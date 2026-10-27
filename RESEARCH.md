@@ -1,5 +1,7 @@
 # CSULB policy research
 
+The full step-by-step record is [research/end-to-end.md](research/end-to-end.md): the author's starting weights, the scrape, the question build, the pilot, and the 8-hour run, with the commands and the scores.
+
 This repository is the thesis record for a continual-learning experiment on public California State University, Long Beach (CSULB) policies. It is a copy of the model code with the experiment added on top. Nothing here replaces the original project.
 
 ## Where the model comes from

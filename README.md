@@ -1,6 +1,6 @@
 # mini-AGI
 
-This copy is Quach Thien Phu's thesis repository. The model code and the git history below the thesis commit come from [volotat/mini-AGI](https://github.com/volotat/mini-AGI) by Alexey Borsky, under the MIT license in `LICENSE`. The CSULB policy experiment, the measurements, and where the trained weights live are written up in [RESEARCH.md](RESEARCH.md).
+This copy is Quach Thien Phu's thesis repository. The model code and the git history below the thesis commit come from [volotat/mini-AGI](https://github.com/volotat/mini-AGI) by Alexey Borsky, under the MIT license in `LICENSE`. The CSULB policy experiment, the measurements, and where the trained weights live are written up in [RESEARCH.md](RESEARCH.md). The step-by-step record from the author's weights through the 8-hour run is [research/end-to-end.md](research/end-to-end.md).
 
 mini-AGI - is a **continual learning** byte-level language model that assembles its own architecture, trains from scratch on a single 8 GB VRAM GPU, and keeps learning from everything it reads.
 It stores its weights as ordinary files on disk and pages them onto the card as it needs them, so the parameter count is bounded by free disk space rather than by VRAM. It grows new capacity while training when it runs short, prunes what nothing asks for, and reads through exactly the same code path it serves on. Targeted at a PC or laptop with at least an 8 GB VRAM GPU on the board. 
