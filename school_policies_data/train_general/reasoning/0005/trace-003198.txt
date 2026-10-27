@@ -1,0 +1,792 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Let D(x) be the number of positive divisors of a positive integer x. For example, D(2) = 2 (2 is divisible by 1 and 2), D(6) = 4 (6 is divisible by 1, 2, 3 and 6).
+
+You are given an array a of n integers. You have to process two types of queries:
+
+  1. REPLACE l r — for every <image> replace ai with D(ai); 
+  2. SUM l r — calculate <image>. 
+
+
+
+Print the answer for each SUM query.
+
+Input
+
+The first line contains two integers n and m (1 ≤ n, m ≤ 3·105) — the number of elements in the array and the number of queries to process, respectively.
+
+The second line contains n integers a1, a2, ..., an (1 ≤ ai ≤ 106) — the elements of the array.
+
+Then m lines follow, each containing 3 integers ti, li, ri denoting i-th query. If ti = 1, then i-th query is REPLACE li ri, otherwise it's SUM li ri (1 ≤ ti ≤ 2, 1 ≤ li ≤ ri ≤ n).
+
+There is at least one SUM query.
+
+Output
+
+For each SUM query print the answer to it.
+
+Example
+
+Input
+
+7 6
+6 4 1 10 3 2 4
+2 1 7
+2 4 5
+1 3 5
+2 4 4
+1 5 7
+2 1 7
+
+
+Output
+
+30
+13
+4
+22
+</user>
+<bot>
+<think>
+Okay, let's tackle this programming problem. So, the problem is about processing two types of queries on an array: replacing elements with their divisor counts and summing ranges. Hmm. The challenge here is handling a large number of queries efficiently, up to 3e5 each. Let's see.
+
+First, let's understand the problem. Each element in the array can be replaced multiple times. Each REPLACE query applies D(x) (number of divisors) to all elements from index l to r. The SUM query just sums those elements in the range. The issue is that if we naively process each REPLACE by iterating through the range and updating each element, that would be O(r-l+1) per query. Since m can be 3e5 and ranges can be large, this approach would be way too slow, leading to a time complexity that's O(mn) in the worst case. For example, if every query is a REPLACE over the entire array, then for 3e5 queries, each taking 3e5 operations, that's 9e10 operations. That's way beyond the acceptable time limits.
+
+So we need a smarter data structure here. The key is to find a way to handle these updates and queries efficiently. Let's think about the properties of the divisor function D(x). Let's compute D(x) for some numbers. For example:
+
+D(1) = 1
+D(2) = 2
+D(3) = 2
+D(4) = 3
+D(6) = 4
+D(12) = 6
+
+But what happens when we apply D multiple times? Let's see:
+
+Take x=6. D(6)=4. Then D(4)=3. Then D(3)=2. Then D(2)=2. After that, applying D again won't change the value. So for x=6, after a few REPLACE operations, it stabilizes.
+
+Similarly, x=4: D(4)=3 → D(3)=2 → D(2)=2. So after two replaces, it stabilizes.
+
+So for most numbers, after a certain number of replacements (like 5-6 times), they become 2 or 1. Once they reach 1 or 2, applying D again doesn't change them. Because D(1) is 1, D(2) is 2. So after that, further REPLACE operations have no effect.
+
+This is important. Because if we can track for each element how many times it can still be replaced (i.e., when it's not yet stabilized), then we can avoid processing elements that are already in a state where replacing them does nothing. So the idea is to model the array with a segment tree that tracks which ranges have elements that can still be updated. For elements that have become 1 or 2, we can skip processing them in future REPLACE queries.
+
+So the plan is:
+
+1. Precompute the D(x) for all possible x (up to 1e6) once, so that we can quickly compute the number of divisors for any x in O(1) time.
+
+2. Use a segment tree that can track the sum of a range and also allows applying the REPLACE operation (i.e., replacing elements in a range with D(x) if they are not yet stabilized). The segment tree needs to support two operations:
+   a. Range update (replace elements in [l, r] with their D(x) if they can be updated)
+   b. Range sum query (sum of elements in [l, r])
+
+3. For each element in the array, after a certain number of REPLACE operations, it will stabilize (either 1 or 2). Once stabilized, any further REPLACE operations on that element can be ignored.
+
+So the segment tree needs to track, for each node, the sum of the elements in its range, and also whether all elements in the range are stabilized (so that we can skip processing them in future REPLACE operations). If a segment's elements are all stabilized, then any REPLACE operation on that segment can be ignored.
+
+But how do we track whether a segment can be updated? Each node in the segment tree can have a flag indicating whether all elements in its range are stabilized. If the flag is set, then we can skip processing that node. Otherwise, we need to process its children.
+
+So during a REPLACE query, we traverse the segment tree, and for each node, if it's not stabilized, we process its children. For the leaves (individual elements), we check if the current value is not stabilized (i.e., not 1 or 2). If it's not, we replace it with D(x), and check if the new value is stabilized (so if after replacement, it's 1 or 2, then it's stabilized and won't change again).
+
+This approach would be efficient because each element can be updated a limited number of times (like up to 6 times for x up to 1e6). Once an element is stabilized, it's not processed again. So the total number of updates across all REPLACE queries is O(n log n * max_replacements), where max_replacements is the maximum number of times an element can be replaced before stabilizing. Since max_replacements is small (like up to 6), this should be manageable.
+
+So the steps to implement this:
+
+First, precompute the number of divisors for all x up to 1e6. The standard way to compute D(x) is to use a sieve approach. For each i from 1 to 1e6, we iterate through its multiples and increment their divisor counts. For example:
+
+Initialize a divisor count array d with all 0s. Then for each i from 1 to 1e6, for each multiple j = i, 2i, 3i, ..., up to 1e6, increment d[j] by 1.
+
+Yes, that's O(n log n) time for sieve.
+
+Once we have this array, D(x) can be looked up in O(1).
+
+Then, build a segment tree where each node contains the sum of the range, and a flag indicating if all elements in the range are stabilized (i.e., equal to 1 or 2). The segment tree needs to support two operations:
+
+1. Range update: replace each element in [l, r] with D(element) if it's not stabilized. For elements that are already stabilized, do nothing.
+
+2. Range sum query: return the sum of elements in [l, r].
+
+So each node in the segment tree will store:
+
+- sum: the sum of the elements in the range.
+
+- is_stable: a boolean indicating whether all elements in this range are already stabilized (i.e., D(x) = x, so replacing them has no effect). For elements 1 and 2, D(1) is 1, D(2) is 2, so once an element reaches 1 or 2, it's stabilized.
+
+For example, if a node's range consists of elements that are all 1 or 2, then is_stable is True. Otherwise, it's False.
+
+When processing a REPLACE query, we need to traverse the segment tree and apply the D(x) function to elements in the specified range, but only if they are not already stable.
+
+For each node in the segment tree during the REPLACE update:
+
+- If the current node's range is completely outside the query range, do nothing.
+
+- If the current node's range is completely inside the query range:
+
+   - If the node is_stable is True, then do nothing (since replacing won't change anything).
+
+   - Else, we need to check each element in this node's range. But since it's a segment tree, perhaps we need to split into child nodes until we reach leaves. Wait, but that would be O(n) in the worst case if the node is not stable. Hmm.
+
+Wait, this is a problem. If a node's range is not stable, but the entire range is within the query's [l, r], then we can't just skip it. We have to process each element in the node's range. But processing each element in a segment tree node can be expensive if the range is large. For example, if the entire array is not stable and we have a REPLACE query over the entire array, this approach would process all elements, leading to O(n) time for each such query, which is not acceptable.
+
+This suggests that the initial approach may not be efficient enough. So perhaps we need a different way to model the segment tree.
+
+Alternative approach: For each element, track how many times it can be replaced. But that's difficult, as the number of replacements depends on the value of the element.
+
+Wait, but the number of times an element can be replaced is limited. For example, even if an element is in a range that's queried for replacement multiple times, the element will stop changing after a few steps. So for each element, after a certain number of replacements, it's no longer changing. So for each element, we can track whether it's stable (i.e., current value is 1 or 2). If it is, then any further REPLACE operations on it can be skipped.
+
+So the idea is that the segment tree can track for each range whether all elements are stable. If a range is fully stable, then we can skip processing it. Otherwise, we process the children.
+
+But when processing a REPLACE query, we need to traverse the segment tree, and for each node that is not fully stable and is in the query's range, we process it. Processing a node here would involve checking if it's a leaf (single element). If so, replace it if not stable. Otherwise, split into children and process them.
+
+So the segment tree is designed such that during a range update (REPLACE), for each node that is completely within the query's range:
+
+- If the node is_stable, do nothing.
+
+- Else, if it's a leaf node, compute D(a_i) and update sum. Check if the new a_i is 1 or 2. If yes, mark the node as stable.
+
+- If it's not a leaf, recursively process the children.
+
+Wait, but this approach would have O(log n) per element that is being replaced. Since each element can be replaced a limited number of times (say up to 6), the total time across all REPLACE queries would be O(6n log n), which is acceptable for n=3e5 (3e5 * 6 * 20 ~ 3.6e7 operations).
+
+Yes, this seems manageable.
+
+So the key is that each element is processed a small number of times (each time it's replaced, until it stabilizes). Once it's stabilized, it's no longer touched.
+
+So the segment tree must be built to support this.
+
+Now, the structure of the segment tree node:
+
+Each node will have:
+
+- left and right boundaries (start and end indices of the range).
+
+- sum: sum of the elements in the range.
+
+- is_stable: True if all elements in the range are either 1 or 2 (so applying REPLACE again would do nothing).
+
+The segment tree will need to support:
+
+1. Range sum query (sum from l to r).
+
+2. Range update (apply D(x) to each element in [l, r] that is not stable).
+
+The update function for the segment tree will work as follows:
+
+To perform a REPLACE on [l, r], we call a function on the root node that covers the entire array. For each node:
+
+- If the node's current range is completely outside [l, r], do nothing.
+
+- Else, if the node's range is completely inside [l, r]:
+
+   - If the node is_stable is True, do nothing.
+
+   - Else, if the node is a leaf (start == end):
+
+      - Compute the new value as D(current value).
+
+      - Update the sum to the new value.
+
+      - Check if the new value is 1 or 2. If yes, mark is_stable as True.
+
+   - Else (the node is not a leaf and not stable):
+
+      - Recursively process the left and right children.
+
+      - After processing, update the sum as the sum of the left and right children.
+
+      - Update the is_stable flag of the current node as the AND of the left and right's is_stable.
+
+- Else (the node's range overlaps with [l, r] but is not entirely within):
+
+   - If the node is_stable is True, do nothing.
+
+   - Else, process the left and right children recursively.
+
+   - Update the sum and is_stable as before.
+
+So the key here is that for a REPLACE query, we only process nodes that are not stable and are in the query's range. Once a node is marked as stable, all elements in its range are stable, so further REPLACE queries on that range can be skipped.
+
+Now, for the sum query, it's straightforward. The segment tree can sum over the range efficiently.
+
+So the main steps are:
+
+1. Precompute D(x) for all x up to 1e6.
+
+2. Read the input array and build the segment tree with the initial values.
+
+3. For each query:
+
+   a. If it's a SUM query, query the segment tree for the sum of [l, r].
+
+   b. If it's a REPLACE query, perform the range update as described.
+
+Now, the problem is to implement this segment tree efficiently in Python.
+
+But wait, in Python, implementing a segment tree with 3e5 elements can be challenging due to recursion depth and speed. However, the approach here is that each REPLACE operation processes each element at most a few times, so even with a recursive approach, it might be manageable.
+
+But for Python, recursion depth can be a problem. The maximum depth for a segment tree with 3e5 elements is log2(3e5) ≈ 19. So recursive calls up to depth 19 should be okay. Python's default recursion depth limit is 1000, so that's acceptable.
+
+Alternatively, the segment tree can be implemented iteratively, but that's more complex. For the sake of time, maybe a recursive approach is manageable.
+
+So let's outline the steps for precomputing D(x):
+
+We can use a sieve method. Initialize an array divisors of size 1e6 + 1, initialized to 0. Then, for each i from 1 to 1e6, we loop through all multiples of i and increment divisors[j] by 1. This way, for each j, divisors[j] will be the number of divisors of j.
+
+Yes, this is O(n log n) time. For 1e6, this is manageable.
+
+Now, building the segment tree. Each node can be represented as a class or a dictionary. But for Python, using a list-based approach for the segment tree can be efficient. However, with a recursive approach, each node can be represented as a structure.
+
+Alternatively, since the segment tree is built once and then modified, perhaps a list-based approach with indexes is feasible. But for the sake of code clarity, perhaps we can represent the segment tree as a list of dictionaries, but in Python, using objects for nodes can be slow. Another approach is to use a list-based segment tree where each node is stored in a list, and children of node i are 2i+1 and 2i+2. But this is more memory-consuming and may not be feasible for n=3e5 (since the size of the segment tree would be 4*3e5 ≈ 1.2e6, which is manageable).
+
+Alternatively, use a class-based approach with each node containing left and right children. But recursion in Python can be slow for large n.
+
+Wait, but given that each element is updated at most 6 times, and each update is O(log n) time, the total time for all updates is 3e5 * 6 * 20 ≈ 3.6e7 operations, which is manageable in Python.
+
+But Python's recursion overhead can add up. So perhaps an iterative segment tree would be better. But for the sake of time, perhaps a recursive approach is manageable.
+
+Alternatively, we can implement a segment tree using a binary indexed tree (Fenwick tree), but I'm not sure if that's feasible for range updates and range queries with the conditions we have here. The problem requires that for REPLACE queries, each element in the range is updated, but only if not stable. So a BIT may not be suitable here.
+
+Thus, the segment tree approach seems necessary.
+
+Now, let's outline the code.
+
+First, precompute the number of divisors.
+
+max_a = 1e6, but in Python, the sieve can be initialized as:
+
+max_num = 10**6
+divisors = [0] * (max_num + 1)
+for i in range(1, max_num + 1):
+    for j in range(i, max_num + 1, i):
+        divisors[j] += 1
+
+Yes, that's correct. So divisors[x] gives D(x).
+
+Next, the segment tree. Each node must track sum and is_stable.
+
+Let's implement the segment tree as a class.
+
+But for Python, implementing a segment tree with nodes as objects may be slow. Alternatively, we can represent the tree using a list of nodes, each node containing start, end, sum, is_stable, left and right pointers.
+
+But for large n, this could be memory-intensive and slow. Alternatively, we can use a list-based approach where each node is stored in a list, and children are computed via indexes. But in practice, for Python, a recursive approach with objects may be manageable for the given constraints.
+
+Alternatively, here's another approach: represent the segment tree using a list where each node is represented as a dictionary. But again, this can be slow.
+
+Alternatively, using a more efficient representation, such as building a segment tree using a list where each node's data is stored in a flat structure. For example, for a list-based segment tree, each node is stored in a list, and for a node at position i, the left child is 2*i + 1, and the right child is 2*i + 2. But this approach can be difficult for dynamic ranges, especially when the initial size is not a power of two. However, for our case, we can build the segment tree with the given array's size, and pad it to the next power of two if necessary. But this complicates the implementation.
+
+Alternatively, here's a possible way to implement a segment tree recursively:
+
+Each node is a structure (a Python object) that contains:
+
+- left and right boundaries (start, end)
+
+- sum of the elements in the range
+
+- is_stable (True if all elements in the range are 1 or 2)
+
+- left_child and right_child (pointers to child nodes)
+
+So, the root node covers the entire array. For leaves (start == end), the sum is the initial a[start], is_stable is True if a[start] is 1 or 2. For internal nodes, the sum is the sum of left and right children, and is_stable is True only if both children are stable.
+
+The initial build function would look like:
+
+def build(start, end, a):
+
+    node = Node(start, end)
+
+    if start == end:
+
+        node.sum = a[start]
+
+        node.is_stable = (a[start] in {1, 2})
+
+        node.left_child = None
+
+        node.right_child = None
+
+    else:
+
+        mid = (start + end) // 2
+
+        node.left_child = build(start, mid, a)
+
+        node.right_child = build(mid+1, end, a)
+
+        node.sum = node.left_child.sum + node.right_child.sum
+
+        node.is_stable = node.left_child.is_stable and node.right_child.is_stable
+
+    return node
+
+Then, for the sum query:
+
+def query_sum(node, l, r):
+
+    if node.end < l or node.start > r:
+
+        return 0
+
+    if l <= node.start and node.end <= r:
+
+        return node.sum
+
+    return query_sum(node.left_child, l, r) + query_sum(node.right_child, l, r)
+
+For the replace update:
+
+def replace_update(node, l, r, divisors):
+
+    if node.end < l or node.start > r:
+
+        return
+
+    if node.is_stable:
+
+        return
+
+    if node.start == node.end:
+
+        # leaf node
+
+        old_val = node.sum
+
+        new_val = divisors[old_val]
+
+        node.sum = new_val
+
+        node.is_stable = new_val in {1, 2}
+
+        return
+
+    # process children
+
+    replace_update(node.left_child, l, r, divisors)
+
+    replace_update(node.right_child, l, r, divisors)
+
+    # update current node's sum and is_stable
+
+    node.sum = node.left_child.sum + node.right_child.sum
+
+    node.is_stable = node.left_child.is_stable and node.right_child.is_stable
+
+Yes, this seems correct. Because for a node that's not a leaf, and not stable, the function will process its children, which may in turn process their children until leaves are reached. The leaves are updated, and their stability is checked. Once a leaf becomes stable, its parent nodes will reflect this in their is_stable flags.
+
+But wait, in the replace_update function, after processing the children, the current node's sum and is_stable are updated. So if all children become stable, the parent's is_stable will be True, which allows future REPLACE operations to skip processing this node.
+
+This should work.
+
+Now, let's test this logic with the example given.
+
+Example input:
+
+7 6
+
+6 4 1 10 3 2 4
+
+Queries:
+
+2 1 7 → sum 1-7 → 6+4+1+10+3+2+4 = 30.
+
+Then, 2 4 5 → sum 10 +3=13.
+
+Then, 1 3 5 → replace positions 3-5 (original a[3] is 1, a[4] is 10, a[5] is 3).
+
+After replace:
+
+a[3] is D(1) =1 → remains 1 (stable).
+
+a[4] is D(10) =4 (divisors of 10 are 1,2,5,10 → 4 divisors).
+
+a[5] is D(3) =2.
+
+So the array becomes [6,4,1,4,2,2,4].
+
+Next query is SUM 4-4 → sum is 4.
+
+Then, replace 5-7 → a[5] is 2 (stable), a[6] is 2 (stable), a[7] is 4. So a[7] becomes D(4)=3. So after replace, the array becomes [6,4,1,4,2,2,3].
+
+Wait, but in the example input, after the first replace (1 3 5), the array is [6,4,1,4,2,2,4]. Then, the SUM 4-4 is 4, which matches the example.
+
+Then, the next replace is 5-7. The elements are:
+
+a[5] =2 → D(2)=2 (stable, no change).
+
+a[6] =2 → same.
+
+a[7] =4 → D(4)=3. So a[7] becomes 3.
+
+Then, the next SUM is 1-7: 6+4+1+4+2+2+3 = 22.
+
+But according to the example's output, the last SUM is 22.
+
+So the code should handle this.
+
+Now, when building the segment tree, each node's is_stable is computed as whether all elements in its range are 1 or 2.
+
+For the initial array:
+
+6,4,1,10,3,2,4.
+
+The initial elements are:
+
+6 → D(6)=4 (sum is 6, is_stable? No.
+
+4 → D(4)=3, but initially, 4 is not 1 or 2.
+
+1 → is_stable.
+
+10 → not stable.
+
+3 → not stable.
+
+2 → stable.
+
+4 → not stable.
+
+So the root node's is_stable is False. Then, when a REPLACE query is done on 3-5, the leaves in positions 3,4,5 are processed.
+
+Position 3: 1 → D(1) is 1 → stable. So no change.
+
+Position 4: 10 → D(10)=4 → becomes 4. Then, check if it's 1 or 2. No, so not stable.
+
+Position5: 3 → D(3) is 2 → which is stable. So this becomes 2.
+
+So after this replace, the sum of 4-4 is 4 (the new value of position4 is 4, which is not stable. So during the next SUM query, it is included.
+
+But when the next replace is applied on 5-7:
+
+position5 is 2 (stable → no change).
+
+position6 is 2 (stable → no change).
+
+position7 is4 → D(4) is3 → becomes 3. Now, 3 is not 1 or 2, so not stable.
+
+So after this replace, the array is [6,4,1,4,2,2,3].
+
+But the sum query 1-7 is 6+4=10, +1=11, +4=15, +2=17, +2=19, +3=22 → which matches the example.
+
+So the code should handle this.
+
+Now, the code in Python needs to:
+
+- Precompute the divisors.
+
+- Read n and m.
+
+- Read the array.
+
+- Build the segment tree.
+
+- Process each query: for each query, call replace or sum.
+
+But in Python, implementing a recursive segment tree may be too slow for 3e5 elements. Let's think about possible optimizations.
+
+Another approach to speed up the code is to precompute the divisors and then represent the segment tree using a list-based structure with pointers, but that's more complex.
+
+Alternatively, perhaps using a class-based approach with memoization.
+
+Alternatively, perhaps using a flattened array to represent the segment tree. But this requires knowing the size of the tree in advance. For example, the size is 2^ceil(log2(n)), and so on. But that's more involved.
+
+Alternatively, using a binary indexed tree (Fenwick tree) is not suitable here because the update is not a point update but a range update with a condition (only update elements that are not stable). Fenwick trees can't efficiently handle such conditional updates.
+
+So the segment tree approach is the way to go.
+
+But in Python, recursion can be slow. For example, if we have 3e5 elements, the build function will have O(n) time, which is acceptable. But each query involves O(log n) operations. For m=3e5 queries, each with O(log n) time, that's O(m log n) = 3e5 * 20 ≈6e6 operations, which is acceptable. But the actual time can vary depending on Python's speed.
+
+Another possible optimization is to precompute the divisors and then for each element, track how many times it can be replaced until it stabilizes. For example, for each element a_i, we can compute the number of times it can be replaced before it becomes 1 or 2, and then during processing, track how many times it's been replaced. But this approach would require per-element tracking, which is difficult with a segment tree. So the initial approach of checking stability in the segment tree seems better.
+
+Now, the code:
+
+First, precompute the divisors. Let's note that the maximum possible a_i is 1e6, so we need to compute divisors up to 1e6.
+
+Then, read n and m, the array, and process the queries.
+
+Implementing the segment tree with a class in Python:
+
+class Node:
+    def __init__(self, start, end):
+        self.start = start
+        self.end = end
+        self.sum = 0
+        self.is_stable = False
+        self.left = None
+        self.right = None
+
+def build(start, end, a, divisors):
+    node = Node(start, end)
+    if start == end:
+        val = a[start]
+        node.sum = val
+        node.is_stable = (val == 1 or val == 2)
+    else:
+        mid = (start + end) // 2
+        node.left = build(start, mid, a, divisors)
+        node.right = build(mid+1, end, a, divisors)
+        node.sum = node.left.sum + node.right.sum
+        node.is_stable = node.left.is_stable and node.right.is_stable
+    return node
+
+def query_sum(node, l, r):
+    if node.end < l or node.start > r:
+        return 0
+    if l <= node.start and r >= node.end:
+        return node.sum
+    return query_sum(node.left, l, r) + query_sum(node.right, l, r)
+
+def replace_update(node, l, r, divisors):
+    if node.end < l or node.start > r:
+        return
+    if node.is_stable:
+        return
+    if node.start == node.end:
+        # leaf node
+        old_val = node.sum
+        new_val = divisors[old_val]
+        node.sum = new_val
+        node.is_stable = new_val in {1, 2}
+    else:
+        replace_update(node.left, l, r, divisors)
+        replace_update(node.right, l, r, divisors)
+        node.sum = node.left.sum + node.right.sum
+        node.is_stable = node.left.is_stable and node.right.is_stable
+
+But wait, in the replace_update function, after processing the left and right children, the current node's sum and is_stable are updated. This is correct.
+
+But in Python, for large n=3e5, building the tree recursively may hit stack limits. For example, building the tree for n=3e5 would require log2(3e5) ≈ 19 levels of recursion, which is manageable.
+
+But let's test with the sample input.
+
+Sample input:
+
+7 6
+6 4 1 10 3 2 4
+
+Building the tree:
+
+The root node is 0-6. Its left child is 0-3, right child 4-6.
+
+Each node's sum is built recursively.
+
+Then, processing the queries:
+
+First SUM query 1-7 (indices are 1-based, but in the code, the array is 0-based). Wait, the problem uses 1-based indices. So when the input says l and r, they are 1-based. So during processing, we need to convert them to 0-based.
+
+So for example, in the sample input, the first query is SUM 1-7. The code is 0-based, so it's sum from 0 to 6.
+
+So in the code, when reading l and r, subtract 1 from them.
+
+So in the code:
+
+For each query, after reading t, l, r, adjust l and r to be 0-based.
+
+So during processing:
+
+if t == 2: sum query, output query_sum(root, l-1, r-1).
+
+if t == 1: replace query, call replace_update(root, l-1, r-1, divisors).
+
+So the code needs to read the queries correctly.
+
+Putting it all together:
+
+But in Python, building a recursive segment tree for n=3e5 may be slow, but let's proceed.
+
+But let's think about the time for building the tree. For n=3e5, the build function creates O(n) nodes, each with O(1) operations, which is O(n) time. But in Python, creating 3e5 nodes could be time-consuming, as each node is an object with multiple attributes.
+
+An alternative approach is to represent the segment tree using a list of dictionaries or even a tuple-based structure. But that's more complex.
+
+Alternatively, perhaps using a flattened array approach. Let's see.
+
+But for the purposes of this problem, let's proceed with the code as written.
+
+Now, the code steps:
+
+Read n and m.
+
+Read the array.
+
+Precompute the divisors.
+
+Build the segment tree.
+
+Process m queries.
+
+But precomputing the divisors for 1e6 is time-consuming. Let's see.
+
+The sieve for 1e6 takes O(n log n) time. For i in 1 to 1e6, and for each j in multiples of i. For i=1e6, there is 1 multiple. For i=5e5, 2 multiples. So the total number of iterations is sum_{i=1 to 1e6} (1e6 / i) → which is approximately O(1e6 log 1e6) → around 1e7 operations. Which is acceptable.
+
+So the code:
+
+But wait, in Python, 1e6 is manageable, but initializing a list of 1e6+1 elements may take some memory. Each element is an integer. For 1e6+1 integers, each taking 4 bytes (in CPython, integers are objects, but the list stores pointers, but it's still manageable.)
+
+But let's proceed.
+
+Now, the code:
+
+import sys
+
+def main():
+    import sys
+    sys.setrecursionlimit(1 << 25)
+    n, m = map(int, sys.stdin.readline().split())
+    a = list(map(int, sys.stdin.readline().split()))
+    max_a = 10**6
+    divisors = [0] * (max_a + 1)
+    for i in range(1, max_a+1):
+        for j in range(i, max_a+1, i):
+            divisors[j] += 1
+    # Build segment tree
+    root = build(0, n-1, a, divisors)
+    for _ in range(m):
+        parts = sys.stdin.readline().split()
+        while len(parts) <3:
+            parts += sys.stdin.readline().split()
+        t, l, r = map(int, parts)
+        l -=1
+        r -=1
+        if t ==2:
+            res = query_sum(root, l, r)
+            print(res)
+        else:
+            replace_update(root, l, r, divisors)
+
+But wait, the build function needs to pass the divisors array. But the build function is only using it for the initial setup. Wait, no. The build function uses the a array, which is the original array. So during the build, the nodes' initial sum is set to the original a[i], and is_stable is determined based on whether a[i] is 1 or 2.
+
+But the divisors array is not used during the build. It's only used during the replace_update steps.
+
+So the code is correct.
+
+But in the sample input, the first replace is on positions 3-5 (1-based) which are 0-based indices 2-4. The initial a[2] is 1, which is stable, so no change. a[3] is 10 → D(10)=4. a[4] is 3 → D(3)=2. So after this replace, the sum from 4-4 (0-based 3-3) is 4.
+
+But when the code calls replace_update(root, 2, 4, divisors), it will process the leaves 2,3,4.
+
+For leaf 2: initial sum is 1. D(1) is 1 → no change. is_stable is already True.
+
+For leaf 3: initial sum is 10 → D(10)=4 → sum becomes 4. is_stable is False (4 is not 1 or 2).
+
+For leaf4: initial sum is 3 → D(3) is 2 → sum becomes 2. is_stable is True.
+
+So after this replace, the sum of 4-4 (0-based 3-3) is 4.
+
+Yes.
+
+But in the code, the build function uses the original array. So it's correct.
+
+But there's a possible issue with the initial a array. For example, if the original array has elements larger than 1e6, but the problem statement says ai is up to 1e6. So no problem.
+
+Now, let's test the code with the sample input.
+
+But in Python, recursion depth can be a problem. The build function for n=3e5 would require log2(3e5) ≈ 18.2 levels. So the maximum recursion depth during build would be 18, which is way under Python's default recursion limit. But during replace_update, each call can recurse up to log2(n) levels. But the code sets the recursion limit to 1<<25, which is 33 million, which is way more than enough.
+
+Now, the code should handle the sample input correctly.
+
+But in practice, with Python's speed, this code may not be fast enough for the largest test cases, but given the problem constraints, it's the correct approach.
+
+However, there's a possible optimization here. The replace_update function processes the entire subtree even if some parts are not in the query range. But this is handled by the initial condition: if node's range is outside [l, r], return.
+
+So the code is correct.
+
+Another possible optimization is to precompute D(x) for all x in the initial array and during the replace steps, but that's already handled by the divisors array.
+
+So the code should work correctly.
+</think>
+To solve this problem, we need to efficiently handle two types of queries on an array: replacing elements with their divisor counts and summing ranges. The challenge is to process up to 300,000 queries efficiently, given that each element can be replaced multiple times but stabilizes after a few replacements.
+
+### Approach
+1. **Precompute Divisors**: Use a sieve method to precompute the number of divisors for all integers up to \(10^6\). This allows us to quickly determine the number of divisors for any element in constant time.
+2. **Segment Tree**: Use a segment tree to efficiently handle range sum queries and range updates. Each node in the segment tree tracks the sum of elements in its range and a flag indicating if all elements in the range are stabilized (i.e., they are either 1 or 2, as further replacements will not change their values).
+3. **Handling Queries**: For each query, if it's a sum query, compute the sum using the segment tree. If it's a replace query, update the elements in the specified range using the precomputed divisor counts, skipping elements that have already stabilized.
+
+### Solution Code
+```python
+import sys
+
+class Node:
+    __slots__ = ['start', 'end', 'sum', 'is_stable', 'left', 'right']
+    def __init__(self, start, end):
+        self.start = start
+        self.end = end
+        self.sum = 0
+        self.is_stable = False
+        self.left = None
+        self.right = None
+
+def build(start, end, a, divisors):
+    node = Node(start, end)
+    if start == end:
+        val = a[start]
+        node.sum = val
+        node.is_stable = (val == 1 or val == 2)
+    else:
+        mid = (start + end) // 2
+        node.left = build(start, mid, a, divisors)
+        node.right = build(mid+1, end, a, divisors)
+        node.sum = node.left.sum + node.right.sum
+        node.is_stable = node.left.is_stable and node.right.is_stable
+    return node
+
+def query_sum(node, l, r):
+    if node.end < l or node.start > r:
+        return 0
+    if l <= node.start and r >= node.end:
+        return node.sum
+    return query_sum(node.left, l, r) + query_sum(node.right, l, r)
+
+def replace_update(node, l, r, divisors):
+    if node.end < l or node.start > r:
+        return
+    if node.is_stable:
+        return
+    if node.start == node.end:
+        old_val = node.sum
+        new_val = divisors[old_val]
+        node.sum = new_val
+        node.is_stable = new_val in {1, 2}
+    else:
+        replace_update(node.left, l, r, divisors)
+        replace_update(node.right, l, r, divisors)
+        node.sum = node.left.sum + node.right.sum
+        node.is_stable = node.left.is_stable and node.right.is_stable
+
+def main():
+    sys.setrecursionlimit(1 << 25)
+    input = sys.stdin.read().split()
+    ptr = 0
+    n = int(input[ptr])
+    ptr +=1
+    m = int(input[ptr])
+    ptr +=1
+    a = list(map(int, input[ptr:ptr+n]))
+    ptr +=n
+
+    max_a = 10**6
+    divisors = [0]*(max_a +1)
+    for i in range(1, max_a+1):
+        for j in range(i, max_a+1, i):
+            divisors[j] +=1
+
+    root = build(0, n-1, a, divisors)
+
+    for _ in range(m):
+        t = int(input[ptr])
+        ptr +=1
+        l = int(input[ptr])
+        ptr +=1
+        r = int(input[ptr])
+        ptr +=1
+        l0 = l-1
+        r0 = r-1
+        if t ==2:
+            print(query_sum(root, l0, r0))
+        else:
+            replace_update(root, l0, r0, divisors)
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Precompute Divisors**: We use a sieve method to count the divisors for each number up to \(10^6\). This is done in \(O(n \log n)\) time.
+2. **Segment Tree Construction**: The segment tree is built recursively. Each node stores the sum of its range and a flag indicating if all elements in the range are stabilized.
+3. **Query Handling**: Sum queries are processed by recursively querying the segment tree. Replace queries update elements in the specified range, skipping stabilized elements to optimize performance.
+4. **Efficiency**: Each element is updated a limited number of times (until it stabilizes), leading to an efficient solution with \(O(n \log n)\) preprocessing and \(O(\log n)\) per query.
+</bot>

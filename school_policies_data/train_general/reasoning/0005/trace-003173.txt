@@ -1,0 +1,1709 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.In this task, Nastya asked us to write a formal statement.
+
+An array a of length n and an array k of length n-1 are given. Two types of queries should be processed: 
+
+  * increase a_i by x. Then if a_{i+1} < a_i + k_i, a_{i+1} becomes exactly a_i + k_i; again, if a_{i+2} < a_{i+1} + k_{i+1}, a_{i+2} becomes exactly a_{i+1} + k_{i+1}, and so far for a_{i+3}, ..., a_n; 
+  * print the sum of the contiguous subarray from the l-th element to the r-th element of the array a. 
+
+
+
+It's guaranteed that initially a_i + k_i ≤ a_{i+1} for all 1 ≤ i ≤ n-1.
+
+Input
+
+The first line contains a single integer n (2 ≤ n ≤ 10^{5}) — the number of elements in the array a.
+
+The second line contains n integers a_1, a_2, …, a_n (-10^{9} ≤ a_i ≤ 10^{9}) — the elements of the array a.
+
+The third line contains n-1 integers k_1, k_2, …, k_{n-1} (-10^{6} ≤ k_i ≤ 10^{6}) — the elements of the array k.
+
+The fourth line contains a single integer q (1 ≤ q ≤ 10^{5}) — the number of queries.
+
+Each of the following q lines contains a query of one of two types: 
+
+  * if the query has the first type, the corresponding line contains the character '+' (without quotes), and then there are two integers i and x (1 ≤ i ≤ n, 0 ≤ x ≤ 10^{6}), it means that integer x is added to the i-th element of the array a as described in the statement. 
+  * if the query has the second type, the corresponding line contains the character 's' (without quotes) and then there are two integers l and r (1 ≤ l ≤ r ≤ n). 
+
+Output
+
+For each query of the second type print a single integer in a new line — the sum of the corresponding subarray.
+
+Examples
+
+Input
+
+
+3
+1 2 3
+1 -1
+5
+s 2 3
++ 1 2
+s 1 2
++ 3 1
+s 2 3
+
+
+Output
+
+
+5
+7
+8
+
+
+Input
+
+
+3
+3 6 7
+3 1
+3
++ 1 3
++ 2 4
+s 1 3
+
+
+Output
+
+
+33
+
+Note
+
+In the first example: 
+
+  * after the first change a = [3, 4, 3]; 
+  * after the second change a = [3, 4, 4]. 
+
+
+
+In the second example: 
+
+  * after the first change a = [6, 9, 10]; 
+  * after the second change a = [6, 13, 14].
+</user>
+<bot>
+<think>
+Okay, let's see. The problem is about processing two types of queries on arrays a and k. The main challenge is handling the first type of query efficiently because when we add x to a_i, we have to propagate the changes to the right elements, ensuring that each a_{i+1} is at least a_i + k_i, and so on. The second query is a straightforward sum from l to r, but the issue is handling these updates efficiently so that each query can be answered quickly, especially given the constraints of up to 1e5 operations.
+
+Hmm. So the brute force approach of processing each '+' query by updating a and then checking and adjusting all elements to the right is O(n) per update, which would be too slow for 1e5 queries. We need a smarter data structure here.
+
+Let's think about the initial condition. The problem says that initially, a_i + k_i <= a_{i+1} for all i. So after any update, when we add x to a_i, the subsequent elements might need to be adjusted. But how?
+
+Wait, when you add x to a_i, then a_i becomes a_i + x. Then, a_{i+1} must be at least a_i + k_i. If it was already >=, then nothing. Otherwise, set it to exactly a_i +k_i. Then, check a_{i+2} >= a_{i+1} +k_{i+1}, and so on. So this is a chain reaction. The problem is that each '+' operation could trigger a cascade of changes all the way to the end of the array, leading to O(n) per query in the worst case.
+
+But with 1e5 queries, that's 1e10 operations, which is way too slow. So we need a way to model this efficiently.
+
+Let me think about the structure of the array after these constraints are applied. Let's denote that after any operation, for all j >= i, a_j is as small as possible given the constraints. Because each time we increase a_i, the subsequent elements are adjusted only if necessary.
+
+Wait, maybe there's a way to model the array a in terms of the initial a_1 and the k values. Because the constraints form a chain. For example, a_2 >= a_1 +k_1. Then a_3 >= a_2 +k_2 = a_1 +k_1 +k_2. So a_3 is at least a_1 + sum_{j=1 to 2} k_j. Similarly, a_i is at least a_1 + sum_{j=1 to i-1} k_j. But this is under the initial condition. But after updates, maybe the array elements can be represented as the maximum between their original value (after updates) and this lower bound.
+
+Wait, but the problem allows that when you add x to a_i, the next elements are adjusted based on the new a_i. So after adding x to a_i, a_i becomes a_i + x, and then a_{i+1} is set to max(a_{i+1}, a_i +k_i). Then, a_{i+2} is set to max(a_{i+2}, a_{i+1} +k_{i+1}), etc. So each element after i is possibly increased to the lower bound set by the previous elements plus k.
+
+Hmm. So perhaps, for each position j, the actual value a_j can be represented as the maximum between the base value (the sum of the initial a_1 plus the sum of k's up to j-1) plus any modifications made through the '+' operations.
+
+Alternatively, maybe the array a can be considered as a series of dependencies. For example, a_1 can be modified directly. Then a_2 is determined by a_1 +k_1, unless there's a modification to a_2. Wait, but the problem's update affects a_i, then propagates to the right. So modifying a_i can cause a_{i+1} to be increased, which in turn may affect a_{i+2}, etc.
+
+This seems complicated. Let's think of another approach. Let's model the array a in terms of the original a array and the increments applied. But when we add x to a_i, it's not just a_i that increases; the subsequent elements could be adjusted to their minimum possible values based on the new a_i.
+
+Wait, but perhaps after any operation, the array a can be split into segments. For example, when you update a_i, the elements from i to some j are updated to their new values based on the constraints. The key is to find the point where the next elements are already in compliance and don't need to be changed.
+
+Alternatively, maybe each element a_j can be expressed as a_1 plus sum of k_1 to k_{j-1} plus some delta. Let's see. The initial condition ensures that a_{i} +k_i <= a_{i+1}. So for the initial a array, a_2 >= a_1 +k_1, a_3 >= a_2 +k_2 >= a_1 +k_1 +k_2, etc. So in the initial state, each a_j is at least the sum a_1 + sum_{m=1 to j-1}k_m. But maybe in the initial state, they are exactly equal? No, the problem statement says "it's guaranteed that initially a_i +k_i <= a_{i+1} for all i". So the initial a could be such that a_{i+1} is larger than required.
+
+But when we do an update, the propagation forces the following elements to at least their required minimum. So after the first update, a_i is increased by x, then a_{i+1} is set to a_i +k_i if necessary, and so on. So the new a_j's after the update will be the maximum of their previous value (after previous updates) and the required minimum.
+
+Wait, but the required minimum for a_j is a_{j-1} +k_{j-1} after the previous elements are updated. So each a_j is the maximum of its current value (from previous operations) and the previous element's a_{j-1} +k_{j-1}.
+
+This seems like a chain of dependencies. So the array a is such that for all j>1, a_j >= a_{j-1} +k_{j-1}.
+
+This is the invariant that must hold after each '+' operation.
+
+So the array is maintained in a way that for any j >= i, the a_j is as small as possible (given the previous updates) but at least the sum of a_i plus the cumulative k's from i to j-1.
+
+Wait, perhaps each a_j can be represented as a base value plus some delta. For example, the base value is a_1 plus the sum of k_1 to k_{j-1}. Then, any delta applied to a_1 would propagate through the array. For example, if we add x to a_1, then a_2 becomes a_1 +x +k_1, a_3 becomes a_1 +x +k_1 +k_2, etc. But if a_2 was already higher than this (from previous updates), then it would retain its value.
+
+But how to model this when multiple updates are applied to different positions?
+
+Alternatively, maybe each element a_j can be represented as the maximum between the base value (from the initial structure) and some propagated delta from previous updates.
+
+This is getting a bit stuck. Let's think about the problem from another angle. Suppose all the k's are fixed. When we perform an update on a_i, adding x, the new a_i becomes a_i +x. Then, a_{i+1} must be at least a_i +x +k_i. If it's already >=, then no change. Otherwise, set it to a_i +x +k_i. Then, a_{i+2} must be at least a_{i+1} +k_{i+1}, and so on. So the update propagates until some j where a_j is already >= a_{j-1} +k_{j-1}.
+
+So for example, if the original a array after the initial setup is such that each a_{j} = a_{j-1} +k_{j-1} + delta_j, where delta_j >=0, then adding x to a_i would set a_i +=x, and then for j=i+1, check if a_j < a_i_new +k_i. If so, set a_j to that value and proceed. But if a_j was already >=, then the process stops here.
+
+So the key is that after each '+' operation, the propagation to the right is a contiguous range starting from i until some j where the existing a_j is already >= a_{j-1} +k_{j-1}.
+
+The challenge is to model this process efficiently. If we can find, for each update, the first position where the propagation stops, then we can update all elements from i to that position. But even that could take O(n) time per query in the worst case, which is not feasible.
+
+Hmm. So we need a data structure that can handle range updates and range sum queries. The sum queries are straightforward if we have a prefix sum array. But the problem is that the updates are not arbitrary ranges; they are the result of a propagation process that can affect a contiguous range from i to some j.
+
+Wait, but the update for the '+' operation may affect a range from i to m (for some m >=i). For each element in this range, their new values are determined by the previous elements. So for example, a_{i} is increased by x, a_{i+1} is set to max(a_{i+1}, a_i +k_i), then a_{i+2} is set to max(a_{i+2}, a_{i+1} +k_{i+1}), etc. The propagation stops when the existing a_j is already >= a_{j-1} +k_{j-1}.
+
+So, for the data structure, perhaps we can model the array a as follows. Each element a_j can be represented as the maximum of (a_{j-1} +k_{j-1}, original a_j plus some delta). But how to track this.
+
+Alternatively, perhaps we can model a_j as a_j = max( base_j, delta ), where base_j is the minimum possible value given the initial structure. Wait, but base_j would be a_1 plus the sum of k_1 to k_{j-1}, but this depends on a_1. If a_1 is modified, then all base_j's change. But modifying a_1's delta would affect all elements. But in that case, how to track this.
+
+Alternatively, consider that each element a_j can be written as a_1 + sum_{m=1 to j-1}k_m plus delta_j, where delta_j >=0. Then, when a_1 is increased by x, all a_j's base values increase by x. But if some delta_j's are already positive, the actual a_j would be the new base plus delta_j. However, when a_i (for i>1) is increased by x, then delta_i is increased by x, and then we have to propagate the effect of this delta to the right elements.
+
+Wait, perhaps this is a possible approach. Let's model each a_j as the sum of the base (a_1 + sum of k's up to j-1) plus a delta_j. Then, the constraints a_j >= a_{j-1} +k_{j-1} can be expressed as delta_j >=0, since:
+
+a_j = (a_1 + sum_{m=1}^{j-1}k_m) + delta_j
+
+a_{j-1} = (a_1 + sum_{m=1}^{j-2}k_m) + delta_{j-1}
+
+Then, a_j must be >= a_{j-1} +k_{j-1} = (a_1 + sum_{m=1}^{j-2}k_m + delta_{j-1}) ) +k_{j-1} = a_1 + sum_{m=1}^{j-1}k_m + delta_{j-1}
+
+So, a_j >= this implies that (a_1 + sum_{m=1}^{j-1}k_m) + delta_j >= a_1 + sum_{m=1}^{j-1}k_m + delta_{j-1}
+
+Which simplifies to delta_j >= delta_{j-1}.
+
+So the constraints on the delta_j's are that delta_j >= delta_{j-1} for all j >=2. So delta is a non-decreasing sequence.
+
+This is a crucial insight. Because the problem's initial condition ensures that a_j >= a_{j-1} +k_{j-1}, which translates to delta_j >= delta_{j-1}. So initially, the delta sequence is non-decreasing.
+
+Now, when we perform a '+' operation on a_i (the actual a_i, which is base_i + delta_i), adding x to a_i, this changes delta_i to (delta_i +x) (since base_i is a_1 + sum_{m=1}^{i-1}k_m, adding x to a_i would increase delta_i by x). However, after this, the delta sequence must still satisfy delta_j >= delta_{j-1} for all j. So after adding x to delta_i, the sequence may become invalid for j >=i. So we need to propagate the increase to the right to maintain the non-decreasing property of delta.
+
+Wait, but delta_j >= delta_{j-1} for all j. So when we increase delta_i by x, for j >=i, if delta_{j} is less than delta_{j-1}, then we have to adjust delta_j to be at least delta_{j-1}.
+
+So the process is similar to when we increment a certain element in a non-decreasing array and then enforce the non-decreasing property again. For example, if after adding x to delta_i, delta_i becomes larger than delta_{i+1}, then delta_{i+1} must be set to delta_i, and so on.
+
+Wait, yes. So this seems similar to the problem of maintaining a non-decreasing array where updates are made and then the array is adjusted to maintain the non-decreasing property. In that case, the process is to find the first j where delta_j becomes less than delta_{j-1} after the update and adjust accordingly.
+
+But how to model this. Let's think. Suppose we add x to delta_i. Then, the new delta_i is delta_i +x. Then, for j >=i, delta_j must be at least delta_{j-1}. So after the update, we need to check if delta_{i+1} is less than delta_i_new. If yes, set delta_{i+1} to delta_i_new, then check delta_{i+2}, etc.
+
+This process continues until we find a j where delta_j is already >= delta_{j-1} (after the previous step). Because once that's true, the rest of the delta sequence is already non-decreasing.
+
+But this process could take O(n) time per query in the worst case, which is not feasible for 1e5 queries. So we need an efficient way to model these delta changes.
+
+Ah, here's the key: the delta array is non-decreasing. When we add x to delta_i, this could create a "bump" at i. To fix the array, we need to find the first j >=i where delta_j >= new_delta_i. Then, all elements from i+1 to j-1 need to be set to the maximum between their current value and the previous delta.
+
+Wait, but after adding x to delta_i, the new delta_i is delta_i +x. Now, since the delta array is non-decreasing, all elements after i must be >= delta_i +x. However, if any of them are less than this, they need to be increased to match delta_i +x. But wait, the non-decreasing property requires that delta_{i+1} >= delta_i (new), delta_{i+2} >= delta_{i+1}, etc. So after adding x to delta_i, if delta_{i+1} < delta_i_new, then delta_{i+1} must be set to delta_i_new. Then delta_{i+2} must be >= delta_{i+1} (now equal to delta_i_new). If delta_{i+2} was originally >= delta_{i+1} (old), but delta_{i+2} < delta_i_new, then it must be set to delta_i_new, and so on.
+
+Wait, but in this case, the entire suffix from i onwards could be set to the maximum between their current value and delta_i_new. Because once you set delta_{i+1} to delta_i_new, then delta_{i+2} must be >= delta_{i+1} (now delta_i_new), so if delta_{i+2} was less than delta_i_new, it must be set to delta_i_new. Similarly for all j >i+1.
+
+Wait, this suggests that after adding x to delta_i, the entire delta array from i to n is set to the maximum between their current value and (delta_i +x). But this is only true if the delta array was initially non-decreasing. Because delta_i was <= delta_{i+1} initially. After adding x to delta_i, delta_i_new could be larger than delta_{i+1}, which would cause delta_{i+1} to be set to delta_i_new. Then delta_{i+2} needs to be at least delta_{i+1} (delta_i_new), but if delta_{i+2} was originally >= delta_{i+1} (old) which was >= delta_i (old), but now delta_i_new could be larger than delta_{i+1} (old). So delta_{i+2} may need to be increased to delta_i_new.
+
+But this process can be seen as finding the first position j >=i where delta_j (original) >= delta_i_new. All elements from i to j-1 would need to be set to delta_i_new, and j would start from i+1. If all elements from i onwards are less than delta_i_new, then all of them are set to delta_i_new.
+
+So the problem reduces to, for each update, adding x to delta_i, then setting all elements from i+1 to m (where m is the first position >=i+1 where delta_j >= delta_i_new) to delta_i_new.
+
+But how can we model this efficiently?
+
+This is similar to the problem of range updates with a condition. We need a data structure that can find the first position where delta_j >= a certain value, and then perform a range update.
+
+A segment tree can be used for this purpose. Each node in the segment tree can track the minimum and maximum delta in its interval, allowing us to perform a binary search to find the first j >=i where delta_j >= new_delta_i.
+
+Alternatively, since the delta array is non-decreasing, a binary search approach is possible. Because after the update, the delta array must still be non-decreasing. So when we add x to delta_i, we can compute new_val = delta_i +x. Then, we need to find the smallest m >=i+1 such that delta[m] >= new_val. Then, all elements from i to m-1 (but wait, no: delta[i] is new_val, and the elements after i must be >= new_val. So the elements from i+1 onwards must be at least new_val. So the first position where delta[j] >= new_val is the start of the remaining elements that are already >= new_val. So we can set all elements from i+1 up to j-1 to new_val, and the rest remain as they are.
+
+But since the delta array is non-decreasing, once we find the first j where delta[j] >= new_val, then all elements after j are >= delta[j] >= new_val, so no need to update beyond j.
+
+So the process is:
+
+1. delta[i] +=x.
+
+2. Find the first j >=i+1 such that delta[j] >= new_val.
+
+3. Set all elements from i+1 to j-1 to new_val.
+
+This way, the delta array remains non-decreasing.
+
+But how to find j quickly. Since delta is non-decreasing, we can perform a binary search from i+1 to n to find the smallest j where delta[j] >= new_val. Then, the elements from i+1 to j-1 need to be set to new_val.
+
+So each '+' operation would involve:
+
+- Update delta[i] +=x.
+
+- Binary search to find j.
+
+- Range update from i+1 to j-1 to new_val.
+
+If the delta array is stored in a segment tree with range updates and binary search capabilities, this can be done in O(log n) time.
+
+Additionally, for sum queries, we need to compute the sum from l to r of (base_j + delta_j), where base_j is a_1 + sum_{m=1}^{j-1}k_m. But the base array can be precomputed. Let's denote:
+
+base_j = a_1_initial + sum_{m=1}^{j-1}k_m.
+
+Wait, no. Because the initial a_1 can be modified via '+' operations. Wait, no. The '+' operation adds x to a_i. But in our model, a_i is base_i + delta_i. So base_i is the initial a_1 plus the sum of k_1 to k_{i-1}, but if a_1 is modified via a '+' operation, that would be part of delta_1, right?
+
+Wait, in our model, delta_1 represents the amount added to the initial a_1. So when a_1 is increased by x (via a '+' operation), delta_1 is increased by x. Then, the base array is computed based on the initial a_1 and the k's, but delta_1 is part of the delta array. So the actual a_1 is base_1 + delta_1. But base_1 is the initial a_1.
+
+Wait, perhaps the base_j is computed as a_1_initial + sum_{m=1}^{j-1}k_m. Then, delta_1 represents the modifications to a_1. So when we add x to a_1, delta_1 +=x. Then, the delta array is maintained such that delta_j >= delta_{j-1} for all j >=2.
+
+So the actual value of a_j is base_j + delta_j.
+
+So the sum from l to r is sum_{j=l}^r (base_j + delta_j) = sum(base[l..r]) + sum(delta[l..r]).
+
+So if we can precompute the prefix sums of the base array, then the sum for a query is (base_sum[r] - base_sum[l-1]) + (delta_sum[r] - delta_sum[l-1]).
+
+The base_sum can be precomputed once. The delta_sum can be maintained using a segment tree that supports range updates and point queries (for the sum), but since we have range updates (like setting a range to a certain value), we need a segment tree that can handle range assignments and compute the sum efficiently.
+
+Alternatively, the delta array can be maintained with a segment tree that allows:
+
+- Point updates (for adding x to delta[i]).
+
+- Range assignments (like setting a range [i+1, j-1] to new_val).
+
+- Range sum queries (summing delta[l..r]).
+
+But how to handle this with a segment tree.
+
+A standard segment tree with lazy propagation can handle range assignments and point updates, and can compute the sum. Each node in the segment tree would track the sum of the delta values in its interval, and a lazy value indicating a pending assignment.
+
+So for the '+' operation:
+
+- Update delta[i] +=x. This is a point update (we add x to delta[i]).
+
+- Then, find the first j >=i+1 where delta[j] >= new_val (delta[i] after the point update).
+
+- Then, perform a range assignment from i+1 to j-1 to new_val.
+
+For the sum query:
+
+- Compute (base_sum[r] - base_sum[l-1]) + (delta_sum[r] - delta_sum[l-1]).
+
+So the steps are:
+
+1. Precompute the base array and its prefix sums.
+
+2. Initialize the delta array as the initial a_j minus base_j. Because initially, a_j = base_j + delta_j. So delta_j = a_j_initial - base_j.
+
+   Wait, base_j is a_1_initial + sum_{m=1}^{j-1}k_m.
+
+   So a_j_initial = base_j + delta_j_initial.
+
+   So delta_j_initial = a_j_initial - base_j.
+
+   But since the problem's initial condition ensures that a_j_initial >= a_{j-1}_initial +k_{j-1} = base_j.
+
+   So delta_j_initial >=0. Also, the initial delta array is non-decreasing.
+
+   Let's confirm this:
+
+   a_j_initial >= a_{j-1}_initial +k_{j-1} => base_j + delta_j_initial >= (base_{j-1} + delta_{j-1}_initial) +k_{j-1}
+
+   Since base_j = base_{j-1} +k_{j-1}, this simplifies to delta_j_initial >= delta_{j-1}_initial.
+
+   So the initial delta array is non-decreasing.
+
+So this model holds.
+
+Now, the problem is how to represent the delta array with a segment tree that allows for point updates (adding x to a position), range assignments (setting a range to a certain value), and sum queries.
+
+A segment tree can be designed with each node storing:
+
+- The sum of the interval.
+
+- The minimum and maximum delta in the interval (to aid in binary search).
+
+- Lazy propagation for assignments (since a range assignment can override the current values).
+
+But combining point updates with range assignments is tricky. For example, if a point update is done after a range assignment has been applied but not yet propagated, we need to handle the order correctly.
+
+Alternatively, since the delta array is non-decreasing, the binary search to find j can be done efficiently. Let's think about that.
+
+After we update delta[i] to delta[i]+x, new_val = delta[i] +x. The delta array is now not necessarily non-decreasing. We need to find the first j >=i+1 where delta[j] >= new_val. Then, set all elements from i+1 to j-1 to new_val, which makes delta[j-1] = new_val <= delta[j] (since delta[j] >= new_val).
+
+Wait, but if j is the first index >=i+1 where delta[j] >= new_val, then for all indices in [i+1, j-1], delta[j] < new_val. But since the delta array is initially non-decreasing (before the current update), the elements from i+1 onwards are >= delta[i] (original). But after adding x to delta[i], delta[i] becomes delta[i]+x, which could be larger than delta[i+1] (original), which would require delta[i+1] to be increased to delta[i] +x.
+
+But since the original array is non-decreasing, delta[i+1] >= delta[i]. After adding x to delta[i], delta[i] becomes delta[i] +x. If delta[i+1] (original) < delta[i] +x, then we set delta[i+1] to delta[i] +x, and then check delta[i+2], etc.
+
+So the delta array after the update will be non-decreasing again.
+
+To find j, the first position where delta[j] (original) >= new_val, we can perform a binary search from i+1 to n. But the delta array is non-decreasing, so the binary search is feasible.
+
+Once j is found, we need to set delta[i+1] ... delta[j-1] to new_val. This will make the delta array non-decreasing again.
+
+So the steps for handling the '+' query are:
+
+1. For the given i and x, compute new_val = delta[i] +x. But wait, the current delta[i] may be part of a pending assignment in the segment tree. So we need to first get the current value of delta[i], add x to it, then perform the update.
+
+Wait, no. Because the segment tree may have pending operations. To handle this correctly, we need to make sure that any pending operations are resolved before accessing the delta[i] value.
+
+Alternatively, the point update (adding x to delta[i]) can be handled as a separate operation. Then, after that, the range assignment is done from i+1 to j-1.
+
+So the process is:
+
+a. Apply the point update: delta[i] +=x. This is done via the segment tree's point update function.
+
+b. Get the new_val = delta[i] (after the point update).
+
+c. Find j as the first index >=i+1 where delta[j] >= new_val. Because after the point update, delta[i] is new_val, and delta[i+1] is the original value (since we haven't processed the propagation yet).
+
+Wait, but after the point update, delta[i] is new_val. The rest of the delta array (from i+1 to n) is still in their original state (before the point update). So the delta array is not necessarily non-decreasing anymore. So we need to find j such that delta[j] (original) >= new_val, which would be the first position where no further updates are needed.
+
+So, how do we find j?
+
+We can perform a binary search in the delta array (using the segment tree) to find the smallest j >=i+1 where delta[j] >= new_val.
+
+Once found, we need to set delta[i+1] ... delta[j-1] to new_val.
+
+This is the key step. The range assignment from i+1 to j-1.
+
+But how to perform this in the segment tree.
+
+So, the steps for the '+' query:
+
+i. Apply point update to delta[i] (add x).
+
+ii. new_val = delta[i] after the update.
+
+iii. Binary search to find j (the first index >=i+1 where delta[j] >= new_val).
+
+iv. Apply range assignment from i+1 to j-1 to new_val.
+
+Then, the delta array remains non-decreasing.
+
+The sum queries are handled by summing the base array's segment plus the delta array's segment.
+
+Now, the challenge is to implement the segment tree for delta array with the following operations:
+
+1. Point update (add x to a position).
+
+2. Range assignment (set a range to a value).
+
+3. Sum query over a range.
+
+4. Binary search to find the first index >=i+1 where delta[j] >= new_val.
+
+The binary search requires that the delta array is stored in a way that allows efficient querying of individual elements. Alternatively, the segment tree can be augmented to support finding the first position >= a certain index where the value is >= a target.
+
+This is possible with a segment tree that, for each node, stores the minimum and maximum in the interval. Then, during the binary search, we can split the interval into left and right and check if the left part contains any element >= new_val. If not, check the right part.
+
+But implementing this requires a custom binary search using the segment tree.
+
+Alternatively, the binary search can be implemented using the current delta array's values, but that would require O(n) time in the worst case.
+
+But with the segment tree, each step of the binary search can be done in O(log n) time.
+
+So, the plan is:
+
+Implement a segment tree for the delta array that supports:
+
+- Point updates (adding x to a position).
+
+- Range assignments (setting a range to a value).
+
+- Sum queries.
+
+- Querying the value of a specific position (to get delta[i] after point update).
+
+- Binary search to find the first j >=i+1 where delta[j] >= target.
+
+Now, let's think about the segment tree structure.
+
+Each node represents an interval [l, r].
+
+For each node, we store:
+
+- sum: sum of delta in [l, r].
+
+- min_val: minimum delta in [l, r].
+
+- max_val: maximum delta in [l, r].
+
+- assign_lazy: a value to be assigned to the entire interval. If None, no pending assignment.
+
+- add_lazy: a value to be added to each element in the interval. This is for the point updates. Wait, but point updates are adding x to a single position, which can be represented as a range update from i to i. However, the add_lazy is not efficient for point updates. So perhaps we need to handle point updates as range updates for a single element.
+
+But this may complicate things. Alternatively, the segment tree can have two types of lazy operations: assignments and additive updates. However, combining additive updates and assignments is non-trivial. For example, if a node has an additive lazy and then an assignment is applied, the additive is overwritten. So the order of operations matters.
+
+Alternatively, since the only additive operations are point updates (adding x to a single position), perhaps we can handle them as single-element updates, and for range assignments, we can manage the lazy propagation as usual.
+
+But in this case, the additive point update would need to propagate down to the leaf node, resolving any pending assignments along the way.
+
+This could be feasible, but may lead to O(log n) time per point update, which is acceptable.
+
+So the segment tree will have:
+
+Each node:
+
+- sum: sum of the interval.
+
+- min_val: min of the interval.
+
+- max_val: max of the interval.
+
+- assign: the pending assignment for the interval. If present, all elements in the interval are set to this value.
+
+- add: pending additive updates for the interval. But since additive updates are only point updates, perhaps this is not needed. Alternatively, if we handle additive point updates directly by traversing to the leaf node and applying the addition, and then propagating back up, then we don't need an add lazy.
+
+Wait, but point updates can be handled by traversing the tree to the leaf node, applying any pending assignments along the way (by propagating the assignment to the children and resetting the parent's assignment), and then adding x to the leaf. Then, the sum, min, max of the ancestors are updated accordingly.
+
+Similarly, for range assignments, when a range is assigned a value, the segment tree's nodes are marked with the assignment and the sum, min, max are updated.
+
+So, the segment tree can be implemented with support for range assignments and point updates.
+
+Now, for the binary search step: given a target value, and a starting index i+1, find the smallest j >= i+1 such that delta[j] >= target.
+
+To perform this binary search, we can query the segment tree for the interval [i+1, n], and find the first element >= target. The segment tree can be augmented to allow this binary search.
+
+The binary search can be done as follows:
+
+- Start with the left bound as i+1 and right bound as n.
+
+- Check if the maximum in the current interval is < target. If so, no such j exists, return n+1.
+
+- Otherwise, check the left half and see if it has a value >= target. If yes, search left. Else, search right.
+
+This can be implemented in O(log n) time using the segment tree.
+
+So, the segment tree needs to support a function to find the first position >= start where delta[j] >= target.
+
+Putting it all together:
+
+The steps are:
+
+For '+' query i x:
+
+1. Apply point update to delta[i]: add x to it. This is done by traversing the segment tree to the leaf node i, applying any pending assignments, then adding x to the leaf, and updating sum, min, max up the tree.
+
+2. Get the new_val = delta[i] (after the update). This can be done by querying the segment tree for the value at i.
+
+3. Perform a binary search on delta array from i+1 to n to find the first j where delta[j] >= new_val.
+
+4. If j >i+1, apply a range assignment from i+1 to j-1 to new_val. This sets all those positions to new_val, which is <= delta[j], ensuring the delta array remains non-decreasing.
+
+For 's' query l r:
+
+Compute sum of base array from l to r, plus sum of delta array from l to r.
+
+The base array's sum can be precomputed as a prefix sum array.
+
+Now, implementing the segment tree with these operations.
+
+But how to handle the binary search for j.
+
+Let's think about the binary search function.
+
+The function find_first_ge(start, target) returns the smallest j >= start such that delta[j] >= target. The delta array is stored in the segment tree, which is a non-decreasing sequence.
+
+The binary search works as follows:
+
+current start is start, end is n.
+
+Check the left half [start, mid] and the right half [mid+1, end]. For the left half, check if the max_val is >= target. If yes, there's a j in the left half. Else, check the right half.
+
+But since the array is non-decreasing, once we find the leftmost j in an interval where delta[j] >= target, that's the first occurrence.
+
+Alternatively, since the array is non-decreasing, the first occurrence of delta[j] >= target is the minimal j >=start where this holds.
+
+So, in the segment tree, for a given interval, if the min of the interval is >= target, then the first j is the start of the interval. Else, if the max is >= target, split into left and right and check.
+
+But this requires the segment tree to be able to answer for any interval [l, r] whether there's an element >= target, and then find the first occurrence.
+
+So, the find_first_ge function can be implemented recursively:
+
+function find_first_ge(node, start, end, target):
+
+    if node's interval is outside [start, end] or node's max_val < target:
+        return infinity (no such j)
+    if node is a leaf:
+        return node's interval start (since it's within [start, end] and node's value >= target)
+    push down any pending assignments to children
+    check left child's interval (l_child)
+    if l_child's interval is within [start, end] and l_child's max_val >= target:
+        res = find_first_ge(left child, start, end, target)
+        if res != infinity:
+            return res
+    return find_first_ge(right child, start, end, target)
+
+But how to pass the start and end parameters.
+
+Alternatively, the function can be implemented as follows:
+
+def find_first_ge(node, current_l, current_r, target, start):
+
+    if current_r < start:
+        return None
+    if current_l > current_r:
+        return None
+    if node.max_val < target:
+        return None
+    if current_l >= start and node.min_val >= target:
+        return current_l
+    # Need to explore children
+    push down pending assignments
+    mid = (current_l + current_r) // 2
+    left_result = find_first_ge(node.left, current_l, mid, target, start)
+    if left_result is not None:
+        return left_result
+    right_result = find_first_ge(node.right, mid+1, current_r, target, start)
+    return right_result
+
+But I'm not sure. This would require the node to track min and max.
+
+Alternatively, for each query of find_first_ge(start, target), we can check the leftmost position in [start, n] where delta[j] >= target. Since the array is non-decreasing, once we find the first such j, everything to the right is >= target.
+
+So the binary search can start with low = start, high = n. The answer is the smallest j >= low where delta[j] >= target.
+
+The binary search can be implemented in O(log n) time using the segment tree's range min/max queries.
+
+But each step of the binary search would require a query to the segment tree to check if the current mid's value is >= target.
+
+But for each step of binary search, this is O(log n) time, leading to O(log^2 n) per binary search.
+
+Alternatively, the find_first_ge function can be implemented using the segment tree in O(log n) time.
+
+Yes, this is possible. Here's how:
+
+We can start at the root and proceed to the left child whenever possible. For example, for the interval [l, r], if the left child's interval [l, mid] has max >= target, then the first occurrence could be in the left child. Otherwise, check the right child.
+
+But we also need to ensure that we only search in the interval >= start.
+
+So the algorithm is:
+
+Initialize the answer as None.
+
+Traverse the segment tree nodes, keeping track of the current interval. For each node:
+
+- If the current node's interval is entirely before start, skip.
+
+- If the current node's interval has max < target, skip.
+
+- Else, if the current node is a leaf, return its position.
+
+- Else, check the left child. If the left child's interval intersects with [start, ...] and its max >= target, then recursively check the left child. If the left child returns a valid position, that's the answer.
+
+- If not found, check the right child.
+
+This way, the traversal finds the first position in the interval >= start where delta[j] >= target, taking O(log n) time.
+
+So, the find_first_ge function can be implemented in O(log n) time.
+
+Once j is found, the range assignment from i+1 to j-1 can be performed. If j is i+1, then no assignment is needed.
+
+Now, putting it all together.
+
+The steps for the '+' query:
+
+1. Apply a point update to delta[i], adding x. This is O(log n) time.
+
+2. Query delta[i] to get new_val. This is O(log n) time.
+
+3. Find j = find_first_ge(i+1, new_val). This is O(log n) time.
+
+4. If j >i+1, apply a range assignment from i+1 to j-1 to new_val. This is O(log n) time (since the range is contiguous and the assignment is a single range update).
+
+For the 's' query:
+
+1. Compute sum of base from l to r (precomputed) and sum of delta from l to r (using the segment tree's sum query). This is O(log n) time.
+
+Now, the key is to precompute the base array's prefix sums.
+
+The base array is computed as:
+
+base_1 = a_1_initial
+
+base_j = base_1 + sum_{m=1}^{j-1}k_{m} for j >=2.
+
+So the base array can be precomputed once. The prefix sums of the base array can be precomputed as well.
+
+So, for the sample input:
+
+Sample 1:
+
+3
+
+1 2 3
+
+1 -1
+
+Then base_1 =1, base_2 =1+1=2, base_3=1+1 + (-1) =1.
+
+But the initial a array is [1,2,3], so delta_1 =1 - base_1 =0, delta_2 =2 - base_2=0, delta_3=3 - base_3=2.
+
+But since the delta array must be non-decreasing, this is allowed (0,0,2). Wait, but delta_2 is 0 which is equal to delta_1. Then delta_3 is 2, which is >= delta_2. So it's non-decreasing.
+
+Now, when a '+' query is applied to i=1, x=2.
+
+Point update to delta[1]: 0 +2=2. Then new_val is 2.
+
+We need to find j >=2 where delta[j] >=2.
+
+The current delta array after the point update is [2,0,2]. But since we need to enforce the non-decreasing property, after the point update, the delta array is [2,0,2], which is not non-decreasing. So we need to propagate.
+
+So binary search from i+1=2 to find the first j where delta[j] >=2.
+
+In the initial delta array (before the propagation), after the point update, delta[2] is 0. So j is found at delta[3]=2 >=2. So j=3.
+
+So we set delta[2] to 2.
+
+Now the delta array becomes [2,2,2]. Which is non-decreasing.
+
+So the sum after this is base + delta.
+
+After this, the a array is [1+2, 2+2,1+2] =3,4,3.
+
+Then, the next '+' query is applied to i=3, x=1.
+
+delta[3] was 2. After adding 1, becomes 3. Then, new_val=3. Find j >=4 (since i=3, i+1=4, which is beyond n=3. So no j found. So no range assignment is done. The delta array is [2,2,3], which is non-decreasing.
+
+So the a array becomes [3,4,3+3=6? Wait, wait. base_3 is 1. delta_3 is 3. So a_3=1+3=4. After adding x=1 to a_3, delta_3 becomes 3+1=4. Then, new_val=4. We look for j=4 which is out of bounds. So no assignment. So delta is [2,2,4]. The a array is base + delta: 1+2=3, 2+2=4, 1+4=5. So after the second '+' query, a becomes [3,4,5].
+
+But the sample output after the second '+' query (the third query) is s 2 3, which is 4 +3=7. Wait, maybe I'm getting confused with the sample.
+
+Wait, the first sample's input after processing the first '+' query (i=1, x=2) makes a = [3,4,3]. Then the next '+' query is +3 1. So adding 1 to a_3. Then a_3 becomes 3+1=4. But then, there's no a_4, so propagation stops. So the a array becomes [3,4,4]. So the sum from 2-3 is 4+4=8, which matches the sample's last output.
+
+Hmm. So perhaps I made a mistake in the model. Because the model suggests that the base_3 is 1, and delta_3 is 4. So a_3 is 1+4=5. But according to the sample, after adding 1 to a_3, the a_3 is 3+1=4, and no propagation is needed because there's no a_4.
+
+Ah, here's the mistake. The initial a array is [1,2,3], and k array is [1,-1]. So base_1 =1, base_2 =1+1=2, base_3=1+1-1=1. So delta_1 is 0, delta_2=0, delta_3=2. So initial a is [1,2,3] = base + delta.
+
+When the first '+' query is +1 2:
+
+delta_1 becomes 0+2=2. new_val=2.
+
+Now, find j in i+1=2 to 3 where delta[j] >=2.
+
+Current delta[2] is 0 (before any propagation), delta[3] is 2.
+
+So the first j is 3. So set delta[2] to 2. Now, delta array is [2,2,2]. So a_2 is base_2 + delta_2 =2+2=4, a_3= base_3 + delta_3=1+2=3. So a becomes [3,4,3], which matches the sample.
+
+Then, the next '+' query is +3 1. So delta_3 +=1. new_val=2+1=3. Then find j >=4, which is out of bounds. So no range assignment. So delta array becomes [2,2,3]. So a_3 is 1+3=4. So a is [3,4,4]. The sum from 2-3 is 4+4=8.
+
+So the model works.
+
+So the key is that the base array is computed once, and the delta array is maintained with the non-decreasing property.
+
+Now, the data structures required:
+
+- Precompute the base array and its prefix sums.
+
+- A segment tree for the delta array, supporting point updates (add x), range assignments (set to value), sum queries, and find_first_ge(start, target).
+
+Implementing this segment tree in Python is challenging, but possible.
+
+But given the time constraints (n up to 1e5 and q up to 1e5), Python's performance may be an issue. However, given that each query is O(log n) time, it's manageable.
+
+Now, let's think about implementing the segment tree.
+
+The segment tree node needs to track sum, min, max, and pending assignments. Each node can be represented as a class, but in Python, it's more efficient to use arrays to represent the segment tree.
+
+But for simplicity, perhaps we can represent the segment tree using a list-based approach with each node's data stored in a list. However, for large n (up to 1e5), the segment tree requires O(4n) space, which is manageable.
+
+The segment tree functions:
+
+- build: constructs the tree based on the initial delta array.
+
+- push: propagates pending assignments to children.
+
+- point_update: adds x to a specific position.
+
+- range_assign: assigns a value to a range.
+
+- query_sum: returns the sum of a range.
+
+- find_first_ge: finds the first index >=start where delta[j] >= target.
+
+Implementing this in Python:
+
+But Python is not the fastest for this, but given the time constraints of code submission (with 3-5 seconds), it's manageable.
+
+But how to handle the delta array's initial values. For each j in 1..n:
+
+base_j = a_1_initial + sum_{m=1}^{j-1}k_m.
+
+delta_j_initial = a_j_initial - base_j.
+
+These can be precomputed.
+
+Now, the code steps:
+
+Read n.
+
+Read a array.
+
+Read k array.
+
+Precompute base array and delta initial array.
+
+precompute prefix sums of base array.
+
+Read q queries.
+
+Process each query.
+
+For a '+' query:
+
+i is given (1-based). x is added to a_i. So:
+
+- delta[i] +=x. Point update.
+
+- new_val = get delta[i] after update.
+
+- find j = find_first_ge(i+1, new_val).
+
+- if j >i+1, assign delta[i+1..j-1] = new_val.
+
+For 's' query l to r:
+
+sum_base = base_prefix[r] - base_prefix[l-1]
+
+sum_delta = query_sum(l, r)
+
+sum_total = sum_base + sum_delta
+
+print(sum_total)
+
+So the code needs to implement all this.
+
+Now, the implementation:
+
+First, compute the base array and delta initial array.
+
+base = [0]*(n+1)
+
+base[1] = a[0]
+
+for j in range(2, n+1):
+
+    base[j] = base[j-1] + k[j-2] # since k is 0-based for j-2 (as j-1 is the index up to j-1 elements)
+
+delta_initial = [0]*(n+1)
+
+for j in 1..n:
+
+    delta_initial[j] = a[j-1] - base[j]
+
+But a is given as a list (0-based in Python).
+
+Then, the prefix sums for the base array:
+
+base_prefix = [0]*(n+1)
+
+for j in 1..n:
+
+    base_prefix[j] = base_prefix[j-1] + base[j]
+
+Now, build the segment tree for the delta_initial array.
+
+The segment tree will need to handle 1-based indices.
+
+Now, the segment tree implementation:
+
+The segment tree nodes will have:
+
+- sum: sum of the interval.
+
+- max_val: maximum in the interval.
+
+- min_val: minimum in the interval.
+
+- assign_lazy: pending assignment.
+
+The segment tree functions:
+
+The segment tree will be built using a list-based approach, with each node represented as a dictionary or a class. But in Python, using a list of dictionaries for each node is possible but may be memory-intensive for large n.
+
+An alternative is to use a list for each parameter (sum, min_val, max_val, assign_lazy), but this can get complicated.
+
+Alternatively, for each node, store the sum, min, max, and assign_lazy. The nodes can be stored in a list, with the root at index 0, and left and right children computed as 2*i+1 and 2*i+2. But this approach is not feasible for large n.
+
+Alternatively, use a dynamic approach where each node is represented as a dictionary, and the tree is built recursively.
+
+But given time constraints, perhaps the most efficient way is to implement a segment tree using a list-based approach with 4n elements.
+
+But in Python, for n up to 1e5, a list of size 4*1e5 is manageable.
+
+But for each node, we need to track sum, min_val, max_val, and assign_lazy.
+
+So perhaps use four separate lists: sum_tree, min_val_tree, max_val_tree, assign_lazy_tree.
+
+But this is memory-intensive.
+
+Alternatively, use a single list of tuples, but this may be slow in Python.
+
+Alternatively, use a class-based approach.
+
+Alternatively, consider that each node's sum, min, max, and assign_lazy can be stored in a dictionary for each node. But for n up to 1e5, this could be feasible.
+
+But I'm not sure. Alternatively, implement a segment tree using a recursive approach.
+
+But given time constraints, perhaps use a simple iterative segment tree with range assignments and sum queries.
+
+But this requires careful implementation.
+
+Alternatively, refer to online resources for a Python segment tree implementation that supports range assignments and point updates.
+
+But I'll proceed to outline the code.
+
+First, the initial code skeleton:
+
+Read n.
+
+a = list(map(int, input().split()))
+
+k = list(map(int, input().split()))
+
+Compute base array:
+
+base = [0]*(n+1)
+
+base[1] = a[0]
+
+for j in range(2, n+1):
+
+    base[j] = base[j-1] + k[j-2]
+
+Compute delta_initial:
+
+delta_initial = [0]*(n+1)
+
+for j in range(1, n+1):
+
+    delta_initial[j] = a[j-1] - base[j]
+
+Compute base_prefix:
+
+base_prefix = [0]*(n+1)
+
+for j in range(1, n+1):
+
+    base_prefix[j] = base_prefix[j-1] + base[j]
+
+Now, build the segment tree for delta_initial.
+
+The segment tree needs to support:
+
+- point update (add x to a position).
+
+- range assign (set a range to a value).
+
+- sum query for a range.
+
+- find_first_ge(start, target).
+
+Implementing this in Python.
+
+But implementing a segment tree with all these operations is non-trivial.
+
+Alternatively, use a binary indexed tree (Fenwick tree) for sum queries. But binary indexed trees can't handle range assignments efficiently.
+
+So, the segment tree is the way to go.
+
+Now, the segment tree code:
+
+class SegmentTree:
+
+    def __init__(self, data):
+
+        self.n = len(data) -1  # data is 1-based
+
+        self.size = 1
+
+        while self.size < self.n:
+
+            self.size <<=1
+
+        self.sum_tree = [0]*(2*self.size)
+
+        self.min_val = [0]*(2*self.size)
+
+        self.max_val = [0]*(2*self.size)
+
+        self.assign_lazy = [None]*(2*self.size)
+
+        # Fill the leaves
+
+        for i in range(1, self.n+1):
+
+            self.sum_tree[self.size + i -1] = data[i]
+
+            self.min_val[self.size + i -1] = data[i]
+
+            self.max_val[self.size + i -1] = data[i]
+
+        # Build the internal nodes
+
+        for i in range(self.size-1, 0, -1):
+
+            self.sum_tree[i] = self.sum_tree[2*i] + self.sum_tree[2*i+1]
+
+            self.min_val[i] = min(self.min_val[2*i], self.min_val[2*i+1])
+
+            self.max_val[i] = max(self.max_val[2*i], self.max_val[2*i+1])
+
+    def push(self, node, l, r):
+
+        if self.assign_lazy[node] is not None:
+
+            mid = (l + r) //2
+
+            left = 2*node
+
+            right = 2*node+1
+
+            # Assign to left child
+
+            self.sum_tree[left] = self.assign_lazy[node] * (mid -l +1)
+
+            self.min_val[left] = self.assign_lazy[node]
+
+            self.max_val[left] = self.assign_lazy[node]
+
+            self.assign_lazy[left] = self.assign_lazy[node]
+
+            # Assign to right child
+
+            self.sum_tree[right] = self.assign_lazy[node] * (r - mid)
+
+            self.min_val[right] = self.assign_lazy[node]
+
+            self.max_val[right] = self.assign_lazy[node]
+
+            self.assign_lazy[right] = self.assign_lazy[node]
+
+            # Clear the lazy value for current node
+
+            self.assign_lazy[node] = None
+
+    def range_assign(self, a, b, val, node, l, r):
+
+        if a > r or b < l:
+
+            return
+
+        if a <= l and r <= b:
+
+            self.sum_tree[node] = val * (r -l +1)
+
+            self.min_val[node] = val
+
+            self.max_val[node] = val
+
+            self.assign_lazy[node] = val
+
+            return
+
+        self.push(node, l, r)
+
+        mid = (l + r) //2
+
+        self.range_assign(a, b, val, 2*node, l, mid)
+
+        self.range_assign(a, b, val, 2*node+1, mid+1, r)
+
+        self.sum_tree[node] = self.sum_tree[2*node] + self.sum_tree[2*node+1]
+
+        self.min_val[node] = min(self.min_val[2*node], self.min_val[2*node+1])
+
+        self.max_val[node] = max(self.max_val[2*node], self.max_val[2*node+1])
+
+    def assign(self, a, b, val):
+
+        self.range_assign(a, b, val, 1, 1, self.size)
+
+    def point_add(self, pos, val):
+
+        # Update the leaf node
+
+        node = 1
+
+        l =1
+
+        r = self.size
+
+        stack = []
+
+        while l != r:
+
+            stack.append(node)
+
+            mid = (l +r) //2
+
+            if pos <= mid:
+
+                r = mid
+
+                node = 2*node
+
+            else:
+
+                l = mid+1
+
+                node = 2*node+1
+
+        # Now at leaf node
+
+        self.sum_tree[node] += val
+
+        self.min_val[node] += val
+
+        self.max_val[node] += val
+
+        # Bubble up
+
+        for node in reversed(stack):
+
+            left = 2*node
+
+            right = 2*node+1
+
+            self.sum_tree[node] = self.sum_tree[left] + self.sum_tree[right]
+
+            self.min_val[node] = min(self.min_val[left], self.min_val[right])
+
+            self.max_val[node] = max(self.max_val[left], self.max_val[right])
+
+    def query_sum(self, a, b):
+
+        return self.range_sum(a, b, 1, 1, self.size)
+
+    def range_sum(self, a, b, node, l, r):
+
+        if a > r or b < l:
+
+            return 0
+
+        if a <= l and r <= b:
+
+            return self.sum_tree[node]
+
+        self.push(node, l, r)
+
+        mid = (l + r) //2
+
+        left_sum = self.range_sum(a, b, 2*node, l, mid)
+
+        right_sum = self.range_sum(a, b, 2*node+1, mid+1, r)
+
+        return left_sum + right_sum
+
+    def find_first_ge(self, start, target):
+
+        # Find the smallest j >= start where delta[j] >= target
+
+        # Implement this using the segment tree
+
+        node =1
+
+        l =1
+
+        r = self.size
+
+        res = None
+
+        stack = [(node, l, r)]
+
+        while stack:
+
+            node, curr_l, curr_r = stack.pop()
+
+            if curr_r < start:
+
+                continue
+
+            if curr_l > self.n:
+
+                continue
+
+            if self.max_val[node] < target:
+
+                continue
+
+            if curr_l == curr_r:
+
+                if curr_l >= start and self.min_val[node] >= target:
+
+                    if res is None or curr_l < res:
+
+                        res = curr_l
+
+                continue
+
+            # Push children to the stack in reverse order (right first)
+
+            self.push(node, curr_l, curr_r)
+
+            mid = (curr_l + curr_r) //2
+
+            stack.append( (2*node+1, mid+1, curr_r) )
+
+            stack.append( (2*node, curr_l, mid) )
+
+        return res if res is not None else (self.n +1)
+
+But this code may not handle all cases correctly. For example, the find_first_ge function may not correctly track the current_l and curr_r when nodes are pushed onto the stack. Also, the initial approach of using a stack and iterating may not correctly find the leftmost j.
+
+Alternatively, a recursive approach for find_first_ge may be better.
+
+    def find_first_ge(self, start, target):
+
+        return self._find_first_ge(1, 1, self.size, start, target)
+
+    def _find_first_ge(self, node, node_l, node_r, start, target):
+
+        if node_r < start:
+
+            return None
+
+        if self.max_val[node] < target:
+
+            return None
+
+        if node_l == node_r:
+
+            return node_l if node_l >= start else None
+
+        self.push(node, node_l, node_r)
+
+        mid = (node_l + node_r) //2
+
+        left_res = self._find_first_ge(2*node, node_l, mid, start, target)
+
+        if left_res is not None:
+
+            return left_res
+
+        return self._find_first_ge(2*node+1, mid+1, node_r, start, target)
+
+But this approach recursively checks the left child first, and if found, returns the leftmost position. Otherwise, checks the right child.
+
+This should work correctly.
+
+Now, with this segment tree implementation, the code can proceed.
+
+But I need to test this code.
+
+But given time constraints, perhaps proceed with writing the code.
+
+The final code steps:
+
+Read input.
+
+Compute base and delta_initial.
+
+Build the segment tree.
+
+Process each query.
+
+For '+' query:
+
+i is 1-based.
+
+Convert i to 1-based.
+
+Add x to delta[i].
+
+Get new_val by querying the delta[i].
+
+Find j = find_first_ge(i+1, new_val).
+
+If j is None, j =n+1.
+
+If j >i+1:
+
+    assign delta[i+1..j-1] to new_val.
+
+For 's' query:
+
+l, r are 1-based.
+
+sum_base = base_prefix[r] - base_prefix[l-1]
+
+sum_delta = segment_tree.query_sum(l, r)
+
+print(sum_base + sum_delta)
+
+Now, the code for this:
+
+But there is a problem with the initial segment tree's data. The segment tree is built with data from delta_initial[1..n], which is 1-based. The segment tree's nodes are 1-based as well.
+
+But the code for the segment tree's init may be incorrect. For example, in the constructor, the code fills the leaves by:
+
+for i in range(1, self.n+1):
+
+    self.sum_tree[self.size + i -1] = data[i]
+
+Which is correct if the segment tree has leaves starting at index self.size, but if the size is larger than n, the remaining leaves (i> n) will be 0, but in our case, delta_initial is 1-based and of size n+1. So for j >n, delta_initial[j] is undefined. But since the segment tree's size is a power of two >=n, the leaves after the nth position will be filled with 0, but those are beyond our data, so they are not accessed.
+
+But in our code, the queries are limited to 1..n, so those leaves are not considered.
+
+Now, putting it all together.
+
+But there are several potential issues, such as the segment tree's implementation being incorrect, or the find_first_ge function not working correctly.
+
+But given time constraints, here's the code:
+
+Read the input and compute base, delta_initial, etc.
+
+But in the code:
+
+delta_initial is computed as a list with indices 0..n.
+
+Then, when building the segment tree, we pass delta_initial[1..n], but the code for the segment tree expects data from 1-based to n-based.
+
+But the code for the segment tree's __init__ function takes data as 1-based.
+
+Wait, the code in the constructor is:
+
+self.n = len(data) -1.
+
+But data is passed as delta_initial, which has len(n+1), so self.n is n.
+
+Yes.
+
+So the code is:
+
+delta_data = delta_initial
+
+st = SegmentTree(delta_data)
+
+Now, the code for the '+' query:
+
+i is 1-based.
+
+st.point_add(i, x)
+
+new_val = st.query_sum(i, i)  # sum from i to i is delta[i]
+
+j = st.find_first_ge(i+1, new_val)
+
+if j is None:
+
+    j = n +1
+
+if j >i+1:
+
+    st.assign(i+1, j-1, new_val)
+
+But wait, the assign function is for a range a to b. So if j-1 >=i+1, then the range is i+1 to j-1.
+
+Yes.
+
+For the 's' query:
+
+sum_base = base_prefix[r] - base_prefix[l-1]
+
+sum_delta = st.query_sum(l, r)
+
+total = sum_base + sum_delta
+
+print(total)
+
+Now, test case 1:
+
+Sample input 1:
+
+3
+
+1 2 3
+
+1 -1
+
+5
+
+s 2 3
+
++ 1 2
+
+s 1 2
+
++ 3 1
+
+s 2 3
+
+Output:
+
+5
+
+7
+
+8
+
+Processing:
+
+Initial base array:
+
+base[1] =1
+
+base[2] =1+1=2
+
+base[3] =2 + (-1) =1
+
+delta_initial:
+
+delta[1] =1-1=0
+
+delta[2]=2-2=0
+
+delta[3]=3-1=2
+
+Segment tree initially has delta [0, 0, 2].
+
+Processing the first '+' query: + 1 2.
+
+i=1, x=2.
+
+point_add(1, 2) → delta[1] becomes 2.
+
+new_val =2.
+
+find j = find_first_ge(2, 2).
+
+Check in the segment tree. The delta array is now [2,0,2].
+
+But wait, after the point_add, the delta array is:
+
+delta[1] =0+2=2.
+
+The rest are unchanged.
+
+So the delta array is [2,0,2]. The find_first_ge(2, 2) would check positions 2 and 3.
+
+delta[2] is 0 <2, delta[3] is 2 >=2. So j=3.
+
+range assign 2..2 (since j-1=3-1=2). So assign delta[2] to 2.
+
+Now delta array becomes [2,2,2].
+
+Sum for s 1 2: base[1]+base[2] =1 +2=3. Delta sum 2+2=4. Total 7.
+
+Next, '+' query: +3 1.
+
+i=3, x=1.
+
+point_add(3,1) → delta[3] becomes 2+1=3.
+
+new_val=3.
+
+find j = find_first_ge(4,3). Which is out of bounds. So j is None → n+1=4.
+
+No assignment.
+
+So delta array is [2,2,3].
+
+Sum for s 2-3: base[2] + base[3] =2+1=3. delta sum 2+3=5. Total 8.
+
+Which matches the sample.
+
+So the code should handle this correctly.
+
+Now, the code:
+
+But the segment tree's point_add function may not work correctly. In the current code, point_add uses the method:
+
+def point_add(self, pos, val):
+
+    # Update the leaf node
+
+    node =1
+
+    l =1
+
+    r = self.size
+
+    stack = []
+
+    while l != r:
+
+        stack.append(node)
+
+        mid = (l +r) //2
+
+        if pos <= mid:
+
+            r = mid
+
+            node = 2*node
+
+        else:
+
+            l = mid+1
+
+            node = 2*node+1
+
+    # Now at leaf node
+
+    self.sum_tree[node] += val
+
+    self.min_val[node] += val
+
+    self.max_val[node] += val
+
+    # Bubble up
+
+    for node in reversed(stack):
+
+        left = 2*node
+
+        right = 2*node+1
+
+        self.sum_tree[node] = self.sum_tree[left] + self.sum_tree[right]
+
+        self.min_val[node] = min(self.min_val[left], self.min_val[right])
+
+        self.max_val[node] = max(self.max_val[left], self.max_val[right])
+
+But this approach assumes that the leaf node is correctly found, and then the update is applied. However, the assign_lazy may not be handled during the traversal. For example, if there are pending assignments in the nodes above the leaf, the leaf's value may not be correct.
+
+So, during the point_add traversal, the code should push down any pending assignments along the path.
+
+Thus, the point_add function needs to be modified to handle pending assignments.
+
+But in the current code, during the traversal to the leaf, the code does not handle the assign_lazy, leading to incorrect values.
+
+To fix this, during the traversal to the leaf node, any pending assigns in the path must be pushed down.
+
+So the code for point_add should be modified to:
+
+def point_add(self, pos, val):
+
+    # Update the leaf node
+
+    node =1
+
+    l =1
+
+    r = self.size
+
+    stack = []
+
+    while l != r:
+
+        stack.append(node)
+
+        self.push(node, l, r)
+
+        mid = (l +r) //2
+
+        if pos <= mid:
+
+            r = mid
+
+            node = 2*node
+
+        else:
+
+            l = mid+1
+
+            node = 2*node+1
+
+    # Now at leaf node
+
+    self.sum_tree[node] += val
+
+    self.min_val[node] += val
+
+    self.max_val[node] += val
+
+    # Bubble up
+
+    for node in reversed(stack):
+
+        left = 2*node
+
+        right = 2*node+1
+
+        self.sum_tree[node] = self.sum_tree[left] + self.sum_tree[right]
+
+        self.min_val[node] = min(self.min_val[left], self.min_val[right])
+
+        self.max_val[node] = max(self.max_val[left], self.max_val[right])
+
+This way, during the traversal to the leaf, any pending assignments are pushed down to the children, ensuring that the leaf node's value is current.
+
+This correction is crucial for the code to work correctly.
+
+Similarly, the find_first_ge function needs to push pending assignments during the search.
+
+The current code for _find_first_ge calls self.push(node, node_l, node_r) before checking the children.
+
+With these corrections, the code should work.
+
+But given time constraints, the final code is as follows.
+</think>
+To solve this problem, we need to efficiently handle two types of queries on an array `a` after applying certain constraints using another array `k`. The first type of query updates elements in `a` and propagates changes to maintain a non-decreasing property, while the second type calculates the sum of a subarray. The solution must handle up to 100,000 operations efficiently.
+
+### Approach
+1. **Initial Setup**: We start by converting the array `a` into a base array and a delta array. The base array is constructed using the initial values of `a` and the constraints from `k`, ensuring that each element `a_i` is at least the sum of previous elements and their corresponding `k` values. The delta array captures the difference between the actual values in `a` and the computed base values.
+
+2. **Segment Tree**: We use a segment tree to manage the delta array efficiently. The segment tree supports:
+   - Point updates to increment a specific element.
+   - Range assignments to propagate constraints.
+   - Sum queries to compute the sum of any subarray.
+   - Binary search to find the first position where a value meets a threshold, ensuring the non-decreasing property.
+
+3. **Handling Queries**:
+   - **Update Query**: When updating an element, we adjust the delta array and propagate changes to maintain the non-decreasing property using binary search and range assignments.
+   - **Sum Query**: Compute the sum using precomputed base array values and the segment tree for delta values.
+
+### Solution Code
+```python
+import sys
+
+class SegmentTree:
+    def __init__(self, data):
+        self.n = len(data) - 1  # data is 1-based
+        self.size = 1
+        while self.size < self.n:
+            self.size <<= 1
+        self.sum_tree = [0] * (2 * self.size)
+        self.min_val = [0] * (2 * self.size)
+        self.max_val = [0] * (2 * self.size)
+        self.assign_lazy = [None] * (2 * self.size)
+
+        for i in range(1, self.n + 1):
+            pos = self.size + i - 1
+            self.sum_tree[pos] = data[i]
+            self.min_val[pos] = data[i]
+            self.max_val[pos] = data[i]
+        for i in range(self.size - 1, 0, -1):
+            self.sum_tree[i] = self.sum_tree[2 * i] + self.sum_tree[2 * i + 1]
+            self.min_val[i] = min(self.min_val[2 * i], self.min_val[2 * i + 1])
+            self.max_val[i] = max(self.max_val[2 * i], self.max_val[2 * i + 1])
+
+    def push(self, node, l, r):
+        if self.assign_lazy[node] is not None:
+            mid = (l + r) // 2
+            left = 2 * node
+            right_node = 2 * node + 1
+
+            self.sum_tree[left] = self.assign_lazy[node] * (mid - l + 1)
+            self.min_val[left] = self.assign_lazy[node]
+            self.max_val[left] = self.assign_lazy[node]
+            self.assign_lazy[left] = self.assign_lazy[node]
+
+            self.sum_tree[right_node] = self.assign_lazy[node] * (r - mid)
+            self.min_val[right_node] = self.assign_lazy[node]
+            self.max_val[right_node] = self.assign_lazy[node]
+            self.assign_lazy[right_node] = self.assign_lazy[node]
+
+            self.assign_lazy[node] = None
+
+    def range_assign(self, a, b, val, node, l, r):
+        if a > r or b < l:
+            return
+        if a <= l and r <= b:
+            self.sum_tree[node] = val * (r - l + 1)
+            self.min_val[node] = val
+            self.max_val[node] = val
+            self.assign_lazy[node] = val
+            return
+        self.push(node, l, r)
+        mid = (l + r) // 2
+        self.range_assign(a, b, val, 2 * node, l, mid)
+        self.range_assign(a, b, val, 2 * node + 1, mid + 1, r)
+        self.sum_tree[node] = self.sum_tree[2 * node] + self.sum_tree[2 * node + 1]
+        self.min_val[node] = min(self.min_val[2 * node], self.min_val[2 * node + 1])
+        self.max_val[node] = max(self.max_val[2 * node], self.max_val[2 * node + 1])
+
+    def assign(self, a, b, val):
+        self.range_assign(a, b, val, 1, 1, self.size)
+
+    def point_add(self, pos, val):
+        node = 1
+        l = 1
+        r = self.size
+        stack = []
+        while l != r:
+            stack.append(node)
+            self.push(node, l, r)
+            mid = (l + r) // 2
+            if pos <= mid:
+                r = mid
+                node = 2 * node
+            else:
+                l = mid + 1
+                node = 2 * node + 1
+        self.sum_tree[node] += val
+        self.min_val[node] += val
+        self.max_val[node] += val
+        for n in reversed(stack):
+            left = 2 * n
+            right = 2 * n + 1
+            self.sum_tree[n] = self.sum_tree[left] + self.sum_tree[right]
+            self.min_val[n] = min(self.min_val[left], self.min_val[right])
+            self.max_val[n] = max(self.max_val[left], self.max_val[right])
+
+    def query_sum(self, a, b):
+        return self._range_sum(a, b, 1, 1, self.size)
+
+    def _range_sum(self, a, b, node, l, r):
+        if a > r or b < l:
+            return 0
+        if a <= l and r <= b:
+            return self.sum_tree[node]
+        self.push(node, l, r)
+        mid = (l + r) // 2
+        return self._range_sum(a, b, 2 * node, l, mid) + self._range_sum(a, b, 2 * node + 1, mid + 1, r)
+
+    def find_first_ge(self, start, target):
+        res = self._find_first_ge(1, 1, self.size, start, target)
+        return res if res is not None else (self.n + 1)
+
+    def _find_first_ge(self, node, node_l, node_r, start, target):
+        if node_r < start:
+            return None
+        if self.max_val[node] < target:
+            return None
+        if node_l == node_r:
+            return node_l if node_l >= start else None
+        self.push(node, node_l, node_r)
+        mid = (node_l + node_r) // 2
+        left_res = self._find_first_ge(2 * node, node_l, mid, start, target)
+        if left_res is not None:
+            return left_res
+        return self._find_first_ge(2 * node + 1, mid + 1, node_r, start, target)
+
+def main():
+    input = sys.stdin.read().split()
+    ptr = 0
+    n = int(input[ptr])
+    ptr +=1
+
+    a = list(map(int, input[ptr:ptr+n]))
+    ptr +=n
+
+    k = list(map(int, input[ptr:ptr+n-1]))
+    ptr +=n-1
+
+    base = [0]*(n+1)
+    base[1] = a[0]
+    for j in range(2, n+1):
+        base[j] = base[j-1] + k[j-2]
+
+    delta_initial = [0]*(n+1)
+    for j in range(1, n+1):
+        delta_initial[j] = a[j-1] - base[j]
+
+    base_prefix = [0]*(n+1)
+    for j in range(1, n+1):
+        base_prefix[j] = base_prefix[j-1] + base[j]
+
+    st = SegmentTree(delta_initial)
+
+    q = int(input[ptr])
+    ptr +=1
+
+    for _ in range(q):
+        query = input[ptr]
+        ptr +=1
+        if query == '+':
+            i = int(input[ptr])
+            x = int(input[ptr+1])
+            ptr +=2
+            st.point_add(i, x)
+            new_val = st.query_sum(i, i)
+            j = st.find_first_ge(i+1, new_val)
+            if j > i+1:
+                st.assign(i+1, j-1, new_val)
+        else:
+            l = int(input[ptr])
+            r = int(input[ptr+1])
+            ptr +=2
+            sum_base = base_prefix[r] - base_prefix[l-1]
+            sum_delta = st.query_sum(l, r)
+            print(sum_base + sum_delta)
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+- **Initial Setup**: Convert the array `a` into a base array and delta array to separate the initial values and constraints from updates.
+- **Segment Tree**: Efficiently manage updates and queries using a segment tree that supports point updates, range assignments, sum queries, and binary search for maintaining constraints.
+- **Query Handling**: For update queries, adjust the delta array and propagate changes. For sum queries, combine precomputed base sums with dynamic delta sums from the segment tree.
+
+This approach ensures that each query is handled in logarithmic time, making the solution efficient for large input sizes.
+</bot>

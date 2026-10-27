@@ -1,0 +1,556 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.There are N cells arranged in a row, numbered 1, 2, \ldots, N from left to right.
+
+Tak lives in these cells and is currently on Cell 1. He is trying to reach Cell N by using the procedure described below.
+
+You are given an integer K that is less than or equal to 10, and K non-intersecting segments [L_1, R_1], [L_2, R_2], \ldots, [L_K, R_K]. Let S be the union of these K segments. Here, the segment [l, r] denotes the set consisting of all integers i that satisfy l \leq i \leq r.
+
+* When you are on Cell i, pick an integer d from S and move to Cell i + d. You cannot move out of the cells.
+
+
+
+To help Tak, find the number of ways to go to Cell N, modulo 998244353.
+
+Constraints
+
+* 2 \leq N \leq 2 \times 10^5
+* 1 \leq K \leq \min(N, 10)
+* 1 \leq L_i \leq R_i \leq N
+* [L_i, R_i] and [L_j, R_j] do not intersect (i \neq j)
+* All values in input are integers.
+
+Input
+
+Input is given from Standard Input in the following format:
+
+
+N K
+L_1 R_1
+L_2 R_2
+:
+L_K R_K
+
+
+Output
+
+Print the number of ways for Tak to go from Cell 1 to Cell N, modulo 998244353.
+
+Examples
+
+Input
+
+5 2
+1 1
+3 4
+
+
+Output
+
+4
+
+
+Input
+
+5 2
+3 3
+5 5
+
+
+Output
+
+0
+
+
+Input
+
+5 1
+1 2
+
+
+Output
+
+5
+
+
+Input
+
+60 3
+5 8
+1 3
+10 15
+
+
+Output
+
+221823067
+</user>
+<bot>
+<think>
+Okay, let's tackle this problem. Hmm. So, the task is to find the number of ways Tak can move from cell 1 to cell N, moving only in steps that are in the set S, which is the union of K non-overlapping segments. And each move's step size has to be in one of those segments. Oh right, and the answer needs to be modulo 998244353.
+
+First, I need to model this as a dynamic programming problem. Because each step depends on previous choices. The idea is to compute the number of ways to reach each cell i, then build up the solution incrementally.
+
+Let's think about the DP approach. Let's define dp[i] as the number of ways to reach cell i. The base case is dp[1] = 1, since we start there. For each cell i, we look back to all possible cells j where j + d = i, and d is in S. Then, dp[i] is the sum of dp[j] for all such j.
+
+But if S is a collection of intervals, then for each interval [L, R], any d between L and R (inclusive) is allowed. So, for each i, the possible j's are i - R to i - L. But since the intervals are non-overlapping and sorted, maybe we can process them efficiently.
+
+Wait, but the problem states that the segments are non-overlapping. But the order of the segments isn't specified. So first, perhaps we need to process all the intervals and for each i, determine which intervals contribute to possible steps.
+
+But the naive approach of checking for each i and each interval [L_k, R_k] to add the sum of dp[i - d] for d in [L_k, R_k] would be O(N*K*R) which is way too slow for N up to 2e5. So that's not feasible.
+
+So we need a way to compute these ranges efficiently. How can we compute the sum over a range quickly? Oh right, using prefix sums. Because the sum from j = a to j = b of dp[j] can be computed as prefix[b] - prefix[a-1], where prefix is the prefix sum array.
+
+So here's the plan:
+
+- Initialize a dp array where dp[1] = 1, and others are 0.
+- Compute the prefix sum array of dp, which allows us to quickly get the sum over any interval.
+- For each interval [L, R] in the K segments, for each position i, the possible steps are d in [L, R], so the previous positions would be i - d, which is j = i - d. So j ranges from (i - R) to (i - L). But j has to be >=1. So for current i, the contribution from this interval is sum_{j=max(1, i-R)}^{i-L} dp[j], if i-L >=1 and i-R <= i-L (since R >= L). Wait, no, the interval [L, R] is for d, so d ranges from L to R. So j = i - d. So d can be from L to R, so j ranges from (i - R) to (i - L). But since d must be positive (since L_i >=1?), because each segment is [L_k, R_k], and L_k >=1. So j must be less than i. So for each i, the possible j's are from (i - R) to (i - L), but j must be >=1. So the lower bound is max(1, i - R), upper bound is (i - L). However, if (i - L) < 1, then this interval contributes nothing.
+
+Wait, but if i - R is larger than i - L? No, because R >= L. So i-R <= i-L. So the interval is from (i-R) to (i-L), but if (i-L) < 1, then there's no contribution. So for each interval [L, R], the contribution to dp[i] is the sum of dp[j] where j is in [max(1, i-R), i-L], but only if i-L >=1.
+
+So for each i, the total dp[i] is the sum over all intervals of (sum of dp[j] in the j's range defined by the interval).
+
+So the key is to compute these sums efficiently. To do this, we can precompute the prefix sums, and then for each interval, compute the sum in O(1) time.
+
+So here's the step-by-step:
+
+1. Preprocess the K intervals. Maybe sort them, but since the order doesn't matter for the sum, perhaps it's not necessary. But the order of processing the intervals for each i doesn't matter since the sum is additive.
+
+2. Initialize dp[1] = 1. The prefix sum array is initialized as prefix[0] = 0, prefix[1] = 1, and prefix[i] for i>1 is 0 initially.
+
+3. For each i from 2 to N:
+
+   a. Initialize dp[i] as 0.
+
+   b. For each interval [L, R] in the K intervals:
+
+      i. Compute the lower and upper bounds for j: lower = max(1, i - R), upper = i - L.
+
+      ii. If upper < 1, skip this interval.
+
+      iii. Else, the sum for this interval is prefix[upper] - prefix[lower - 1].
+
+      iv. Add this sum to dp[i], modulo 998244353.
+
+   c. After processing all intervals, set the prefix sum array up to i as prefix[i] = (prefix[i-1] + dp[i]) % mod.
+
+But wait, the prefix array is the cumulative sum up to each index. So prefix[i] = prefix[i-1] + dp[i]. So when we process i in order, the prefix array can be updated step by step.
+
+This approach would be O(K*N), which for K up to 10 and N up to 2e5 is 2e6 operations, which should be manageable.
+
+Now, let's test this approach against the examples.
+
+First example:
+
+Input:
+
+5 2
+
+1 1
+
+3 4
+
+So S is {1,3,4}.
+
+For dp[1] = 1.
+
+i=2:
+
+Check each interval:
+
+First interval [1,1]. For this interval, lower = 2-1=1, upper=2-1=1. Sum is dp[1] =1. So contributes 1.
+
+Second interval [3,4]. i=2. upper = 2-3 = -1. So no contribution.
+
+Total dp[2] = 1.
+
+prefix[2] = 1+1=2.
+
+i=3:
+
+First interval [1,1]. lower=3-1=2, upper=3-1=2. Sum is dp[2] =1.
+
+Second interval [3,4]. lower=3-4= -1 → max 1. upper=3-3=0. So upper is 0 <1 → no contribution.
+
+So dp[3] =1.
+
+prefix[3] = 2+1=3.
+
+i=4:
+
+First interval [1,1]. lower=4-1=3, upper=4-1=3. Sum is dp[3] =1.
+
+Second interval [3,4]. lower=4-4=0 → max 1. upper=4-3=1. So sum is prefix[1] - prefix[0] =1. So contribution 1.
+
+Total dp[4] =1+1=2.
+
+prefix[4] =3+2=5.
+
+i=5:
+
+First interval [1,1]. lower=5-1=4, upper=5-1=4. Sum is dp[4] =2.
+
+Second interval [3,4]. lower=5-4=1, upper=5-3=2. Sum is prefix[2] - prefix[0] =2. So 2.
+
+Total dp[5] =2+2=4. Which matches the first example.
+
+Great, so the approach works here.
+
+Another example: input 5 2, intervals [3,3] and [5,5]. So steps are 3 or5. But N=5. So to reach 5:
+
+From cell 1, adding 5 steps would take you to 6, which is out. So steps 3: 1+3=4. Then from 4, steps 3 → 7, which is out. Or 5: 4+5=9. So no way. So the answer is 0. Which the code should compute.
+
+Let's see:
+
+i runs up to 5.
+
+dp[1] =1.
+
+i=2:
+
+For each interval:
+
+[3,3]: i=2, lower=2-3= -1 → 1, upper=2-3= -1. So no contribution.
+
+[5,5]: same. upper=2-5= -3. No.
+
+dp[2] =0.
+
+Similarly, for i=3:
+
+Check intervals:
+
+[3,3]: lower=3-3=0 →1. upper=3-3=0. So no.
+
+[5,5]: same.
+
+dp[3] =0.
+
+i=4: same steps, nothing. So all dp's are 0 except dp[1], so dp[5] remains 0.
+
+Thus, the code would return 0. Correct.
+
+Third example: N=5, K=1, interval [1,2]. So steps are 1 or 2.
+
+Possible paths:
+
+1 →2 →3 →4 →5 (steps 1,1,1,1)
+
+1 →2 →3 →5 (steps 1,1,2)
+
+1 →2 →4 →5 (steps 1,2,1)
+
+1 →3 →4 →5 (steps 2,1,1)
+
+1 →3 →5 (steps 2,2). Wait, 1+2=3, 3+2=5. So that's another path.
+
+Wait, total of 5. How does the code compute this?
+
+Let's walk through:
+
+dp[1] =1.
+
+i=2:
+
+sum over interval [1,2]. For i=2, the possible steps are d=1 and 2.
+
+For d=1: j=2-1=1. dp[1] =1.
+
+For d=2: j=2-2=0 → invalid. So sum is 1.
+
+dp[2] =1. prefix[2] =2.
+
+i=3:
+
+sum for d in 1-2.
+
+j ranges from i -2=1 to i-1=2. sum is dp[1] + dp[2] =1+1=2. So dp[3] =2. prefix[3]=2+2=4.
+
+i=4:
+
+sum for d in 1-2. j ranges from 4-2=2 to 4-1=3. sum dp[2]+dp[3] =1+2=3. dp[4] =3. prefix 4+3=7.
+
+i=5:
+
+sum j ranges from 5-2=3 to 5-1=4. sum dp[3]+dp[4] =2+3=5. So dp[5] =5. Which matches the example.
+
+So the approach works.
+
+Now, handling the intervals. Wait, the intervals are non-overlapping, but the code is processing each interval as separate ranges. So for each interval, regardless of order, it's adding the sum of j's in i-R to i-L.
+
+But how to process all K intervals for each i?
+
+Yes, and that's the plan.
+
+Now, handling the intervals. The input gives K intervals, which are non-overlapping. But their order can be arbitrary. But in code, when processing for each interval, we just loop through all K of them.
+
+So the code needs to read all K intervals and process each for each i.
+
+But for each interval [L, R], the code will compute for the current i the contribution of all possible steps d in [L, R].
+
+Thus, the approach is correct.
+
+Now, code-wise:
+
+We need to read the input, then process each interval for each i from 2 to N.
+
+Implement the DP with a prefix array.
+
+But for N up to 2e5, and K up to 10, the code should be efficient.
+
+So, in Python:
+
+But wait, in Python, for N=2e5, creating a list of size N+1 is manageable. Let's see.
+
+Initialize dp as [0]*(N+2). Similarly for prefix.
+
+Then, for each i from 2 to N:
+
+   dp[i] = 0
+
+   for each interval [L, R] in the list:
+
+      lower = max(1, i - R)
+
+      upper = i - L
+
+      if upper < 1:
+
+          continue
+
+      sum_contribution = prefix[upper] - prefix[lower-1]
+
+      if sum_contribution <0:
+
+          sum_contribution += mod
+
+      dp[i] += sum_contribution
+
+      dp[i] %= mod
+
+   prefix[i] = (prefix[i-1] + dp[i]) % mod
+
+But in code, the prefix array is built as the sum up to i. So for i from 1 to N:
+
+prefix[0] =0
+
+prefix[1] = dp[1]
+
+prefix[2] = prefix[1] + dp[2]
+
+etc.
+
+So the code structure is:
+
+Read N and K.
+
+Read K intervals, store as a list of tuples (L, R).
+
+Initialize dp and prefix arrays.
+
+Then loop i from 2 to N:
+
+   for each interval in intervals:
+
+      compute lower and upper.
+
+      if upper <1, skip.
+
+      else:
+
+          sum_contribution is prefix[upper] - prefix[lower-1]
+
+          add to dp[i]
+
+   update prefix[i] = prefix[i-1] + dp[i], mod.
+
+Finally, print dp[N] mod 998244353.
+
+But wait, in the code, when i=1, dp[1] is 1, and prefix[1] =1. Then for i >=2, the code loops through intervals.
+
+But how are the intervals stored? Since they can be in any order, but for each interval, the code processes it in the same way.
+
+Now, let's code this.
+
+But in Python, for N=2e5, a list of 2e5+2 elements is acceptable.
+
+Now, edge cases.
+
+For example, when N=2, and K=1 with [1,1]. Then dp[2] = sum of dp[j] for j=2-1=1 → dp[1] =1. So output is 1.
+
+Another edge case: when intervals are such that for i, no possible steps can reach. Like when all intervals have L > i. So dp[i] remains 0.
+
+Now, the code must handle the modulo correctly. All additions should be modded, and when subtracting, adding mod in case of negative numbers.
+
+For example, sum_contribution = prefix[upper] - prefix[lower-1]. If prefix[upper] < prefix[lower-1], then sum_contribution could be negative. So after the subtraction, we add mod and take mod again to get the positive equivalent.
+
+In code, sum_contribution is (prefix[upper] - prefix[lower-1]) % mod.
+
+Yes.
+
+So in Python, the code would be:
+
+mod = 998244353
+
+n, k = map(int, input().split())
+
+intervals = [tuple(map(int, input().split())) for _ in range(k)]
+
+dp = [0] * (n + 2)
+prefix = [0] * (n + 2)
+
+dp[1] = 1
+prefix[1] = 1
+
+for i in range(2, n + 1):
+    current = 0
+    for (l, r) in intervals:
+        upper = i - l
+        lower = i - r
+        lower = max(1, lower)
+        if upper < 1:
+            continue
+        if lower > upper:
+            continue  # since the interval is invalid
+        # sum from lower to upper: prefix[upper] - prefix[lower-1]
+        sum_c = (prefix[upper] - prefix[lower - 1]) % mod
+        current += sum_c
+        current %= mod
+    dp[i] = current % mod
+    prefix[i] = (prefix[i-1] + dp[i]) % mod
+
+print(dp[n] % mod)
+
+Wait, but when upper is i - l, and lower is i - r. Because d is between l and r, so d can be l to r. So j = i - d. Since d increases, j decreases. So j can range from i - r (when d=r) to i - l (when d=l). So the interval for j is [i - r, i - l]. But j can't be less than 1. So lower is max(1, i - r). Upper is i - l. So if upper < lower, then there's no contribution.
+
+Wait, for example, if i - r > i - l. Because r < l. But in the problem statement, each interval is given as L_i <= R_i, so l <= r. So i - r <= i - l. So upper >= lower. Wait, no. Because l <= r → i - l >= i - r. So the interval for j is [i - r, i - l], which is valid as a range. So upper is i - l, lower is i - r. So lower could be less than upper. For example, if r is 3, l is 1, i=5: lower=5-3=2, upper=5-1=4. So j ranges from 2 to 4.
+
+But when we have i - r can be less than 1. So lower is set to max(1, i - r). But upper can still be >= lower. For example, i=3, l=2, r=3. So lower is 0 → max(1, 0) →1. upper is 3-2=1. So j ranges from 1 to 1. So sum is dp[1].
+
+But when i - l < 1 → upper <1. Then no contribution.
+
+So in code:
+
+for each (l, r) in intervals:
+
+    upper = i - l
+
+    lower = i - r
+
+    lower = max(1, lower)
+
+    if upper < 1:
+
+        continue
+
+    if lower > upper:
+
+        continue
+
+    sum_c = prefix[upper] - prefix[lower -1]
+
+    ...
+
+Wait, but lower is max(1, i - r). So i - r can be 0, but lower becomes 1. upper is i - l. So, for example, if l=2, r=3, i=3: upper=3-2=1, lower=3-3=0 → max(1, 0)=1. So upper is 1 >= lower (1), so sum is prefix[1] - prefix[0] =1.
+
+But if i is 3, l=3, r=4. Then upper=3-3=0, which is <1. So no contribution.
+
+So the code handles that.
+
+Thus, the code seems correct.
+
+Now, testing the third example:
+
+N=5, K=1, interval [1,2].
+
+For i=2:
+
+lower = i - r → 2-2=0 → max(1,0)=1.
+
+upper = i - l → 2-1=1.
+
+sum_c = prefix[1] - prefix[0] →1-0=1.
+
+dp[2] =1.
+
+prefix[2] =1+1=2.
+
+i=3:
+
+for interval [1,2], upper=3-1=2, lower=3-2=1 → max(1,1)=1.
+
+sum_c = prefix[2] - prefix[0] →2-0=2.
+
+dp[3] =2.
+
+prefix[3] =2+2=4.
+
+i=4:
+
+upper=4-1=3, lower=4-2=2 → sum_c = prefix[3] - prefix[1] =4-1=3. dp[4]=3. prefix 4+3=7.
+
+i=5:
+
+upper=5-1=4, lower=5-2=3 → sum_c=prefix[4]-prefix[2] =7-2=5. So dp[5]=5. Correct.
+
+Thus, the code works.
+
+Another test case: when K=0? But constraints say K>=1. So no.
+
+So the code should handle all cases.
+
+Now, what about the modulo? All additions and subtractions are modded.
+
+In code, when we compute sum_c, it is (prefix[upper] - prefix[lower-1]) % mod. So even if the difference is negative, adding mod and then mod again gives the correct value.
+
+Yes.
+
+Thus, this code should solve the problem.
+</think>
+To solve this problem, we need to determine the number of ways Tak can move from Cell 1 to Cell N using steps defined by given non-overlapping segments. The solution involves dynamic programming (DP) with prefix sums to efficiently compute the number of ways to reach each cell.
+
+### Approach
+1. **Dynamic Programming (DP) Setup**: Define `dp[i]` as the number of ways to reach cell `i`. Initialize `dp[1]` to 1 since Tak starts at Cell 1.
+2. **Prefix Sum Array**: Use a prefix sum array to quickly compute the sum of DP values over any range. This helps in efficiently calculating the contributions from each segment.
+3. **Segment Processing**: For each cell `i` from 2 to N, compute the contribution from each segment by determining the valid range of previous cells that can reach `i` using steps from the segment. Use the prefix sum array to get the sum of contributions in constant time.
+4. **Modulo Operations**: Ensure all operations are performed modulo 998244353 to handle large numbers and prevent overflow.
+
+### Solution Code
+```python
+mod = 998244353
+
+n, k = map(int, input().split())
+intervals = [tuple(map(int, input().split())) for _ in range(k)]
+
+dp = [0] * (n + 2)
+prefix = [0] * (n + 2)
+
+dp[1] = 1
+prefix[1] = dp[1]
+
+for i in range(2, n + 1):
+    current = 0
+    for (l, r) in intervals:
+        upper = i - l
+        lower = i - r
+        lower = max(1, lower)
+        if upper < 1:
+            continue
+        if lower > upper:
+            continue
+        sum_c = (prefix[upper] - prefix[lower - 1]) % mod
+        current = (current + sum_c) % mod
+    dp[i] = current
+    prefix[i] = (prefix[i - 1] + dp[i]) % mod
+
+print(dp[n] % mod)
+```
+
+### Explanation
+1. **Dynamic Programming Array**: `dp[i]` stores the number of ways to reach cell `i`. We start with `dp[1] = 1` since Tak is initially at Cell 1.
+2. **Prefix Sum Array**: The prefix array `prefix[i]` stores the cumulative sum of `dp` values up to cell `i`, allowing efficient range sum queries.
+3. **Segment Contribution Calculation**: For each cell `i`, iterate through each segment to determine the valid range of previous cells that can reach `i` using steps from the segment. The valid range is adjusted to ensure it stays within bounds, and the prefix sum array is used to get the sum of contributions in constant time.
+4. **Modulo Operations**: All operations are performed modulo 998244353 to handle large numbers and ensure results fit within standard integer limits.
+
+This approach efficiently computes the number of ways to reach each cell using dynamic programming and prefix sums, ensuring the solution is optimal and runs in O(N*K) time complexity, which is feasible for the given constraints.
+</bot>

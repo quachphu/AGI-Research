@@ -1,0 +1,740 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Teddy and Tracy like to play a game based on strings. The game is as follows. Initially, Tracy writes a long random string on a whiteboard. Then, each player starting with Teddy makes turn alternately. Each turn, the player must erase a contiguous substring that exists in the dictionary. The dictionary consists of N words.
+Of course, the player that can't erase any substring in his turn loses the game, and the other player is declared the winner.
+Note that after a substring R is erased, the remaining substring becomes separated, i.e. they cannot erase a word that occurs partially to the left of R and partially to the right of R.
+
+Determine the winner of the game, assuming that both players play optimally.
+
+Input
+The first line contains a single integer T, the number of test cases. T test cases follow. The first line of each testcase contains a string S, the string Tracy writes on the whiteboard. The next line contains a single integer N. N lines follow. The i-th line contains a single string wi, the i-th word in the dictionary.
+
+Output
+For each test case, output a single line containing the name of the winner of the game.
+
+Example
+
+Input:
+3
+codechef
+2
+code
+chef
+foo
+1
+bar
+mississippi
+4
+ssissi
+mippi
+mi
+ppi
+
+Output:
+Tracy
+Tracy
+Teddy
+
+
+Constraints
+
+1 <= T <= 5
+1 <= N <= 30
+1 <= |S| <= 30
+1 <= |wi| <= 30
+S and wi contain only characters 'a'-'z'
+</user>
+<bot>
+<think>
+Okay, let's try to figure out how to solve this problem. So the problem is about a game between Teddy and Tracy where they take turns removing substrings from a string. The substrings they can remove must be present in a given dictionary. The players alternate turns, and the one who can't move loses. We need to determine who wins assuming both play optimally.
+
+Hmm. So this seems like a game theory problem. The key here is to model the game as a series of states and determine for each state whether the current player can force a win. Since the game's outcome depends on the Grundy numbers (or mex function) for each possible position, I think we'll need to use dynamic programming with memoization to calculate the Grundy numbers for each possible substring of S.
+
+Wait, right. The idea is to break down the string into segments. Each time a player removes a substring, the original string is split into two parts (left and right of the removed substring). The game then becomes the sum of two independent games on those left and right parts. The overall Grundy number for the original string is the XOR of the Grundy numbers of the left and right segments.
+
+But first, we need to find all possible positions where a substring from the dictionary exists. Then, for each possible split, compute the Grundy number of the entire string by considering all possible moves.
+
+Let me outline the steps:
+
+1. Preprocess the dictionary words. For each possible substring of S, check if it exists in the dictionary. But wait, the dictionary may have words that are not substrings of S. So for each possible substring of S, we check if it's present in the dictionary. Because the player can only erase a substring that's in the dictionary. So first, for the given S, we need to collect all possible substrings that are present in the dictionary.
+
+Wait, but the problem statement says that each player must erase a contiguous substring that exists in the dictionary. So during the game, any move a player can make is to erase a substring that is exactly one of the words in the dictionary, and that substring must exist in the current string (contiguous, not split). So for the current string, we need to find all possible substrings that match any word in the dictionary, and then for each such substring, removing it splits the remaining string into left and right parts. The game state then becomes the combination of those parts.
+
+So for each possible substring of the current string, if that substring is present in the dictionary, then that's a possible move. The player can choose any of those moves, and the next state is the combination of the left and right parts.
+
+The key here is to model each possible string as a state, compute the Grundy number (or mex) for that state, and determine if the starting position is a winning or losing state. If the Grundy number is non-zero, the first player (Teddy) can win; otherwise, Tracy wins.
+
+But the problem is that the string S can be up to 30 characters long. The number of possible substrings (states) is O(30^2) = 900 possible substrings. For each state, we need to compute the mex over all possible moves. For each move, we split the string into left and right, compute their grundy numbers, XOR them, and then take mex of all those results.
+
+So the approach would be:
+
+- Preprocess the dictionary into a set for O(1) lookups.
+
+- For each test case, process the string S. For each possible substring (i.e., for each possible interval [i, j) in S), check if it exists in the dictionary. So we can precompute all possible positions where a substring in the dictionary exists in S.
+
+Wait, but S can be modified after each move. So the initial S is the original string, but after some moves, the string is split into parts. So the game states are all possible intervals (substrings) of the original S, but as parts are removed, the remaining parts are separate and each is considered as a separate state.
+
+Wait, no. For example, if the original string is "abcde", and a player removes "bc", the remaining parts are "a" and "de". The game state now is the combination of those two parts. Each part is a separate substring. The Grundy number for the entire state is the XOR of the Grundy numbers of each individual part. So the game can be modeled using the Sprague-Grundy theorem, where each part is a pile in a Nim-like game.
+
+Thus, for a given string (like the original S), the game is equivalent to the sum of games on each of the individual segments that are left after previous moves. Each segment is processed independently.
+
+So the first step is to compute for every possible substring (interval) of the original S whether it can be erased (i.e., if it's present in the dictionary). Then, for each interval [i,j), compute the Grundy number for that interval.
+
+The Grundy number for an interval [i,j) is calculated as follows:
+
+If the interval is empty (i >= j), the Grundy number is 0.
+
+Otherwise, we look for all possible substrings [k,l) within [i,j) that are in the dictionary. For each such [k,l), removing it splits the interval into [i,k) and [l,j). The Grundy number for this move is the XOR of the Grundy numbers of [i,k) and [l,j). The mex of all such possible XORs is the Grundy number for [i,j).
+
+So the plan is to compute a memo table, say dp[i][j], which represents the Grundy number for the interval [i,j) of the original string. For each interval, we check all possible possible substrings within it that are in the dictionary. For each such substring, we split into left and right intervals, compute their Grundy numbers (recursively), and collect all the XOR results. Then, dp[i][j] is the mex of all those results.
+
+If there are no possible moves (no substrings in the dictionary within [i,j)), then the mex is 0, which means the current player cannot make a move and loses.
+
+So the steps are:
+
+1. For each test case:
+
+   a. Read the string S.
+
+   b. Read N and the dictionary words. Store them in a set for quick lookups.
+
+   c. Precompute all possible substrings of S and check which are in the dictionary. For each possible interval [i,j) in S, check if S[i:j] is present in the set. Store this in a 2D array valid[i][j], which is True if S[i:j] is in the dictionary.
+
+   d. Compute the dp[i][j] table using memoization. The base case is when i >= j, dp[i][j] = 0.
+
+   e. The grundy number for the entire string is dp[0][len(S)]. If this number is non-zero, Teddy (the first player) wins; else, Tracy wins.
+
+Now, the key is to efficiently compute the dp[i][j] table. Let's think about how to implement this.
+
+The memoization can be done using a memo table, perhaps a 2D array of size (n+1) x (n+1), where n is the length of S. For each i and j, 0 <= i <= j <= n.
+
+But to compute dp[i][j], we need to check all possible k and l such that [k, l) is a substring in the dictionary, and k >= i, l <= j. Wait, no. Because the substring must be exactly S[k...l-1], and that substring must be present in the dictionary.
+
+So for the interval [i, j), the possible moves are all possible [k, l) where i <= k < l <= j, and S[k:l] is in the dictionary. For each such [k,l), when the player removes that substring, the remaining parts are [i, k) and [l, j). So the grundy number for the move is dp[i][k] ^ dp[l][j]. Then, the mex of all such grundy numbers is the grundy number for [i,j).
+
+So the steps for dp[i][j] are:
+
+Initialize a set of grundy values for all possible moves.
+
+For each possible k from i to j-1:
+
+   For each possible l from k+1 to j:
+
+      if S[k:l] is in the dictionary, then:
+
+          compute left_grundy = dp[i][k]
+
+          compute right_grundy = dp[l][j]
+
+          current_grundy = left_grundy ^ right_grundy
+
+          add this to the set.
+
+Then, mex is the minimum non-negative integer not in the set.
+
+So dp[i][j] = mex of the set.
+
+If no such [k,l) exists in the dictionary, then mex is 0 (since the set is empty, mex is 0). So dp[i][j] is 0, which means the current player can't make any move and loses.
+
+But how do we compute this efficiently?
+
+The problem is that for each interval [i,j), checking all possible k and l pairs is O(n^2) per interval, and with O(n^2) intervals, this becomes O(n^4) which could be acceptable for n=30. Let's see: 30^4 is 810,000. That's manageable for T=5, leading to 4,050,000 operations, which should be okay.
+
+But perhaps we can optimize this. For each interval [i,j), precompute all possible substrings of S[i..j-1] that are present in the dictionary.
+
+Wait, but the dictionary words can be up to 30 characters. So for each interval [i,j), the length is up to 30. So for each [i,j), we can generate all possible substrings (i.e., all possible lengths from 1 to j-i, and all possible starting positions) and check if they are in the dictionary.
+
+But that's O((j-i)^2) per interval. For example, for a length 30 interval, that's 30*30=900 checks. So for 900 intervals (like when the entire string is 30 characters), that's 900*900=810,000 checks. For T=5, 5*810,000=4,050,000. That's acceptable.
+
+But how do we check for all possible substrings [k,l) within [i,j) that S[k:l] is in the dictionary?
+
+Alternatively, we can precompute for the entire S all possible possible substrings and store which are in the dictionary. Then, for any [i,j), any substring [k,l) within [i,j) can be checked in O(1) time.
+
+So for S of length n, create a 2D array valid[k][l], where valid[k][l] is True if S[k:l] is in the dictionary.
+
+This pre-processing can be done once per test case. For each test case:
+
+- Precompute valid[k][l] for all 0<=k<l<=n.
+
+That's O(n^2) time. For n=30, it's 900 checks per test case. For each of these, check if the substring is in the dictionary. But the dictionary can have up to 30 words. So for each substring of S, check if it's in the dictionary. How?
+
+Wait, the dictionary words can be any length. So for a substring of length m, we check if it exists in the dictionary's words of length m. But checking all words for each substring is O(N) per substring. For n=30, the number of substrings is (30*31)/2 = 465. For each, checking N=30 words, that's 465*30=13,950 per test case. Which is manageable.
+
+Alternatively, we can preprocess the dictionary into a hash set. Then, for each substring, check if it's in the set. That would be O(1) per substring check. So for each test case:
+
+- Create a set dict_set containing all the words in the dictionary.
+
+- For each possible [k, l) in S (0 <=k < l <= len(S)), check if S[k:l] is in dict_set. Store valid[k][l] = True if yes.
+
+This is O(n^2) per test case, which is acceptable.
+
+So steps for each test case:
+
+1. Read S.
+
+2. Read N and the N words, store in a set.
+
+3. Precompute valid[k][l] for all 0 <=k < l <= len(S).
+
+4. Compute the dp[i][j] table using memoization.
+
+Now, for the memoization. The DP can be computed recursively with memoization, but for Python, recursion depth might be an issue. Alternatively, we can compute it iteratively using dynamic programming, filling the table in order of increasing interval length.
+
+Yes. Let's process intervals in order of their length. For all intervals of length 0 (i == j), dp[i][j] = 0.
+
+Then, for intervals of length 1, then 2, up to len(S). For each interval [i,j) of length l = j-i, we compute dp[i][j] based on smaller intervals.
+
+So for each interval length from 1 to len(S):
+
+   for i in 0 to len(S) - l:
+
+       j = i + l
+
+       collect all possible [k, l) within [i, j) where valid[k][l] is True.
+
+       for each such k and l:
+
+           left = dp[i][k]
+
+           right = dp[l][j]
+
+           current_xor = left ^ right
+
+           add to a set of grundy values.
+
+       then, compute mex of this set.
+
+       dp[i][j] = mex.
+
+Wait, no. The j is i + l. But in code, for each possible interval [i,j), j can range from i+1 to len(S). So the order should process intervals by their length. So for l in 1 to len(S):
+
+   for i in 0 to len(S) - l:
+
+       j = i + l
+
+       process interval [i,j).
+
+So this way, when processing [i,j), all smaller intervals (i to k and l to j) have already been processed.
+
+Yes. So the code can fill a 2D array dp, where dp[i][j] is computed for all intervals in order of increasing length.
+
+So for each test case:
+
+Initialize a 2D array dp of size (n+1) x (n+1), where n is the length of S. Initially, all zeros.
+
+Then, for l from 1 to n (length of interval):
+
+   for i from 0 to n - l:
+
+       j = i + l
+
+       current_set = set()
+
+       for k in range(i, j):
+
+           for m in range(k+1, j+1):
+
+               if valid[k][m]:
+
+                   left = dp[i][k]
+
+                   right = dp[m][j]
+
+                   current_xor = left ^ right
+
+                   current_set.add(current_xor)
+
+       mex = 0
+
+       while mex in current_set:
+
+           mex += 1
+
+       dp[i][j] = mex
+
+Wait, but for [i,j), the valid substrings are those from k to m, where k is in [i, j) and m is in (k, j]. So for example, the substring [k, m) must be within [i, j). So for each possible k and m where i <=k < m <= j.
+
+Wait, in the code above, the loops for k and m are:
+
+k ranges from i to j-1 (since m can be up to j).
+
+m ranges from k+1 to j.
+
+But the valid array is for [k][m], which is S[k:m]. So the code for checking is:
+
+if valid[k][m] is True.
+
+So for each interval [i, j), we check all possible k and m where k >=i and m <=j. So the loops are:
+
+for k in range(i, j):
+
+   for m in range(k+1, j+1):
+
+       if valid[k][m]:
+
+           ...
+
+Because m can be up to j. For example, when m is j, then the substring is S[k:j], which is from k to j.
+
+So the code is correct.
+
+Once all dp[i][j] are computed, the grundy number for the entire string is dp[0][n], where n is the length of S. If this value is non-zero, Teddy wins; else, Tracy.
+
+So now, putting this all together.
+
+Let's test this approach against the example given.
+
+Sample Input 1:
+
+3
+
+codechef
+
+2
+
+code
+
+chef
+
+Sample Output: Tracy
+
+So the string is "codechef".
+
+The dictionary has "code" and "chef".
+
+So valid substrings:
+
+Check all possible substrings of "codechef" and see if they are in the dictionary.
+
+The valid substrings are:
+
+"code" (indices 0-4)
+
+"chef" (indices 4-8)
+
+So when the entire string is considered (i=0, j=8), possible moves are:
+
+- erase "code" (indices 0-4). The remaining parts are [0-0] (empty) and [4-8] (which is "chef"). So left is dp[0][0] (0) and right is dp[4][8]. The grundy for "chef" (i=4, j=8) is computed as:
+
+In dp[4][8], the substring "chef" is present. So the possible move is to erase "chef", which splits into [4][4] and [8][8], both empty. So the grundy is 0 XOR 0 = 0. So mex of {0} is 1. So dp[4][8] = 1.
+
+So the xor for the first move (erasing "code") is 0 ^ 1 = 1.
+
+Another possible move is erasing "chef" (indices 4-8), which splits into [0-4] and [8-8]. The left is dp[0][4], which is the grundy for "code".
+
+When calculating dp[0][4], the substring "code" is present. So erasing it splits into [0][0] and [4][4], both grundy 0. XOR is 0. So mex of {0} is 1. So dp[0][4] is 1.
+
+So the xor for the move of erasing "chef" is 1 ^ 0 = 1.
+
+So the current_set for dp[0][8] is {1,1}, but in a set, it's {1}. So mex is 0. So dp[0][8] is 0.
+
+So the grundy number is 0, so Tracy wins. Which matches the sample output.
+
+Another sample case: the third test case.
+
+Input:
+
+mississippi
+
+4
+
+ssissi
+
+mippi
+
+mi
+
+ppi
+
+The output is Teddy.
+
+So the entire string's grundy number must be non-zero.
+
+But perhaps I'll have to trust that the code works once the logic is correct.
+
+Now, the code structure in Python would be:
+
+Read T test cases.
+
+For each test case:
+
+Read S.
+
+Read N.
+
+Read N lines, add to a set.
+
+Precompute valid[k][m] for all 0 <=k <m <= len(S).
+
+Compute the DP table.
+
+If dp[0][len(S)] !=0, Teddy wins, else Tracy.
+
+Implementing this.
+
+Now, code steps:
+
+First, read T.
+
+For each T:
+
+Read S.
+
+n = len(S).
+
+Read N.
+
+Read N words into a set.
+
+Precompute valid as a 2D array (n+1) x (n+1) (since m can be up to len(S)).
+
+Initialize valid as all False.
+
+Then, for each possible k in 0 to n-1:
+
+   for m in k+1 to n:
+
+       substring = S[k:m]
+
+       if substring in the set:
+
+           valid[k][m] = True
+
+Then, initialize dp as a 2D array of (n+1) x (n+1), filled with 0.
+
+Then, for l in 1 to n:
+
+   for i in 0 to (n - l):
+
+       j = i + l
+
+       current_set = set()
+
+       for k in range(i, j):
+
+           for m in range(k+1, j+1):
+
+               if valid[k][m]:
+
+                   left = dp[i][k]
+
+                   right = dp[m][j]
+
+                   current_xor = left ^ right
+
+                   current_set.add(current_xor)
+
+       mex = 0
+
+       while mex in current_set:
+
+           mex +=1
+
+       dp[i][j] = mex
+
+Finally, if dp[0][n] !=0: print Teddy else Tracy.
+
+But for Python, the 2D array can be implemented as a list of lists.
+
+Now, testing this code against the first sample.
+
+Sample 1:
+
+S = 'codechef', len 8.
+
+N=2, words 'code' and 'chef'.
+
+valid[k][m] is True for (0,4) and (4,8).
+
+Then, for l=8 (the entire string), i=0, j=8.
+
+For k=0, m=4: valid. left is dp[0][0] =0, right is dp[4][8]. For dp[4][8], when computed:
+
+l=4, i=4, j=8. Check all possible [k,m) between 4 and 8.
+
+valid[4][8] is True (chef). So in that case, the move is to take k=4, m=8. left is dp[4][4] =0, right is dp[8][8]=0. XOR is 0. So mex is 0's set is {0}, mex is 1. So dp[4][8] is 1.
+
+Similarly, when i=0, j=4: check if 'code' is present. So the move is k=0, m=4. left and right are 0, XOR 0. mex is 1. So dp[0][4] is 1.
+
+So in the first sample:
+
+dp[0][8] will have possible moves:
+
+k=0, m=4: left 0 ^ right 1 (dp[4][8] is 1) → 1.
+
+k=4, m=8: left dp[0][4] is 1, right dp[8][8] is 0 → 1.
+
+current_set is {1}.
+
+mex starts at 0. Since 0 not in the set, mex is 0. So dp[0][8] =0 → Tracy wins.
+
+Which matches the sample.
+
+Another sample: third test case.
+
+But perhaps the code works.
+
+Now, code considerations.
+
+In Python, the code would have to create a 2D array for valid. Let's see:
+
+For a string of length n, valid is a (n+1)x(n+1) array. Because for 0<=k <=n and 0<=m <=n. Wait, no. For k from 0 to n-1, and m from k+1 to n. Because S[k:m] is the substring starting at index k and ending at m-1. So m can be from k+1 to n.
+
+So for example, the substring S[0:4] is "code" when S is "codechef".
+
+So the code for precomputing valid is:
+
+n = len(S)
+
+valid = [[False]*(n+1) for _ in range(n+1)]
+
+for k in range(n):
+
+    for m in range(k+1, n+1):
+
+        substr = S[k:m]
+
+        if substr in dict_set:
+
+            valid[k][m] = True
+
+Yes.
+
+Then, the DP loops:
+
+n = len(S)
+
+dp = [[0]*(n+1) for _ in range(n+1)]
+
+for l in range(1, n+1):  # length of the interval
+
+    for i in range(n - l +1):
+
+        j = i + l
+
+        current_set = set()
+
+        for k in range(i, j):
+
+            for m in range(k+1, j+1):
+
+                if valid[k][m]:
+
+                    left = dp[i][k]
+
+                    right = dp[m][j]
+
+                    current_set.add(left ^ right)
+
+        mex = 0
+
+        while mex in current_set:
+
+            mex +=1
+
+        dp[i][j] = mex
+
+So for each interval [i,j) of length l, the code checks all possible substrings [k, m) in the current interval that are valid.
+
+Yes.
+
+So the code should work.
+
+Now, testing for the third sample:
+
+Input:
+
+mississippi
+
+4
+
+ssissi
+
+mippi
+
+mi
+
+ppi
+
+The string is "mississippi" (len is 11? Let's count: m i s s i s s i p p i → yes, 11 letters).
+
+The dictionary words are:
+
+ssissi → length 6.
+
+mippi → length 5.
+
+mi → length 2.
+
+ppi → length 3.
+
+So the valid substrings in "mississippi" are:
+
+Looking for all possible substrings that match any of the four.
+
+mi: positions 0-2 ("mi").
+
+ssissi: positions 2-8 (s s i s s i).
+
+mippi: not sure. Let's check.
+
+Wait, the original string is "mississippi".
+
+Breaking down the string:
+
+Indices:
+
+0: m
+
+1: i
+
+2: s
+
+3: s
+
+4: i
+
+5: s
+
+6: s
+
+7: i
+
+8: p
+
+9: p
+
+10: i
+
+So S[2:8] is s s i s s i → "ssissi" (indices 2 to 8 (exclusive), m=8. So yes, substring is "ssissi". So valid[2][8] = True.
+
+mi: S[0:2] is "mi".
+
+ppi: S[8:11] is "ppi"? Let's see. S[8] is 'p', 9 is 'p', 10 is 'i'? Wait, no. Original string is m i s s i s s i p p i → indices 0-10 (len 11).
+
+So indices 8 is 'p', 9 is 'p', 10 is 'i'. So S[8:11] is 'pp i'? Wait, no: indices 8,9,10 are p, p, i. So S[8:11] is 'ppi'? Yes. So valid[8][11] would be True if 'ppi' is in the dictionary. Yes, it is. So valid[8][11] = True.
+
+mi: valid[0][2] = True.
+
+ssissi: valid[2][8] = True.
+
+mippi: let's see. "mippi" is m i p p i. But the original string's first two letters are m i, then s's. So is there a substring that is "mippi"? Let's look for the substring.
+
+Looking for 'mippi' (length 5):
+
+Possible starting indices:
+
+At 0: 'm i s s i' → no.
+
+At 7: 'i p p i' → no. So 'mippi' is not present. So valid[k][k+5] is False for any k.
+
+So the valid substrings are:
+
+"mi" (0-2), "ssissi" (2-8), "mi" (4-6? Let's see: S[4] is i, so 'mi' would start at 4-6? No. Wait, 'mi' is two letters. So possible positions:
+
+Looking for any occurrence of 'mi' in the string. The only occurrence is at 0-2.
+
+Then, 'ssissi' is 2-8.
+
+Then, 'ppi' is 8-11.
+
+Wait, the fourth word is 'ppi' → so S[8:11] is 'pp i'? Wait, the substring from 8 to 11 (exclusive) is S[8], S[9], S[10], which is 'p p i'? Wait, that's three characters. So 'ppi' would be the substring starting at 8, ending at 11. So S[8:11] is 'ppi' (since 8 to 11 is characters 8,9,10: 'p', 'p', 'i' → 'ppi').
+
+Yes. So valid[8][11] = True.
+
+Also, the third word is 'mi' → S[0:2] is 'mi' → valid[0][2] = True.
+
+So in the original string, possible moves are:
+
+- erase "mi" (0-2). Then the remaining string is from 2-11: "ssissippi".
+
+- erase "ssissi" (2-8). Then the remaining parts are 0-2 and 8-11: "mi" and "ppi".
+
+- erase "ppi" (8-11). Then the remaining is 0-8: "mississi".
+
+But during the game, each player can erase any of these substrings. The grundy number for the entire string will determine the winner.
+
+But since the code is handling this, I'll have to trust that the code's DP calculation is correct.
+
+In the sample output, the result is Teddy, implying that the grundy number is non-zero.
+
+So the code should handle all cases.
+
+Another edge case: when S is exactly one word in the dictionary. Then, the first player can erase it, leading to a grundy number of 1 (since mex is 0 for the move where the entire string is erased, left and right are 0, XOR is 0. So mex is 1). So grundy is 1 → Teddy wins.
+
+If S is empty, but the problem says that S is a string written by Tracy, so S is non-empty.
+
+Now, possible time constraints. For n=30, the code will have to loop for 30 possible lengths, each up to 30 steps. For each interval, the code checks all possible k and m pairs. For a 30-length string, the worst case for a single interval is 30 *30 = 900 checks. For 30^2 intervals, it's 30^2 * 900 = 810,000 operations per test case. For T=5, it's 4 million operations. Which is acceptable in Python.
+
+Thus, the code should work correctly.
+</think>
+To solve this problem, we need to determine the winner of a game where players take turns removing substrings from a string based on a given dictionary of words. The solution involves game theory concepts and dynamic programming to compute optimal moves.
+
+### Approach
+1. **Game Theory and Grundy Numbers**: The game can be modeled using Grundy numbers (or mex function) to determine the winning strategy. Each position in the string can be considered a state, and the Grundy number for each state is computed based on possible moves.
+2. **Dynamic Programming (DP)**: We use a DP table to store the Grundy numbers for all possible substrings of the given string. The table is filled in increasing order of substring lengths.
+3. **Preprocessing Valid Substrings**: For each test case, we preprocess which substrings of the given string exist in the dictionary to allow quick lookups during the DP computation.
+
+### Solution Code
+```python
+def determine_winner():
+    import sys
+    input = sys.stdin.read().split()
+    idx = 0
+    T = int(input[idx])
+    idx += 1
+    for _ in range(T):
+        S = input[idx]
+        idx += 1
+        N = int(input[idx])
+        idx += 1
+        dict_set = set()
+        for __ in range(N):
+            word = input[idx]
+            idx += 1
+            dict_set.add(word)
+        n = len(S)
+        # Precompute valid[k][m] where k is the start index (inclusive) and m is end index (exclusive)
+        valid = [[False]*(n+1) for _ in range(n+1)]
+        for k in range(n):
+            for m in range(k+1, n+1):
+                substr = S[k:m]
+                if substr in dict_set:
+                    valid[k][m] = True
+        # Initialize DP table
+        dp = [[0]*(n+1) for _ in range(n+1)]
+        # Fill DP in order of increasing interval length
+        for l in range(1, n+1):  # length of the interval
+            for i in range(n - l +1):
+                j = i + l
+                current_set = set()
+                # Check all possible substrings [k, m) within [i, j)
+                for k in range(i, j):
+                    for m_split in range(k+1, j+1):
+                        if valid[k][m_split]:
+                            left = dp[i][k]
+                            right = dp[m_split][j]
+                            current_xor = left ^ right
+                            current_set.add(current_xor)
+                # Compute mex
+                mex = 0
+                while mex in current_set:
+                    mex += 1
+                dp[i][j] = mex
+        # Determine the winner based on the grundy number of the entire string
+        if dp[0][n] != 0:
+            print("Teddy")
+        else:
+            print("Tracy")
+
+determine_winner()
+```
+
+### Explanation
+1. **Reading Input**: The input is read and parsed into the number of test cases, each containing the string and dictionary words.
+2. **Preprocessing Valid Substrings**: For each substring of the input string, we check if it exists in the dictionary and mark it in a 2D array `valid`.
+3. **Dynamic Programming Table Initialization**: The DP table `dp` is initialized where `dp[i][j]` represents the Grundy number for the substring from index `i` to `j`.
+4. **Filling DP Table**: For each interval length from 1 to the length of the string, we compute the Grundy number by considering all possible valid substrings within the interval. The mex (minimum excludant) value is calculated for each interval to determine the Grundy number.
+5. **Determine Winner**: The Grundy number of the entire string determines the winner. If it is non-zero, Teddy (the first player) wins; otherwise, Tracy wins.
+
+This approach efficiently computes the optimal moves using dynamic programming and game theory, ensuring that the solution is both optimal and correct.
+</bot>

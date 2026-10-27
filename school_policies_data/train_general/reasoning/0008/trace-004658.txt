@@ -1,0 +1,537 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.We have N points in a two-dimensional plane.
+The coordinates of the i-th point (1 \leq i \leq N) are (x_i,y_i).
+Let us consider a rectangle whose sides are parallel to the coordinate axes that contains K or more of the N points in its interior.
+Here, points on the sides of the rectangle are considered to be in the interior.
+Find the minimum possible area of such a rectangle.
+
+Constraints
+
+* 2 \leq K \leq N \leq 50
+* -10^9 \leq x_i,y_i \leq 10^9 (1 \leq i \leq N)
+* x_i≠x_j (1 \leq i<j \leq N)
+* y_i≠y_j (1 \leq i<j \leq N)
+* All input values are integers. (Added at 21:50 JST)
+
+Input
+
+Input is given from Standard Input in the following format:
+
+
+N K
+x_1 y_1
+:
+x_{N} y_{N}
+
+
+Output
+
+Print the minimum possible area of a rectangle that satisfies the condition.
+
+Examples
+
+Input
+
+4 4
+1 4
+3 3
+6 2
+8 1
+
+
+Output
+
+21
+
+
+Input
+
+4 2
+0 0
+1 1
+2 2
+3 3
+
+
+Output
+
+1
+
+
+Input
+
+4 3
+-1000000000 -1000000000
+1000000000 1000000000
+-999999999 999999999
+999999999 -999999999
+
+
+Output
+
+3999999996000000001
+</user>
+<bot>
+<think>
+Okay, let's see. The problem is to find the minimum possible area of a rectangle that contains at least K points from the given N points. The rectangle's sides must be parallel to the axes, and points on the edges are considered inside. 
+
+Hmm. So first, how do rectangles in this problem look? Since the sides are parallel to the axes, a rectangle is determined by its left x, right x, bottom y, and top y. Any point (x_i, y_i) that is between left and right (inclusive) in x and between bottom and top (inclusive) in y is counted.
+
+The goal is to find the rectangle with the smallest area (calculated as (right - left) * (top - bottom)) that includes at least K points. 
+
+Constraints are N up to 50, which is manageable. But with K varying, we need an approach that efficiently checks possible rectangles.
+
+Wait, the brute-force approach here might be feasible because N is small. Let's think: for each possible subset of points of size K or more, compute the minimal rectangle that contains them, and then find the minimum area among all those.
+
+But wait, even for N=50 and K=25, the number of combinations is C(50,25) which is huge. That's not feasible. So brute-force subsets is impossible. So we need a smarter approach.
+
+Alternative idea: Since the rectangle is determined by the left, right, top, bottom boundaries, maybe we can consider all possible combinations of left and right x-coordinates and top and bottom y-coordinates, then check how many points lie within that rectangle, and track the minimum area where the count is >= K.
+
+But how do we generate all possible left/right and top/bottom combinations? That's still a lot. But maybe for each possible pair of x-coordinates (left and right), and for each pair of y-coordinates (top and bottom), we can form the rectangle and check. Then select the minimal area one that meets the K condition.
+
+But how many possible x pairs are there? For x-coordinates, each point's x can be a left or right boundary. Similarly for y. So for x, we can take all possible pairs (x1, x2) where x1 <= x2, and similarly for y. Then for each such rectangle, count how many points are inside, i.e., x_i is between x1 and x2 (inclusive) and y_i is between y1 and y2 (inclusive). Then, if the count >= K, compute the area and track the minimum.
+
+But considering all possible x1, x2 pairs and y1, y2 pairs would have O(N^2) possibilities for x and O(N^2) for y. So total possibilities are O(N^4). For N=50, that's 50^4 = 6,250,000. For each of these, we need to check N points. So 50 * 6e6 = 3e8 operations. That's maybe acceptable, but 3e8 is a bit high for Python. Wait, but maybe the actual number is lower. Let's see:
+
+Each rectangle is determined by left x being some x_i, right x being another x_i (>= left), and similarly for y. So for all possible combinations of left and right in x coordinates (sorted), and bottom and top in y coordinates (sorted), we can compute the rectangle. But how many such combinations are there?
+
+Suppose we sort all x coordinates. Then for the left and right, we can consider all pairs of x coordinates where left <= right. So for x, sorted, there are O(N^2) possible pairs. Same for y. So total possible rectangles is O(N^4), as before.
+
+But with N=50, that's 50^4 = 6,250,000. For each rectangle, we check all 50 points. So 6e6 * 50 = 3e8 operations. Hmm, that's 300 million operations. Python can handle that, but it depends. Wait, 3e8 operations would take a while. Maybe we can optimize.
+
+Wait, perhaps pre-sorting the x and y coordinates. Then for each x_left and x_right (x_left <= x_right), the x coordinates must be in between. Similarly for y. So the count of points in the rectangle is the number of points where x_i is between x_left and x_right, and y_i is between y_bottom and y_top.
+
+But how do we compute that efficiently? If we pre-sort the x and y coordinates, perhaps we can pre-process for all possible x ranges and y ranges and then for each x range and y range, compute the intersection.
+
+Alternatively, for each possible x_left and x_right (x_left <= x_right), find all points whose x is between x_left and x_right. Then, for those points, we can look at their y coordinates and see the possible y ranges that include at least K points from this subset.
+
+Wait, that might help. Because for a fixed x range, the minimal area is (x_right - x_left) multiplied by the minimal possible (y_top - y_bottom) for a y range that includes at least K points in the subset.
+
+So the approach could be:
+
+1. Sort all points by their x coordinates. This allows us to consider x ranges between x[i] and x[j], where i <= j. For each such x range (x_left = x[i], x_right = x[j]), collect all points that are within this x range (x >= x_left and x <= x_right). Then, for these points, we need to find the minimal y interval that includes at least K points. The minimal area would then be (x_right - x_left) * (y_top - y_bottom), and we can track the minimum overall.
+
+This reduces the problem from O(N^4) to O(N^2) possible x ranges, each requiring O(N^2) time for y ranges.
+
+Wait, but for each x range, we collect a subset of points. For that subset, which has m points (m can be j - i + 1 if all x's are sorted, but not necessarily because some points in between may not be selected. Wait, no. For example, when x is sorted, the points in the x range x[i] to x[j] would be all points from i to j in the sorted list. Because the x's are unique and sorted in order. So when x[i] is the i-th smallest x and x[j] is the j-th smallest x, all points with x between x[i] and x[j] must be in positions i to j. Because the x's are unique and sorted.
+
+Wait, no. Wait, if the x's are sorted in increasing order, then for any i and j where i <= j, x[i] <= x[j]. Then, the points that have x between x[i] and x[j] inclusive are exactly the points from index i to j in the sorted list. Because since the x's are sorted, x[i] is the i-th smallest, x[j] is j-th. So any point between them in x must have been sorted in between. So that's a key insight. So when we choose x_left = x[i] and x_right = x[j], the points in the x range are exactly the points from index i to j in the sorted list. So that's m = j - i + 1 points. So for each i and j (i <= j), the number of points in the x range is j - i + 1. So for those points, we can then process their y coordinates to find the minimal height (y_top - y_bottom) such that at least K points are in the y range (including edges). 
+
+But wait, K could be larger than j - i + 1. For example, if the x range includes m points (m = j - i +1), but m < K. Then, this x range is not useful, since even if we take all m points, they can't reach K. So for such cases, we can skip processing the y's. So for each i and j, first check if (j - i +1) >= K. If not, skip. If yes, then proceed to find the minimal y range that includes at least K points from those m points.
+
+So the algorithm becomes:
+
+1. Sort all points by x-coordinate. Then, for each possible i and j (i <= j), compute m = j - i +1. If m >= K, proceed.
+
+2. For these m points (from i to j in sorted x list), collect their y-coordinates. Then, sort these y's. 
+
+3. Now, find the minimal interval [y_low, y_high] such that there are at least K points in this interval. The minimal possible (y_high - y_low) for this subset. 
+
+4. For each such i and j where m >= K, compute the x width (x[j] - x[i]) * (y_high - y_low) for the minimal y interval, and track the minimum over all such possibilities.
+
+So the key is that for each x range (i, j) with at least K points, we can find the minimal y interval that captures K points among them. Then multiply by x's width. 
+
+The problem then reduces to, for each subset of points in the x range, find the minimal y interval covering at least K points. 
+
+How to find the minimal y interval for a list of m points (sorted y) with m >= K?
+
+Yes. For example, if the y's are sorted in increasing order, then for each possible window of K consecutive points in the sorted y list, the minimal interval is the maximum y in the window minus the minimum y in the window. For example, if we have points sorted as y_1 <= y_2 <= ... <= y_m. Then, the minimal interval covering K points is the minimal (y[p + K -1] - y[p]) for p from 0 to m-K. Because choosing a window of K consecutive points in the sorted list gives the minimal possible delta. Because any other selection of K points would require a larger or equal interval.
+
+So for the subset of y's sorted, the minimal interval is min(y[p + K -1] - y[p] for p in 0..m-K). 
+
+So the approach is:
+
+For each i and j in x ranges (sorted x), where j-i+1 >= K:
+
+- collect the y's of the points in i..j, sort them.
+
+- if the count is >= K, compute the minimal y interval as the minimal (y[p + K -1] - y[p]) over all possible p.
+
+- compute the area as (x[j] - x[i]) * (minimal y interval).
+
+- keep track of the minimal area across all such possibilities.
+
+Yes. That seems manageable. 
+
+Now, let's think about the steps:
+
+1. Sort the points by x. So, x is sorted, and the points are ordered such that x1 < x2 < ... < xN (since all x's are unique). 
+
+2. For each possible i and j (i <= j):
+
+   a. Check if j - i +1 >= K. If not, skip.
+
+   b. Collect the points from i to j (inclusive). These are the points in the x range [x[i], x[j]]. 
+
+   c. Extract their y-coordinates and sort them. Let's call this sorted_ys.
+
+   d. If the number of points in sorted_ys (which is j -i +1) is >= K, then for all possible p from 0 to (m - K), compute sorted_ys[p + K -1] - sorted_ys[p], take the minimal of these, multiply by (x[j] - x[i]), and see if it's the minimal area so far.
+
+So the algorithm would have O(N^2) possible x ranges, and for each, O(m log m) to sort the y's (but m is up to N, so O(N log N)), and then O(m) steps to compute the minimal y interval (since for m points, there are m-K+1 possible p's). So overall time complexity is O(N^3), which for N=50 is 125,000 operations, which is acceptable for Python.
+
+Wait, let's calculate:
+
+For each i (from 0 to N-1), j can be from i to N-1. So total x ranges is sum_{i=0 to N-1} (N - i) ) = N(N+1)/2. For N=50, that's 50*51/2=1275 x ranges.
+
+For each x range, the points from i to j (j-i+1 points). For each of these, we sort the y's (O(m log m)), but m is up to 50. Then, for each of those, we compute (m-K+1) possible p's (for example, if m is 50 and K=2, then 49 steps). But in Python, even 1275 * 50 * 50 steps would be 3,187,500 steps, which is very manageable.
+
+So this approach is feasible.
+
+Now, edge cases. For example, when K=N, then the x range must include all points. Then the y interval must include all of them. So the area is (max_x - min_x) * (max_y - min_y).
+
+Another case: when K=2. Then, for some x ranges, the minimal y interval could be between two points. For example, in the second sample input, the answer is 1. Let's see why.
+
+Sample Input 2:
+
+4 2
+
+0 0
+
+1 1
+
+2 2
+
+3 3
+
+Sample Output: 1.
+
+The rectangle must include at least 2 points. The minimal area is 1*1=1, which can be achieved by selecting two adjacent points. For example, the rectangle from (1,1) to (2,2) would have area 1. Or the rectangle from (0,0) to (1,1), which includes (0,0) and (1,1), but since points on the edges are counted, that's two points, and the area is 1*1=1.
+
+So the algorithm would process all x ranges. For example, when i=0 and j=1 (x ranges 0 and 1), the points are (0,0) and (1,1). The sorted y's are [0,1]. For K=2, the y interval is 1-0=1. So area is (1-0)*1=1. Similarly for other pairs. The minimal is 1.
+
+Another example is the first sample input:
+
+4 4
+
+Points:
+
+(1,4), (3,3), (6,2), (8,1). The x's are sorted as 1,3,6,8.
+
+The x range must be from 1 to 8 (since K=4). The y's are 4,3,2,1. Sorted y's: 1,2,3,4. The minimal y interval is 4-1=3. So area is (8-1)*3=21, which matches the sample output.
+
+So the approach works.
+
+Now, let's think about possible optimizations. For example, when considering x ranges, the x's are sorted. So for each i and j where i <= j, the x part of the area is x[j] - x[i]. So the minimal area for the x range is fixed once i and j are chosen, and the minimal y interval for that subset is multiplied by this. So the key is to find the minimal (x[j] - x[i]) * (minimal_y_interval).
+
+So the steps in code:
+
+1. Read N, K.
+
+2. Read all points, store as a list.
+
+3. Sort the points by their x coordinates. Then, extract the sorted_x list (x_i's).
+
+4. For each i in 0 to N-1:
+
+   a. For each j in i to N-1:
+
+      i. m = j - i +1. If m < K, skip.
+
+      ii. Collect the points from i to j. Extract their y-coordinates, sort them into sorted_ys.
+
+      iii. If len(sorted_ys) < K, skip (though this can't happen since m >= K).
+
+      iv. Compute the minimal y interval. This is the minimal (sorted_ys[p + K -1] - sorted_ys[p]) for p in 0 to len(sorted_ys) - K.
+
+      v. The current area is (sorted_x[j] - sorted_x[i]) * minimal_y.
+
+      vi. Update the global minimal area if this is smaller.
+
+5. After processing all i and j, output the minimal area.
+
+But wait, the sorted_x list is the x coordinates of the points sorted. But in step 3, the points are sorted by x, so sorted_x is [points[i].x for i in 0..n-1].
+
+Yes.
+
+So in code:
+
+We can proceed as follows:
+
+- Read the input.
+
+- Sort the points by x.
+
+- For each i and j:
+
+   - Check if j-i+1 >= K.
+
+   - Collect the y's of points[i..j], sort them.
+
+   - For the sorted y list, compute the minimal possible (y[p+K-1] - y[p]).
+
+   - Calculate area.
+
+Now, code in Python.
+
+Wait, but points are sorted by x. So for each i and j, the x range is from points[i].x to points[j].x. The points in between are exactly those from i to j.
+
+So code steps:
+
+Read N, K.
+
+points = [tuple(map(int, input().split())) for _ in range(N)]
+
+points.sort(key=lambda p: p[0])
+
+min_area = infinity.
+
+for i in range(N):
+
+    for j in range(i, N):
+
+        count = j - i + 1
+
+        if count < K:
+
+            continue
+
+        # collect y's
+
+        ys = [points[k][1] for k in range(i, j+1)]
+
+        ys.sort()
+
+        # compute minimal y interval
+
+        min_y_span = infinity
+
+        for p in range(len(ys) - K +1):
+
+            current_span = ys[p + K -1] - ys[p]
+
+            if current_span < min_y_span:
+
+                min_y_span = current_span
+
+        current_area = (points[j][0] - points[i][0]) * min_y_span
+
+        if current_area < min_area:
+
+            min_area = current_area
+
+print(min_area)
+
+Wait, but in Python, the initial min_area should be set to a very large value, like infinity. We can initialize it to something like float('inf'), but since the coordinates can be up to 1e9, the maximum possible area is (1e9 * 2) * (1e9 * 2) = 4e18. So using 1e19 as initial should be sufficient.
+
+But in the third sample input, the output is 3999999996000000001, which is about 4e18, so using a big enough initial value is important.
+
+But in Python, integers can be arbitrarily large, so we can safely set min_area to a very large number.
+
+So code:
+
+Read N and K.
+
+points = sorted([tuple(map(int, input().split())) for _ in range(N)], key=lambda x: x[0])
+
+min_area = float('inf')
+
+for i in range(N):
+
+    for j in range(i, N):
+
+        m = j - i + 1
+
+        if m < K:
+
+            continue
+
+        ys = [points[k][1] for k in range(i, j+1)]
+
+        ys.sort()
+
+        # compute minimal y span for K points
+
+        min_span = ys[-1] - ys[0]  # initial value, maybe?
+
+        # but to get the minimal, check all possible K-length windows
+
+        current_min = None
+
+        for p in range(len(ys) - K +1):
+
+            span = ys[p + K -1] - ys[p]
+
+            if current_min is None or span < current_min:
+
+                current_min = span
+
+        if current_min is None:
+
+            # shouldn't happen since m >= K
+
+            continue
+
+        area = (points[j][0] - points[i][0]) * current_min
+
+        if area < min_area:
+
+            min_area = area
+
+print(min_area)
+
+Yes.
+
+Testing sample input 1:
+
+4 4
+
+Points after sorting by x:
+
+(1,4), (3,3), (6,2), (8,1)
+
+i=0, j=3. m=4 >=4.
+
+ys = [4,3,2,1], sorted as [1,2,3,4]. For K=4, p can be 0 only. So span is 4-1=3. Area is (8-1)*3=21. Which matches the sample.
+
+Sample input 2:
+
+4 2.
+
+Points sorted by x: (0,0), (1,1), (2,2), (3,3)
+
+i=0, j=1: m=2 >=2.
+
+ys = [0,1] sorted. K=2. p=0: 1-0=1. area (1-0)*1 = 1.
+
+Similarly for i=1, j=2: (2-1) * (2-1) = 1.
+
+So the minimal is 1.
+
+Sample input 3:
+
+4 3.
+
+Points:
+
+-1e9,-1e9
+
+-999999999, 999999999
+
+999999999,-999999999
+
+1e9,1e9
+
+Wait, but the points in input are:
+
+-1000000000 -1000000000
+
+1000000000 1000000000
+
+-999999999 999999999
+
+999999999 -999999999
+
+But after sorting by x, the x coordinates are:
+
+-1e9 (first point), -999999999 (third point), 999,999,999 (fourth point), 1e9 (second point). Because 1e9 is larger than 999,999,999 (since 1e9 is 1000000000, which is 1 more than 999,999,999).
+
+So sorted x order is:
+
+-1000000000, -999999999, 999999999, 1000000000.
+
+So the points are ordered as:
+
+Point 0: (-1e9, -1e9)
+
+Point 1: (-999999999, 999999999)
+
+Point 2: 999999999, -999999999
+
+Point 3: 1e9, 1e9.
+
+So when K=3, we need to look for i and j where j-i+1 >=3.
+
+For example, i=0 and j=2: includes points 0,1,2. x range from -1e9 to 999,999,999. The x width is 999,999,999 - (-1e9) = 1999999999.
+
+The y's are [-1e9, 999999999, -999999999]. Sort them: [-1e9, -999999999, 999999999]. For K=3, the minimal y span is 999,999,999 - (-1e9) = 1999999999. So the area is 1999999999 * 1999999999 = (2e9 -1)^2 = ?
+
+Wait, but the sample output is 3999999996000000001, which is equal to (2e9-1)^2 - (2e9-1) ?
+
+Wait, 1999999999 * 1999999999 = ?
+
+Wait 2e9 is 2000000000. 1999999999 is 2e9-1. So (2e9-1)^2 = (2e9)^2 - 2*2e9 +1 = 4e18 -4e9 +1. But the sample output is 3999999996000000001. Hmm. Let's calculate:
+
+The sample output is given as 3999999996000000001. Let's see:
+
+Compute 1999999999 * 1999999999:
+
+Let me compute 1999999999 * 1999999999.
+
+= (2000000000 -1) * (2000000000 -1)
+
+= 2000000000² - 2*2000000000 +1
+
+= 4e18 -4e9 +1 = 3999999996000000001, which matches the sample output.
+
+So in this case, when i=0 and j=2, the area is 1999999999 * 1999999999 = sample output. But wait, what about other possible i and j?
+
+Wait, maybe other i and j combinations can give a smaller area. Let's check.
+
+For example, i=1, j=3: points 1,2,3. x range is from -999999999 to 1e9. x width is 1e9 - (-999,999,999) = 1999999999. The y's are 999,999,999; -999,999,999; 1e9. Sorted: [-999999999, 999999999, 1e9]. K=3. The minimal y span is 1e9 - (-999999999) = 1999999999. So same as before. Area is same as before. So there are multiple possibilities leading to the same area. 
+
+Alternatively, perhaps other combinations may have a smaller area.
+
+Wait, maybe when i=0 and j=3 (all four points). The x width is 1e9 - (-1e9) = 2e9. The y's are -1e9, 999999999, -999999999, 1e9. Sorted: [-1e9, -999999999, 999999999, 1e9]. For K=3, the minimal y span can be between the first three points (span is 999999999 - (-1e9) = 1999999999) or the last three (1e9 - (-999999999) = 1999999999). So the minimal y span is 1999999999. The area would be 2e9 * 1999999999 = 3.999999998e18 + ... which is bigger than the sample output. So the minimal area is indeed 3999999996000000001.
+
+Thus, the code works for that case.
+
+So the code should handle all cases correctly.
+
+Now, implement the code, read from stdin, and output the answer.
+
+But note that in Python, when K is 1, but the constraints say K >=2, so the code doesn't have to handle K=1.
+
+The code reads N and K, then the points, sorts them by x. Then for all i <= j, computes the possible area as described.
+
+So the code should work.
+</think>
+To solve this problem, we need to find the minimum possible area of a rectangle that contains at least K points from a given set of N points in a 2D plane. The rectangle's sides must be parallel to the coordinate axes, and points on the edges are considered inside the rectangle.
+
+### Approach
+1. **Sort Points by X-Coordinates**: First, we sort all the points based on their x-coordinates. This helps in efficiently determining the range of x-values for potential rectangles.
+2. **Iterate Over Possible X-Ranges**: For each possible range of x-values (from the i-th smallest x to the j-th smallest x), we check if the number of points in this range is at least K.
+3. **Extract and Sort Y-Coordinates**: For each valid x-range, extract the y-coordinates of the points within this range and sort them.
+4. **Determine Minimum Y-Interval**: Using the sorted y-coordinates, compute the minimum interval that includes at least K points. This is done by sliding a window of size K over the sorted y-values and finding the smallest interval.
+5. **Calculate Area and Track Minimum**: For each valid x-range and corresponding y-interval, compute the area of the rectangle and keep track of the minimum area encountered.
+
+### Solution Code
+```python
+n, k = map(int, input().split())
+points = [tuple(map(int, input().split())) for _ in range(n)]
+points.sort(key=lambda p: p[0])  # Sort points by x-coordinate
+
+min_area = float('inf')
+
+for i in range(n):
+    for j in range(i, n):
+        # Check if the number of points in x range [i..j] is >=k
+        m = j - i + 1
+        if m < k:
+            continue
+        # Extract y-coordinates and sort them
+        ys = [points[idx][1] for idx in range(i, j + 1)]
+        ys.sort()
+        # Find the minimal y span covering at least k points
+        min_span = None
+        for p in range(len(ys) - k + 1):
+            span = ys[p + k - 1] - ys[p]
+            if min_span is None or span < min_span:
+                min_span = span
+        if min_span is None:
+            continue  # This case should not occur as m >=k
+        # Calculate the area
+        width = points[j][0] - points[i][0]
+        area = width * min_span
+        if area < min_area:
+            min_area = area
+
+print(min_area)
+```
+
+### Explanation
+1. **Sorting Points**: By sorting the points based on their x-coordinates, we can efficiently consider all possible x-ranges by iterating through pairs of points.
+2. **Sliding Window for Y-Intervals**: For each valid x-range, the y-coordinates are sorted, and a sliding window of size K is used to determine the smallest interval that includes at least K points. This ensures we efficiently find the minimal y-interval.
+3. **Efficiency**: The algorithm runs in O(N^3) time complexity due to iterating over all possible x-ranges (O(N^2)) and sliding the window over sorted y-coordinates (O(N)). This is feasible given the constraint N ≤ 50.
+
+This approach ensures that we explore all potential rectangles efficiently and find the minimum area that meets the problem's requirements.
+</bot>

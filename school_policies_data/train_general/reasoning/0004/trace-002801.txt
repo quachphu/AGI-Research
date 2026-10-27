@@ -1,0 +1,877 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.You are given a string s consisting only of characters + and -. You perform some process with this string. This process can be described by the following pseudocode: 
+    
+    
+    res = 0  
+    for init = 0 to inf  
+        cur = init  
+        ok = true  
+        for i = 1 to |s|  
+            res = res + 1  
+            if s[i] == '+'  
+                cur = cur + 1  
+            else  
+                cur = cur - 1  
+            if cur < 0  
+                ok = false  
+                break  
+        if ok  
+            break  
+    
+
+Note that the inf denotes infinity, and the characters of the string are numbered from 1 to |s|.
+
+You have to calculate the value of the res after the process ends.
+
+Input
+
+The first line contains one integer t (1 ≤ t ≤ 1000) — the number of test cases.
+
+The only lines of each test case contains string s (1 ≤ |s| ≤ 10^6) consisting only of characters + and -.
+
+It's guaranteed that sum of |s| over all test cases doesn't exceed 10^6.
+
+Output
+
+For each test case print one integer — the value of the res after the process ends.
+
+Example
+
+Input
+
+
+3
+--+-
+---
+++--+-
+
+
+Output
+
+
+7
+9
+6
+</user>
+<bot>
+<think>
+Okay, I need to solve this problem where I have to calculate the res value based on the given pseudocode. Let's try to understand what's happening in the pseudocode.
+
+The process involves trying different initial values (init) starting from 0 upwards. For each init, we simulate the process of going through each character in the string s. For each step, we increment res by 1. If during this simulation the current value (cur) drops below 0, we break out of the loop and try the next init. The goal is to find the smallest init where the entire string can be processed without cur ever becoming negative. Then, the total res is the sum of all the steps taken during all the simulations.
+
+Hmm. The problem is that if the string is long and the init is large, simulating each step for every possible init until we find the right one would be way too slow. Especially since the string can be up to 1e6 characters long. So I need a smarter way to calculate res without simulating every step for every possible init.
+
+Let's think about what contributes to res. For each position in the string where the current value (cur) would drop below 0 for a given init, that's where the simulation stops. The res increases by the number of steps taken before breaking. The sum of all these steps across all failed inits plus the steps of the successful init gives the total res.
+
+So maybe the key is to find for each position in the string, how many inits would fail at that position. Then sum all those contributions.
+
+Wait, here's an idea. Each time the current cur becomes negative at some step i, that means for all inits up to a certain value, the process would stop at step i. Then, for each such i, the number of inits that cause the process to fail at i contributes (i) to res (since for each of those inits, we add i steps to res before breaking). Then, the successful init would contribute the length of the string to res.
+
+Wait, let's break this down. Let's think about the initial value (init) and track when it's too small. For a particular step i in the string, the accumulated effect of the operations up to step i must cause the current cur to drop below zero. So, for each position i where the cumulative sum (let's call it some variable) is such that init plus that sum is less than zero. Wait, no. Because the cur is starting at init, and each step adds or subtracts 1. Let's model the cumulative sum as a prefix sum. For example, after each step, the cur is init plus the sum of the first i operations (since each '+' is +1, '-' is -1). So the prefix sum after i steps is sum_i = sum_{k=1 to i} s_k (where s_k is +1 or -1).
+
+At step i, cur = init + sum_{k=1 to i} s_k. But wait, no. Because the process is that each step is applied sequentially. Wait, the initial cur is init. Then, for each step i (from 1 to |s|), we do:
+
+res +=1
+
+cur += s[i] (where '+' is +1, '-' is -1).
+
+If after this, cur <0, break.
+
+So the current value after each step is init plus the sum of the first i operations (since each step is applied in order). So the sum after i steps is sum_i = sum_{k=1 to i} s_k (where s_k is +1 for '+', -1 for '-'). Then, the condition after step i is that init + sum_i < 0.
+
+Wait, but sum_i is the cumulative change after i steps. So the cur after the i-th step is init + sum_i. But for the process to break at step i, this cur must be negative. So init + sum_i < 0 → init < -sum_i.
+
+But this is the condition for the process to break at step i. However, the process would break at the first such i where this happens. So for a given init, the process stops at the first i where init + sum_i < 0.
+
+But how do we model this across all possible inits?
+
+The idea is that for each i, any init value that is less than the required threshold will cause the process to fail at step i. But we need to find the earliest i where this happens for each init.
+
+Alternatively, for each i, the minimum init required to avoid failing up to step i is the maximum over all ( - sum_j ) for j from 1 to i, but only considering the j where sum_j is negative. Because, for example, if at step j, sum_j is -5, then init must be at least 5 to avoid cur being negative at step j.
+
+Wait, let's think. The condition is that init + sum_j >= 0 for all j up to the current step. So for each j, init >= -sum_j. Therefore, the minimal init required to pass all steps is the maximum of (-sum_j) for all j from 1 to n, where sum_j is the cumulative sum up to j. If all sum_j are >=0, then init can be 0.
+
+So, the minimal init is max(0, max_{j} (-sum_j)) ). Once we know that minimal init, then the total res is the sum of all steps taken in all inits up to (minimal init -1) plus the steps taken in the minimal init (which is the full length of s).
+
+Wait, but how do we calculate the steps contributed by the inits that are less than the minimal required init?
+
+Each init from 0 up to (minimal_init -1) will fail at some step. For each such init, the steps added to res are the first step where init + sum_i <0. So for each init, we need to find the earliest i where sum_i < -init, and add i to res.
+
+But doing this for all possible inits is O(n * minimal_init), which is not feasible if minimal_init is large.
+
+So we need a way to model the sum for all inits.
+
+Let's think differently. For each i (step in the string), how many inits would cause the process to fail at step i?
+
+For step i, the process fails here if:
+
+init + sum_1 >= 0 (so it didn't fail at step 1),
+
+init + sum_2 >=0 (didn't fail at step 2),
+
+..., 
+
+init + sum_{i-1} >=0,
+
+but init + sum_i <0.
+
+But sum_i is the sum after step i.
+
+So for step i to be the first failure step, the init must satisfy:
+
+init >= -sum_1 +1 (since sum_1 is the sum after step 1; init + sum_1 >=0 → init >= -sum_1. But if init is exactly -sum_1, then sum_1 + init is zero, which is allowed. So failure would happen at step i only if sum_i + init <0 → init < -sum_i.
+
+Wait, maybe this approach is getting complicated. Let's think again.
+
+Each init can be mapped to the first i where sum_i < -init. So the steps added for that init is i. The total res is sum over all inits (from 0 to required_init-1) of their i, plus the length of the string for the required_init.
+
+The required_init is the minimal init that ensures sum_i + init >=0 for all i.
+
+So, how to compute for each i, the number of inits that have their first failure at i.
+
+Let me model this:
+
+For a given i, the number of inits that first fail at i is equal to the number of inits that are in the interval [a, b), where a and b are determined based on the previous steps.
+
+Wait, perhaps the following approach:
+
+Let's compute for each i the minimal init that would cause the process to fail at i. Let's call this m_i. Then, the number of inits that fail at i is the number of init values where m_i = i's required init.
+
+Alternatively, for each i, the range of inits that would fail first at i is the set of inits such that:
+
+- init < -sum_i (so that they fail at i),
+
+and for all j < i, init >= -sum_j (so they didn't fail at any j before i).
+
+So the inits that fail at i are those in the interval [max_{j < i} (-sum_j), -sum_i).
+
+Because:
+
+max_{j < i} (-sum_j) is the minimal init required to pass all steps before i. So, any init less than that would have failed in a previous step. So, the inits that reach step i must be >= max_{j <i} (-sum_j). But to fail at i, they must be < -sum_i.
+
+Therefore, the count of inits that first fail at i is the number of integers in [max_prev, -sum_i -1], where max_prev is the maximum of (-sum_j) for j < i.
+
+If this interval is valid (i.e., max_prev <= -sum_i -1), then the count is (-sum_i -1) - max_prev + 1 = (-sum_i - max_prev). Otherwise, zero.
+
+So for each i, we can compute the contribution to res as the count multiplied by i (since each such init contributes i steps).
+
+Then, the total res is the sum over all i of (count_i * i) + len(s), since the successful init (required_init) contributes len(s) steps.
+
+So the problem reduces to:
+
+1. Compute the cumulative sums sum_i for each step.
+
+2. For each i, compute the maximum of (-sum_j) for j from 1 to i-1 (call this max_prev).
+
+3. The interval for inits that first fail at i is [max_prev, -sum_i -1].
+
+4. If max_prev > (-sum_i -1), then no inits fail here. Else, the count is (-sum_i - max_prev) (since the number of integers from a to b is b -a +1, but here we have from max_prev to (-sum_i -1), so ( (-sum_i -1) - max_prev +1 ) = (-sum_i - max_prev).
+
+Wait, let me calculate the number of integers between a and b inclusive: it's b -a +1. So if a is the lower bound and b is upper, then the count is (b - a +1) when a <= b.
+
+In this case, the interval for inits is [max_prev, -sum_i -1], inclusive. So the count is (-sum_i -1 - max_prev +1) = (-sum_i - max_prev).
+
+But we have to ensure that max_prev <= -sum_i -1. Otherwise, there are zero inits here.
+
+So for each i:
+
+contribution_i = max(0, (-sum_i - max_prev)) * i
+
+Summing all contribution_i across i gives the total res from all failed inits, then add len(s) for the successful init.
+
+So the steps are:
+
+Compute the prefix sums sum_i for each i.
+
+Compute for each i, the maximum of (-sum_j) for j < i (up to i-1). Let's call this max_prev_i.
+
+Then, for each i:
+
+if (max_prev_i <= (-sum_i -1)):
+
+   count = (-sum_i) - max_prev_i
+
+   contribution += count * i
+
+else:
+
+   no contribution.
+
+Then, the total res is sum of contributions + len(s).
+
+Wait, but why is the count ( (-sum_i) - max_prev_i ) ?
+
+Wait, because:
+
+The interval is [max_prev_i, (-sum_i -1)], inclusive.
+
+The number of integers here is ( (-sum_i -1) - max_prev_i + 1 ) = (-sum_i -1 - max_prev_i +1 ) = (-sum_i - max_prev_i).
+
+Yes.
+
+So, the key is to compute for each i, the maximum of (-sum_j) for j < i. Then, compute the interval and count.
+
+But how to compute max_prev_i efficiently?
+
+We can track this as we compute the prefix sums.
+
+Let's walk through an example.
+
+Take the first sample input:
+
+Sample Input 1: --+-
+
+The string is '--+-', which translates to steps: -1, -1, +1, -1.
+
+Let's compute the prefix sums:
+
+sum_1 = -1
+
+sum_2 = -2
+
+sum_3 = -1
+
+sum_4 = -2
+
+Now, for each i from 1 to 4:
+
+Compute max_prev_i (the maximum of -sum_j for j < i):
+
+i=1: j <1 → no elements. So max_prev is 0? Or is it the maximum over an empty set. Wait, no. Because for i=1, j ranges from 1 to 0, which is empty. So max_prev_i for i=1 is the maximum of an empty set. But since the inits start from 0, maybe we need to consider that the initial max_prev is 0.
+
+Wait, for i=1:
+
+The condition is that init must be >= max_prev_i (which is the maximum of -sum_j for j <i). Since there are no j <i, the max_prev_i is 0 (since the init starts at 0, which is the minimum possible). Wait, perhaps for i=1, the max_prev_i is the maximum of the empty set, which is -infinity. But in practice, when j <i is empty, the inits that can reach step i must have passed all previous steps (which there are none). So the max_prev_i is 0.
+
+Hmm, perhaps the correct way to model max_prev_i is the maximum of ( -sum_j for j in 1..i-1 ), but if i=1, then i-1=0, so there are no j. So for i=1, the maximum is -infinity. But in that case, the interval [max_prev_i, -sum_i -1] would be from -infty to (-sum_1 -1) → but in reality, the init can't be negative, so the lower bound is 0.
+
+Wait, perhaps the actual max_prev_i for each i is the maximum between the previous maximum and the current -sum_j, but considering j up to i-1.
+
+Alternatively, perhaps the initial max_prev is 0, and for each i, the max_prev_i is the maximum of all -sum_j for j from 1 to i-1. But if i-1 is 0, then there's no sum_j, so max_prev is 0.
+
+Wait, let's think again. For a given i, the inits that can reach step i must be >= the maximum of -sum_1, -sum_2, ..., -sum_{i-1}. Because, for each of the previous steps j (from 1 to i-1), init + sum_j >= 0. So init >= -sum_j for all j <i. So the minimal init required to reach step i is the maximum of all -sum_j for j <i. If there are no j <i (i=1), then the maximum is 0? Or negative infinity?
+
+But in the problem statement, the inits start from 0. So the init can't be less than 0. So the lower bound for any interval is 0. So for i=1, the interval of inits that can reach step i (i=1) is [0, ...], since there's no previous steps. Then, for step i=1, the inits that fail here are those where init + sum_1 <0 → init < -sum_1.
+
+But sum_1 is the sum after step 1, which is the first character.
+
+Let's take the first sample input:
+
+s is "--+-".
+
+sum_1 = -1.
+
+For i=1:
+
+max_prev_i is 0 (since j <1 has no elements, and the init starts at 0).
+
+So the interval is [0, (-sum_i -1)] → sum_i is -1, so -sum_i is 1. So (-sum_i -1) is 0.
+
+So the interval is [0,0]. So count is (0 -0 +1) =1. So contribution is 1*1=1.
+
+But wait, the inits that fail here are those in [0,0], which is init=0. Because for i=1, sum_1 is -1. So init=0: 0 + (-1) = -1 <0. So this init would fail at step 1. So contribution is 1*1=1.
+
+Then, for i=2:
+
+sum_2 = -2.
+
+max_prev_i is max of -sum_1 (since j <2 is 1). -sum_1 is 1. So max_prev_i=1.
+
+So interval is [1, (-sum_i -1)] → sum_i is -2 → -sum_i is 2 → -sum_i -1=1. So interval is [1,1]. So count is 1-1 +1 =1. Contribution is 1*2=2.
+
+So for init=1: during step 1, sum_1= -1. 1 + (-1) =0 ≥0. So proceeds to step 2. sum_2= -2. 1 + (-2) =-1 <0 → fails here. So steps added:2. So init=1 contributes 2 steps.
+
+Then i=3:
+
+sum_3 = -1.
+
+max_prev_i is max of -sum_1 (1), -sum_2 (2). So max_prev_i=2.
+
+Interval is [2, (-sum_i -1)] → sum_i is -1 → -sum_i=1 → -sum_i-1=0. So the interval is [2,0], which is invalid (2>0). So count is 0. Contribution is 0.
+
+Then i=4:
+
+sum_4 =-2.
+
+max_prev_i is max of -sum_1 (1), -sum_2 (2), -sum_3 (1) → 2.
+
+Interval is [2, (-sum_i -1)] → sum_i is -2 → -sum_i=2 → -sum_i-1=1. So interval [2,1] → invalid. So contribution is 0.
+
+So total contributions from failed inits are 1+2=3. Then the successful init is 2 (since the required init is the maximum of all -sum_j, which is max(1,2,1,2) → 2). So the steps added for init=2 are 4. So total res is 3 +4=7, which matches the sample.
+
+So the approach seems correct.
+
+Now, the plan is:
+
+For each test case:
+
+1. Compute the prefix sums sum_i for each i from 1 to len(s).
+
+2. Track the maximum of (-sum_j) for j up to i-1 (max_prev).
+
+3. For each i, calculate the interval [max_prev, (-sum_i -1)] → if max_prev > (-sum_i -1), contribution is 0. Else, count is (-sum_i -1 - max_prev +1) = (-sum_i - max_prev).
+
+4. Multiply count by i and add to res.
+
+Finally, add len(s) to res (the successful init's steps).
+
+So the key steps are:
+
+- Compute prefix sums.
+
+- Track the maximum of (-sum_j) for j <i.
+
+- For each i, calculate the contribution.
+
+Now, how to compute this efficiently.
+
+Let's see. For each test case:
+
+Initialize sum =0, max_prev =0, res=0.
+
+For each character in the string (i from 0 to len(s)-1):
+
+   sum += (1 if s[i] == '+' else -1)
+
+   current_sum = sum
+
+   if it's the first step (i=0, since 0-based?), then:
+
+      max_prev for i=1 (1-based) is 0.
+
+      For i=1 (1-based), sum_1 is current_sum.
+
+      contribution is max(0, (-current_sum) - max_prev) → since -sum_i is -current_sum.
+
+      Then, interval is [max_prev, (-current_sum -1)]
+
+      So count is (-current_sum - max_prev) → but only if max_prev <= (-current_sum -1).
+
+      So the contribution is max(0, (-current_sum - max_prev)) * (i+1).
+
+      Then, add this to res.
+
+      Then update the max_prev for next steps. The new max_prev is the maximum between current max_prev and (-current_sum).
+
+   else:
+
+      compute max_prev (from previous steps).
+
+      contribution calculation as before.
+
+      then update max_prev to be the maximum between current max_prev and (-current_sum).
+
+So, in code:
+
+We can loop through each character, keeping track of sum, max_prev (the maximum of (-sum_j) for j up to current i-1), and accumulate the res.
+
+Wait, let's code this step by step.
+
+Sample code for the first example:
+
+s = "--+-"
+
+sum starts at 0.
+
+max_prev starts at 0.
+
+res starts at 0.
+
+For each character in s:
+
+i=0 (char '-'):
+
+sum = -1.
+
+max_prev for this step (i=1, 1-based) is the max_prev before processing this step, which is 0.
+
+contribution for this step is max(0, (-sum_i) - max_prev) * (i+1) → (-sum_i) is 1. 1 -0 =1. So 1*1=1. res +=1.
+
+Then, update max_prev to max(0, 1) →1.
+
+i=1 (char '-'):
+
+sum becomes -2.
+
+contribution: (-sum_i) is 2. max_prev is 1. 2-1=1. 1*2=2 → res becomes 3.
+
+update max_prev to max(1, 2) →2.
+
+i=2 (char '+'):
+
+sum becomes -1.
+
+contribution: (-sum_i) is 1. max_prev is 2. 1-2= -1 →0. So no contribution.
+
+update max_prev remains 2.
+
+i=3 (char '-'):
+
+sum becomes -2.
+
+contribution: (-sum_i) is 2. max_prev is 2. 2-2=0. 0*4=0. So no contribution.
+
+update max_prev remains 2.
+
+After processing all characters, add len(s) (4) → res becomes 3+4=7.
+
+Which matches.
+
+Another sample input:
+
+Third test case: ++--+- → s is '++--+-'.
+
+Let's process this.
+
+sum starts at 0.
+
+max_prev=0.
+
+res=0.
+
+Characters:
+
+i=0: '+', sum=1.
+
+contribution: (-sum_i) is -1. but the calculation is (-sum_i) is -1? Wait, sum_i is 1. -sum_i is -1. But we are in the first step (i=0 in 0-based → i+1=1 in 1-based).
+
+sum_i is 1. So -sum_i is -1. The max_prev is 0 (from initial).
+
+So contribution is max(0, (-sum_i) - max_prev) → (-1 -0) =-1 →0. So no contribution.
+
+Then, update max_prev to max(0, -sum_i) → max(0, -1) →0.
+
+i=1: '+', sum=2.
+
+sum_i=2. -sum_i =-2. max_prev is 0.
+
+contribution: (-2) -0 =-2 →0. So no contribution.
+
+update max_prev to max(0, -2) →0.
+
+i=2: '-', sum=1.
+
+sum_i=1. -sum_i= -1. max_prev is 0.
+
+contribution: (-1) -0 =-1 →0. So no contribution.
+
+update max_prev to max(0, -1) →0.
+
+i=3: '-', sum=0.
+
+sum_i=0. -sum_i=0. max_prev=0.
+
+contribution: (0 -0)=0 →0*4=0.
+
+update max_prev to max(0, 0) →0.
+
+i=4: '+', sum=1.
+
+sum_i=1. -sum_i=-1. max_prev=0.
+
+contribution: (-1 -0)= -1 →0. So no contribution.
+
+update max_prev to max(0, -1) →0.
+
+i=5: '-', sum=0.
+
+sum_i=0. -sum_i=0. max_prev=0.
+
+contribution: 0-0=0 →0*6=0.
+
+update max_prev to max(0,0) →0.
+
+So sum of contributions is 0. Then add len(s) =6. So total res is 6, which matches the sample.
+
+So the approach works.
+
+Another sample input: '---' → output 9.
+
+Let's see:
+
+s is '---' → three '-'s.
+
+sum_1 =-1, sum_2=-2, sum_3=-3.
+
+For each i:
+
+i=1 (sum=-1):
+
+max_prev is 0. contribution is (-(-1) -0) →1 →1*1=1. res=1. max_prev becomes 1.
+
+i=2 (sum=-2):
+
+max_prev is 1. contribution is (-(-2) -1) →2-1=1 →1*2=2. res=3. max_prev becomes max(1,2) →2.
+
+i=3 (sum=-3):
+
+max_prev is 2. contribution is (-(-3) -2) →3-2=1 →1*3=3. res=6. max_prev becomes 3.
+
+So sum contributions 6. Add len(s) (3) →9. Which matches the sample.
+
+So the code seems correct.
+
+Now, the code needs to:
+
+- For each test case, compute the sum for each character.
+
+- Track the current sum, the max_prev (the maximum of (-sum_j) for j up to current step -1).
+
+- For each step, compute the contribution as max(0, (-current_sum) - max_prev) multiplied by (current step index +1).
+
+- Accumulate the res.
+
+Then add len(s) to res.
+
+But wait, the len(s) is added once, because the successful init (required_init) is the maximum of all (-sum_j) for j from 1 to len(s). Because required_init must be >= all (-sum_j), so required_init = max(0, max_j (-sum_j)).
+
+So after processing all steps, the required_init is the maximum between 0 and the maximum of all (-sum_j).
+
+So, after all steps, the required_init is the maximum of all (-sum_j) and 0.
+
+So the code's steps are:
+
+Initialize sum=0, max_prev=0 (the maximum of (-sum_j) up to previous steps), required_init=0.
+
+But as we process each step, we can track the maximum of (-sum_j) for j up to current i. So required_init will be the maximum between 0 and the maximum of (-sum_j) for all j.
+
+So required_init = max(0, current_max_prev).
+
+Wait, no. Because current_max_prev is the maximum of (-sum_j) for j from 1 to i-1. So after processing all steps, the current_max_prev is the maximum of (-sum_j) for j from 1 to len(s)-1. Then, the final step (i= len(s)) is processed, and we compute the required_init as the maximum between current_max_prev and (-sum_{len(s)}).
+
+But required_init is the maximum of all (-sum_j) for j from 1 to len(s).
+
+So during processing each step, the current_max_prev is updated to the maximum between the previous current_max_prev and (-sum_j) for j up to current step.
+
+Wait, perhaps during processing each character:
+
+sum_j is computed (sum += ...), then after calculating the contribution, we update the current_max_prev.
+
+So for each step (i in 0-based, which is step i+1 in 1-based):
+
+sum_j for j = i+1.
+
+current_sum is sum_j.
+
+then, after processing the contribution, current_max_prev is updated to max(current_max_prev, -current_sum).
+
+So, after processing all steps, current_max_prev is the maximum of (-sum_j) for all j from 1 to len(s).
+
+Thus, required_init is max(0, current_max_prev).
+
+So the len(s) is added to res because for the required_init, all steps are processed.
+
+But in our code, the contributions are for all inits up to (required_init -1). Because required_init is the minimal init that passes all steps.
+
+Thus, the code can proceed as:
+
+for each test case:
+
+   s = input string.
+
+   sum =0
+
+   max_prev =0
+
+   res=0
+
+   current_max_prev =0
+
+   for i in 0 to len(s)-1:
+
+       sum += 1 if s[i] == '+' else -1
+
+       # current_sum is sum, which is sum_{j=1 to i+1}
+
+       # For step i+1:
+
+       # compute the contribution for inits that fail here.
+
+       # the max_prev here is the maximum of (-sum_j) for j from 1 to i.
+
+       # because j < i+1 → j up to i.
+
+       # so max_prev is current_max_prev.
+
+       # compute the contribution for this step.
+
+       # the sum for step i+1 is sum.
+
+       # -sum is the -sum_j for j=i+1.
+
+       # contribution is max(0, (-sum) - current_max_prev) * (i+1)
+
+       contribution = max(0, (-sum) - current_max_prev) * (i+1)
+
+       res += contribution
+
+       # update current_max_prev to be the maximum between current_max_prev and (-sum)
+
+       current_max_prev = max(current_max_prev, -sum)
+
+   required_init = max(0, current_max_prev)
+
+   res += len(s)
+
+   print(res)
+
+Wait, but in the first sample, after processing all steps:
+
+current_max_prev is 2 (the maximum of 1,2,1,2 → sum_1=-1 →-sum=1, sum_2=-2 →-sum=2, sum_3=-1 →-sum=1, sum_4=-2 →-sum=2 → current_max_prev is 2).
+
+required_init is max(0,2) →2. So len(s) is 4 → added to res.
+
+Which gives 3+4=7.
+
+Yes.
+
+Another example: for s '++--+-', after processing all steps:
+
+current_max_prev is 0 → because sum_1=1 →-sum=-1, sum_2=2→-sum=-2, sum_3=1→-sum=-1, sum_4=0→-sum=0, sum_5=1→-sum=-1, sum_6=0→-sum=0. So current_max_prev is max(0, -sum for each step) → which is 0.
+
+required_init is 0. So len(s) is 6. So res=0 +6=6.
+
+Yes.
+
+So the code looks correct.
+
+Now, let's code this in Python.
+
+The function will read t test cases, each being a string s. For each s, compute res as per the above steps.
+
+The code should be efficient, handling up to 1e6 characters per test case, and sum of all characters up to 1e6.
+
+In Python, for each test case:
+
+sum = 0
+
+current_max_prev = 0
+
+res =0
+
+for char in s:
+
+   sum += 1 if char == '+' else -1
+
+   contribution = max(0, (-sum) - current_max_prev) * (len(res_so_far) +1)
+
+Wait, wait, the (i+1) is the step number (1-based). For each character in the loop, the index i (0-based) is 0 to len(s)-1. So step i+1.
+
+So in code:
+
+for i in range(len(s)):
+
+   char = s[i]
+
+   sum += 1 if char == '+' else -1
+
+   contribution = max(0, (-sum) - current_max_prev) * (i+1)
+
+   res += contribution
+
+   current_max_prev = max(current_max_prev, -sum)
+
+Then, required_init = max(0, current_max_prev)
+
+res += len(s)
+
+Yes.
+
+So the code will look like this.
+
+Testing the first sample:
+
+Sample Input 1: --+-
+
+Processing:
+
+i=0:
+
+char '-', sum becomes -1.
+
+contribution: (-(-1) -0) =1 →1*1=1. res=1.
+
+current_max_prev = max(0, 1) →1.
+
+i=1:
+
+char '-', sum becomes -2.
+
+contribution: (-(-2) -1)= 2-1=1 →1*2=2. res=3.
+
+current_max_prev = max(1,2)=2.
+
+i=2:
+
+char '+', sum becomes -1.
+
+contribution: (-(-1) -2=1-2=-1 →0. res remains 3.
+
+current_max_prev remains 2.
+
+i=3:
+
+char '-', sum becomes -2.
+
+contribution: (-(-2) -2=2-2=0 →0*4=0. res remains3.
+
+current_max_prev remains 2.
+
+required_init = max(0,2)=2.
+
+res +=4 →3+4=7.
+
+So correct.
+
+Thus, the code should work.
+
+Now, code:
+
+Read t.
+
+For each t:
+
+   s = input().strip()
+
+   sum_s = 0
+
+   current_max_prev =0
+
+   res=0
+
+   for i in range(len(s)):
+
+       c = s[i]
+
+       if c == '+':
+
+           sum_s +=1
+
+       else:
+
+           sum_s -=1
+
+       contribution = max(0, (-sum_s) - current_max_prev) * (i+1)
+
+       res += contribution
+
+       current_max_prev = max(current_max_prev, -sum_s)
+
+   res += len(s)
+
+   print(res)
+
+Yes.
+
+Now, test the third sample input: "++--+-" → output 6.
+
+Processing:
+
+sum_s starts at 0.
+
+current_max_prev is 0.
+
+for i=0 (char '+'):
+
+sum_s becomes 1.
+
+contribution: (-1 -0) →-1 →max(0,-1)=0. res remains 0.
+
+current_max_prev is max(0, -1) →0.
+
+i=1 (char '+'):
+
+sum_s becomes 2.
+
+contribution: (-2 -0) →-2 →0. res remains 0.
+
+current_max_prev remains 0.
+
+i=2 (char '-'):
+
+sum_s becomes1.
+
+contribution: (-1 -0) →-1 →0. res remains0.
+
+current_max_prev remains0.
+
+i=3 (char '-'):
+
+sum_s becomes0.
+
+contribution: (0 -0)=0 →0*4=0. res remains0.
+
+current_max_prev becomes0.
+
+i=4 (char '+'):
+
+sum_s becomes1.
+
+contribution: (-1 -0) →-1 →0. res remains0.
+
+current_max_prev remains0.
+
+i=5 (char '-'):
+
+sum_s becomes0.
+
+contribution: 0-0=0 →0*6=0. res remains0.
+
+current_max_prev remains0.
+
+res +=6 →6. Correct.
+
+So the code works.
+
+Thus, this should be the correct solution.
+</think>
+To solve this problem, we need to determine the total number of steps taken during the process described in the problem statement. The key challenge is to efficiently compute this without simulating each possible initial value (init) step-by-step, which would be computationally infeasible for large strings.
+
+### Approach
+1. **Understanding the Process**: The process involves simulating steps for different initial values (init) until we find the minimum init that allows the entire string to be processed without the current value (cur) dropping below zero. Each step contributes to a result counter (res).
+
+2. **Prefix Sum Insight**: For each character in the string, we compute the cumulative sum of the operations. This helps in determining the points where the current value might drop below zero for different initial values.
+
+3. **Efficient Calculation**: Instead of simulating each init, we calculate the contribution of each position in the string to the result. For each position, we determine how many initial values would cause the process to fail at that position. This is done by tracking the maximum negative cumulative sum encountered so far.
+
+4. **Contribution Calculation**: For each position, we compute the interval of initial values that would fail at that position. The number of such values multiplied by the position gives the contribution to the result. Summing these contributions and adding the length of the string (for the successful initial value) gives the final result.
+
+### Solution Code
+```python
+import sys
+
+def calculate_res(s):
+    sum_s = 0
+    current_max_prev = 0
+    res = 0
+    for i in range(len(s)):
+        c = s[i]
+        if c == '+':
+            sum_s += 1
+        else:
+            sum_s -= 1
+        contribution = max(0, (-sum_s) - current_max_prev) * (i + 1)
+        res += contribution
+        current_max_prev = max(current_max_prev, -sum_s)
+    res += len(s)
+    return res
+
+t = int(sys.stdin.readline())
+for _ in range(t):
+    s = sys.stdin.readline().strip()
+    print(calculate_res(s))
+```
+
+### Explanation
+1. **Reading Input**: The number of test cases is read first, followed by each string for which the result needs to be computed.
+
+2. **Prefix Sum Calculation**: For each character in the string, we maintain a running sum of the operations (+1 for '+', -1 for '-').
+
+3. **Tracking Maximum Negative Sum**: We keep track of the maximum negative cumulative sum encountered so far. This helps in determining the range of initial values that would fail at each position.
+
+4. **Contribution Calculation**: For each position, the contribution to the result is calculated based on the range of initial values that would fail at that position. This is done by comparing the current cumulative sum with the maximum negative sum encountered so far.
+
+5. **Final Result**: After processing all characters, the result is the sum of all contributions plus the length of the string (for the successful initial value).
+
+This approach efficiently computes the result in linear time relative to the length of the string, making it suitable for large inputs.
+</bot>

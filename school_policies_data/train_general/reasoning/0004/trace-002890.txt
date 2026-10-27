@@ -1,0 +1,525 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.You are given an array a of size n, and q queries to it. There are queries of two types: 
+
+  * 1 li ri — perform a cyclic shift of the segment [li, ri] to the right. That is, for every x such that li ≤ x < ri new value of ax + 1 becomes equal to old value of ax, and new value of ali becomes equal to old value of ari; 
+  * 2 li ri — reverse the segment [li, ri]. 
+
+
+
+There are m important indices in the array b1, b2, ..., bm. For each i such that 1 ≤ i ≤ m you have to output the number that will have index bi in the array after all queries are performed.
+
+Input
+
+The first line contains three integer numbers n, q and m (1 ≤ n, q ≤ 2·105, 1 ≤ m ≤ 100). 
+
+The second line contains n integer numbers a1, a2, ..., an (1 ≤ ai ≤ 109). 
+
+Then q lines follow. i-th of them contains three integer numbers ti, li, ri, where ti is the type of i-th query, and [li, ri] is the segment where this query is performed (1 ≤ ti ≤ 2, 1 ≤ li ≤ ri ≤ n). 
+
+The last line contains m integer numbers b1, b2, ..., bm (1 ≤ bi ≤ n) — important indices of the array. 
+
+Output
+
+Print m numbers, i-th of which is equal to the number at index bi after all queries are done.
+
+Example
+
+Input
+
+6 3 5
+1 2 3 4 5 6
+2 1 3
+2 3 6
+1 1 6
+2 2 1 5 3
+
+
+Output
+
+3 3 1 5 2
+</user>
+<bot>
+<think>
+Okay, let's see. So the problem is about processing a bunch of queries on an array and then finding the values at certain important indices after all queries have been applied. The queries are either cyclic shifts to the right or reverses of a segment. The challenge is to do this efficiently, especially considering the constraints where n and q can be up to 2e5, which is pretty big. But then, m is only up to 100. Hmm, maybe there's a way to track the important indices backwards through the queries instead of applying all the operations directly.
+
+Wait, right. Because if we try to process all queries forward, especially for large n and q, it's going to be O(q) time per query, which might be manageable if we can find an O(1) per query approach. But applying each query directly would be O(n) per query, which is 2e5 * 2e5 operations—way too slow. That's 4e10 operations, which is impossible.
+
+So the key insight here is that since m is small (100), we can reverse-engineer each important index's position. Instead of applying the operations to the entire array, we can track where each of the m indices ends up after each query. Then, once we have the final position for each important index, we can just read the original array at that position.
+
+But how do we reverse the operations? Let's think about processing the queries in reverse order, starting from the last query and going back to the first. For each query, we need to determine what the original position was before this query was applied. Because when you reverse the process, each query's inverse would affect the position in the opposite way.
+
+Let's take each type of query and figure out how to reverse it.
+
+First, the cyclic shift right. Let's say a query is of type 1 (cyclic shift right) on [l, r]. What does this operation do? It takes the element at position r and moves it to position l, shifting all elements from l to r-1 to the right by one. So, for example, if the segment is [1,3], the elements a1, a2, a3 become a3, a1, a2.
+
+When processing backwards, for a given current position pos, we need to find out where it came from before this cyclic shift was applied. So suppose after the shift, a certain position x in [l, r] was obtained. How do we find the original position before the shift?
+
+For the cyclic shift right, the original positions can be determined as follows: For positions in [l, r], the original position of the element that ends up at x is x-1 if x > l, and r if x == l. So, to reverse this operation (since we're processing queries in reverse), we need to find, for the current position, what was the position before the shift was applied.
+
+Wait, when processing queries in reverse, each query's effect is undone. So for a cyclic shift right query (type 1), when we reverse it, it's equivalent to doing a cyclic shift left on the same segment. Because a cyclic shift right followed by a cyclic shift left (on the same segment) would cancel each other.
+
+So, when undoing a type 1 query (shift right), the inverse is a shift left on the same segment. So, for each position in the segment [l, r], during the reverse processing, the position's previous location would be:
+
+If the current pos is l, then before the original shift right, it was at r.
+
+If the current pos is in (l, r], then before the shift right, it was at pos-1.
+
+But when undoing the shift right (i.e., applying shift left), during the reverse processing, for a current position pos in [l, r], the original position before the shift left (which is the shift right in the original queries) would be:
+
+Original pos is pos + 1 if pos is in [l, r-1], and l if pos is r.
+
+Wait, perhaps this is getting a bit confusing. Let's think of the process.
+
+Let me model the queries in reverse. Suppose we have a query Q that was the last one applied. To reverse it, we need to apply the inverse operation. For each query type:
+
+Type 1 (shift right): The inverse is a shift left on the same segment. So, during reverse processing, when we encounter a type 1 query, we need to compute what the position was before the original shift right was applied. Because the original shift right would have moved elements in a certain way, and to reverse it, we need to apply the opposite.
+
+So, for a current position x (the position after the original query), during reverse processing, we need to find where x came from before the original query.
+
+For example, during the original shift right on [l, r], the element at position r moves to l. The elements from l to r-1 move to l+1 to r. So, after the shift, in the original processing, the element at x (in the segment) was originally at x-1 if x>l, or r if x=l.
+
+So, when we are undoing this, for each x in [l, r], the element that is now at x would have come from x-1 (if x>l) or from r (if x=l). Therefore, during reverse processing, if the current position is in the segment [l, r], then before this query, the position was:
+
+if x == l: original position is r.
+
+else: original position is x-1.
+
+So, when we process a type 1 query in reverse, the new position (after undoing) is determined by that rule.
+
+Similarly, for a type 2 query (reverse the segment [l, r]), the reverse is the same operation. Because if you reverse a segment and then reverse it again, you get back the original. So, to undo a reverse, you just apply the reverse again. So for type 2 queries in reverse processing, when we process them, we again reverse the segment. So, for a current position x in [l, r], the original position before the reverse was (l + r) - x. Because reversing swaps the positions symmetrically around the center of the segment.
+
+So, putting this together, the approach is:
+
+For each of the m important indices (b_i), we start with their final position (which is their value, since the queries are applied and then we have to find the value at b_i). Then, we process each query in reverse order, starting from the last query and moving to the first. For each query, we adjust the current position of the b_i's to track where they were before this query was applied.
+
+Once all queries are processed in reverse, the position of each b_i will point to the original index in the initial array. Then, we can just take the original array's value at that position.
+
+This approach is O(m * q), which for m=100 and q=2e5 is 2e7 operations, which is acceptable.
+
+So the steps are:
+
+1. Read the original array.
+
+2. Read all the queries and store them in a list.
+
+3. Read the m important indices into a list.
+
+4. For each important index b_i:
+
+   a. Initialize current_pos = b_i.
+
+   b. Iterate through the queries in reverse order (from last to first).
+
+   c. For each query, check if current_pos is affected by the query. If not, do nothing.
+
+   d. If affected, compute the new current_pos as per the inverse of the query.
+
+5. After processing all queries, the current_pos for each b_i is the original index. Output the original array's value at that index.
+
+Now, the key part is to implement the logic for each query type during reverse processing.
+
+Let's formalize the reverse processing for each query type:
+
+For a query of type 1 (original cyclic shift right) in reverse:
+
+The inverse is a cyclic shift left on the same segment. So, when processing this query in reverse (undoing the original shift right), for each position x in [l, r], the original position (before the shift right) was:
+
+if x == l: then it came from x (after the original shift right, which moved r to l). Wait, no. Let's think again.
+
+Original shift right:
+
+After the shift, the elements are:
+
+new a[l] = old a[r]
+
+new a[l+1] = old a[l]
+
+new a[l+2] = old a[l+1]
+
+...
+
+new a[r] = old a[r-1]
+
+So, for any position x in [l, r], during the original shift right, the element at x after the shift came from:
+
+if x == l: old a[r]
+
+else: old a[x-1]
+
+So, during reverse processing, for a current x (which is in the segment after the original shift), we need to find where it was before the original shift. So, during reverse processing, when we undo the shift right (i.e., apply a shift left), the element at x would have come from:
+
+if x is in [l, r], then:
+
+if x == l: original position is r (because during the original shift, the element at r was moved to l).
+
+else: original position is x-1 (since during the original shift, x's element came from x-1).
+
+Wait, but when we undo the shift right, applying a shift left would take the elements in [l, r] and shift them left. So, during this reverse processing, the current x is in [l, r], and we need to find the position that would have moved into x during a shift left. So during a shift left, the elements move as follows:
+
+new a[l] = a[l+1]
+
+new a[l+1] = a[l+2]
+
+...
+
+new a[r-1] = a[r]
+
+new a[r] = a[l]
+
+So, for a position x in [l, r], the original position (before the shift left) would be:
+
+if x is in [l, r-1], then the original position is x+1.
+
+if x == r, then the original position is l.
+
+Wait, so during the shift left, the element that was at x+1 moves to x. Except for x = r, where the element from l moves to r.
+
+So, when undoing a shift right (original query type 1), during reverse processing, we are applying a shift left. So for a current position x (in the original array after the shift right), we need to find where it was before the shift right. But during reverse processing, each step is undoing the original query.
+
+So, for example, during reverse processing, if the query was a type 1 on [l, r], then for a current x in [l, r], the original position (before the original query) is:
+
+If x == l: then during the original shift right, the element at r was moved to l. So, during reverse processing, the element at l (after the original shift) would have come from r. So in reverse processing, the position after undoing would be r.
+
+For x in (l, r]: during the original shift right, x was filled with the element from x-1. So during reverse processing, the original element is at x-1. So, the position before the original query was x-1.
+
+Therefore, during reverse processing for type 1 query, the new current_pos is:
+
+if current_pos is in [l, r]:
+
+   if current_pos == l:
+
+      new_pos = r
+
+   else:
+
+      new_pos = current_pos - 1
+
+Else:
+
+   new_pos remains current_pos.
+
+For a type 2 query (reverse segment [l, r]), the reverse is the same. So during reverse processing, applying a reverse again undoes the original. For a current_pos x in [l, r], the original position (before the original reverse) is (l + r) - x. Because reversing the segment again swaps the positions back.
+
+So, during reverse processing, for a type 2 query:
+
+if current_pos is in [l, r]:
+
+   new_pos = l + r - current_pos
+
+Else:
+
+   new_pos remains current_pos.
+
+So, the algorithm for each important index is:
+
+start with current_pos = b_i.
+
+for each query in reversed list:
+
+   get t, l, r.
+
+   if current_pos is between l and r (inclusive):
+
+      if t == 1:
+
+          if current_pos == l:
+
+              current_pos = r
+
+          else:
+
+              current_pos -= 1
+
+      elif t == 2:
+
+          current_pos = l + r - current_pos
+
+So, after processing all queries, current_pos is the original index in the array. So we just output a[current_pos - 1], assuming the array is 0-based or 1-based. Wait, in the problem statement, the array is given as a_1, a_2, ... a_n, which is 1-based. So the original array is 1-based. So the indices in the code would be 1-based. However, in Python, lists are 0-based, so when storing the array, we need to adjust accordingly.
+
+Wait, the input for the array is a_1 to a_n, so when reading the array, in Python, we'll store them as a list with indices 0 to n-1. So for the original array, a[0] is a_1 in the problem, a[1] is a_2, etc. So, when we finally get the original position (after processing all reverse queries) for a given b_i (which is 1-based in the input), the code should take that into account.
+
+Wait, wait. Let's clarify:
+
+Suppose in the problem, the important indices are given as b_1, b_2, ..., b_m, each of which is between 1 and n. So in the code, the initial current_pos for each b_i is b_i (1-based). Then, after processing all queries in reverse, current_pos is the original 1-based index in the array. So, to get the value from the original array (which was read as a list in Python, 0-based), we subtract 1.
+
+So, for example, if the original array is [1,2,3,4,5,6], stored as a list in Python as [1,2,3,4,5,6], and current_pos after processing is 3 (1-based), then the value is a[2].
+
+So, the code needs to:
+
+- Read the original array as a list of integers, stored in a list called 'a', which is 0-based.
+
+- For each important index b_i (which is 1-based), track current_pos (1-based) through the reverse processing.
+
+- After reverse processing all queries, the current_pos (1-based) is the index in the original array, so output a[current_pos - 1].
+
+Therefore, the steps in code:
+
+Read n, q, m.
+
+Read array a (n elements).
+
+Read q queries, each with t_i, l_i, r_i. Store them in a list, perhaps in reverse order.
+
+Read the m important indices into a list b.
+
+For each index in b:
+
+   current_pos = the index (1-based).
+
+   iterate through the queries in reverse order (from last to first):
+
+      for each query (t, l, r):
+
+          if current_pos < l or current_pos > r:
+
+              continue
+
+          else:
+
+              if t == 1:
+
+                  # reverse the shift right, which is shift left.
+
+                  # during original shift right, current_pos was in [l, r].
+
+                  # the new current_pos before the original shift is determined.
+
+                  if current_pos == l:
+
+                      current_pos = r
+
+                  else:
+
+                      current_pos -= 1
+
+              elif t == 2:
+
+                  # reverse is same as original, so the position is mirrored.
+
+                  current_pos = l + r - current_pos
+
+   after processing all queries, append a[current_pos - 1] to the result.
+
+Finally, print the result.
+
+Now, the code can be written as follows:
+
+Read n, q, m.
+
+a = list of integers.
+
+queries = [ (t1, l1, r1), ... ] read from next q lines.
+
+b = list of m integers (each is 1-based index).
+
+For each of the m indices in b:
+
+   pos = bi
+
+   for query in reversed(queries):
+
+       t, l, r = query
+
+       if pos < l or pos > r:
+
+           continue
+
+       if t == 1:
+
+           if pos == l:
+
+               pos = r
+
+           else:
+
+               pos -=1
+
+       else: # t ==2
+
+           pos = l + r - pos
+
+   result.append(a[pos-1])
+
+Then print the result.
+
+Yes, this seems correct. Let's check the example.
+
+The example input is:
+
+6 3 5
+
+1 2 3 4 5 6
+
+2 1 3
+
+2 3 6
+
+1 1 6
+
+The queries are:
+
+Query 1: t=2, l=1, r=3
+
+Query 2: t=2, l=3, r=6
+
+Query 3: t=1, l=1, r=6
+
+The important indices are 2, 2, 1, 5, 3.
+
+So, let's process each of these 5 indices in reverse.
+
+For example, take the first important index, which is 2.
+
+Processing the queries in reverse order (the third query first, then second, then first):
+
+Third query (original) was type 1, l=1, r=6. So during reverse processing (undoing this query), for any pos in [1,6], we need to adjust.
+
+Original processing of query 3 was a cyclic shift right on 1-6. So, the new array after this query would be [6,1,2,3,4,5]. But instead of tracking the array, we track the position of the index.
+
+So for the important index 2:
+
+Start with pos=2.
+
+Processing the third query (type 1, l=1, r=6) in reverse:
+
+current pos is 2, which is in [1,6].
+
+Since it's a type 1 query in reverse, we check if pos is in the segment. It is.
+
+If pos == l (1) → pos becomes r (6). But pos is 2 here.
+
+So pos becomes 2-1=1.
+
+Now, after processing the third query (reverse), the new pos is 1.
+
+Next, process the second query (original query 2: reverse 3-6) in reverse.
+
+The query is type 2, l=3, r=6. So during reverse processing, we apply a reverse again.
+
+Current pos is 1, which is less than l=3. So no change.
+
+Then, process the first query (original query 1: reverse 1-3) in reverse.
+
+Again, type 2. So current pos is 1, which is in [1,3]. So compute new pos as 1+3 -1 =3.
+
+So after processing all queries, the original pos is 3. So the value is a[3-1] = a[2] = 3.
+
+Which matches the first output of 3.
+
+Another example: the fifth important index is 3.
+
+Processing in reverse:
+
+Start with pos=3.
+
+Process third query (type1, l=1, r=6). pos is 3, within [1,6].
+
+Type1 reverse: since pos is not l, subtract 1 → pos becomes 2.
+
+Then process second query (type2, l=3, r=6). pos is 2 <3 → no change.
+
+Then process first query (type2, l=1, r=3). pos is 2, which is in [1,3]. So new pos is 1+3 -2 =2. So after this query, pos is 2.
+
+Wait, no. Let's track step by step:
+
+Original steps for fifth index (3):
+
+Start pos=3.
+
+Reverse processing queries:
+
+Third query is type1, l=1, r=6. pos is in [1,6].
+
+Since pos=3 !=1, subtract 1 → pos becomes 2.
+
+Now, processing the second query (original query2 was type2 on 3-6). Reverse processing: apply type2 again. pos is 2 <3 → no change.
+
+Processing first query (original query1 was type2 on 1-3). pos is 2. So new pos is 1+3 -2=2.
+
+So after all reverse processing, the pos is 2. Original array's index 2 (0-based) is a[1] → 2. But wait, the sample output's fifth element is 2. Let's see:
+
+Sample output is:
+
+3 3 1 5 2 
+
+Wait, the fifth output is 2, which would correspond to the original array's element at position 2 (0-based is index 1). But the original array is [1,2,3,4,5,6]. a[1] is 2. So that's correct.
+
+Wait, but wait the fifth important index in the input is 3. So the fifth element in the output is a[2] (0-based) which is 3. Hmm, perhaps I made a mistake here.
+
+Wait, in the sample input, the last line is 2 2 1 5 3. So the important indices are [2, 2, 1, 5, 3]. The fifth element is 3. Let's track that.
+
+Processing the fifth important index (3):
+
+Start with pos=3.
+
+Process the third query (type1, l=1, r=6):
+
+pos is in [1,6], so adjust.
+
+pos is 3 !=1. So subtract 1 → pos=2.
+
+Next, process the second query (type2, l=3, r=6). pos=2 is less than l=3 → no change.
+
+Then process the first query (type2, l=1, r=3). pos=2 is in [1,3]. So new pos is 1+3-2=2. So after this, pos remains 2.
+
+So the original array's index is 2 (0-based is a[1], which is 2. But the sample output's fifth element is 2. So that's correct.
+
+Yes, in the sample output, the fifth element is 2, which matches.
+
+So the code seems to handle that correctly.
+
+Thus, the code should work.
+</think>
+To solve this problem, we need to determine the values at specific indices of an array after applying a series of cyclic shifts and reversals. Given the constraints, directly simulating each operation on the array would be computationally infeasible. Instead, we can efficiently track the positions of the important indices by reversing the operations from the last query to the first.
+
+### Approach
+1. **Reverse Processing of Queries**: Instead of applying each query from start to end, we reverse the order of processing the queries. This allows us to track the origin of each important index backward through each operation.
+2. **Handling Cyclic Shifts**: For each cyclic shift right operation (type 1), we reverse it by treating it as a cyclic shift left. This involves adjusting the position of the important index based on its segment boundaries.
+3. **Handling Reversals**: A reversal operation (type 2) is its own inverse. Reversing the same segment again will return the original configuration, so we adjust the position by mirroring it within the segment.
+
+### Solution Code
+```python
+def main():
+    import sys
+    input = sys.stdin.read().split()
+    ptr = 0
+    n, q, m = map(int, input[ptr:ptr+3])
+    ptr +=3
+    a = list(map(int, input[ptr:ptr+n]))
+    ptr +=n
+    queries = []
+    for _ in range(q):
+        t, l, r = map(int, input[ptr:ptr+3])
+        ptr +=3
+        queries.append((t, l, r))
+    b = list(map(int, input[ptr:ptr+m]))
+    ptr +=m
+    
+    result = []
+    for bi in b:
+        pos = bi
+        for t, l, r in reversed(queries):
+            if pos < l or pos > r:
+                continue
+            if t == 1:
+                if pos == l:
+                    pos = r
+                else:
+                    pos -=1
+            else:
+                pos = l + r - pos
+        result.append(str(a[pos-1]))
+    print(' '.join(result))
+    
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Reading Input**: The input is read in one go for efficiency, and parsed into the array, queries, and important indices.
+2. **Processing Each Important Index**: For each important index, we initialize its position and process each query in reverse order.
+3. **Adjusting Positions**: For each query, if the current position of the important index is within the affected segment, we adjust the position based on the type of operation. Cyclic shifts are reversed by moving left instead of right, and reversals are handled by mirroring the position within the segment.
+4. **Output the Results**: After processing all queries, the original position of each important index is determined, and the corresponding value from the initial array is retrieved and printed.
+
+This approach efficiently tracks the positions of the important indices through all operations, ensuring that we handle up to 200,000 queries in linear time relative to the number of queries and important indices, making it feasible for large input sizes.
+</bot>

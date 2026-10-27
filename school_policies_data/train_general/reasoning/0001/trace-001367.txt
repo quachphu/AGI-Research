@@ -1,0 +1,812 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Champernown constant is an irrational number represented in decimal by "0." followed by concatenation of all positive integers in the increasing order. The first few digits of this constant are: 0.123456789101112...
+
+Your task is to write a program that outputs the K digits of Chapnernown constant starting at the N-th place for given two natural numbers K and N.
+
+
+
+Input
+
+The input has multiple lines. Each line has two positive integers N and K (N ≤ 109, K ≤ 100) separated by a space.
+
+The end of input is indicated by a line with two zeros. This line should not be processed.
+
+Output
+
+For each line, output a line that contains the K digits.
+
+Example
+
+Input
+
+4 5
+6 7
+0 0
+
+
+Output
+
+45678
+6789101
+</user>
+<bot>
+<think>
+Okay, I need to solve this problem where I have to find K digits of the Champernowne constant starting at the N-th position. The input is multiple lines of N and K, and I have to output each corresponding substring. Let's think about how to approach this.
+
+First, the Champernowne constant is formed by concatenating all positive integers. So, the digits after the decimal are 1, 2, 3, ..., 10, 11, etc., all stuck together. For example, positions 1 is '1', position 2 is '2', up to 9, then position 10 is the '1' of 10, position 11 is '0' of 10, then 11 starts at 12 with '1', etc.
+
+The challenge is, given N and K, to find the K digits starting at position N. But since N can be up to 1e9 and K up to 100, we need an efficient way to compute this without generating the entire string up to N+K, which is impossible for large N.
+
+Hmm. Let's break it down. For any N, we need to find which number in the sequence contains the N-th digit, and then extract the appropriate substring.
+
+The approach is to find the range of numbers where the N-th digit is located. Let's think about numbers with different digit lengths:
+
+- 1-digit numbers (1-9): each contributes 1 digit. There are 9 numbers, so total digits here is 9*1=9.
+- 2-digit numbers (10-99): each contributes 2 digits. There are 90 numbers, so 90*2=180 digits.
+- 3-digit numbers (100-999): 900 numbers, 900*3=2700 digits.
+- And so on.
+
+So, for each possible number of digits (d), we can calculate how many digits are contributed by all numbers with d digits, and subtract that from N until we find the d where N falls into.
+
+Let's see an example. Suppose N is 15. 
+
+Start with d=1. The total digits for d=1 is 9. 15 >9, so subtract 9. Now remaining N is 6.
+
+Next d=2. Each 2-digit number contributes 2 digits. There are 90 numbers, so 180 digits. 6 is less than 180, so the N is in the 2-digit numbers. Then, find which number exactly. The starting position of the 2-digit numbers is after the 1-digit ones, which is 9 digits. So the first 2-digit number (10) starts at position 10. Wait, but in our adjusted N after subtracting d=1's digits, the remaining N is 6. So each 2-digit number contributes 2 digits. The number of full numbers needed is (remaining_N-1) // d. Because (6-1)//2 = 2 (since 5//2 is 2). So 2 numbers (10,11) contribute 4 digits, and the next digit is the 3rd digit of the next number (12). Wait, maybe I should model this more carefully.
+
+Wait, the remaining N after subtracting the 9 digits of d=1 is 6. So the 6th digit in the 2-digit numbers. Since each 2-digit number contributes 2 digits, the number of digits before the target is (remaining_N -1) // d gives the number of numbers we need to pass. For example, remaining_N=6, d=2: (6-1)//2 = 2.5? Wait wait, (6-1) is 5. 5//2 is 2. So 2 numbers, each contributing 2 digits: 2*2=4 digits. So the starting position is at 4, and remaining_N is 6, so 6 - (2 * 2) = 2. So the third number (since 10 is first, 10,11,12: third number is 12?), wait, 10 is first, 10 (digits 1 and 2 in the 2-digit group), 11 (3 and 4), 12 (5 and 6). So the 6th digit in the 2-digit group is the second digit of 12, which is '2'. Wait, but the overall position is 9 (from 1-digit) + 6 = 15. So position 15 is the second digit of 12, which is '2'. So the 15th digit is '2'.
+
+So the algorithm is:
+
+1. Subtract the digits contributed by each digit-length group until we find the group where the remaining N is in.
+
+Once we find the correct digit-length d:
+
+- The starting number of this group is 10^(d-1). For d=1, it's 1 (10^0), for d=2, 10, etc.
+
+- The numbers in this group contribute d digits each. The remaining N after subtracting previous groups' digits is the current count.
+
+- The number of full numbers in this group is (remaining_N -1) // d. Because for example, remaining_N=6, d=2: (6-1) //2 = 2 (since 5//2 is 2). So 2 full numbers (each 2 digits) contribute 4 digits, leaving 6-4 = 2 digits into the next number. So the number is 10 + 2 = 12, and the digit is at position 2-1=1 (since 0-based) of the number. So the digit is the second digit of 12, which is '2'.
+
+So the formula is:
+
+number = start + (remaining_N -1) // d
+
+digit_in_number = (remaining_N -1) % d
+
+Then, the target digit is the (digit_in_number)-th digit of the number.
+
+So once we find that, we can get the first digit. But since K can be up to 100, we might need to collect multiple digits, possibly spanning multiple numbers.
+
+So the steps for each query (N, K):
+
+- Find the starting position (N) and collect K digits, which may cross into multiple numbers.
+
+The problem is that for K up to 100, the substring could be part of multiple numbers. For example, if the starting digit is the last digit of a 3-digit number, then the next digits are from the next number.
+
+So the plan is:
+
+1. For the starting N, find which number and digit position that starts at.
+
+2. Then, collect K digits, moving through the digits of the current number and subsequent numbers as needed.
+
+But how to efficiently collect K digits once we have the starting point?
+
+Once we have the starting number and digit position, we can start collecting digits. For each step:
+
+- Take the remaining digits from the current number.
+
+- If that's enough to satisfy K, take those digits and return.
+
+- Else, take all remaining digits, subtract the count from K, and move to the next number.
+
+Repeat until K digits are collected.
+
+So, the process would be:
+
+Initialize current_number = number where the N-th digit starts.
+
+current_pos = digit_in_number (the index within the current_number's string representation where the first digit is taken).
+
+Collect the substring from current_number starting at current_pos, then continue with the next numbers.
+
+So for example, if K=5, and the current_number is 12, current_pos is 1 (second digit of 12: '2'), then:
+
+current_number is 12, digits '2', then next number is 13, digits '1','3', then next is 14, digits '1','4', etc. Wait, no. Wait, 12 is followed by 13, 14, etc.
+
+Wait, after 12 comes 13, then 14, etc. So after 12's digits, the next number is 13, which contributes two digits. So if starting at the second digit of 12 (which is '2'), then next digits would be the first digit of 13 ('1'), then the second digit of 13 ('3'), then first of 14 ('1'), second of 14 ('4'), etc. Wait, but that's not right. Because 12 is the number, and its digits are '1' followed by '2'. If we start at position 1 (the '2'), then the next digits are from the next number, which is 13. So 13's digits are '1' and '3', so the next digits after '2' would be '1', '3', then next number 14 gives '1','4', etc.
+
+So, for the example where N=4 and K=5. Let's see:
+
+The input example's first line is N=4, K=5. The expected output is 45678.
+
+Let's see: the digits are 123456789101112... So starting at position 4 (assuming positions are 1-based?), which is '4', then K=5 digits: 4,5,6,7,8. So the output is 45678.
+
+So the approach for N=4:
+
+Check the first group (d=1). The total digits is 9. N=4 is within this group. So the digit is the 4th digit in the 1-digit numbers, which is 4. So current_number is 4, current_pos is 0 (since 4-1=3 digits before in the group, each contributing 1 digit, so the 4th digit is the first (only) digit of 4). Then collect K=5 digits: take the rest of the current_number (only 1 digit '4'), then move to 5 (digit '5'), then 6,7,8. So the digits are 4,5,6,7,8. So the output is 45678.
+
+So the algorithm works.
+
+Now, how to model this in code.
+
+First, for each query (N, K), we need to:
+
+1. Find the starting number and the starting digit position in that number.
+
+To find the starting number and position:
+
+Initialize variables:
+
+d = 1
+
+count = 9
+
+while N > count * d:
+
+    N -= count *d
+
+    d +=1
+
+    count *=10
+
+Wait, no. Wait, the logic is: for each digit length d, the total digits contributed is count *d, where count is 9 * 10^{d-1} (since for d digits, there are 9*10^{d-1} numbers). For example, d=1: count=9, digits=9*1=9. d=2: count=90, digits=90*2=180.
+
+So the loop would be:
+
+remaining = N
+
+d = 1
+
+numbers_in_d = 9
+
+digits_per_number = d
+
+total_digits_in_d = numbers_in_d * digits_per_number
+
+while remaining > total_digits_in_d:
+
+    remaining -= total_digits_in_d
+
+    d +=1
+
+    numbers_in_d = 9 * 10**(d-1)
+
+    digits_per_number = d
+
+    total_digits_in_d = numbers_in_d * digits_per_number
+
+Once we exit the loop, the remaining is the position within the current d-digit numbers.
+
+Then, the starting number is 10^(d-1) + (remaining-1) // d
+
+digit_offset = (remaining -1) % d
+
+So, for example, if d=2, remaining=6 (like earlier example), then (remaining-1) //d = (5)//2=2, so starting number is 10 +2=12. digit_offset is (5%2) =1, so the second digit of 12 (0-based index 1).
+
+So the starting number is 12, and the starting digit is index 1 (the '2').
+
+Once the starting number and digit offset are found, we need to collect K digits.
+
+So, the process is:
+
+result = []
+
+current_number = starting_number
+
+current_pos = digit_offset
+
+remaining_k = K
+
+while remaining_k >0:
+
+    # get the digits of current_number as string
+
+    s = str(current_number)
+
+    # how many digits can we take from current_pos onwards?
+
+    available = len(s) - current_pos
+
+    if available >= remaining_k:
+
+        result.append(s[current_pos : current_pos + remaining_k])
+
+        remaining_k =0
+
+    else:
+
+        result.append(s[current_pos:])
+
+        remaining_k -= available
+
+        current_number +=1
+
+        current_pos =0
+
+So, concatenate all parts of the result.
+
+But wait, for numbers after the starting_number, we take all their digits. Because once we move to the next number, we start from position 0.
+
+For example, starting at 12, current_pos=1 (digit '2'), available is 2-1=1. So take '2', remaining_k=4. Then move to current_number=13, current_pos=0. available is 2 digits. Take all (13) gives '1' and '3', which is 2 digits. remaining_k=4-1=3 (wait, wait, remaining_k was 5-1=4. Then taking 2 digits would subtract 2 from remaining_k. So after taking '2', remaining_k is K=5 -1=4. Then take 13's digits (2 digits) which uses 2 more, so remaining_k is 4-2=2. Then take next number 14's digits (2 digits) uses 2, and so on. Wait, no. Let's see:
+
+In the first example where K=5, starting with current_number=4, current_pos=0. s is '4', available is 1-0=1. 1 >=5? No. So take '4' (appended to result), remaining_k=5-1=4. Then current_number increments to 5, current_pos=0. s is '5', available is 1. Take all, append '5', remaining_k=4-1=3. Then current_number 6, append '6', remaining_k=2. Then current_number 7, append '7', remaining_k=1. Then current_number 8, append '8', remaining_k=0. So the result is '45678', which matches the sample.
+
+So the algorithm works.
+
+Now, coding this in Python.
+
+But how to handle very large N (up to 1e9). The loop for finding d must be efficient. For example, even for N=1e9, the maximum possible d is when the sum of digits exceeds N. Let's see.
+
+The sum of digits for d=1: 9*1=9.
+
+d=2: 90*2=180. Total sum 9+180=189.
+
+d=3: 900*3=2700. Total sum 189+2700=2889.
+
+d=4: 9000*4=36000. Sum becomes 38889.
+
+d=5: 90000*5=450000. Sum 488889.
+
+d=6: 900000*6=5,400,000. Sum 5,888,889.
+
+d=7: 63,000,000. Sum 68,888,889.
+
+d=8: 720,000,000. Sum 788,888,889.
+
+d=9: 8100000000. Which is 9 digits * 9e8 numbers. So 9*9e8=8.1e9 digits. So for N=1e9, the sum up to d=8 is 788,888,889. Then remaining N is 1e9 -788,888,889 = 211,111,111.
+
+So for d=9, the numbers_in_d is 900,000,000 (9*10^8), digits_per_number=9. The total digits in d=9 is 9*9e8 = 8.1e9. But remaining is 2e8, which is less than 8.1e9, so the loop will exit here.
+
+So for d=9, the starting number is 10^8 (100,000,000) + (remaining-1)/9.
+
+remaining is 211,111,111.
+
+(211,111,111 -1) //9 = 211,111,110 //9 = 23,456,790.
+
+So starting number is 100,000,000 +23,456,790 = 123,456,790.
+
+digit_offset is (211,111,110) %9 = 211,111,110 mod9. Let's see 211,111,110 divided by 9: 9*23,456,790=211,111,110. So mod is 0. So digit_offset is 0. So the first digit of 123,456,790 is the starting digit.
+
+But this calculation is manageable in Python even for large numbers, as exponents are handled efficiently.
+
+Now, the code steps.
+
+Read input line by line until 0 0 is encountered.
+
+For each line (N and K, until 0 0):
+
+If N is 0 and K is 0, break.
+
+Else:
+
+Compute the starting number and digit offset.
+
+Then collect K digits as per the algorithm.
+
+But what about N=0? According to the input constraints, N is a positive integer. So each input line has N and K as positive integers.
+
+So code steps:
+
+Read each line, split into N and K. For each, process until 0 0.
+
+So the code structure:
+
+import sys
+
+def main():
+
+    for line in sys.stdin:
+
+        line = line.strip()
+
+        if not line:
+
+            continue
+
+        n, k = map(int, line.split())
+
+        if n ==0 and k ==0:
+
+            break
+
+        # process n and k here
+
+        # compute starting number and digit offset
+
+        # ... code ...
+
+        # collect K digits
+
+        # ... code ...
+
+        # output the result as a string
+
+        print(result)
+
+But in Python, reading from stdin can be done via a loop, but sometimes lines can be split across multiple reads, but for the purposes of code submission, it's better to read all lines at once.
+
+But for this code, the standard way is to process each line until 0 0 is encountered.
+
+Now, implementing the first part: finding d.
+
+Implementing the code:
+
+remaining = n
+
+d = 1
+
+numbers_in_d = 9
+
+digits_per_number = d
+
+while remaining > numbers_in_d * digits_per_number:
+
+    remaining -= numbers_in_d * digits_per_number
+
+    d +=1
+
+    numbers_in_d = 9 * (10 ** (d-1))
+
+    digits_per_number = d
+
+Once the loop ends, remaining is the position within the d-digit group.
+
+Then, starting_number = 10 ** (d-1) + (remaining-1) // d
+
+digit_offset = (remaining-1) % d
+
+Then, collect K digits.
+
+But wait, in the problem statement, the positions are 1-based. For example, in the sample input:
+
+N=4, K=5: output is 45678.
+
+Which corresponds to starting at the 4th digit (1-based) which is '4', then take 5 digits.
+
+So the code above is correct.
+
+Now, code for collecting the digits.
+
+result = []
+
+current_number = starting_number
+
+current_pos = digit_offset
+
+remaining_k = k
+
+while remaining_k >0:
+
+    s = str(current_number)
+
+    available = len(s) - current_pos
+
+    if available >= remaining_k:
+
+        result.append(s[current_pos : current_pos + remaining_k])
+
+        remaining_k =0
+
+    else:
+
+        result.append(s[current_pos:])
+
+        remaining_k -= available
+
+        current_number +=1
+
+        current_pos =0
+
+So the final result is ''.join(result).
+
+But what about when current_pos is beyond the length of the current_number? Well, current_pos is initially set to digit_offset, which is (remaining-1) % d, which is between 0 and d-1. So for the current_number (which is a d-digit number), s has length d, so current_pos is valid.
+
+So the code is safe.
+
+Testing this with the sample input:
+
+Sample Input:
+
+4 5
+
+6 7
+
+0 0
+
+Sample Output:
+
+45678
+
+6789101
+
+First case: N=4, K=5.
+
+Processing N=4:
+
+d starts at 1, numbers_in_d=9, digits_per_number=1.
+
+remaining=4. 9*1=9, which is larger than 4. So loop doesn't run. So remaining is 4.
+
+starting_number = 10^(0) + (4-1)//1 =1 +3=4.
+
+digit_offset= (4-1) %1 =0.
+
+So current_number=4, current_pos=0.
+
+Collecting K=5:
+
+available is 1 (len(s)=1, current_pos=0). available is 1 >=5? No. So append s[0:], which is '4', remaining_k=5-1=4.
+
+current_number increments to 5, current_pos=0.
+
+s is '5', available=1. remaining_k=4-1=3.
+
+current_number 6, available 1. remaining_k=2.
+
+current_number 7, available 1. remaining_k=1.
+
+current_number 8, append '8', remaining_k=0.
+
+So the result is '4'+'5'+'6'+'7'+'8' = '45678'.
+
+Which matches the sample.
+
+Second test case: N=6, K=7.
+
+The sample output is 6789101.
+
+Wait, the input line is 6 7, so N=6, K=7.
+
+The digits are:
+
+Positions 1-9: 1-9.
+
+Position 10: '1' (of 10), 11: '0', 12: '1' (of 11), 13: '1', 14: '1' (of 12), etc.
+
+Wait, let's see:
+
+Original sequence:
+
+After 9 comes 10, which is '1','0'; 11 is '1','1'; 12 is '1','2'; etc.
+
+So the sequence after 9 is:
+
+10 11 12 13 14 15 16 17 18 19 20 ...
+
+Digits:
+
+1 0 1 1 1 2 1 3 1 4 1 5 1 6 1 7 1 8 1 9 2 0 ...
+
+So for N=6, which is after the 9th position (since 1-9 are positions 1-9). So N=6 would be the 15th position overall? Wait, wait, N is the starting position. Wait, original problem's input is N=6, K=7. The output is 6789101.
+
+Wait, let's think again. Let's compute the digits starting at position N=6.
+
+But according to the problem statement, the first digit after the decimal is position 1. So:
+
+Positions 1-9: 1-9.
+
+Position 10: '1' (10 starts here).
+
+Position 11: '0' (second digit of 10).
+
+Position 12: '1' (first digit of 11).
+
+Position 13: '1' (second digit of 11).
+
+Position 14: '1' (first digit of 12).
+
+Position 15: '2' (second digit of 12).
+
+So N=6 is the sixth digit, which is 6. Then K=7 digits would be 6,7,8,9,1,0,1. So the output is 6789101.
+
+Wait, but the sample output is '6789101'. Let's see:
+
+Digits starting at position 6: 6,7,8,9,1 (of 10),0 (of 10),1 (of 11). So seven digits: 6 7 8 9 1 0 1 → "6789101".
+
+So the code must handle this.
+
+Let's see how the code processes N=6.
+
+remaining =6.
+
+d=1. numbers_in_d=9, digits_per_number=1. 9*1=9. 6 <=9. So remaining=6.
+
+starting_number =1 + (6-1)//1 =1 +5=6. digit_offset= (6-1)%1=5%1=0.
+
+So current_number=6, current_pos=0.
+
+K=7.
+
+available is 1. 7 >1, so take '6', remaining_k=6.
+
+current_number=7, current_pos=0. Take '7', remaining_k=5.
+
+current_number=8, take '8', remaining_k=4.
+
+current_number=9, take '9', remaining_k=3.
+
+current_number=10, current_pos=0. s is '10', available is 2. Take all (2 digits: '1','0'). remaining_k=3-2=1.
+
+current_number=11, take first digit '1', remaining_k=0.
+
+So the collected digits are '6','7','8','9','10','1','0','1' → wait, no. Wait, the code appends s[current_pos:] for each step. Let's walk through:
+
+current_number=6, current_pos=0 → s is '6', available=1. append '6' → result is '6', remaining_k=7-1=6.
+
+current_number=7 → s is '7', available=1. append '7' → remaining_k=5.
+
+current_number=8 → append '8' → remaining_k=4.
+
+current_number=9 → append '9' → remaining_k=3.
+
+current_number=10 → s is '10', available=2. 2 >=3? No. So append '10'[0:], which is '10'. remaining_k=3-2=1.
+
+current_number=11 → s is '11', available=2. 2 >=1 → yes. Append '11'[0:0+1] → '1'.
+
+So the total is '6'+'7'+'8'+'9'+'10' + '1' → but wait, when we process current_number=10, s is '10', current_pos=0. available is 2. Since remaining_k=3 is more than 2, we append the entire '10' (two digits: '1','0'), and remaining_k=3-2=1. Then current_number becomes 11, current_pos=0. available is 2 (len(s)=2). remaining_k=1. So append s[0:0+1] → '1'.
+
+So the collected digits are '6' + '7' + '8' + '9' + '10' (two digits) → '678910' → then + '1' → '6789101'. Which is the correct sample output.
+
+Thus, the code works for this case.
+
+So the code seems correct.
+
+Now, let's code this.
+
+But in code, variables like numbers_in_d and digits_per_number can be computed as 9 * (10 ** (d-1)) and d, respectively.
+
+So the code:
+
+def find_digits(n, k):
+
+    remaining = n
+
+    d = 1
+
+    numbers_in_d = 9
+
+    digits_per_number = d
+
+    while remaining > numbers_in_d * digits_per_number:
+
+        remaining -= numbers_in_d * digits_per_number
+
+        d +=1
+
+        numbers_in_d = 9 * (10 ** (d-1))
+
+        digits_per_number = d
+
+    start_number = 10 ** (d-1) + (remaining -1) // d
+
+    digit_offset = (remaining -1) % d
+
+    result = []
+
+    current_number = start_number
+
+    current_pos = digit_offset
+
+    remaining_k = k
+
+    while remaining_k >0:
+
+        s = str(current_number)
+
+        available = len(s) - current_pos
+
+        if available >= remaining_k:
+
+            result.append(s[current_pos : current_pos + remaining_k])
+
+            remaining_k =0
+
+        else:
+
+            result.append(s[current_pos:])
+
+            remaining_k -= available
+
+            current_number +=1
+
+            current_pos =0
+
+    return ''.join(result)
+
+Then, the main function reads input lines until 0 0 is encountered.
+
+Putting it all together:
+
+import sys
+
+def main():
+
+    for line in sys.stdin:
+
+        line = line.strip()
+
+        if not line:
+
+            continue
+
+        parts = line.split()
+
+        if len(parts) <2:
+
+            continue
+
+        n, k = map(int, parts)
+
+        if n ==0 and k ==0:
+
+            break
+
+        # process
+
+        remaining = n
+
+        d =1
+
+        numbers_in_d =9
+
+        digits_per_number =d
+
+        while remaining > numbers_in_d * digits_per_number:
+
+            remaining -= numbers_in_d * digits_per_number
+
+            d +=1
+
+            numbers_in_d =9 * (10 ** (d-1))
+
+            digits_per_number =d
+
+        start_number = 10 ** (d-1) + (remaining -1) //d
+
+        digit_offset = (remaining -1) %d
+
+        result = []
+
+        current_number = start_number
+
+        current_pos = digit_offset
+
+        remaining_k =k
+
+        while remaining_k>0:
+
+            s = str(current_number)
+
+            available = len(s) - current_pos
+
+            if available >= remaining_k:
+
+                result.append(s[current_pos: current_pos+remaining_k])
+
+                remaining_k =0
+
+            else:
+
+                result.append(s[current_pos:])
+
+                remaining_k -= available
+
+                current_number +=1
+
+                current_pos =0
+
+        print(''.join(result))
+
+if __name__ == '__main__':
+
+    main()
+
+This should handle all cases.
+
+Testing edge cases:
+
+Case where K=1, N=1 → output '1'.
+
+Another case where N=10 (the first digit of 10):
+
+remaining =10. Subtract d=1's 9 digits → remaining=1.
+
+d=2. numbers_in_d=90, digits_per_number=2. 1 <= 90*2 → yes.
+
+start_number =10^(1) + (1-1)//2 →10 +0=10.
+
+digit_offset (1-1) %2=0.
+
+So current_number=10, current_pos=0. K=1 → append '1', done. So output '1'.
+
+Another case where N=11 (second digit of 10 → '0').
+
+remaining starts at 11.
+
+d=1, 9*1=9. 11>9 → subtract 9 → remaining=2.
+
+d=2. numbers_in_d=90. 2 <=90*2=180.
+
+start_number=10 + (2-1)//2 →10 +0 →10.
+
+digit_offset= (2-1) %2=1%2=1.
+
+current_number=10, current_pos=1. s is '10', available=1 (len 2 -1=1). So take s[1:2] → '0'. So output is '0' for K=1.
+
+Another case where K spans multiple numbers. For example, N=3, K=10 → digits starting from 3: 3 4 5 6 7 8 9 1 0 1 (from 3,4,5,6,7,8,9,10 (1,0), 11 (1)).
+
+So output '3456789101'.
+
+The code should handle that.
+
+Thus, the code should be correct.
+</think>
+To solve this problem, we need to find K digits of the Champernowne constant starting at the N-th position. The Champernowne constant is formed by concatenating all positive integers, such as 0.123456789101112131415..., and we need to efficiently determine the required substring without generating the entire sequence up to potentially very large values of N.
+
+### Approach
+1. **Identify the Digit Group**: Determine which group of numbers (based on the number of digits) the N-th position falls into. For example, 1-digit numbers (1-9), 2-digit numbers (10-99), etc.
+2. **Locate the Exact Number and Position**: Once the group is identified, compute the exact number within that group and the specific digit within that number where the N-th position starts.
+3. **Collect K Digits**: Starting from the identified position, collect K digits by iterating through the numbers as necessary, which may span multiple numbers if K is large enough.
+
+### Solution Code
+```python
+import sys
+
+def main():
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+        n, k = map(int, parts)
+        if n == 0 and k == 0:
+            break
+        
+        remaining = n
+        d = 1
+        numbers_in_d = 9
+        digits_per_number = d
+        
+        while remaining > numbers_in_d * digits_per_number:
+            remaining -= numbers_in_d * digits_per_number
+            d += 1
+            numbers_in_d = 9 * (10 ** (d - 1))
+            digits_per_number = d
+        
+        start_number = 10 ** (d - 1) + (remaining - 1) // d
+        digit_offset = (remaining - 1) % d
+        
+        result = []
+        current_number = start_number
+        current_pos = digit_offset
+        remaining_k = k
+        
+        while remaining_k > 0:
+            s = str(current_number)
+            available = len(s) - current_pos
+            if available >= remaining_k:
+                result.append(s[current_pos:current_pos + remaining_k])
+                remaining_k = 0
+            else:
+                result.append(s[current_pos:])
+                remaining_k -= available
+                current_number += 1
+                current_pos = 0
+        
+        print(''.join(result))
+
+if __name__ == '__main__':
+    main()
+```
+
+### Explanation
+1. **Reading Input**: The input is read line by line until the termination line (0 0) is encountered.
+2. **Determine Digit Group**: The loop iterates through each possible digit length (d) to find the group where the N-th position is located. This is done by subtracting the total number of digits contributed by each group until the remaining digits fall within the current group.
+3. **Locate Exact Number and Position**: Using the remaining digits, compute the exact number and the specific digit within that number where the sequence starts.
+4. **Collect K Digits**: Starting from the identified position, collect the required number of digits by moving through the numbers as needed. If the remaining digits in the current number are insufficient, move to the next number and continue collecting digits until K digits are gathered.
+
+This approach efficiently handles large values of N and K by avoiding the need to generate the entire sequence, ensuring optimal performance even for the upper limits of the input constraints.
+</bot>

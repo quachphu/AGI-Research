@@ -1,0 +1,356 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Let's define a forest as a non-directed acyclic graph (also without loops and parallel edges). One day Misha played with the forest consisting of n vertices. For each vertex v from 0 to n - 1 he wrote down two integers, degreev and sv, were the first integer is the number of vertices adjacent to vertex v, and the second integer is the XOR sum of the numbers of vertices adjacent to v (if there were no adjacent vertices, he wrote down 0). 
+
+Next day Misha couldn't remember what graph he initially had. Misha has values degreev and sv left, though. Help him find the number of edges and the edges of the initial graph. It is guaranteed that there exists a forest that corresponds to the numbers written by Misha.
+
+Input
+
+The first line contains integer n (1 ≤ n ≤ 216), the number of vertices in the graph.
+
+The i-th of the next lines contains numbers degreei and si (0 ≤ degreei ≤ n - 1, 0 ≤ si < 216), separated by a space.
+
+Output
+
+In the first line print number m, the number of edges of the graph.
+
+Next print m lines, each containing two distinct numbers, a and b (0 ≤ a ≤ n - 1, 0 ≤ b ≤ n - 1), corresponding to edge (a, b).
+
+Edges can be printed in any order; vertices of the edge can also be printed in any order.
+
+Examples
+
+Input
+
+3
+2 3
+1 0
+1 0
+
+
+Output
+
+2
+1 0
+2 0
+
+
+Input
+
+2
+1 1
+1 0
+
+
+Output
+
+1
+0 1
+
+Note
+
+The XOR sum of numbers is the result of bitwise adding numbers modulo 2. This operation exists in many modern programming languages. For example, in languages C++, Java and Python it is represented as "^", and in Pascal — as "xor".
+</user>
+<bot>
+<think>
+Okay, let's see. We need to reconstruct a forest (which is a collection of trees, so an acyclic undirected graph) based on the degree and XOR sum of each node's neighbors. The problem says there's a valid solution, so we don't have to check for impossible cases. Our goal is to find all the edges of the original graph.
+
+Hmm. Let's think about how the XOR sum works. For each vertex v, the sum (XOR) of its adjacent vertices is given as s_v. Also, the degree of the vertex is degree_v. So each node has degree_v neighbors, and their XOR is s_v.
+
+In a tree (or forest), the leaves are nodes with degree 1. Maybe we can process the leaves first. Because if a node is a leaf (degree 1), then it has exactly one neighbor. The XOR sum for a leaf is that neighbor's value. So for a leaf node v, the neighbor is s_v. Once we know that, we can connect them, then decrease the degree of that neighbor by 1, and update its XOR sum by XOR'ing with v (since the neighbor's current s includes v, so removing v would require XOR'ing again).
+
+Wait, because XOR is its own inverse. So if a neighbor has s = a ^ b ^ c, and one of them is v (the leaf), then after connecting v to its neighbor (say u), we can subtract v from u's s by doing s_u ^= v. Then u's degree decreases by 1. So this process can be repeated for leaves until all edges are found.
+
+So the algorithm could be something like:
+
+1. Maintain a queue (or priority structure) of nodes with degree 1. These are the current leaves.
+2. For each leaf node v:
+   a. Its only neighbor is u = s_v.
+   b. Add the edge (v, u) to the list (if not already added, but since each edge is processed once from one end, we need to check to avoid duplicates).
+   c. Decrease the degree of u by 1.
+   d. Update s_u by XOR'ing with v (since u's neighbors will now exclude v).
+   e. If after this, u's degree becomes 1, add it to the queue.
+
+This process should reconstruct all edges. Because in a forest, the trees can be built by peeling leaves layer by layer.
+
+But how do we handle the edges? Since each edge is between two nodes, when processing a leaf, the neighbor is determined, but when that neighbor's degree is processed later, how do we ensure we don't add the same edge again?
+
+Wait, when we process a leaf v, we add the edge (v, u), where u is s_v. Then, since we immediately process u's s and degree, when u's degree becomes 1 later, processing u would try to add (u, s_u). But s_u at that time would have had v removed (since when v was processed, u's s was XORed with v). So the edge (v, u) is added once, and u's processing would not add it again.
+
+But how to avoid duplicates? For example, if we process v and add the edge to u, then later when processing u (if it becomes a leaf), we would add the edge again. Wait no. Because once we process v, we add the edge (v, u) and then in u's s, we remove v by XOR'ing. So when u becomes a leaf (degree 1), its s_u will be the other neighbor, not v anymore. So this should work.
+
+Let's test this with the first example:
+
+Input 3:
+
+Vertices 0,1,2.
+
+0: degree 2, s 3. So neighbors should XOR to 3. So possible neighbors 1 and 2 (since 1^2=3).
+
+1: degree 1, s 0. So neighbor is 0.
+
+2: degree 1, s 0. So neighbor is 0.
+
+So in the initial setup, nodes 1 and 2 are leaves (degree 1). Let's process them.
+
+Processing node 1: its s is 0. So neighbor is 0. Add edge (1,0). Then, we decrease the degree of 0 by 1 (from 2 to 1), and XOR 0's s with 1. So 0's s becomes 3 ^1 = 2.
+
+Then, process node 2: its s is 0. Neighbor is 0. Add edge (2,0). Now, 0's degree is 1-1=0. XOR 0's s with 2: 2^2=0.
+
+Now, all degrees are zero except maybe 0. So the edges are (1,0) and (2,0), which is correct.
+
+So this approach works for that example.
+
+Another example: input 2.
+
+Nodes 0 and 1.
+
+0: degree 1, s=1. So neighbor is 1.
+
+1: degree 1, s=0. So neighbor is 0.
+
+So when processing node 0 (degree 1, s=1), we add edge (0,1). Then decrease 1's degree by 1 (to 0), and XOR 1's s with 0, which gives 0^0=0 (since 1's s was 0, after XOR with 0, it's 0). Then node 1's degree is 0, so nothing else to process. So edge (0,1) is added once.
+
+So the output is correct.
+
+So the approach is:
+
+- Use a queue to process nodes with degree 1.
+
+- For each node in the queue:
+
+   - If its degree is not 1 (since it could have been processed before), skip.
+
+   - Find its neighbor u = s_v.
+
+   - Add edge (v, u).
+
+   - Update u's degree: decrement by 1.
+
+   - Update u's s: s_u ^= v.
+
+   - If u's degree is now 1, add it to the queue.
+
+But how to track which nodes are in the queue and avoid processing them again? Because once a node is added to the queue, even if its degree changes again (like from 2 to 1 to 0), but in the queue, it's added once. So perhaps, when processing a node, we check if its current degree is 1. If not, skip processing.
+
+So the steps would be:
+
+Initialize a queue with all nodes where degree[i] is 1.
+
+While the queue is not empty:
+
+   v = dequeue()
+
+   if degree[v] != 1: continue
+
+   u = s[v]
+
+   add edge (v, u)
+
+   m += 1 (count edges)
+
+   degree[v] -= 1 (now 0)
+
+   degree[u] -= 1
+
+   s[u] ^= v
+
+   if degree[u] == 1:
+
+       enqueue(u)
+
+This way, even if a node's degree changes after being enqueued, when it's dequeued, we check if it's still a leaf (degree 1). If not, we skip it.
+
+This should prevent processing nodes that are no longer leaves.
+
+Yes, because after v is processed (degree becomes 0), u's degree is decreased. So when u is enqueued, but perhaps after other steps, when it's dequeued, if degree[u] is 1, then process it.
+
+This seems correct.
+
+So the algorithm is:
+
+- Initialize a list of edges.
+
+- Use a queue to process nodes with degree 1.
+
+- For each such node, find the neighbor (s_v), add the edge, update the neighbor's s and degree.
+
+Now, how to implement this in Python.
+
+We can read the input:
+
+n = int(input())
+
+Then read n lines, each line's degree and s. We can store degree as a list and s as a list.
+
+Then, create a queue (like a deque) initialized with all nodes where degree[i] == 1.
+
+Then process each node in the queue:
+
+But wait, if a node's degree is 1 when we enqueue it, but before processing, another step could have changed its degree. So when processing, first check if the node's degree is 1. If not, skip.
+
+So the code steps would be:
+
+from collections import deque
+
+n = int(input())
+
+degree = []
+s = []
+for _ in range(n):
+    d, si = map(int, input().split())
+    degree.append(d)
+    s.append(si)
+
+edges = []
+queue = deque()
+
+for i in range(n):
+    if degree[i] == 1:
+        queue.append(i)
+
+while queue:
+    v = queue.popleft()
+    if degree[v] != 1:
+        continue  # no longer a leaf
+    # find the neighbor u = s[v]
+    u = s[v]
+    edges.append( (v, u) )
+    # update v's degree to 0
+    degree[v] -= 1
+    # update u's degree and s
+    degree[u] -= 1
+    s[u] ^= v
+    # if u's degree is now 1, add to queue
+    if degree[u] == 1:
+        queue.append(u)
+
+print(len(edges))
+for a, b in edges:
+    print(a, b)
+
+Wait, but what about the order in which edges are added? For example, when we process a node v, add edge (v, u). But when u is processed later, will it add (u, v)? No, because when we process v, we add (v, u), then u's s is updated by XOR'ing v. So when u becomes a leaf, s[u] would have the XOR of all its other neighbors except v. So when u is processed, its neighbor would be the next node in line.
+
+For example, in the first sample, after processing 1 and 0's s is updated, when 0's degree becomes 1 (after processing 1, degree 0 was 2, then 2-1=1, but then processing 2 would take 0's degree down to 0). Wait, maybe in the code above, after processing 1, which is a leaf, the code adds (1,0) edge, then reduces degree[0] by 1 (from 2 to 1), and s[0] becomes 3^1=2. Then, 0 is added to the queue. Then, when processing 2 (the next leaf), add edge (2,0), reduce degree[0] by 1 (from 1 to 0), and s[0] becomes 2^2=0. Then, since degree[0] is 0, nothing is added. So the queue after processing 1 and 2 would have 0 added when processing 1, but when processing 0, its degree is now 0, so it's skipped.
+
+So the code correctly adds edges (1,0) and (2,0).
+
+So in the code, the edges are added in the order of processing the leaves. Each edge is added once, from the leaf's perspective. The other end is processed when it becomes a leaf, but by that time, the s of that node would have the XOR sum of the remaining neighbors.
+
+This should handle all edges correctly.
+
+Let's test the second example:
+
+n=2.
+
+Nodes 0: degree 1, s=1.
+
+Node 1: degree 1, s=0.
+
+Queue initially has 0 and 1.
+
+Processing 0 first (assuming the queue is in order 0,1). So v=0, degree is 1. u = s[0] =1. Add edge (0,1). Then:
+
+degree[0] becomes 0.
+
+degree[1] becomes 0.
+
+s[1] ^= 0 → 0^0 =0 (since s[1] was 0). Then, since degree[1] is 0, it's not added to the queue.
+
+Then, process 1 in the queue. When we dequeue it, check degree[1] is 0, so skip.
+
+So edges list has (0,1), which is correct.
+
+Another test case: a single node. But the input constraints say n >=1. So if n=1, the node has degree 0 and s=0. The code would not add any edges, which is correct.
+
+Another test case: a chain of 3 nodes. Like 0 connected to 1 connected to 2.
+
+Degrees:
+
+0: degree 1, s=1.
+
+1: degree 2, s=0^2= 2.
+
+2: degree 1, s=1.
+
+So initially, queue has 0 and 2.
+
+Processing 0: u=1. Add edge (0,1). Then degree[0] becomes 0. degree[1] becomes 1. s[1] becomes 2^0 =2.
+
+Then, queue appends 1 (since its degree is now 1). Then, process 2: u=1. Add edge (2,1). degree[2] becomes 0. degree[1] becomes 0. s[1] ^=2 → 2^2=0. Then, 1's degree is 0, so not added to queue. Then, when processing 1 (from the queue), degree is 0, so skipped.
+
+Edges are (0,1) and (2,1). Which is correct.
+
+So the code seems to handle these cases.
+
+But wait, when adding edges, in the code, it's (v, u). So for the first case, the edges are (1,0) and (2,0), which is correct regardless of the order. Because edges are undirected.
+
+So the code seems to work.
+
+Now, the code needs to read from stdin, process, and write to stdout. So the code as written should work.
+
+But in the code, edges are added as (v, u). For example, when v is 1 and u is 0, the edge is (1,0). When processing node 0, if it's a leaf (but after being processed once?), but in the code, once v's degree is 0, it's not processed again.
+
+So the code should correctly output all edges once, in any order. Which matches the problem's requirements.
+
+Thus, the code should work.
+</think>
+To solve this problem, we need to reconstruct a forest (a collection of trees) based on the given degrees and XOR sums of the neighbors for each vertex. The solution involves processing leaf nodes (vertices with degree 1) iteratively to determine the edges of the forest.
+
+### Approach
+1. **Identify Leaf Nodes**: Start by identifying all leaf nodes (vertices with degree 1) and enqueue them for processing.
+2. **Process Leaves**: For each leaf node, determine its only neighbor using the XOR sum provided. Add the corresponding edge to the result.
+3. **Update Neighbors**: After determining an edge, update the neighbor's degree and XOR sum. If the neighbor becomes a leaf after this update, enqueue it for further processing.
+4. **Repeat**: Continue processing until all leaves have been handled, ensuring all edges are discovered.
+
+### Solution Code
+```python
+from collections import deque
+import sys
+
+def main():
+    n = int(sys.stdin.readline())
+    degree = []
+    s = []
+    for _ in range(n):
+        d, si = map(int, sys.stdin.readline().split())
+        degree.append(d)
+        s.append(si)
+    
+    edges = []
+    queue = deque()
+    
+    for i in range(n):
+        if degree[i] == 1:
+            queue.append(i)
+    
+    while queue:
+        v = queue.popleft()
+        if degree[v] != 1:
+            continue
+        u = s[v]
+        edges.append((v, u))
+        degree[v] -= 1
+        if degree[u] == 0:
+            continue  # avoid index error if u has already been processed
+        degree[u] -= 1
+        s[u] ^= v
+        if degree[u] == 1:
+            queue.append(u)
+    
+    print(len(edges))
+    for a, b in edges:
+        print(a, b)
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Reading Input**: The input is read and stored in lists for degrees and XOR sums.
+2. **Queue Initialization**: Initialize a queue with all leaf nodes (vertices with degree 1).
+3. **Processing Leaves**: For each leaf node, determine its neighbor using the XOR sum. Add the edge to the result list and update the neighbor's degree and XOR sum.
+4. **Updating Neighbors**: If updating the neighbor's degree results in it becoming a leaf, enqueue it for further processing.
+5. **Output**: Finally, print the number of edges and each edge in the format specified.
+
+This approach efficiently reconstructs the forest by leveraging the properties of leaves and XOR sums, ensuring all edges are correctly identified and processed in linear time relative to the number of vertices.
+</bot>

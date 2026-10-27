@@ -1,0 +1,1231 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Natasha travels around Mars in the Mars rover. But suddenly it broke down, namely — the logical scheme inside it. The scheme is an undirected tree (connected acyclic graph) with a root in the vertex 1, in which every leaf (excluding root) is an input, and all other vertices are logical elements, including the root, which is output. One bit is fed to each input. One bit is returned at the output.
+
+There are four types of logical elements: [AND](https://en.wikipedia.org/wiki/Logical_conjunction) (2 inputs), [OR](https://en.wikipedia.org/wiki/Logical_disjunction) (2 inputs), [XOR](https://en.wikipedia.org/wiki/Exclusive_or) (2 inputs), [NOT](https://en.wikipedia.org/wiki/Negation) (1 input). Logical elements take values from their direct descendants (inputs) and return the result of the function they perform. Natasha knows the logical scheme of the Mars rover, as well as the fact that only one input is broken. In order to fix the Mars rover, she needs to change the value on this input.
+
+For each input, determine what the output will be if Natasha changes this input.
+
+Input
+
+The first line contains a single integer n (2 ≤ n ≤ 10^6) — the number of vertices in the graph (both inputs and elements).
+
+The i-th of the next n lines contains a description of i-th vertex: the first word "AND", "OR", "XOR", "NOT" or "IN" (means the input of the scheme) is the vertex type. If this vertex is "IN", then the value of this input follows (0 or 1), otherwise follow the indices of input vertices of this element: "AND", "OR", "XOR" have 2 inputs, whereas "NOT" has 1 input. The vertices are numbered from one.
+
+It is guaranteed that input data contains a correct logical scheme with an output produced by the vertex 1.
+
+Output
+
+Print a string of characters '0' and '1' (without quotes) — answers to the problem for each input in the ascending order of their vertex indices.
+
+Example
+
+Input
+
+10
+AND 9 4
+IN 1
+IN 1
+XOR 6 5
+AND 3 7
+IN 0
+NOT 10
+IN 1
+IN 1
+AND 2 8
+
+
+Output
+
+10110
+
+Note
+
+The original scheme from the example (before the input is changed):
+
+<image>
+
+Green indicates bits '1', yellow indicates bits '0'.
+
+If Natasha changes the input bit 2 to 0, then the output will be 1.
+
+If Natasha changes the input bit 3 to 0, then the output will be 0.
+
+If Natasha changes the input bit 6 to 1, then the output will be 1.
+
+If Natasha changes the input bit 8 to 0, then the output will be 1.
+
+If Natasha changes the input bit 9 to 0, then the output will be 0.
+</user>
+<bot>
+<think>
+Okay, let's tackle this problem. So, the task is to find for each input node (those with type IN) what the output of the root node (vertex 1) would be if we flip that input's value. The tricky part is that the graph is a tree, and we need to efficiently compute the effect of flipping each input without recalculating everything from scratch each time.
+
+First, let's understand the structure. The logical scheme is a tree rooted at 1. Each non-leaf node is a logical gate (AND, OR, XOR, NOT) with children as their inputs. The leaves (excluding the root if it's a leaf, but according to the problem statement, the root is the output and is part of the logical elements, so inputs are leaves that are not the root) are the IN nodes. Each IN node has a value (0 or 1). We need to flip each IN's value one by one and compute the root's value each time.
+
+But since n can be up to 1e6, we can't recompute the entire tree for each input. We need an O(n) solution that precomputes some information allowing us to find the answer for each input in O(1) time.
+
+Hmm. Let's think about how a change in an input propagates up to the root. For each node, we can track whether changing a particular input would affect the root's value. But since the tree is a DAG (it's a tree, so each node has exactly one path to the root), the influence of an input on the root's value depends on the path from the input to the root. For each input, flipping it will toggle its contribution along the path, but whether this affects the root depends on how each gate along the path processes the change.
+
+Wait, but how do we model this? For each input node, we need to determine how changing its value affects the root. Let's compute two things for each node:
+
+1. The original value of the node (without any flips).
+2. For each node, the sensitivity of its output to each of its children. That is, if a child's value is flipped, how does that affect the parent's value?
+
+Once we have this, we can, for each input node, track the path from the input up to the root, checking at each step whether flipping the input's value would propagate through the parent gates. If, along the path, any gate's output is such that flipping the child's value would not change the parent's value (like if an AND gate has a 0 and flipping one input from 0 to 1 when the other input is 0 doesn't change the AND result), then the input's flip has no effect on the root.
+
+So the plan is:
+
+1. Compute the original values of all nodes (so when all inputs are as given).
+2. For each node (starting from the root and moving down?), compute for each child whether a change in the child's value would affect the parent's value. This is a kind of dependency chain. Then, for each input node, determine if flipping it would affect the root by checking the path from the input up to the root. If all the gates along the path propagate the change, then the root's value flips; otherwise, it remains the same as the original.
+
+Wait, but how to model that? Let's think of it as for each input, the impact of flipping it is determined by the product of the sensitivities along the path from the input to the root. If all sensitivities are 1 (meaning the flip propagates), then the root's value will flip. If any sensitivity is 0, then the flip doesn't affect the root.
+
+So the key is to precompute for each input the product of sensitivities along its path to the root.
+
+So, first, compute the original value of the root. Then, for each input, compute whether flipping that input would change the root's value. If yes, the new root value is 1 - original. If no, it's original. Then, the output for each input is that value.
+
+Now, how to compute the sensitivities.
+
+Let's take each node and for each of its children, determine whether a flip in the child's value (from original) would cause a flip in the node's value.
+
+For example, for an AND gate:
+
+Original value is a AND b.
+
+If child is a, then flipping a would lead to (not a) AND b. The difference between original and new is (a AND b) vs ((1 - a) AND b) → the delta is (a AND b) XOR ((1 - a) AND b). This is equal to (a AND b) ^ ( (1 - a) & b ) → which simplifies to b (since if b is 0, both are 0; if b is 1, then it's a vs 1 -a → XOR is 1). So, the sensitivity for child a is whether b is 1.
+
+Wait, no: let's compute the difference.
+
+Original value: a & b.
+
+After flipping a: (not a) & b.
+
+The XOR between original and new is (a & b) XOR ((not a) & b) → which is equal to [a & b] ^ [ (1 - a) & b ] → which can be simplified as b & (a ^ (1 -a)) → but a ^ (1 -a) is 1 for any a. So this becomes b & 1 → b. So the difference is whether b is 1. So the sensitivity for child a in an AND gate is whether the other child (b) is 1.
+
+Similarly for child b: sensitivity is whether a is 1.
+
+So for an AND gate, each child's sensitivity is the value of the other child.
+
+For OR gate, similar reasoning. Original value is a OR b. Flipping a gives (not a) OR b. The difference is (a OR b) XOR ( (not a) OR b ). Let's see: if a is 0 and b is 0 → original 0, new 0 OR 0 =0. XOR is 0. If a is 0 and b is 1 → original 1, new (1 OR 1) =1. So XOR is 0. If a is 1, original is 1, new is (0 OR b) → which is b. So XOR is 1 XOR b. But wait, when a is 1, the OR is 1. Flipping a gives 0 OR b. So the difference is 1 vs b. So the XOR is 1 ^ b. So the sensitivity for a is (1 ^ (a OR b)) XOR ( (not a) OR b ) → but maybe a better approach is to compute the delta.
+
+Original OR (a OR b), new is (not a) OR b. The delta is (a OR b) != ( (not a) OR b ). Let's see when this is true.
+
+If a is 1: original is 1. New is (0 OR b) → if b is 1, same as before (delta 0). If b is 0, new is 0 → delta 1. So when a is 1, the delta is whether b is 0. So sensitivity is (b == 0).
+
+Wait, but for OR gate, when a is 1, flipping a to 0, the OR becomes 0 OR b. If b is 0, delta is 1 → 0. So the delta is 1. If b is 1, delta is 0.
+
+So the sensitivity for child a in OR is (original OR is (a OR b)) → when a is 1, the sensitivity is (b == 0). So the sensitivity is (other child's value) == 0? Wait, no. Wait, for OR gate, flipping a:
+
+If a is 1: new value is (0 OR b) = b. Original was 1. So delta is 1 XOR b.
+
+So sensitivity is 1 if 1 XOR b is 1, which is equivalent to b being 0.
+
+So sensitivity for a in OR gate is (other child's value) == 0.
+
+For XOR gate: original is a XOR b. Flipping a gives (not a) XOR b. The delta is (a XOR b) XOR ( (not a) XOR b ) → which is a XOR not a → 1. So flipping a in XOR always changes the result. Similarly for flipping b. So for XOR gates, all children have sensitivity 1.
+
+For NOT gate: the original is not a. Flipping a gives not (not a) → a. So delta is (not a) XOR a → 1. So sensitivity is 1.
+
+So for each gate type, the sensitivity of a child is:
+
+- AND: other child's value (if the child is left or right, then the other child's value)
+- OR: the other child's value is 0?
+Wait, earlier analysis for OR gate: when a is 1, delta is 1 if b is 0. When a is 0, flipping a to 1, the OR becomes 1 OR b. Original was 0 OR b → which is b. So delta is (b) XOR (1 OR b) → which is (b) XOR 1. Because 1 OR b is 1 if b is 1, 1 if b is 0. So 1 OR b is 1. So original was 0 OR b → b. So new is 1. So delta is b XOR 1. So when a is 0 (original a is 0), flipping to 1 gives delta of 1 if original OR was 0 → when b is 0. So in this case, the sensitivity is 1. Wait, this is getting complicated.
+
+Alternatively, for OR gate, the sensitivity for child a is (other child's value) == 0. Because:
+
+Original OR is a OR b.
+
+If a is flipped, then new is (not a) OR b.
+
+The delta (change in the value) is (a OR b) XOR ( (not a) OR b ).
+
+We can write this as (a OR b) ^ ( (not a) OR b )
+
+Let me compute this for all possible a and b:
+
+Case 1: a=0, b=0:
+
+Original: 0 OR 0 → 0.
+
+Flipped a: 1 OR 0 → 1. Delta is 0^1 =1.
+
+Case 2: a=0, b=1:
+
+Original: 0 OR 1 →1.
+
+Flipped a:1 OR 1 →1. Delta is 1^1 =0.
+
+Case3: a=1, b=0:
+
+Original:1 OR 0 →1.
+
+Flipped a:0 OR 0 →0. Delta 1^0=1.
+
+Case4: a=1, b=1:
+
+Original:1 OR 1 →1.
+
+Flipped a:0 OR1 →1. Delta 1^1=0.
+
+So delta is 1 in cases where a OR b is different from (not a) OR b. So for a=0 and b=0: delta is 1.
+
+For a=1 and b=0: delta is 1.
+
+In other words, delta is 1 when (a OR b) is not equal to ((not a) OR b). Let's see when that happens.
+
+When a is 0, (not a) is 1. So (not a OR b) is 1 OR b → 1. So original is 0 OR b. So delta is (0 OR b) XOR 1. Which is 1 when (0 OR b) is 0 → which is when b is 0.
+
+When a is 1, (not a) is 0. So (0 OR b) is b. Original was 1 OR b →1. So delta is 1 XOR b. Which is 1 when b is 0.
+
+So overall, delta is 1 only when b is 0. Because in both cases where a is 0 or 1, the delta is 1 only when the other child (b) is 0. So for OR gates, the sensitivity of a child is (other child's value == 0).
+
+So for AND gates, the sensitivity is (other child's value ==1). For OR gates, sensitivity is (other child's value ==0). For XOR, it's 1. For NOT, it's 1.
+
+So the plan is:
+
+1. Compute the original value of each node (using a post-order traversal, since each node depends on its children).
+
+2. For each node, compute the sensitivity factors for each child. For example, for a node with type AND and children a and b, the sensitivity for child a is (value of b == 1), and for child b is (value of a ==1).
+
+3. Then, for each input node (IN), we need to compute the product of the sensitivities along the path from the input up to the root. If the product is 1, then flipping that input will flip the root's value. If the product is 0, the root's value remains the same.
+
+Once we have this product for each input, the answer for that input is (original_root_value ^ product).
+
+So the steps are:
+
+- Compute all node values (original).
+
+- For each node, precompute the sensitivity for each child (whether flipping that child would affect the parent's value). For example, for each node, store for each of its children whether the path is sensitive.
+
+But how to compute the product of sensitivities along the path from each input to the root?
+
+This seems like for each input, we need to track the path upwards from the input to the root, and multiply the sensitivity factors along the way.
+
+But with n up to 1e6, we can't store the path for each input. So we need an efficient way to compute this.
+
+An alternative approach is to perform a BFS or DFS traversal from the root downwards, and for each node, track the sensitivity multiplier. Wait, maybe using dynamic programming. For each node, the sensitivity multiplier is the product of the sensitivity factors from the node up to the root. Then, for any input node (which is a leaf), their sensitivity is the product of the sensitivity factors along their path to the root.
+
+But how to compute this?
+
+Wait, let's think recursively. The sensitivity multiplier for a node is the product of the sensitivity factors from the node's parent to the root multiplied by the sensitivity factor of the node to its parent.
+
+So for the root, the sensitivity multiplier is 1 (since there's no parent). For a child of the root, the sensitivity multiplier is the root's sensitivity for that child. For a child of that child, it's the parent's sensitivity multiplied by the node's sensitivity to the parent.
+
+Wait, maybe we can compute for each node, a value called 'sensitivity_multiplier', which is the product of the sensitivities along the path from that node to the root. Then, for each input node (leaf), their sensitivity_multiplier is the product of all the sensitivities along their path to the root. If this product is 1, flipping the input will flip the root's output; if 0, no change.
+
+So how to compute this?
+
+We can perform a post-order traversal to compute the original values, then a second traversal (pre-order) to compute the sensitivity_multiplier for each node.
+
+But how?
+
+Let's first compute the original values. Then, for each node, determine the sensitivity for each of its children.
+
+Then, during a BFS or DFS traversal starting from the root, for each node, when we process it, we can compute the sensitivity_multiplier for its children. For example, for a node u with children v and w (depending on type), the sensitivity_multiplier for v is the sensitivity_multiplier of u multiplied by u's sensitivity for v. Similarly for w.
+
+Wait, this makes sense. Let's see:
+
+The root's sensitivity_multiplier is 1. For each child of the root, the child's sensitivity_multiplier is root's sensitivity for that child multiplied by the root's sensitivity_multiplier (which is 1). Then, for each child of that child, multiply by the current node's sensitivity for the child and the current node's sensitivity_multiplier.
+
+This way, each node's sensitivity_multiplier represents the product of all sensitivities along the path from the node to the root.
+
+So the steps would be:
+
+1. Compute the original value of each node (post-order traversal).
+
+2. For each node, compute the sensitivity for each child (based on the node's type and the original values of its other children).
+
+3. Compute the sensitivity_multiplier for each node using a BFS or DFS traversal starting from the root, propagating the multiplier down to children.
+
+But wait, the children are part of the tree. So the root's children will have their sensitivity_multiplier computed as (root's sensitivity_multiplier) * (root's sensitivity for that child). Then, for each of their children, it's (parent's sensitivity_multiplier) * (parent's sensitivity for that child).
+
+This way, when you reach a leaf node (IN), its sensitivity_multiplier is the product of all the sensitivities along the path from that input to the root. So flipping that input will toggle the root's value if and only if the product is 1.
+
+So once all sensitivity_multipliers are computed, for each IN node, the answer is original_root_value XOR (sensitivity_multiplier of the IN node).
+
+So now, how to implement this.
+
+First, read the input and build the tree structure. For each node, store its type and its children.
+
+But since n can be up to 1e6, we need an efficient data structure. For each node, we can have a list of children (but in the problem statement, the inputs are given as the children of each node. For example, AND has two children, etc. So the input for node i gives the children indices. So for node i, we can store the list of children (possibly one or two elements, depending on type).
+
+Then, perform a post-order traversal to compute the original values. For each node, based on its type and the values of its children, compute its value.
+
+Once all original values are computed, for each node, compute the sensitivity for each child. For example, for an AND node, the sensitivity for each child is the value of the other child. For OR, it's whether the other child is 0. For XOR, it's 1. For NOT, it's 1.
+
+Then, perform a BFS starting from the root. The root's sensitivity_multiplier is 1. For each node in the BFS, for each of its children, compute their sensitivity_multiplier as (current node's sensitivity_multiplier) * (current node's sensitivity for that child). Then add the child to the BFS queue.
+
+But wait, the tree is a tree (each node has exactly one parent, except the root). So each node is processed once. So this BFS is O(n) time.
+
+Once all sensitivity_multipliers are computed, collect all the IN nodes in order. For each IN node, the answer is original_root_value XOR (sensitivity_multiplier for that node). But we need to flip the IN's value, which would change the original value. Wait, no: the original_root_value is the original output. Flipping the IN's value would change the root's value if and only if the sensitivity_multiplier is 1. So the new root's value is original_root_value ^ (sensitivity_multiplier & 1), but since the sensitivity_multiplier is either 0 or 1 (as the product of 0s and 1s), we can just use original_root_value ^ (sensitivity_multiplier).
+
+Wait, the sensitivity_multiplier is 1 if flipping the input will flip the root's value. So yes, new root's value is original_root_value XOR sensitivity_multiplier.
+
+But how to get the sensitivity_multiplier for each input.
+
+So, steps:
+
+1. Read the input and parse each node's type and children.
+
+2. Compute the original values for each node via post-order traversal.
+
+3. For each node, compute the sensitivity factors for each of its children. For example, for an AND node u with children v and w, the sensitivity for v is (original value of w) == 1, and for w is (original value of v) == 1.
+
+4. Perform a BFS starting from the root. For each node u, for each child v, compute v's sensitivity_multiplier as u's sensitivity_multiplier multiplied by u's sensitivity for v. Then add v to the queue.
+
+5. Collect all IN nodes in order of their indices. For each IN node, the answer is original_root_value XOR (sensitivity_multiplier of the IN node).
+
+So, the code structure would be:
+
+Read n.
+
+For each node i from 1 to n:
+
+   read the line, parse type and inputs.
+
+   if type is IN:
+
+      store value.
+
+      children is empty.
+
+   else:
+
+      store the list of children (as integers).
+
+Compute original values via post-order traversal.
+
+Compute for each node, the sensitivity for each of its children.
+
+Compute sensitivity_multiplier for each node via BFS.
+
+Collect all IN nodes in order of their indices (so indices 2,3, etc., as per their occurrence in the input).
+
+Output the answer for each IN node as original_root_value XOR (sensitivity_multiplier of that IN node).
+
+But let's think about possible issues.
+
+For example, during the BFS, each node is processed once, and each child's sensitivity_multiplier is computed based on the parent's sensitivity_multiplier and the sensitivity factor.
+
+But how to represent the sensitivity factors.
+
+For each node, for each of its children, the sensitivity is a binary value (0 or 1).
+
+So for node u, when processing it, for each child v in u's children, compute:
+
+sensitivity_multiplier[v] = sensitivity_multiplier[u] * (sensitivity of u for v).
+
+But since sensitivity_multiplier is a product of 0s and 1s, once a 0 is encountered in the path, all subsequent multipliers will be 0, as 0 * anything is 0.
+
+Now, the code.
+
+First, building the structure.
+
+Each node can be represented as a dictionary or a list. For example, for node i, we can have:
+
+type, children list, original_value, etc.
+
+But in Python, for n up to 1e6, using a list of objects might be memory-intensive, but manageable. Let's see.
+
+Each node needs:
+
+- type: str.
+
+- children: list of integers.
+
+- original_value: int (0 or 1).
+
+- sensitivity_multiplier: int (0 or 1).
+
+But for n=1e6, each node takes about, say, 20 bytes (roughly), which is 20MB, manageable.
+
+So, code steps:
+
+Read n.
+
+nodes = list of dictionaries (or a list of objects, but in Python, perhaps a list of tuples would be better for memory, but perhaps with classes.)
+
+But in Python, for speed, perhaps using lists to store each node's data.
+
+But perhaps, for each node, we can have separate arrays:
+
+type: list, where type[i] is the type of node i+1 (since nodes are 1-based).
+
+children: a list of lists. children[i] is the list of children for node i+1.
+
+values: list where values[i] is the original value of node i+1.
+
+sensitivity_multiplier: list where sm[i] is the sensitivity multiplier for node i+1.
+
+But in Python, lists are 0-based, but the nodes are 1-based, so need to adjust indices.
+
+Alternatively, for 1-based indexing, perhaps use indexes 1 to n.
+
+So:
+
+type = [None] * (n+1)
+
+children = [[] for _ in range(n+1)]
+
+values = [0] * (n+1)
+
+sm = [0] * (n+1)
+
+Then, for node 1 to n:
+
+Read line, split into parts.
+
+If parts[0] is 'IN', then type[i] = 'IN', children[i] is empty, values[i] is the value given (int(parts[1])).
+
+Else, the type is parts[0], and the children are the list of integers in parts[1:].
+
+So for example:
+
+For the sample input:
+
+10
+
+AND 9 4 → node 1 is type AND, children [9,4]
+
+IN 1 → node 2 is type IN, value 1.
+
+And so on.
+
+Then, compute the original values via post-order traversal.
+
+Post-order traversal can be done with a stack. For each node, process children first.
+
+But in Python, recursion is not feasible for n=1e6, so we need an iterative approach.
+
+So:
+
+stack = [(u, False)] for u in the root (1). While stack not empty:
+
+   u, visited = stack.pop()
+
+   if not visited:
+
+       stack.append( (u, True) )
+
+       for child in reversed(children[u]):
+
+           stack.append( (child, False) )
+
+   else:
+
+       compute the value of u based on its type and children's values.
+
+For example:
+
+if type[u] is 'IN':
+
+   value is already set.
+
+else:
+
+   if 'AND' → value is children[0].value AND children[1].value.
+
+Wait, but each node's children are stored as a list. So for node u of type AND, children are two nodes. So for each child, get their value.
+
+So during post-order processing, once all children of u are processed, compute u's value.
+
+So:
+
+For the stack approach:
+
+values array is initialized. For IN nodes, values are already set.
+
+For other nodes:
+
+when processing (u, True), compute their value based on their children's values.
+
+So code:
+
+for each node u in post-order:
+
+   if type[u] == 'IN':
+
+       pass (value is already set)
+
+   elif type[u] == 'AND':
+
+       a = children[u][0]
+
+       b = children[u][1]
+
+       values[u] = values[a] & values[b]
+
+   elif type[u] == 'OR':
+
+       values[u] = values[a] | values[b]
+
+   elif type[u] == 'XOR':
+
+       values[u] = values[a] ^ values[b]
+
+   elif type[u] == 'NOT':
+
+       a = children[u][0]
+
+       values[u] = 1 - values[a]
+
+Once values are computed, original_root_value is values[1].
+
+Then, for each node, compute the sensitivity factors for each of its children.
+
+For this, for each node u (non-IN), we need to compute for each child v in children[u], what's the sensitivity (0 or 1).
+
+So:
+
+We can precompute for each node u and each child v:
+
+sensitivity[u][v] = 0 or 1.
+
+But how to represent this. Since each node has a fixed number of children (depending on type), perhaps for each u, store a list of sensitivities for each child.
+
+But for space, perhaps we can compute the sensitivity on the fly when processing the node during the BFS for sensitivity multipliers.
+
+Alternatively, for each node u, during the BFS, when processing u, compute the sensitivities for each of its children and then compute the sensitivity_multiplier for each child as (current sm[u] * sensitivity).
+
+But to compute the sensitivity, we need the original values of the other children.
+
+So during the BFS:
+
+For node u, for each child v in children[u]:
+
+   compute the sensitivity based on u's type and other children's values.
+
+For example, if u is AND:
+
+   if children are [a, b], then for child a, the sensitivity is (values[b] == 1).
+
+   for child b, sensitivity is (values[a] == 1).
+
+Similarly for OR, XOR, etc.
+
+So during the BFS processing of u, for each child v, compute sensitivity and then compute sm[v] = sm[u] * sensitivity.
+
+So code:
+
+sm = [0] * (n+1)
+
+sm[1] = 1
+
+queue = deque([1])
+
+while queue:
+
+    u = queue.popleft()
+
+    if type[u] == 'IN':
+
+        continue
+
+    # process children
+
+    if type[u] == 'AND':
+
+        a, b = children[u]
+
+        # for child a: sensitivity is values[b] == 1
+
+        sens_a = 1 if values[b] == 1 else 0
+
+        # for child b: sensitivity is values[a] == 1
+
+        sens_b = 1 if values[a] == 1 else 0
+
+        # compute sm for a and b
+
+        sm_a = sm[u] * sens_a
+
+        sm_b = sm[u] * sens_b
+
+        # assign to a and b
+
+        if sm[a] == 0 and sm_a != 0:
+
+            # only assign once (since tree is a tree, each node has one parent)
+
+            # but wait, in a tree, each node has exactly one parent except root. So during BFS, each node is processed once.
+
+            # So we can set sm[a] = sm_a
+
+            sm[a] = sm_a
+
+            queue.append(a)
+
+        if sm[b] == 0 and sm_b != 0:
+
+            sm[b] = sm_b
+
+            queue.append(b)
+
+    elif type[u] == 'OR':
+
+        a, b = children[u]
+
+        sens_a = 1 if values[b] == 0 else 0
+
+        sens_b = 1 if values[a] == 0 else 0
+
+        sm_a = sm[u] * sens_a
+
+        sm_b = sm[u] * sens_b
+
+        sm[a] = sm_a
+
+        queue.append(a)
+
+        sm[b] = sm_b
+
+        queue.append(b)
+
+    elif type[u] == 'XOR':
+
+        a, b = children[u]
+
+        # sensitivity for a is 1
+
+        # sensitivity for b is 1
+
+        sm_a = sm[u] * 1
+
+        sm_b = sm[u] * 1
+
+        sm[a] = sm_a
+
+        queue.append(a)
+
+        sm[b] = sm_b
+
+        queue.append(b)
+
+    elif type[u] == 'NOT':
+
+        a = children[u][0]
+
+        # sensitivity is 1
+
+        sm_a = sm[u] * 1
+
+        sm[a] = sm_a
+
+        queue.append(a)
+
+But wait, for the AND and OR cases, when we have two children, and each's sensitivity is computed, and then their sm is set. But in code, since each node can have multiple parents (but in a tree, each node has exactly one parent), the BFS approach may process a node multiple times. Wait no. In a tree, each node except root has exactly one parent. So during BFS, each node is processed once. So when we set sm[a] and sm[b], they are guaranteed to be their correct values.
+
+So during BFS, for each node u, when we process it, we compute the sm for all its children, which are added to the queue. Since each node is processed once, this works.
+
+So the code for BFS would process each node once, and for each child, compute their sm based on u's sm and the sensitivity for that child.
+
+Once all sm's are computed, collect the IN nodes in order of their indices.
+
+So, collect all nodes where type is 'IN', sorted by their index.
+
+Then, for each such node, the answer is original_root_value XOR (sm[i] % 2). Wait, no: sm[i] can be 0 or 1, since the product of 0s and 1s is either 0 or 1. So the answer is values[1] ^ (sm[i] & 1). But since sm[i] is 0 or 1, it's just values[1] ^ sm[i].
+
+So, the code would collect all IN nodes in order, then for each, output the original_root_value XOR sm[i].
+
+Now, the sample input:
+
+Sample Input:
+
+10
+
+AND 9 4
+
+IN 1
+
+IN 1
+
+XOR 6 5
+
+AND 3 7
+
+IN 0
+
+NOT 10
+
+IN 1
+
+IN 1
+
+AND 2 8
+
+So nodes 2,3,6,8,9,10 are IN nodes. Wait, wait:
+
+Looking at the input lines:
+
+The first node is 1: AND 9 4.
+
+Second line is node 2: IN 1.
+
+Third line node 3: IN 1.
+
+Fourth line node4: XOR 6 5.
+
+Fifth line node5: AND 3 7.
+
+Sixth line node6: IN 0.
+
+Seventh line node7: NOT 10.
+
+Eighth line node8: IN 1.
+
+Ninth line node9: IN 1.
+
+Tenth line node10: AND 2 8.
+
+Wait, no. The tenth line is node10: AND 2 8.
+
+So the IN nodes are nodes 2,3,6,8,9,10?
+
+Wait no. Wait, the nodes are:
+
+node1: type AND, children 9 and 4.
+
+node2: type IN, value 1.
+
+node3: type IN, value 1.
+
+node4: type XOR, children 6 and5.
+
+node5: type AND, children3 and7.
+
+node6: type IN, value0.
+
+node7: type NOT, child10.
+
+node8: type IN, value1.
+
+node9: type IN, value1.
+
+node10: type AND, children2 and8.
+
+So IN nodes are 2,3,6,8,9,10? Wait no. node10 is type AND, so not IN. node7 is NOT, child10 (which is node10). node10 has type AND. So IN nodes are nodes 2,3,6,8,9. Wait, node10 is not an IN node. So the IN nodes are nodes where type is 'IN', which are 2,3,6,8,9, and node10 is not an IN. So in the sample input, the output is 10110. The output has 5 characters. So the number of IN nodes is 5. Let's see:
+
+Looking at the sample input lines:
+
+Line 2 (node 2) is IN.
+
+Line3 (node3) is IN.
+
+Line6 (node6) is IN.
+
+Line8 (node8) is IN.
+
+Line9 (node9) is IN.
+
+Line10 (node10) is AND, so not IN.
+
+So the IN nodes are 2,3,6,8,9. So 5 IN nodes. The output is 10110, which is 5 characters.
+
+So the code collects all IN nodes in order of their indices (i.e., node 2,3,6,8,9), then computes their sm values, and outputs the XOR between original_root_value and sm[i].
+
+Now, code-wise:
+
+We need to collect all nodes of type IN in order of their indices (from 1 to n). So in the code:
+
+in_nodes = []
+
+for i in 1..n:
+
+   if type[i] == 'IN':
+
+       in_nodes.append( (i, sm[i]) )
+
+Then, sort in_nodes by i, and output the XOR of original_root and sm[i].
+
+In the sample input, the original_root_value is the value of node1. Let's compute that.
+
+But the sample output is 10110, which is the output for nodes 2,3,6,8,9.
+
+So the code should process these nodes in order.
+
+Now, in the code, after the BFS, the sm for each IN node is computed.
+
+So the code will generate the correct output.
+
+Now, the code:
+
+But in Python, handling n=1e6 is possible, but recursion depth may be an issue, but using iterative post-order traversal and BFS is okay.
+
+But let's think about possible issues in code.
+
+For example, during post-order traversal, nodes are processed in the correct order (children first).
+
+The stack-based approach for post-order:
+
+stack = [(1, False)]
+
+while stack not empty:
+
+   u, visited = stack.pop()
+
+   if not visited:
+
+       stack.append( (u, True) )
+
+       for child in reversed(children[u]):
+
+           stack.append( (child, False) )
+
+   else:
+
+       compute value of u.
+
+This works.
+
+Now, for each node, compute its value.
+
+For the sample input:
+
+Let's compute the original value of node1.
+
+But perhaps it's easier to proceed step by step.
+
+But perhaps for the code, we can proceed as described.
+
+Potential edge cases:
+
+- The tree is a chain (e.g., all NOT gates except the leaves). For example, node1 is NOT, node2 is NOT, ..., until an IN node. Flipping the IN node would propagate through all NOT gates, so the sensitivity_multiplier would be 1 (since all are NOT, so sensitivity is 1, product is 1). So the answer would be original_root_value XOR 1.
+
+- Another case: AND gate where one input is 0. Flipping the other input (which is 1) would not change the AND result (0), so the sensitivity_multiplier is 0.
+
+So the code should handle these cases correctly.
+
+Now, code implementation:
+
+Read n.
+
+nodes from 1 to n.
+
+Read each node's data.
+
+Build children lists and values (only for IN nodes).
+
+Compute the original values via post-order traversal.
+
+Compute the sm for each node via BFS.
+
+Collect IN nodes in order.
+
+Now, code:
+
+import sys
+from collections import deque
+
+def main():
+    sys.setrecursionlimit(1 << 25)
+    n = int(sys.stdin.readline())
+    type_ = [''] * (n+1)
+    children = [[] for _ in range(n+1)]
+    values = [0] * (n+1)
+    for i in range(1, n+1):
+        parts = sys.stdin.readline().split()
+        type_[i] = parts[0]
+        if parts[0] == 'IN':
+            values[i] = int(parts[1])
+        else:
+            cs = list(map(int, parts[1:]))
+            children[i] = cs
+    
+    # Compute original values via post-order traversal
+    stack = [(1, False)]
+    while stack:
+        u, visited = stack.pop()
+        if not visited:
+            stack.append( (u, True) )
+            for c in reversed(children[u]):
+                stack.append( (c, False) )
+        else:
+            if type_[u] == 'IN':
+                pass
+            else:
+                if type_[u] == 'AND':
+                    a, b = children[u][0], children[u][1]
+                    values[u] = values[a] & values[b]
+                elif type_[u] == 'OR':
+                    a, b = children[u][0], children[u][1]
+                    values[u] = values[a] | values[b]
+                elif type_[u] == 'XOR':
+                    a, b = children[u][0], children[u][1]
+                    values[u] = values[a] ^ values[b]
+                elif type_[u] == 'NOT':
+                    a = children[u][0]
+                    values[u] = 1 - values[a]
+    
+    original_root = values[1]
+    
+    # Compute sensitivity multipliers
+    sm = [0] * (n+1)
+    sm[1] = 1
+    q = deque()
+    q.append(1)
+    
+    while q:
+        u = q.popleft()
+        if type_[u] == 'IN':
+            continue
+        if type_[u] in ['AND', 'OR', 'XOR', 'NOT']:
+            if type_[u] == 'AND':
+                a, b = children[u]
+                # sensitivity for a is values[b] == 1
+                sens_a = 1 if values[b] else 0
+                # sensitivity for b is values[a] ==1
+                sens_b = 1 if values[a] else 0
+                sm_a = sm[u] * sens_a
+                sm_b = sm[u] * sens_b
+                if sm[a] == 0:
+                    sm[a] = sm_a
+                    q.append(a)
+                if sm[b] == 0:
+                    sm[b] = sm_b
+                    q.append(b)
+            elif type_[u] == 'OR':
+                a, b = children[u]
+                # sensitivity for a is values[b] ==0
+                sens_a = 1 if (values[b] == 0) else 0
+                sens_b = 1 if (values[a] == 0) else 0
+                sm_a = sm[u] * sens_a
+                sm_b = sm[u] * sens_b
+                if sm[a] == 0:
+                    sm[a] = sm_a
+                    q.append(a)
+                if sm[b] == 0:
+                    sm[b] = sm_b
+                    q.append(b)
+            elif type_[u] == 'XOR':
+                a, b = children[u]
+                sm_a = sm[u] * 1
+                sm_b = sm[u] * 1
+                if sm[a] == 0:
+                    sm[a] = sm_a
+                    q.append(a)
+                if sm[b] == 0:
+                    sm[b] = sm_b
+                    q.append(b)
+            elif type_[u] == 'NOT':
+                a = children[u][0]
+                sm_a = sm[u] * 1
+                if sm[a] == 0:
+                    sm[a] = sm_a
+                    q.append(a)
+    
+    # Collect IN nodes in order
+    in_order = []
+    for i in range(1, n+1):
+        if type_[i] == 'IN':
+            in_order.append(i)
+    # Sort the in_order list (they are already in order)
+    # because we are iterating from 1 to n, and appending as encountered.
+    # So the list is in increasing order.
+    res = []
+    for idx in in_order:
+        res.append( str(original_root ^ sm[idx]) )
+    print(''.join(res))
+    
+main()
+
+Wait, but in the code for AND sensitivity:
+
+sens_a = 1 if values[b] else 0. Because for AND, the sensitivity is whether the other child's value is 1. So if values[b] is 1, sens_a is 1.
+
+But in the code, 'values[b] is 1' is checked by 'if values[b]' which is True for 1, False for 0. So this is correct.
+
+Similarly, for OR, sensitivity is 1 if the other child is 0. So sens_a = 1 if (values[b] == 0).
+
+Yes.
+
+Testing this code against the sample input.
+
+Sample Input:
+
+10
+
+AND 9 4
+
+IN 1 → node2 value 1.
+
+IN 1 → node3 value 1.
+
+XOR 6 5 → children6 and 5.
+
+AND 3 7 → children3 and7.
+
+IN 0 → node6 value 0.
+
+NOT 10 → children10.
+
+IN 1 → node8 value1.
+
+IN 1 → node9 value1.
+
+AND 2 8 → node10 children2 and8.
+
+So during the post-order traversal:
+
+Process nodes in order of children first.
+
+For example, node6 is IN, value0.
+
+node8 is IN, value1.
+
+node9 is IN, value1.
+
+node10 is AND with children2 and8. So values[2] is 1, values[8] is 1. So node10's value is 1 & 1 =1.
+
+node7 is NOT, child10. So value is 1 -1 =0.
+
+node5 is AND, children3 and7. values[3]=1, values[7]=0 → 1 &0=0.
+
+node4 is XOR, children6 (0) and5 (0). XOR 0^0=0.
+
+node1 is AND, children9 (1) and4 (0). 1 &0=0. So original_root is 0.
+
+Then, during the BFS for sensitivity multipliers:
+
+sm[1] =1.
+
+Process node1 (AND):
+
+children9 and4.
+
+sens_a (for child9) is values[4] → values[4] is 0. So sens_a =0.
+
+sens_b (for child4) is values[9] → 1. So sens_b=1.
+
+sm[9] = 1*0 =0.
+
+sm[4] =1*1=1.
+
+Add node9 and4 to the queue.
+
+Queue now has node9,4.
+
+Process node9 (type IN, no children).
+
+Process node4 (type XOR):
+
+children6 and5.
+
+Sensitivity for each child is 1 (since XOR).
+
+sm[6] = sm[4] *1 =1*1=1.
+
+sm[5] = sm[4] *1=1.
+
+Add 6 and5 to queue.
+
+Queue now has 6,5.
+
+Process node6 (IN).
+
+Process node5 (AND):
+
+children3 and7.
+
+values[3] is 1, values[7] is0.
+
+sens_a (child3) is values[7] ==1 → 0. So sens_a=0.
+
+sens_b (child7) is values[3] ==1 →1.
+
+sm[3] = sm[5] *0 → 0 *0 =0.
+
+sm[7] = sm[5] *1 =1.
+
+Add3 and7 to queue.
+
+Process node3 (IN).
+
+Process node7 (NOT):
+
+child10.
+
+sens is 1.
+
+sm[10] = sm[7] *1 =1.
+
+Add10 to queue.
+
+Process node10 (AND):
+
+children2 and8.
+
+values[2] is1, values[8] is1.
+
+sens for child2 is values[8] ==1 →1.
+
+sens for child8 is values[2] ==1 →1.
+
+sm[2] = sm[10] *1 =1*1=1.
+
+sm[8] = sm[10] *1 =1.
+
+Add2 and8 to queue.
+
+Process node2 (IN).
+
+Process node8 (IN).
+
+So the sm for the IN nodes:
+
+node2: sm=1.
+
+node3: sm=0.
+
+node6: sm=1.
+
+node8: sm=1.
+
+node9: sm=0.
+
+The original_root is 0.
+
+So for each IN node:
+
+0 XOR sm[i]:
+
+node2: 0 ^1 =1.
+
+node3:0^0=0.
+
+node6:0^1=1.
+
+node8:0^1=1.
+
+node9:0^0=0.
+
+The output is '10110', which matches the sample.
+
+So the code works for the sample.
+
+Now, the code handles large n efficiently.
+
+But in Python, for n=1e6, the code needs to process all nodes. The post-order and BFS are O(n) each. For 1e6 nodes, this should be manageable.
+
+Potential optimizations:
+
+Using more efficient data structures, like pre-allocating lists for type_, children, values, sm.
+
+But as written, the code should work.
+
+So the final code is as above.
+</think>
+To solve this problem, we need to determine the output of the root node (vertex 1) in a logical tree structure when each input node's value is flipped. The tree consists of logical gates (AND, OR, XOR, NOT) and input nodes (IN). Each input node's value flip should be evaluated independently, and the result for each should be the root node's output after the flip.
+
+### Approach
+1. **Parse Input and Build Tree Structure**: Read the input to construct the tree structure, where each node is either a logical gate or an input node with its value.
+2. **Compute Original Values**: Perform a post-order traversal to compute the original value of each node starting from the leaves (input nodes) up to the root.
+3. **Determine Sensitivity Multipliers**: Use a BFS traversal starting from the root to compute the sensitivity multiplier for each node. The sensitivity multiplier indicates whether flipping an input node's value affects the root node's output.
+4. **Generate Results**: For each input node, compute the result as the XOR of the original root value and its sensitivity multiplier.
+
+### Solution Code
+```python
+import sys
+from collections import deque
+
+def main():
+    sys.setrecursionlimit(1 << 25)
+    n = int(sys.stdin.readline())
+    type_ = [''] * (n + 1)
+    children = [[] for _ in range(n + 1)]
+    values = [0] * (n + 1)
+    for i in range(1, n + 1):
+        parts = sys.stdin.readline().split()
+        type_[i] = parts[0]
+        if parts[0] == 'IN':
+            values[i] = int(parts[1])
+        else:
+            cs = list(map(int, parts[1:]))
+            children[i] = cs
+    
+    # Compute original values using post-order traversal
+    stack = [(1, False)]
+    while stack:
+        u, visited = stack.pop()
+        if not visited:
+            stack.append((u, True))
+            for c in reversed(children[u]):
+                stack.append((c, False))
+        else:
+            if type_[u] == 'IN':
+                continue
+            elif type_[u] == 'AND':
+                a, b = children[u]
+                values[u] = values[a] & values[b]
+            elif type_[u] == 'OR':
+                a, b = children[u]
+                values[u] = values[a] | values[b]
+            elif type_[u] == 'XOR':
+                a, b = children[u]
+                values[u] = values[a] ^ values[b]
+            elif type_[u] == 'NOT':
+                a = children[u][0]
+                values[u] = 1 - values[a]
+    
+    original_root = values[1]
+    
+    # Compute sensitivity multipliers using BFS
+    sm = [0] * (n + 1)
+    sm[1] = 1
+    q = deque([1])
+    
+    while q:
+        u = q.popleft()
+        if type_[u] == 'IN':
+            continue
+        if type_[u] == 'AND':
+            a, b = children[u]
+            sens_a = 1 if values[b] else 0
+            sens_b = 1 if values[a] else 0
+            if sm[a] == 0:
+                sm[a] = sm[u] * sens_a
+                q.append(a)
+            if sm[b] == 0:
+                sm[b] = sm[u] * sens_b
+                q.append(b)
+        elif type_[u] == 'OR':
+            a, b = children[u]
+            sens_a = 1 if (values[b] == 0) else 0
+            sens_b = 1 if (values[a] == 0) else 0
+            if sm[a] == 0:
+                sm[a] = sm[u] * sens_a
+                q.append(a)
+            if sm[b] == 0:
+                sm[b] = sm[u] * sens_b
+                q.append(b)
+        elif type_[u] == 'XOR':
+            a, b = children[u]
+            if sm[a] == 0:
+                sm[a] = sm[u] * 1
+                q.append(a)
+            if sm[b] == 0:
+                sm[b] = sm[u] * 1
+                q.append(b)
+        elif type_[u] == 'NOT':
+            a = children[u][0]
+            if sm[a] == 0:
+                sm[a] = sm[u] * 1
+                q.append(a)
+    
+    # Collect IN nodes in order and compute results
+    result = []
+    for i in range(1, n + 1):
+        if type_[i] == 'IN':
+            result.append(str(original_root ^ sm[i]))
+    print(''.join(result))
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Tree Construction**: The input is parsed into a tree structure where each node's type and children (for logical gates) or value (for input nodes) are stored.
+2. **Post-order Traversal**: This traversal computes the original value of each node starting from the leaves (input nodes) up to the root. Each logical gate's value is determined based on its children's values.
+3. **BFS for Sensitivity Multipliers**: Starting from the root, we compute how each node's value affects the root when flipped. The sensitivity multiplier for each node is propagated down to its children, considering the type of logical gate.
+4. **Result Generation**: For each input node, the result is determined by XORing the original root value with the input node's sensitivity multiplier, indicating whether flipping that input changes the root's output.
+</bot>

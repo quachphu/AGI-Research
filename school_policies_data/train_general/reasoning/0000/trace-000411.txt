@@ -1,0 +1,410 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.We have N integers. The i-th integer is A_i.
+
+Find \sum_{i=1}^{N-1}\sum_{j=i+1}^{N} (A_i \mbox{ XOR } A_j), modulo (10^9+7).
+
+What is \mbox{ XOR }?
+
+The XOR of integers A and B, A \mbox{ XOR } B, is defined as follows:
+
+* When A \mbox{ XOR } B is written in base two, the digit in the 2^k's place (k \geq 0) is 1 if either A or B, but not both, has 1 in the 2^k's place, and 0 otherwise.
+
+For example, 3 \mbox{ XOR } 5 = 6. (In base two: 011 \mbox{ XOR } 101 = 110.)
+
+Constraints
+
+* 2 \leq N \leq 3 \times 10^5
+* 0 \leq A_i < 2^{60}
+* All values in input are integers.
+
+Input
+
+Input is given from Standard Input in the following format:
+
+
+N
+A_1 A_2 ... A_N
+
+
+Output
+
+Print the value \sum_{i=1}^{N-1}\sum_{j=i+1}^{N} (A_i \mbox{ XOR } A_j), modulo (10^9+7).
+
+Examples
+
+Input
+
+3
+1 2 3
+
+
+Output
+
+6
+
+
+Input
+
+10
+3 1 4 1 5 9 2 6 5 3
+
+
+Output
+
+237
+
+
+Input
+
+10
+3 14 159 2653 58979 323846 2643383 27950288 419716939 9375105820
+
+
+Output
+
+103715602
+</user>
+<bot>
+<think>
+Okay, let's see. I need to compute the sum of XORs between all pairs of integers in the array. But since the array can be up to 3e5 elements, a brute-force approach of checking every pair is impossible. That would be O(N^2) time, which for N=3e5 would be around 9e10 operations—way too slow. So I need a smarter way.
+
+Hmm, what's the maximum possible value of A_i? It says less than 2^60, so each number is up to 60 bits. Oh right, XOR between two bits is 1 if the bits are different. So maybe for each bit position, I can calculate how many pairs have differing bits in that position, and multiply by 2^k for that bit's contribution to the sum.
+
+Yes, that makes sense. Because for each bit position k, if there are C pairs where the two numbers have differing bits in that position, then the total contribution is C * 2^k. Summing over all bits gives the total sum.
+
+So the key is to calculate, for each bit position from 0 to 59, the number of pairs (i,j) where the k-th bit is set in A_i XOR A_j. Which is the same as the number of pairs where exactly one of A_i or A_j has the k-th bit set.
+
+Let's think about this. For each bit position k, count the number of elements that have the k-th bit set. Let's say that count is m. Then the number of elements that don't have the bit set is n = N - m. The number of pairs where one has it and the other doesn't is m * n. So for each bit, the contribution is (m * (N - m)) * (1 << k). Sum all these up and take mod 1e9+7.
+
+Oh right! Because for each bit, the XOR will contribute 1 in that position exactly when one has the bit set and the other doesn't. So the number of such pairs is m*(n-m), which is m*(N - m). Then multiply by 2^k for the value of that bit.
+
+So the plan is:
+
+1. For each bit position (0 to 59), count how many numbers have that bit set.
+2. For each bit, compute m*(N - m).
+3. Multiply by 2^bit, add all these values.
+4. Take modulo 1e9+7.
+
+This approach is O(N * 60), which is acceptable for N=3e5 (3e5 *60=1.8e7 operations).
+
+So how do I implement this?
+
+First, read N and the array. Then, for each bit from 0 to 59, count the number of elements where that bit is set. Then compute the sum as described.
+
+But wait, how do I handle each bit? For each number in the array, check each bit from 0 to 59. For each bit, if it's set, increment the count for that bit.
+
+Yes.
+
+Then, for each bit k, compute (count[k] * (N - count[k])) * (1 << k), and sum all those. Modulo 1e9+7 at each step to prevent overflow, especially since 1 << 59 is a huge number, but Python handles big integers, but when summing, modulo is needed.
+
+Wait, but in Python, even though integers can be big, the multiplication of 1e18 (like 3e5 * 3e5 * 1<<60) could be very big, but the mod is 1e9+7, so perhaps we can compute each term modulo 1e9+7 and sum them up.
+
+Yes. Because (a + b) mod MOD = ((a mod MOD) + (b mod MOD)) mod MOD.
+
+So for each bit, compute (m * (N - m)) * (2^k mod MOD), then mod MOD, then add to the total, mod MOD again.
+
+Wait, but 2^k can be up to 2^59, which is around 5e17. So 2^k mod MOD is needed. Because multiplying m*(N-m) (which can be up to (3e5)^2=9e10) by 2^k would be 9e10 * 5e17 = 4.5e28, which is way larger than 1e18, but in Python, even with big integers, when mod is applied, it's manageable.
+
+But to compute (m * (N - m) ) * (2^k) mod MOD, perhaps compute each term as (m*(N-m) mod MOD) * (2^k mod MOD) mod MOD, then add all terms mod MOD. But wait, because (a * b) mod MOD is equal to (a mod MOD) * (b mod MOD) mod MOD. So it's correct.
+
+But since 2^k can be precomputed modulo MOD, perhaps precompute all 2^k mod MOD for k from 0 to 59.
+
+Yes.
+
+So steps:
+
+- Precompute pow2 = [ (1 << k) % MOD for k in 0..59 ]
+
+Then for each bit k:
+
+- count = number of set bits in k-th position
+- term = count * (N - count)
+- term *= pow2[k]
+- add term mod MOD to the total
+
+But wait, count can be up to N (3e5), N is up to 3e5, so count*(N-count) is up to (3e5)^2 = 9e10. Then multiplied by pow2[k] (up to 2^59 mod MOD), which is up to around 5e17. So 9e10 * 5e17 is 4.5e28. But in Python, the multiplication can be handled as big integers, but when taking mod MOD (1e9+7) each term, it's manageable.
+
+But 9e10 * 5e17 is 4.5e28. 1e9+7 is about 1e9. 4.5e28 mod 1e9+7 is possible, but how?
+
+But in Python, the modulo operation can handle big numbers, even if they are huge.
+
+Alternatively, compute the term as (count * (N - count)) % MOD, multiply by (pow2[k] % MOD), then mod MOD again.
+
+Wait, but (a * b) mod MOD is the same as ( (a mod MOD) * (b mod MOD) ) mod MOD. So if I compute (count * (N - count)) as a number, which can be up to 9e10, then mod MOD, which is 1e9+7. Let's compute 9e10 mod 1e9+7. Let's see: 9e10 / 1e9+7 is 9e10/(~1e9) = ~90. So 90 * 1e9+7 is ~9e11. 9e10 is 9e10, so 9e10 mod 1e9+7 is (9e10 - (9e10 // (1e9+7)) * (1e9+7)). But maybe in Python, it's handled automatically.
+
+So for each term:
+
+term = (count * (N - count)) % MOD
+
+term = (term * pow2[k]) % MOD
+
+total = (total + term) % MOD
+
+Yes. So that way, each term is computed modulo MOD, and added to the total, which is also modded each time.
+
+So the code steps:
+
+Read N.
+
+Read the array A.
+
+Compute MOD = 10^9 +7.
+
+precompute pow2: for each bit k (0-59), compute (1 <<k) mod MOD.
+
+But wait, 1<<k can be up to 1<<59, which is 5.76e17, but mod MOD.
+
+So precompute a list pow2 where pow2[k] = (2^k) mod MOD.
+
+Initialize an array bits_count of 60 elements, all 0.
+
+For each number in A:
+
+   for each k in 0..59:
+
+       if the k-th bit is set in the number:
+
+           bits_count[k] +=1
+
+Then, for each k in 0..59:
+
+   m = bits_count[k]
+
+   term = m * (N - m)
+
+   term = term % MOD
+
+   term = term * pow2[k]
+
+   term = term % MOD
+
+   add to total.
+
+Finally, output total mod MOD.
+
+Wait, but m is up to 3e5, and (3e5)^2 is 9e10. So m*(N-m) can be up to 9e10. Then term = (9e10) * pow2[k] mod MOD. But pow2[k] is up to 2^59 mod MOD. Let's compute 2^59 mod MOD.
+
+What is 2^59 mod 1e9+7?
+
+Well, 1e9+7 is a prime. So 2^ (MOD-1) ≡ 1 mod MOD by Fermat's little theorem. But since 59 is way less than MOD-1, we can compute it directly.
+
+But for code, we can precompute pow2 as a list where pow2[k] is (1 <<k) mod MOD. Wait, but 1 <<k for k up to 59 is manageable.
+
+Wait, for k in 0 to 59:
+
+pow2 = [ (1 << k) % MOD for k in range(60) ]
+
+But 1 <<59 is 576460752303423488, which mod 1e9+7 can be computed as follows.
+
+But in code, in Python, shifting is easy.
+
+Alternatively, compute pow2[0] = 1, then for each k from 1 to 59, pow2[k] = (pow2[k-1] *2) % MOD.
+
+Yes, that's better. Because for k up to 60, this is trivial.
+
+So code:
+
+MOD = 10**9 +7
+
+pow2 = [1] * 60
+
+for k in range(1,60):
+
+    pow2[k] = (pow2[k-1] *2) % MOD
+
+Yes. Because 2^0 is 1, 2^1 is 2, etc. So pow2[k] holds 2^k mod MOD.
+
+Now, for each number in the array, check each bit from 0 to 59. For each bit, if the bit is set, increment bits_count[k].
+
+So for example, for the number 3 (binary 11), bits 0 and 1 are set.
+
+So the code would loop through each of the 60 bits for each number.
+
+In Python, for a given number a, to check if the k-th bit is set, we can do (a >> k) & 1.
+
+So for each a in A:
+
+    for k in 0..59:
+
+        if (a >>k) &1:
+
+            bits_count[k] +=1
+
+This is O(N *60), which is acceptable.
+
+Once bits_count is filled, compute the sum as follows:
+
+total =0
+
+for k in 0..59:
+
+    m = bits_count[k]
+
+    term = m * (N -m)
+
+    term = term % MOD
+
+    term = term * pow2[k]
+
+    term = term % MOD
+
+    total = (total + term) % MOD
+
+Then print(total).
+
+Yes.
+
+Testing the first example:
+
+Input:
+
+3
+
+1 2 3
+
+Numbers are 1 (0b01), 2 (0b10), 3 (0b11).
+
+For each bit:
+
+bit 0:
+
+count is the number of numbers where bit 0 is set. 1 (1), 2 (0), 3 (1) → count is 2.
+
+So term = 2*(3-2) = 2*1 =2. Multiply by 2^0=1 → 2.
+
+bit 1:
+
+count is 1 (0), 2 (1), 3 (1) → count is 2.
+
+term is 2*(3-2) = 2 → multiply by 2^1=2 → 4.
+
+bit 2 and higher: all zeros.
+
+Sum is 2+4=6. Which matches the first example.
+
+Another example:
+
+Input 10 numbers. Let's see.
+
+But the code seems correct. So the Python code would be:
+
+Read N, then list A.
+
+Compute the bits_count.
+
+Then calculate sum.
+
+So code:
+
+MOD = 10**9 +7
+
+def main():
+
+    import sys
+
+    input = sys.stdin.read().split()
+
+    N = int(input[0])
+
+    A = list(map(int, input[1:N+1]))
+
+    bits_count = [0] * 60
+
+    for a in A:
+
+        for k in range(60):
+
+            if (a >>k) &1:
+
+                bits_count[k] +=1
+
+    pow2 = [1] *60
+
+    for k in range(1,60):
+
+        pow2[k] = (pow2[k-1] *2) % MOD
+
+    total =0
+
+    for k in range(60):
+
+        m = bits_count[k]
+
+        term = m * (N -m)
+
+        term %= MOD
+
+        term = term * pow2[k]
+
+        term %= MOD
+
+        total = (total + term) % MOD
+
+    print(total % MOD)
+
+if __name__ == '__main__':
+
+    main()
+
+Wait, but pow2 is recomputed each time. Alternatively, precompute once.
+
+But in code, that's how it's done.
+
+Yes. So that should work.
+
+Testing the code against the examples. The first example gives 6, which matches. The other examples would need to be tested as well.
+
+Another point: the bits are from 0 to 59, which covers all possible bits since A_i < 2^60.
+
+Yes. So this code should work.
+</think>
+To solve this problem, we need to compute the sum of XOR values between all pairs of integers in an array efficiently. Given the constraints, a brute-force approach is infeasible, so we use a bitwise optimization technique.
+
+### Approach
+1. **Bitwise Contribution Analysis**: For each bit position (0 to 59), determine how many pairs of numbers have different bits at that position. The XOR of two numbers at a bit position is 1 if the bits are different, contributing \(2^{\text{bit position}}\) to the sum for each such pair.
+2. **Count Set Bits**: For each bit position, count how many numbers have that bit set. Let this count be \(m\). The number of pairs with differing bits at this position is \(m \times (N - m)\).
+3. **Modular Arithmetic**: Since the result can be very large, compute all values modulo \(10^9 + 7\). Precompute powers of 2 modulo \(10^9 + 7\) for efficiency.
+
+### Solution Code
+```python
+MOD = 10**9 + 7
+
+def main():
+    import sys
+    input = sys.stdin.read().split()
+    N = int(input[0])
+    A = list(map(int, input[1:N+1]))
+    
+    bits_count = [0] * 60
+    for a in A:
+        for k in range(60):
+            if (a >> k) & 1:
+                bits_count[k] += 1
+    
+    pow2 = [1] * 60
+    for k in range(1, 60):
+        pow2[k] = (pow2[k-1] * 2) % MOD
+    
+    total = 0
+    for k in range(60):
+        m = bits_count[k]
+        term = m * (N - m)
+        term %= MOD
+        term = term * pow2[k] % MOD
+        total = (total + term) % MOD
+    
+    print(total % MOD)
+
+if __name__ == '__main__':
+    main()
+```
+
+### Explanation
+1. **Reading Input**: The input is read and parsed into an integer \(N\) and a list of integers \(A\).
+2. **Counting Bits**: For each number in the array, check each bit position (0 to 59) and count how many numbers have each bit set.
+3. **Precompute Powers of 2**: Precompute \(2^k \mod (10^9 + 7)\) for all relevant bit positions to avoid repeated calculations.
+4. **Calculate Contributions**: For each bit position, compute the number of pairs with differing bits, multiply by the corresponding power of 2, and accumulate the result modulo \(10^9 + 7\).
+5. **Output Result**: Print the total sum modulo \(10^9 + 7\).
+
+This approach efficiently reduces the problem complexity from \(O(N^2)\) to \(O(N \log \text{MAX_VALUE})\), making it feasible for large input sizes.
+</bot>

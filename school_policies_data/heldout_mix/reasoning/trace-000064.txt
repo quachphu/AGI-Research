@@ -1,0 +1,1706 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.You are playing a computer card game called Splay the Sire. Currently you are struggling to defeat the final boss of the game.
+
+The boss battle consists of n turns. During each turn, you will get several cards. Each card has two parameters: its cost c_i and damage d_i. You may play some of your cards during each turn in some sequence (you choose the cards and the exact order they are played), as long as the total cost of the cards you play during the turn does not exceed 3. After playing some (possibly zero) cards, you end your turn, and all cards you didn't play are discarded. Note that you can use each card at most once.
+
+Your character has also found an artifact that boosts the damage of some of your actions: every 10-th card you play deals double damage.
+
+What is the maximum possible damage you can deal during n turns?
+
+Input
+
+The first line contains one integer n (1 ≤ n ≤ 2 ⋅ 10^5) — the number of turns.
+
+Then n blocks of input follow, the i-th block representing the cards you get during the i-th turn.
+
+Each block begins with a line containing one integer k_i (1 ≤ k_i ≤ 2 ⋅ 10^5) — the number of cards you get during i-th turn. Then k_i lines follow, each containing two integers c_j and d_j (1 ≤ c_j ≤ 3, 1 ≤ d_j ≤ 10^9) — the parameters of the corresponding card.
+
+It is guaranteed that ∑ _{i = 1}^{n} k_i ≤ 2 ⋅ 10^5.
+
+Output
+
+Print one integer — the maximum damage you may deal.
+
+Example
+
+Input
+
+
+5
+3
+1 6
+1 7
+1 5
+2
+1 4
+1 3
+3
+1 10
+3 5
+2 3
+3
+1 15
+2 4
+1 10
+1
+1 100
+
+
+Output
+
+
+263
+
+Note
+
+In the example test the best course of action is as follows:
+
+During the first turn, play all three cards in any order and deal 18 damage.
+
+During the second turn, play both cards and deal 7 damage.
+
+During the third turn, play the first and the third card and deal 13 damage.
+
+During the fourth turn, play the first and the third card and deal 25 damage.
+
+During the fifth turn, play the only card, which will deal double damage (200).
+</user>
+<bot>
+<think>
+Okay, let's tackle this problem. So, the goal is to maximize the damage over n turns, considering that every 10th card played in the entire sequence deals double damage. Each turn, you can play a subset of cards with total cost <=3, and the order in which you play them matters because of the 10th card multiplier.
+
+Hmm. The challenge here is that the order of playing cards across all turns affects the 10th card multiplier. So, for example, if across turns, the cumulative count of cards played reaches a multiple of 10, that card does double damage. So the sequence of cards played in all turns matters. But each turn's cards are processed in their own order, but the 10th card is global across all turns.
+
+Wait, the problem statement says: every 10-th card you play deals double damage. So, the count starts from the first card ever played and increments each time a card is played. So, the 1st card is 1, 10th is 10, 20th is 20, etc. Each of these 10th cards (like 10th, 20th, etc.) deals double damage.
+
+So the order in which you play cards across all turns affects which ones get doubled. But since each turn's cards are played in a certain order, and after each turn, the remaining cards are discarded, we need to find for each turn the optimal subset and order of playing cards, considering the current position in the 10-based count.
+
+Wait, but the problem is that the decision for each turn affects the state (i.e., how many cards have been played so far modulo 10) for subsequent turns. So, for example, after playing m cards in the first t turns, the (t+1)th turn's cards will start at position m+1, and their order can affect which ones are 10th.
+
+Therefore, the state we need to track is the current count of total cards played modulo 10. Because the 10th card depends on the total count mod 10 being 0. Wait, no. The 10th card is every time the count is a multiple of 10, so for the 10th, 20th, 30th, etc. So the total number of cards played so far before this turn starts is S. Then, when we play a card during this turn, S increases by 1, then check if that new S is a multiple of 10. If yes, the damage is doubled.
+
+So, the key is, for each turn, when choosing the cards to play and their order, we need to know what the current position (mod 10) is, so that we can arrange the cards in the optimal order to maximize the total damage, taking into account which positions in the sequence will be 10th multiples.
+
+This suggests that we can model the problem using dynamic programming, where the state is the current modulo 10 (i.e., how many cards have been played so far mod 10), and for each state, we track the maximum possible total damage accumulated so far. Then, for each turn, we process all possible states (mod 10), and for each possible way of playing a subset of cards in that turn (with total cost <=3), compute what the new state would be (current mod + number of cards played in this turn, mod 10), and update the DP accordingly.
+
+But the problem is that for each turn, the number of possible subsets and their order is quite large. For a single turn with up to 2e5 cards, this approach could be computationally expensive. However, the constraints say that n can be up to 2e5 and sum of k_i up to 2e5. So we need an approach that is O(n * 10) or something manageable, which suggests that for each turn, we need a way to precompute the best possible way to play cards for each possible mod value (0-9), considering the number of cards played and the positions where the 10th multipliers occur.
+
+So the core idea is:
+
+- For each turn, and for each possible current mod (0-9), compute the best possible damage that can be achieved by playing some subset of cards (total cost <=3) in some order, given that the current number of cards played before this turn is congruent to the current mod. Then, update the DP for the next mod (current mod + number of cards played in this turn) mod 10.
+
+But how do we compute, for a given turn and current mod, the best way to select and order the cards to maximize the damage, considering that some of them may fall into the 10th positions?
+
+Let's think about the per-turn processing. For each turn, given a current mod (s), we can choose to play m cards (where m can be from 0 up to whatever is possible given the cost constraints). Each card played in the turn will have their positions in the global sequence. For example, if before the turn, the total cards played is T, then the first card in the turn is T+1, the second T+2, etc. So, any of these positions that are multiples of 10 (i.e., (T+1) mod 10 ==0, (T+2) mod 10 ==0, etc.) will have their damage doubled.
+
+So for the current mod s (which is T mod 10), when we play m cards in this turn, their positions are s+1, s+2, ..., s+m mod 10. So, for each card in the sequence, if (s + i) mod 10 == 9 (since adding 1 to T, which is s mod 10, gives s+1, which is (T+1) mod 10. Wait, T mod 10 is s. So T = 10k + s. Then, T+1 = 10k + s+1. The mod 10 is s+1. So for the i-th card in this turn's sequence (starting at 1), the position is (s + i) mod 10. If this is 0, then the 10th card multiplier applies.
+
+Wait, no. Because for the i-th card in the turn, the global count is T + i. So (T + i) mod 10 equals (s + i) mod 10. So, if (s + i) mod 10 ==0, then that card is a multiple of 10 and gets doubled.
+
+So, for the current state s (mod 10), when we play m cards in the turn, the positions of the cards in the sequence (from 1 to m) will be (s+1, s+2, ..., s+m) mod 10. So, any of these positions that are 0 mod 10 will trigger the double damage.
+
+Therefore, the damage contributed by this turn's cards depends on:
+
+- Which of the m cards in this turn's sequence are in positions that are multiples of 10 (i.e., where (s + i) mod 10 ==0 for i from 1 to m).
+
+Each such card's damage is doubled.
+
+So, for a given s and m, the number of 10th cards in this turn's sequence is equal to the number of i in 1..m where (s + i) mod 10 ==0. Let's denote this count as cnt.
+
+But wait, for each i in 1..m, check if (s + i) mod 10 ==0. So for example, if s is 9, then i=1: 9+1=10 mod10=0 → yes. So this is a 10th card. Then for s=9 and m=1, there's one 10th card.
+
+So, for each possible s (mod 10) and m (number of cards played in the turn), we can precompute how many of the cards in the turn's sequence are 10th cards, and their positions (i's) in the sequence. But since the cards can be ordered in any way, perhaps we can arrange the cards in an order that places high-damage cards in the positions where they get doubled.
+
+But the problem is that the order in which the cards are played in the turn affects which of them get the multiplier. So to maximize the damage for the turn, given a current mod s and a choice of m cards (with sum of c_i <=3), we need to select m cards and arrange them in such a way that the positions that are 10th (i.e., where (s + i) mod10=0) are filled with the highest possible damage cards.
+
+So, the optimal approach for the turn is:
+
+1. For a given s (current mod) and possible m (number of cards to play), first determine which positions in the sequence (i from 1 to m) are 10th cards (i.e., (s + i) mod10=0). Let's call these positions critical positions.
+
+2. We need to select m cards from the current turn's available cards, with total cost <=3, and assign them to the sequence positions such that the sum of (d_j if not critical, 2*d_j if critical) is maximized. But since the order of the cards affects which ones are in critical positions, the selection and ordering are crucial.
+
+The challenge here is that for each possible s and m, how to select the best subset of m cards (sum c_i <=3) and assign them to the critical positions (if any) to maximize the sum.
+
+But considering that each turn's m can be up to, say, 3 (since sum c_i can be up to 3, and each card is at least 1 cost. Wait, the sum of the costs of the cards in the turn must be <=3. So the maximum number of cards per turn is 3 (each with c_i=1). So m can be up to 3.
+
+Wait, each card's cost is between 1 and 3. So for example, a card with cost 3 can take the entire budget. So for a turn, possible m values are 0 (play no cards), 1 (could be cost 1, 2, or 3), 2 (sum of costs 1+1=2, or 1+2=3, etc.), or 3 (only possible if all are cost 1, sum 3).
+
+So for each turn, the possible m values (number of cards played) can be 0, 1, 2, or 3.
+
+This is a crucial observation. Because m can't exceed 3. So for each turn, the possible m is up to 3. Therefore, for each turn, we can precompute for all possible m (0,1,2,3) the best possible damage for each possible s (0-9), considering the critical positions.
+
+But how do we compute this?
+
+Let's break it down:
+
+For each turn, given the current s (mod 10) and possible m (number of cards played in this turn), we need to:
+
+- Find the set of positions in the sequence (1-based in the turn) where (s + i) mod10=0. These are the positions where the card will get double damage.
+
+- Then, select m cards from the turn's available cards (sum c_i <=3), assign them to these positions (if any) in such a way that the sum of their d_j (doubled if in critical positions) is maximized.
+
+The key here is that the critical positions can be determined in advance for a given s and m. For example, if s=8 and m=3, the positions in the turn are i=1,2,3. Then:
+
+i=1: 8+1=9 mod10 → not 0.
+
+i=2: 8+2=10 → mod10=0 → critical.
+
+i=3: 8+3=11 → mod10=1 → not.
+
+So in this case, the second card in the sequence (i=2) is critical.
+
+So for s=8 and m=3, the critical positions are [2].
+
+Thus, the cards played in this sequence would have the second card's damage doubled.
+
+The optimal arrangement would be to assign the highest damage card to position 2, then the next highest to other positions.
+
+So for each possible s and m, we can precompute which positions are critical, then select the best cards to place in those positions.
+
+But how do we efficiently compute this for each turn?
+
+Let's consider the steps for processing a single turn:
+
+1. For each possible m (0,1,2,3) where sum of costs <=3:
+
+   a. Collect all possible subsets of cards in the turn with exactly m cards, sum c_i <=3.
+
+   b. For each such subset, and for each possible s (mod 10), compute the maximum damage possible by optimally arranging the subset's cards in the sequence, taking into account the critical positions determined by s and m.
+
+But considering that k_i can be up to 2e5 per turn and n up to 2e5, this approach is not feasible. We need a more efficient way.
+
+Alternative approach:
+
+For each possible m (0,1,2,3), and for each possible s (0-9), precompute:
+
+- The number of critical positions in the sequence (c) for s and m.
+
+- Then, to maximize the damage, we need to select m cards where the top c cards (by d_j) are placed in the critical positions (each contributing 2*d_j), and the remaining (m - c) cards are placed in non-critical positions (each contributing d_j). The sum of these would be sum(2*top_c_d + sum(rest_d)).
+
+But how to efficiently find the optimal subset for each m and s, given the turn's cards?
+
+But for each m, we can precompute the possible subsets of cards with sum of c_i <=3. For example, for m=3, all possible combinations of 3 cards with sum of c_i <=3. But given that each c_i is at least 1, sum of 3 cards would require each c_i is 1 (sum 3). For m=2, sum can be 2 (1+1) or 3 (1+2, 2+1, etc.).
+
+But even considering this, it's not feasible to check all possible subsets for each m. So we need a smarter way.
+
+Alternative idea: For each possible m (0,1,2,3), precompute the best possible selection of m cards (with sum c_i <=3) that can be arranged in a way that the top 'c' (number of critical positions) cards are in critical positions.
+
+To do this, perhaps for each possible m, we can sort the cards in the turn in descending order of d_j. Then, for a given number of critical positions c (which depends on s and m), the best would be to take the top (c) cards and multiply their damage by 2, plus the sum of the next (m -c) cards.
+
+But this is only valid if we can choose m cards with sum c_i <=3.
+
+Wait, but the sum of their costs must be <=3. So for each m, we need to select m cards (possibly 0 <= m <=3) with sum of c_i <=3, sorted by d_j in descending order, and then select the top m cards where sum of c_i <=3. But this isn't necessarily optimal, because a lower-damage card with a lower cost might allow more cards to be selected.
+
+For example, suppose m=2. The best two cards might have c_i=2 and 2 (sum 4), which is over the limit. But two cards with c_i=1 and 1 (sum 2) might have lower individual damage but higher total.
+
+So, the problem is similar to a knapsack problem where the sum of c_i <=3, and you want to maximize the sum of d_j (with some multipliers based on their position in the sequence). But the knapsack's constraints are per turn, and for each possible m (0-3).
+
+But since m can be up to 3, and the sum of c_i per m is constrained, perhaps we can precompute for each turn all possible m (0-3) the best possible subsets for each possible m and sum of c_i.
+
+Wait, but for each turn, the maximum possible m is 3 (since each card is at least 1 cost). So for each possible m (number of cards to take: 0,1,2,3), and for each possible sum of costs (sum_c) such that sum_c <=3 and sum_c >= m (since each card is at least 1, sum_c >= m), find the best subset of m cards.
+
+But this might be manageable.
+
+For example:
+
+For m=0: sum_c must be 0. So no cards are taken.
+
+For m=1: sum_c can be 1, 2, or 3. So the best card is the one with maximum d_j where c_i=1, or c_i=2, or c_i=3. Wait, but sum_c is the sum of the selected cards. For m=1, the sum_c is the cost of the single card. So for m=1, the best option is the card with the maximum d_j where c_i <=3 (since sum_c must be <=3). But sum_c is exactly the card's cost, so if a card has cost 3, it's allowed. So the best m=1 is simply the card with the highest d_j (since cost is 1,2, or3, all allowed as sum_c <=3).
+
+For m=2: sum_c can be 2 or 3. So select two cards with sum of costs <=3. The best possible sum of d_j, with sum of c_i <=3.
+
+For m=3: sum_c must be 3. So three cards each with cost 1.
+
+So for each turn, the possible m's are 0,1,2,3, and for each m, the best possible sum of d_j for that m can be precomputed as follows:
+
+- m=0: damage 0.
+
+- m=1: maximum d_j among all cards.
+
+- m=2: maximum sum of two cards with sum of c_i <=3. This could be two cost 1 cards (sum 2), or a cost 1 and cost 2 (sum 3), etc. Need to find the pair with sum c_i <=3 and maximum d_j sum.
+
+- m=3: sum of three cost 1 cards. So if there are at least three cards with cost 1, sum is sum of top three d_j. Otherwise, m=3 is not possible.
+
+So for each turn, we can precompute for each m (0-3) the best possible sum of d_j and the sum of c_i (if applicable). Then, for each possible m and s, compute how many critical positions there are (c) and then the maximum damage for this turn is sum of (2 * sum of top c d_j in the subset) + (sum of the remaining (m -c) d_j). Wait, no. Because the c critical positions are specific positions in the sequence. For example, in some cases, the critical positions may be spread out, but perhaps the best way is to select the top c d_j to place in those positions, and the rest in non-critical positions. So the total damage for the subset is (sum of top c d_j)*2 + sum of the next (m -c) d_j.
+
+But this assumes that when arranging the subset's cards, the top c are placed in critical positions, and the rest in non-critical. So the maximum possible damage for that subset and arrangement is that sum.
+
+So for a given m and c (number of critical positions in this turn's sequence), the optimal way to arrange the subset's cards is to assign the highest c d_j to the critical positions (each multiplied by 2), and the rest to non-critical (each multiplied by 1). The total is sum of (top c d_j)*2 + sum of (remaining (m -c) d_j).
+
+Thus, for each possible m, and for each possible c (number of critical positions for the current s and m), the maximum damage is computed as follows:
+
+If the subset for m has a total of m cards, then:
+
+damage = (sum of top c cards in the subset) * 2 + sum of (m -c) cards.
+
+But to compute this, for each possible m, we need to precompute the sorted list of d_j's for the best subset of m cards. Then, for any c, we can quickly compute the sum of top c and the sum of the rest.
+
+So, for each turn and each possible m (0-3), we can precompute:
+
+- The best subset (sum of c_i <=3) for m cards, sorted in descending order of d_j.
+
+Additionally, for each such subset, compute the prefix sums so that for any c, we can compute the sum of top c and the sum of the rest.
+
+But how do we find the best subset for each m?
+
+Let's break it down per m:
+
+For m=0:
+
+Trivial, damage is 0.
+
+For m=1:
+
+The best subset is the card with maximum d_j. So the sorted list is [max_d].
+
+Sum is max_d.
+
+For m=2:
+
+We need to select two cards, sum of c_i <=3. So possible combinations:
+
+- Two cards with c_i=1 each (sum 2).
+
+- One card with c_i=1 and another with c_i=2 (sum 3).
+
+- One card with c_i=2 and another with c_i=1 (sum 3).
+
+- One card with c_i=3 and another with c_i=0 (but c_i can't be 0).
+
+So for m=2, the possible pairs are any two cards where sum of c_i is <=3.
+
+To find the best pair, we need to select the two cards with the highest possible d_j where their sum of c_i is <=3.
+
+This can be done by:
+
+- Pre-sorting all cards in the turn in descending order of d_j.
+
+Then, for m=2:
+
+Check all possible pairs in the sorted list until we find the first pair where c_i sum <=3.
+
+But that's O(k^2) which is not feasible for k_i up to 2e5.
+
+Alternative approach:
+
+We can precompute the best possible pairs for m=2 by considering different cost combinations:
+
+Case 1: Both cards have c_i=1. Then sum is 2. So select the two highest d_j with c_i=1.
+
+Case 2: One card has c_i=1 and the other has c_i=2. Sum is 3. So select the highest d_j with c_i=1 and the highest d_j with c_i=2.
+
+Case 3: One card has c_i=3 and the other has c_i=0 (invalid, since c_i >=1).
+
+So among these cases, the maximum sum is the maximum between case1, case2, and any other possible combinations.
+
+But other possible combinations may exist, like one card with c_i=3 and another with c_i=0 (but that's invalid). Or two cards with c_i=1 and 2, sum 3.
+
+So for m=2, the best possible sum is the maximum of:
+
+- (sum of two highest c_i=1 cards) → if there are at least two such cards.
+
+- (sum of highest c_i=1 and highest c_i=2) → if there are such cards.
+
+- (sum of highest c_i=2 and highest c_i=1) → same as above.
+
+- (sum of highest c_i=3 and any other card with c_i=0, which is impossible).
+
+So in code, for m=2, the maximum sum is the maximum between:
+
+a) top two 1-cost cards.
+
+b) top 1-cost and top 2-cost.
+
+c) top two 2-cost cards (sum 4 → invalid).
+
+So case c is invalid. So only a and b are possible.
+
+So for m=2:
+
+We can collect all possible candidates:
+
+- top two 1-cost cards (sum 2).
+
+- top 1-cost and top 2-cost (sum 3).
+
+- top two 2-cost cards (sum 4 → invalid, so skip).
+
+- top 2-cost and top 1-cost (sum 3 → same as second case).
+
+So the maximum of these possible pairs.
+
+Similarly for m=3:
+
+Only possible if there are three 1-cost cards, sum 3. So the sum is the top three 1-cost cards.
+
+So for each turn, the steps for preprocessing the best subsets for each m are:
+
+For m=0: damage 0.
+
+For m=1: select the card with maximum d_j. So for all cards, find the maximum d_j.
+
+For m=2:
+
+   - find the top two 1-cost cards.
+
+   - find the top 1-cost and top 2-cost.
+
+   - the maximum sum between these two possibilities (if they exist).
+
+For m=3:
+
+   - sum of top three 1-cost cards, but only if there are at least three such cards.
+
+So for each turn, we can precompute these possible best subsets for each m.
+
+Once we have these, then for each possible s (mod 10) and m, we can determine the number of critical positions c for that s and m.
+
+Then, for each m, the best damage for that m and s is computed as (sum of top c d_j) * 2 + (sum of next (m -c) d_j), where the d_j's are sorted in descending order for the best subset of m.
+
+So, the plan is:
+
+- Preprocess for each turn the best subsets for m=0,1,2,3.
+
+   For each m, store:
+
+   - the list of d_j's sorted in descending order.
+
+   - the sum of their d_j's (for all possible c's).
+
+   But since m is up to 3, for each m, the list can have up to m elements.
+
+Once these are precomputed, for each state in the DP (current mod s), and for each possible m (0-3), we can compute how many critical positions c there are for that s and m. Then, for the best subset of m cards, compute the damage (sum of top c *2 + sum of others), and update the DP accordingly.
+
+So the dynamic programming approach is:
+
+Initialize a DP array where dp[s] represents the maximum damage achievable when the number of cards played so far is congruent to s mod 10.
+
+Initially, before any turns, the count is 0, so dp[0] =0, and the rest are -infinity or something.
+
+For each turn, process all possible previous mod states (s_prev) and for each, consider all possible m (0-3) that can be played in this turn. For each m, check if the best subset for this m exists (i.e., for m=2, there exists a valid pair). Then:
+
+   - Compute the number of critical positions c for s_prev and m.
+
+   - For the best subset of m cards, compute the damage as (sum of top c d_j) *2 + (sum of remaining m -c).
+
+   - The new mod state will be (s_prev + m) mod 10.
+
+   - Update the new DP state (s_new) with the maximum between its current value and dp[s_prev] + damage.
+
+So the steps for each turn are:
+
+1. Precompute the best subsets for m=0,1,2,3.
+
+   For each m, compute:
+
+   - sorted list of d_j's (descending).
+
+   - sum of all d_j's.
+
+   For example:
+
+   For m=1, the list is [max_d], sum is max_d.
+
+   For m=2, the list is [a, b], sum a +b.
+
+   etc.
+
+2. For each possible previous state s_prev (0-9), if dp[s_prev] is not -infinity:
+
+   a. For each possible m (0-3):
+
+      i. Check if the best subset for m exists (e.g., for m=3, there must be three 1-cost cards).
+
+      ii. If exists:
+
+         A. Compute c = number of critical positions for s_prev and m.
+
+            For i in 1..m:
+
+               if (s_prev + i) mod 10 ==0 → increment c.
+
+         B. For the subset of m cards sorted in descending order:
+
+            sum_d = sum of first c elements *2 + sum of remaining (m -c) elements.
+
+         C. Compute new_s = (s_prev + m) %10.
+
+         D. Update the new_dp[new_s] to be the maximum between its current value and dp[s_prev] + sum_d.
+
+3. After processing all m and s_prev, the DP transitions to the new_dp array, which becomes the dp array for the next turn.
+
+So the key steps are:
+
+- Preprocessing per turn the best subsets for each m.
+
+- For each possible state and m, compute the damage for that m and transition to the new state.
+
+Now, the problem is how to precompute the best subsets for each m.
+
+Let's think about how to implement this for each turn.
+
+For each turn's cards:
+
+Collect all cards, and for each possible cost (1, 2, 3), collect a list of d_j's sorted in descending order.
+
+So:
+
+cost1 = sorted list of d_j's where c_i=1, sorted descending.
+
+cost2 = same for c_i=2.
+
+cost3 = same for c_i=3.
+
+Then:
+
+For m=1:
+
+the best is the maximum among cost1[0] (if exists), cost2[0], cost3[0].
+
+So the best m=1 is max_d.
+
+For m=2:
+
+compute possible pairs:
+
+a) two from cost1: if len(cost1)>=2 → sum = cost1[0] + cost1[1]
+
+b) one from cost1 and one from cost2: if len(cost1)>=1 and len(cost2)>=1 → sum = cost1[0] + cost2[0]
+
+So the best m=2 is the maximum of these two options (if they exist).
+
+For m=3:
+
+only possible if len(cost1)>=3 → sum = cost1[0] + cost1[1] + cost1[2]
+
+Otherwise, not possible.
+
+Additionally, for m=2, there's another possibility: one card with cost 3 and another with cost 0 (but that's impossible). So no.
+
+So after computing these possibilities, we can determine if m=2 is possible and what the best sum is.
+
+Once the best subsets for each m are determined, we can store the sorted list of d_j's for each m. For example, for m=2:
+
+If the best subset is two cost1 cards, then the sorted list is [cost1[0], cost1[1]].
+
+If the best subset is cost1[0] + cost2[0], then the sorted list is [cost1[0], cost2[0]] → but sorted in descending order. So we need to compare the two and sort them again.
+
+Wait, no. For example, if cost1[0] is 100, cost2[0] is 90. Then the sorted list would be [100,90].
+
+If cost1[0] is 90 and cost2[0] is 100, then the sorted list would be [100,90].
+
+So in any case, the two elements are sorted in descending order.
+
+So for the m=2 case, the sorted list is the two elements sorted in descending order.
+
+Similarly for other cases.
+
+Thus, for each possible m and subset, the sorted list is in descending order.
+
+Once we have the sorted list for each m, we can precompute the prefix sums for easy computation of sum of top c elements.
+
+So, for example, for m=2, the prefix sums would be [d0, d0+d1].
+
+Then, for any c (0,1,2), the sum of top c is prefix[c-1], and the sum of the rest is sum_total - prefix[c-1].
+
+But c can't be more than m.
+
+But the number of critical positions (c) is determined by s_prev and m. So for each possible s_prev and m, c is the count of i in 1..m where (s_prev +i) mod10 ==0.
+
+So for example, if m=2 and s_prev=9:
+
+i=1 → 9+1=10 mod10=0 → critical.
+
+i=2 → 9+2=11 mod10=1 → not.
+
+So c=1.
+
+Thus, for this case, we take the first element (d0) and multiply by 2, then add d1.
+
+Which is (d0 *2) + d1 = d0 +d1 + d0 → sum_total + d0.
+
+But sum_total is d0 +d1. So the damage is sum_total + d0 = d0*2 +d1.
+
+Which is the same as selecting the first element as critical.
+
+So with the prefix sums, the sum of top c elements is the first c elements' sum.
+
+So, for the m=2 example above, the sum is prefix[0] (d0) *2 + (sum_total - prefix[0]) → 2*d0 +d1.
+
+Which is correct.
+
+So the steps are:
+
+For each possible m, precompute:
+
+   - the sorted list of d_j's (descending order).
+
+   - the prefix sum array.
+
+   - sum_total (sum of all elements).
+
+Then, for each c (number of critical positions), the damage is (prefix[c-1] *2) + (sum_total - prefix[c-1]).
+
+If c is zero, then damage is sum_total.
+
+So, for each turn and m, we need to store the sorted list and sum_total.
+
+Once this is done, the dynamic programming transitions can be computed.
+
+Now, let's think about the code structure.
+
+First, read n.
+
+Then, for each turn, read k_i cards, and process them into cost1, cost2, cost3 lists (sorted descending).
+
+Then, for each possible m (0-3), precompute the best possible subset, sorted list, and sum_total.
+
+Then, for each previous state s_prev (0-9), and each possible m (0-3), compute c and the damage for that m and s_prev.
+
+But how to handle this efficiently?
+
+Let's outline the code steps:
+
+Initialize dp as a list of -infinity, with dp[0] =0.
+
+For each turn in turns:
+
+   Precompute cost1, cost2, cost3.
+
+   For each m in 0,1,2,3:
+
+      compute the best subset and sum_total.
+
+      if m is possible (e.g., for m=3, cost1 has at least 3 elements):
+
+         sort the subset in descending order.
+
+         compute prefix sums.
+
+   Create a new_dp array initialized to -infinity.
+
+   For each s_prev in 0..9:
+
+      if dp[s_prev] is -infinity: skip.
+
+      For each m in 0,1,2,3:
+
+         if the best subset for m is not available: continue.
+
+         compute c as the number of i in 1..m where (s_prev +i) %10 ==0.
+
+         sorted_d = subset's sorted list.
+
+         sum_total = sum of sorted_d.
+
+         if len(sorted_d) < c: this can't happen, since m is the number of cards.
+
+         sum_damage = (sum of first c elements) *2 + (sum of remaining (m -c)).
+
+         which is (prefix[c-1] if c>0 else 0) *2 + (sum_total - (prefix[c-1] if c>0 else 0)).
+
+         new_s = (s_prev + m) %10.
+
+         new_damage = dp[s_prev] + sum_damage.
+
+         if new_damage > new_dp[new_s]:
+
+             new_dp[new_s] = new_damage.
+
+   After processing all m and s_prev, set dp = new_dp.
+
+Finally, the maximum value in dp is the answer.
+
+But how to handle the precomputing for each m?
+
+Let's code this step by step.
+
+For each turn:
+
+   Read k_i cards.
+
+   cost1 = sorted list of d_j where c_i ==1, sorted descending.
+
+   cost2 = same for c_i==2.
+
+   cost3 = same for c_i==3.
+
+   Then, for each m:
+
+      m=0:
+
+         possible: yes.
+
+         subset = empty list.
+
+         sum_total =0.
+
+      m=1:
+
+         possible if any cards.
+
+         max_d = max of (cost1[0] if exists, cost2[0] if exists, cost3[0] if exists).
+
+         subset = [max_d] sorted descending (which is just [max_d]).
+
+         sum_total = max_d.
+
+      m=2:
+
+         possible combinations:
+
+         case a: two cost1 cards (if len >=2).
+
+         case b: one cost1 and one cost2.
+
+         case c: one cost3 and one cost0 (invalid).
+
+         So:
+
+         candidates = []
+
+         if len(cost1) >=2:
+
+             candidates.append(cost1[0] + cost1[1])
+
+         if len(cost1)>=1 and len(cost2)>=1:
+
+             candidates.append(cost1[0] + cost2[0])
+
+         if len(cost2) >=2 and (2+2) <=3? No, 2+2=4 >3. So invalid.
+
+         So, max_sum = max of candidates if any.
+
+         if no candidates, m=2 is not possible.
+
+         subset: the pair with max sum, sorted descending.
+
+         So, if case a is better than case b, then the pair is [cost1[0], cost1[1]].
+
+         else, the pair is [max(cost1[0], cost2[0]), min(cost1[0], cost2[0])] → sorted.
+
+         sum_total = max_sum.
+
+      m=3:
+
+         possible only if len(cost1) >=3.
+
+         subset is cost1[0], cost1[1], cost1[2], sorted.
+
+         sum_total = sum of these three.
+
+   So, for each m, we can compute the subset and sum.
+
+But how to code this.
+
+Implementing m=2:
+
+We need to find the best pair.
+
+So:
+
+sum_a = sum of first two cost1 if possible.
+
+sum_b = sum of first cost1 and first cost2 if possible.
+
+sum_c = sum of first cost2 and first cost1 → same as sum_b.
+
+sum_d = sum of first cost3 and first cost0 → invalid.
+
+So, possible sums are sum_a and sum_b.
+
+The maximum of sum_a and sum_b is the best.
+
+So:
+
+sum_m2 = -infinity.
+
+subset_m2 = None.
+
+if len(cost1) >=2:
+
+   current_sum = cost1[0] + cost1[1]
+
+   if current_sum > sum_m2:
+
+       sum_m2 = current_sum
+
+       subset_m2 = [cost1[0], cost1[1]]
+
+if len(cost1)>=1 and len(cost2)>=1:
+
+   current_sum = cost1[0] + cost2[0]
+
+   if current_sum > sum_m2:
+
+       sum_m2 = current_sum
+
+       subset_m2 = sorted([cost1[0], cost2[0]], reverse=True)
+
+if subset_m2 is not None:
+
+   m2_possible = True.
+
+   sum_total = sum_m2.
+
+else:
+
+   m2_possible = False.
+
+Similarly for m=3.
+
+Once all possible subsets are computed for each m, then for each m, we can store the sorted list and sum.
+
+Now, for each m, the sorted list is sorted in descending order.
+
+Once the sorted list and sum are known, for any c (number of critical positions), the sum of the top c elements can be computed using the prefix sum.
+
+So, in code, for each m and subset:
+
+prefix = [0] * (m +1)  # assuming 1-based or 0-based.
+
+But for example, for m=2:
+
+sorted_d = [a, b]
+
+prefix[0] = 0
+
+prefix[1] = a
+
+prefix[2] = a + b
+
+sum_total = a + b.
+
+So, if c=1, the sum of top 1 is a → prefix[1].
+
+sum_damage = 2*prefix[1] + (sum_total - prefix[1]) → 2a + b.
+
+Which is correct.
+
+So, the code can precompute the prefix sums for each m's subset.
+
+But since m is small (up to 3), this is manageable.
+
+Putting it all together:
+
+We can precompute for each turn and m:
+
+   best[m] = (sorted_d, prefix, sum_total)
+
+where sorted_d is the sorted list for the best subset, prefix is the prefix sums, sum_total is the sum of the subset.
+
+If the subset is not possible for m, then best[m] is None.
+
+Once this is done, the DP transitions can be computed.
+
+Now, let's think about the example given.
+
+Example Input:
+
+5
+
+3
+
+1 6
+
+1 7
+
+1 5
+
+Turn 1:
+
+cost1 = [7,6,5]
+
+cost2 and cost3 are empty.
+
+For m=1: max_d is 7.
+
+subset is [7], sum=7.
+
+For m=2: possible to take two cost1 cards (7+6=13). So subset is [7,6], sum 13.
+
+For m=3: yes, three cost1 cards. sum is 7+6+5=18.
+
+Now, for each possible s_prev (initially 0), and m=3:
+
+s_prev=0.
+
+m=3.
+
+c is the number of positions i=1,2,3 where (0 +i) mod10 ==0.
+
+i=1:1 → no.
+
+i=2:2 → no.
+
+i=3:3 → no.
+
+So c=0.
+
+sum_damage is 7+6+5 =18.
+
+new_s =0 +3 =3 mod10=3.
+
+So after this turn, the state is 3, damage 18.
+
+For the second turn, which has two cost1 cards (4 and 3).
+
+Turn 2:
+
+cost1 = [4,3]
+
+cost2 and cost3 empty.
+
+For m=1: max_d=4.
+
+For m=2: sum is 4+3=7. subset is [4,3].
+
+For m=3: not possible.
+
+Now, the previous state is 3 (mod10), and possible m=2.
+
+s_prev=3.
+
+m=2.
+
+c is the number of i in 1,2 where (3+i) mod10 ==0.
+
+i=1:3+1=4 → no.
+
+i=2:3+2=5 → no.
+
+So c=0.
+
+sum_damage is 4+3=7.
+
+new_s =3+2=5 mod10=5.
+
+Damage so far is 18+7=25.
+
+But perhaps another m is better.
+
+Wait, in the example's explanation:
+
+During the second turn, play both cards and deal 7 damage.
+
+Yes, that's the case. So the sum is 4+3=7, and no 10th cards.
+
+But wait, the first turn's total is 3 cards. So after first turn, the count is 3.
+
+In second turn, playing two cards: positions 4 and 5. Neither are multiples of 10 → so no doubling. So damage is 4+3=7.
+
+Which matches.
+
+So, the code would correctly compute this.
+
+But how?
+
+The first turn's processing:
+
+initial state is 0, dp[0]=0.
+
+For m=3:
+
+c=0.
+
+sum_damage =18.
+
+new_s=3.
+
+dp[3] =18.
+
+Other m's may have worse damage.
+
+After first turn, the dp array has 3 →18.
+
+Second turn:
+
+processing s_prev=3.
+
+For m=2:
+
+c=0.
+
+sum_damage=7.
+
+new_s=3+2=5.
+
+new_damage=18+7=25.
+
+Other m's:
+
+m=1: sum 4. new_s=3+1=4. damage 18+4=22.
+
+m=0: no damage.
+
+So best is m=2.
+
+Thus, after second turn, dp[5] =25.
+
+Third turn:
+
+cards are 3 cards: 1 10, 3 5, 2 3.
+
+cost1 = [10,3] (the first and third cards have cost 1 and 2 respectively? Wait, no. The third card is cost 2.
+
+Wait, third turn's cards:
+
+First card: c=1, d=10 → cost1.
+
+Second card: c=3 → cost3.
+
+Third card: c=2 → cost2.
+
+So cost1 is [10], cost2 is [3], cost3 is [5].
+
+For m=2:
+
+possible options:
+
+case a: two cost1 → not possible (only one).
+
+case b: cost1[0] (10) and cost2[0] (3). sum c_i =1+2=3 → valid.
+
+sum_d =10+3=13.
+
+So subset is [10,3] sorted → [10,3].
+
+So sum_total=13.
+
+For m=2.
+
+c is determined based on s_prev and m.
+
+In the example, during third turn, after previous two turns, the count is 3+2=5. So s_prev=5.
+
+m=2: playing two cards.
+
+The positions are 5+1=6 mod10=6, and 5+2=7 mod10=7. So no critical positions. c=0.
+
+sum_damage=13.
+
+new_s=5+2=7 mod10=7.
+
+damage is 25+13=38.
+
+But according to the example explanation, the third turn's damage is 13 (10 + 3) which is sum_total=13.
+
+Yes.
+
+So the code would compute that.
+
+But wait, the example says during third turn, play first and third card. Those are cards with cost 1 and 2 (sum 3, valid). Their d is 10 and 3. Sum is 13. And no critical positions. So yes.
+
+So code's calculation is correct.
+
+Fourth turn:
+
+cards are 3 cards:
+
+1 15 → cost1.
+
+2 4 → cost2.
+
+1 10 → cost1.
+
+So cost1 is [15,10], cost2 is [4], cost3 is empty.
+
+m=2 options:
+
+case a: two cost1 → sum 15+10=25. sum c_i=2.
+
+case b: cost1[0] (15) and cost2[0] (4) → sum c_i 1+2=3. sum d=19.
+
+So case a (25) is better.
+
+So for m=2, sum is 25.
+
+subset is [15,10].
+
+sum_total=25.
+
+In the example, during fourth turn, play first and third card (cost 1 and 1, sum 2). So that's m=2.
+
+The sum is 15 +10 =25.
+
+Then, the previous state after third turn is s_prev=7.
+
+m=2: positions are 7+1=8 → mod10=8.
+
+7+2=9 → mod10=9.
+
+No critical positions. So c=0. sum_damage=25.
+
+new_s=7+2=9 mod10=9.
+
+damage is 38 +25=63.
+
+But in the example, during fourth turn, the damage is 25. So 15+10=25. Yes.
+
+Fifth turn:
+
+single card, cost1, d=100.
+
+For m=1: sum is 100.
+
+previous state is 9.
+
+m=1: play one card. position is 9+1=10 mod10=0 → critical.
+
+so c=1.
+
+sum_damage=100*2=200.
+
+new_s=9+1=10 mod10=0.
+
+total damage is 63+200=263.
+
+Which matches the example.
+
+Thus, the code's logic should handle this correctly.
+
+Now, the code needs to precompute for each turn and m the best subset and compute the sum based on the critical positions.
+
+But the key challenge is efficiently handling the possible combinations for each m.
+
+Now, let's proceed to code.
+
+First, read n.
+
+Then, for each of the n turns:
+
+   read k_i.
+
+   read k_i lines, each with c_j and d_j.
+
+   group the cards into cost1, cost2, cost3.
+
+   sort each in descending order.
+
+   precompute best for m=0,1,2,3.
+
+Then, for each state s_prev (0-9), and for each possible m (0-3):
+
+   if best subset exists for m:
+
+      compute c.
+
+      compute sum_damage.
+
+      update new_dp accordingly.
+
+So, code steps:
+
+Implement the DP as a list of size 10, initialized to -infinity except dp[0] =0.
+
+For each turn:
+
+   process cards into cost1, cost2, cost3.
+
+   compute best subsets for each m.
+
+   create a new_dp initialized to -infinity.
+
+   for each s_prev in 0..9:
+
+      if dp[s_prev] is -infinity: continue.
+
+      for m in 0,1,2,3:
+
+          if no subset for m: continue.
+
+          sorted_d, prefix, sum_total = best[m].
+
+          m_cards = len(sorted_d).
+
+          # compute c: number of critical positions.
+
+          c =0
+
+          for i in 1..m_cards:
+
+              if (s_prev +i) %10 ==0:
+
+                  c +=1
+
+          # compute sum_damage.
+
+          if c >0:
+
+              sum_c = prefix[c-1]
+
+          else:
+
+              sum_c =0
+
+          sum_damage = sum_c *2 + (sum_total - sum_c)
+
+          new_s = (s_prev + m_cards) %10
+
+          if new_dp[new_s] < dp[s_prev] + sum_damage:
+
+              new_dp[new_s] = dp[s_prev] + sum_damage
+
+   set dp = new_dp.
+
+Finally, output the maximum value in dp.
+
+But wait, the code needs to handle the best subsets for each m.
+
+Implementing the best subsets:
+
+For m=0:
+
+sorted_d = empty list.
+
+sum_total =0.
+
+prefix = [0].
+
+For m=1:
+
+if any cards:
+
+   max_d is the maximum of all cards' d_j.
+
+   sorted_d = [max_d]
+
+   sum_total = max_d.
+
+prefix = [0, max_d].
+
+For m=2:
+
+   compute best subset.
+
+   if possible:
+
+       sorted_d is sorted in descending order.
+
+       sum_total = sum of elements.
+
+       prefix = [0, d0, d0+d1].
+
+For m=3:
+
+   if possible:
+
+       sorted_d is sorted in descending order.
+
+       sum_total = sum of elements.
+
+       prefix = [0, d0, d0+d1, d0+d1+d2].
+
+But for code, the prefix can be computed once sorted_d is known.
+
+But since m is small (up to 3), it's manageable.
+
+Thus, in code, for each turn:
+
+cost1 = sorted([d_j for c_j, d_j in cards if c_j ==1], reverse=True)
+
+cost2 = sorted([d_j for c_j, d_j in cards if c_j ==2], reverse=True)
+
+cost3 = sorted([d_j for c_j, d_j in cards if c_j ==3], reverse=True)
+
+Then, compute best for each m:
+
+best = [None] *4  # m ranges 0-3.
+
+best[0] = ( [], [0], 0 )
+
+For m=1:
+
+max_d = -infinity.
+
+if cost1: max_d = max(max_d, cost1[0])
+
+if cost2: max_d = max(max_d, cost2[0])
+
+if cost3: max_d = max(max_d, cost3[0])
+
+if max_d != -infinity:
+
+   sorted_d = [max_d]
+
+   prefix = [0, max_d]
+
+   sum_total = max_d
+
+   best[1] = (sorted_d, prefix, sum_total)
+
+else:
+
+   best[1] = None.
+
+For m=2:
+
+sum_m2 = -infinity.
+
+candidates = []
+
+if len(cost1) >=2:
+
+   sum_a = cost1[0] + cost1[1]
+
+   candidates.append( (sum_a, [cost1[0], cost1[1]] ) )
+
+if len(cost1)>=1 and len(cost2)>=1:
+
+   sum_b = cost1[0] + cost2[0]
+
+   candidates.append( (sum_b, [cost1[0], cost2[0]] ) )
+
+if len(candidates) ==0:
+
+   best[2] = None
+
+else:
+
+   max_sum = max(candidates, key=lambda x: x[0])
+
+   sum_total = max_sum[0]
+
+   sorted_d = sorted(max_sum[1], reverse=True)
+
+   prefix = [0, sorted_d[0], sorted_d[0] + sorted_d[1]]
+
+   best[2] = (sorted_d, prefix, sum_total)
+
+For m=3:
+
+if len(cost1) >=3:
+
+   sum_total = cost1[0] + cost1[1] + cost1[2]
+
+   sorted_d = cost1[:3]
+
+   prefix = [0, cost1[0], cost1[0]+cost1[1], sum_total]
+
+   best[3] = (sorted_d, prefix, sum_total)
+
+else:
+
+   best[3] = None.
+
+Once best is computed for all m, proceed with the DP transitions.
+
+Now, the code must handle cases where best[m] is None (i.e., no possible subset for that m).
+
+In the DP loop:
+
+for each m in 0,1,2,3:
+
+   if best[m] is None: continue.
+
+   else:
+
+      sorted_d, prefix, sum_total = best[m]
+
+      m_cards = len(sorted_d)
+
+      for each s_prev:
+
+          compute c.
+
+          sum_damage = 2*sum_c + (sum_total - sum_c)
+
+          etc.
+
+Now, the code.
+
+But handling all these steps in Python can be done, but it's a bit involved.
+
+Now, let's code this.
+
+Also, note that for the initial state, dp[0] =0, and others are -infinity.
+
+Finally, after processing all turns, the answer is the maximum value in the dp array.
+
+Now, testing with the example:
+
+Sample Input:
+
+5
+
+3
+
+1 6
+
+1 7
+
+1 5
+
+2
+
+1 4
+
+1 3
+
+3
+
+1 10
+
+3 5
+
+2 3
+
+3
+
+1 15
+
+2 4
+
+1 10
+
+1
+
+1 100
+
+The code should compute the answer 263.
+
+Now, code:
+
+Read the input.
+
+Process each turn.
+
+But let's see.
+
+Turn 1:
+
+cards are:
+
+1 6 → cost1.
+
+1 7 → cost1.
+
+1 5 → cost1.
+
+cost1 = [7,6,5], cost2 and cost3 are empty.
+
+For m=1: max_d=7.
+
+For m=2: sum_a =7+6=13.
+
+sum_b is not possible (cost2 is empty).
+
+So best m=2 is 13.
+
+For m=3: sum is 7+6+5=18.
+
+Thus, best[3] is present.
+
+Then, in the DP step.
+
+Initially, dp[0] =0.
+
+For s_prev=0:
+
+m=3: possible.
+
+c is the number of i=1,2,3 where (0+i) mod10 ==0.
+
+i=1: 1 → no.
+
+i=2: 2 → no.
+
+i=3:3 → no. c=0.
+
+sum_damage =18.
+
+new_s =0+3=3.
+
+So new_dp[3] is 18.
+
+Other m's would have lower damage.
+
+After turn 1, new_dp[3] =18.
+
+Turn 2:
+
+cards are two cost1 (4 and 3).
+
+cost1 = [4,3], others empty.
+
+For m=1: max_d=4.
+
+For m=2: sum_a=4+3=7.
+
+best m=2 is 7.
+
+For m=3: not possible.
+
+DP state is s_prev=3.
+
+For m=2:
+
+c is i=1 and 2 in s_prev=3.
+
+i=1 →3+1=4 mod10=4 → no.
+
+i=2 →3+2=5 → no. c=0.
+
+sum_damage=7.
+
+new_s=3+2=5.
+
+damage 18+7=25.
+
+Other m's (like m=1) sum 4. new_s=4, damage 18+4=22.
+
+So best is m=2.
+
+Turn 2's new_dp is:
+
+new_dp[5] =25.
+
+Turn 3:
+
+cards are:
+
+1 10 → cost1.
+
+3 5 → cost3.
+
+2 3 → cost2.
+
+cost1 = [10], cost2 = [3], cost3 = [5].
+
+For m=2:
+
+sum_a (cost1[0] + cost1[0]) → not possible.
+
+sum_b (cost1[0] + cost2[0] →10+3=13. sum_c=1+2=3 ≤3.
+
+So best m=2 is 13.
+
+sorted_d = [10,3].
+
+prefix [0,10,13].
+
+sum_total=13.
+
+Processing s_prev=5.
+
+m=2:
+
+i=1 →5+1=6 → no.
+
+i=2 →5+2=7 → no.
+
+c=0.
+
+sum_damage=13.
+
+new_s=5+2=7.
+
+damage 25+13=38.
+
+Other m's:
+
+m=1: sum 10. new_s=5+1=6. damage 25+10=35.
+
+m=3: not possible.
+
+Thus, new_dp[7]=38.
+
+Turn4:
+
+cards:
+
+1 15 → cost1.
+
+2 4 → cost2.
+
+1 10 → cost1.
+
+cost1 = [15,10], cost2 = [4], cost3 empty.
+
+For m=2:
+
+sum_a=15+10=25 (sum_c=2).
+
+sum_b=15+4=19 (sum_c=1+2=3).
+
+So best sum is 25.
+
+sorted_d is [15,10].
+
+prefix [0,15,25].
+
+sum_total=25.
+
+Processing s_prev=7.
+
+m=2:
+
+i=1:7+1=8 → no.
+
+i=2:7+2=9 → no.
+
+c=0.
+
+sum_damage=25.
+
+new_s=7+2=9.
+
+damage 38+25=63.
+
+Other m's:
+
+m=1: max_d=15. new_s=7+1=8. damage 38+15=53.
+
+So best is m=2.
+
+new_dp[9] =63.
+
+Turn5:
+
+cards:
+
+1 100 → cost1.
+
+For m=1: sum 100.
+
+Processing s_prev=9.
+
+m=1:
+
+i=1 →9+1=10 mod10=0 → yes. c=1.
+
+sum_damage=100*2=200.
+
+new_s=9+1=10 mod10=0.
+
+damage 63+200=263.
+
+Thus, new_dp[0] =263.
+
+Thus, the final answer is 263.
+
+Thus, the code should work.
+
+Now, let's proceed to write the code.
+
+The code will read the input, process each turn's cards, precompute the best subsets for each m, and then update the DP.
+
+Now, here's the Python code:
+</think>
+To solve this problem, we need to maximize the damage dealt over multiple turns in a card game, considering that every 10th card played deals double damage. The challenge is to optimally select and order cards each turn to leverage the 10th card multiplier effectively.
+
+### Approach
+1. **Dynamic Programming (DP) State Tracking**: Track the maximum damage possible for each modulo 10 state (0-9) of the total cards played so far. This helps in determining which cards will be in the 10th position in subsequent turns.
+2. **Card Grouping and Sorting**: For each turn, group cards by their cost and sort them by damage in descending order. This allows efficient selection of the highest damage cards within cost constraints.
+3. **Subset Selection**: For each turn, precompute the best possible subsets of cards (0 to 3 cards) that can be played without exceeding the total cost of 3. This involves considering all valid combinations of card costs and selecting those with the highest total damage.
+4. **Critical Position Calculation**: For each possible number of cards played in a turn, determine which positions (relative to the total count of cards played so far) will trigger the 10th card multiplier. This helps in optimally placing high-damage cards in these critical positions.
+
+### Solution Code
+```python
+import sys
+
+def main():
+    n = int(sys.stdin.readline())
+    dp = [-float('inf')] * 10
+    dp[0] = 0  # initial state
+
+    for _ in range(n):
+        k = int(sys.stdin.readline())
+        cards = []
+        for _ in range(k):
+            c, d = map(int, sys.stdin.readline().split())
+            cards.append((c, d))
+        
+        # Group cards by cost and sort descending by damage
+        cost1 = sorted([d for c, d in cards if c == 1], reverse=True)
+        cost2 = sorted([d for c, d in cards if c == 2], reverse=True)
+        cost3 = sorted([d for c, d in cards if c == 3], reverse=True)
+        
+        best = [None] * 4  # best[0], best[1], best[2], best[3]
+
+        # Precompute best for each m
+        # m=0
+        best[0] = ([], [0], 0)
+
+        # m=1
+        max_d = -float('inf')
+        if cost1:
+            max_d = max(max_d, cost1[0])
+        if cost2:
+            max_d = max(max_d, cost2[0])
+        if cost3:
+            max_d = max(max_d, cost3[0])
+        if max_d != -float('inf'):
+            sorted_d = [max_d]
+            prefix = [0, max_d]
+            sum_total = max_d
+            best[1] = (sorted_d, prefix, sum_total)
+        else:
+            best[1] = None
+
+        # m=2
+        candidates = []
+        if len(cost1) >= 2:
+            sum_a = cost1[0] + cost1[1]
+            candidates.append((sum_a, [cost1[0], cost1[1]]))
+        if len(cost1) >= 1 and len(cost2) >= 1:
+            sum_b = cost1[0] + cost2[0]
+            candidates.append((sum_b, [cost1[0], cost2[0]]))
+        if candidates:
+            max_candidate = max(candidates, key=lambda x: x[0])
+            sum_total = max_candidate[0]
+            sorted_d = sorted(max_candidate[1], reverse=True)
+            prefix = [0, sorted_d[0], sorted_d[0] + sorted_d[1]]
+            best[2] = (sorted_d, prefix, sum_total)
+        else:
+            best[2] = None
+
+        # m=3
+        if len(cost1) >= 3:
+            sum_total = cost1[0] + cost1[1] + cost1[2]
+            sorted_d = cost1[:3]
+            prefix = [0, sorted_d[0], sum(sorted_d[:2]), sum_total]
+            best[3] = (sorted_d, prefix, sum_total)
+        else:
+            best[3] = None
+
+        # Update DP
+        new_dp = [-float('inf')] * 10
+        for s_prev in range(10):
+            if dp[s_prev] == -float('inf'):
+                continue
+            for m in range(4):
+                if best[m] is None:
+                    continue
+                sorted_d, prefix, sum_total = best[m]
+                m_cards = len(sorted_d)
+                # Compute c: number of critical positions
+                c = 0
+                for i in range(1, m_cards + 1):
+                    if (s_prev + i) % 10 == 0:
+                        c += 1
+                # Compute sum_damage
+                if c == 0:
+                    sum_c = 0
+                else:
+                    sum_c = prefix[c]
+                sum_damage = sum_c * 2 + (sum_total - sum_c)
+                new_s = (s_prev + m_cards) % 10
+                if new_dp[new_s] < dp[s_prev] + sum_damage:
+                    new_dp[new_s] = dp[s_prev] + sum_damage
+        dp = new_dp
+
+    print(max(dp))
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Dynamic Programming State**: The DP array `dp` tracks the maximum damage for each possible modulo 10 state of the total cards played. This helps determine which cards will be in the 10th position in subsequent turns.
+2. **Card Grouping**: Cards are grouped by their cost and sorted by damage in descending order to efficiently select the highest damage cards.
+3. **Subset Selection**: For each turn, the best possible subsets of 0 to 3 cards are precomputed, considering valid cost combinations and maximizing damage.
+4. **Critical Positions**: For each turn, the number of critical positions (where the 10th card multiplier applies) is calculated based on the current state and the number of cards played. High-damage cards are placed in these positions to maximize damage.
+
+This approach ensures that we efficiently leverage the 10th card multiplier while adhering to the cost constraints, leading to the optimal solution.
+</bot>

@@ -1,0 +1,509 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.After learning a lot about space exploration, a little girl named Ana wants to change the subject.
+
+Ana is a girl who loves palindromes (string that can be read the same backwards as forward). She has learned how to check for a given string whether it's a palindrome or not, but soon she grew tired of this problem, so she came up with a more interesting one and she needs your help to solve it:
+
+You are given an array of strings which consist of only small letters of the alphabet. Your task is to find how many palindrome pairs are there in the array. A palindrome pair is a pair of strings such that the following condition holds: at least one permutation of the concatenation of the two strings is a palindrome. In other words, if you have two strings, let's say "aab" and "abcac", and you concatenate them into "aababcac", we have to check if there exists a permutation of this new string such that it is a palindrome (in this case there exists the permutation "aabccbaa"). 
+
+Two pairs are considered different if the strings are located on different indices. The pair of strings with indices (i,j) is considered the same as the pair (j,i).
+
+Input
+
+The first line contains a positive integer N (1 ≤ N ≤ 100 000), representing the length of the input array.
+
+Eacg of the next N lines contains a string (consisting of lowercase English letters from 'a' to 'z') — an element of the input array. 
+
+The total number of characters in the input array will be less than 1 000 000.
+
+Output
+
+Output one number, representing how many palindrome pairs there are in the array.
+
+Examples
+
+Input
+
+3
+aa
+bb
+cd
+
+
+Output
+
+1
+
+
+Input
+
+6
+aab
+abcac
+dffe
+ed
+aa
+aade
+
+
+Output
+
+6
+
+Note
+
+The first example:
+
+  1. aa + bb → abba. 
+
+
+
+The second example:
+
+  1. aab + abcac = aababcac → aabccbaa
+  2. aab + aa = aabaa
+  3. abcac + aa = abcacaa → aacbcaa
+  4. dffe + ed = dffeed → fdeedf
+  5. dffe + aade = dffeaade → adfaafde
+  6. ed + aade = edaade → aeddea
+</user>
+<bot>
+<think>
+Okay, let's try to figure out this problem. So, the task is to count the number of pairs of strings in the array such that their concatenation has a permutation that's a palindrome. Hmm, right. 
+
+First, I remember that a string can be rearranged into a palindrome if and only if the frequency of each character is even, except for at most one character (which would be the middle one in an odd-length palindrome). So for the concatenated string, the combined counts of each character must satisfy this condition.
+
+So for two strings s and t, when we combine their character counts, all counts except possibly one must be even. Let's think: the combined frequency for each character is the sum of their individual frequencies. So for each possible pair (s_i, s_j), we need to check if their combined character counts meet the palindrome permutation condition.
+
+But checking every possible pair directly would be O(N^2), which is way too slow for N up to 1e5. So we need a smarter approach.
+
+Hmm, maybe we can precompute a mask for each string that represents the parity (even or odd) of each character's count. Since there are 26 letters, we can represent this as a bitmask (each bit represents whether the count is odd for that character). Then, for two strings, the XOR of their masks would give the parity of the combined counts. For the combined to form a possible palindrome, the XOR mask must have at most one bit set (since that means all characters except possibly one have even counts).
+
+So the key is to find pairs of masks where the XOR of the two masks has 0 or 1 bits set. That's the condition we need. So the problem reduces to counting the number of pairs (i, j) where mask_i XOR mask_j has <=1 set bits.
+
+Wait, but how do we compute that efficiently?
+
+First, for each string, compute its mask. Then, for each mask, we need to find how many other masks in the array satisfy (current_mask XOR other_mask) has 0 or 1 bits. Let's call such a pair valid.
+
+So for each mask in the array, we can:
+
+1. Look for the same mask. Because if two masks are the same, their XOR is 0, which is allowed (all even counts). So each occurrence of the same mask can form a pair with others. But wait, each pair (i,j) is considered the same as (j,i), and the problem states that two pairs are different only if the indices are different. Wait, the note says that (i,j) is considered the same as (j,i). So in that case, the pairs are unordered, so we need to count each unordered pair once.
+
+But in the problem statement, the output is the count of unordered pairs. For example, in the first sample input, there's 3 strings, and the valid pair is (0,1) which is (aa, bb). So how to model this.
+
+Wait, the problem says that the pair (i,j) is the same as (j,i). So when counting, we have to consider i <= j, and count each such pair once. But when N is up to 1e5, iterating over all possible pairs is O(N^2), which is impossible. So we need a way to count the pairs efficiently using the masks.
+
+So, let's proceed.
+
+Each mask can be stored in a frequency map. Then, for each mask in the frequency map, we can compute how many other masks (including itself) can form a valid pair with it.
+
+But how to do that?
+
+First, for each mask in the map, we need to find all masks that when XORed with it result in a mask with 0 or 1 bits set. Let's call these target masks.
+
+For each current_mask, the target masks are:
+
+- current_mask (since XOR with itself is 0)
+- current_mask XOR (1 << k) for each k in 0..25 (since XOR with a mask that differs by exactly one bit will give a mask with 1 bit set).
+
+So for each current_mask, the possible target masks are:
+
+- current_mask itself (resulting in XOR 0)
+- current_mask XOR (bit) for each bit 0-25 (each of these would have XOR result with exactly one bit set).
+
+So for each current_mask, we can generate these possible target masks and look up how many times they have occurred in the map.
+
+But since pairs are unordered, we have to be careful not to double count. For example, if mask A and mask B form a valid pair, and A != B, then when processing A, we might count B's occurrence, and when processing B, count A's occurrence. But in the frequency map, we need to handle this correctly.
+
+Alternatively, we can precompute for each mask, the possible masks that can form a valid pair with it, and accumulate the counts. Then, divide by 2 when the masks are different (since (i,j) and (j,i) are the same pair) but add the combinations when the masks are the same (since choosing two of the same mask is C(n,2)).
+
+But this approach would require iterating through each mask and for each possible target mask, and summing the product of their frequencies, but then ensuring that each pair is counted once.
+
+Wait, perhaps the correct approach is:
+
+For all pairs (x, y) where x <= y (in terms of mask order), and (mask_x XOR mask_y) has <=1 bits set, sum the product of the counts of x and y, except when x == y, in which case we add C(cnt[x], 2). But this might not be manageable since the masks can be up to 2^26 possibilities, which is around 67 million, but in practice, for N=1e5, the number of unique masks would be manageable.
+
+But how to handle this efficiently?
+
+Alternatively, for each mask in the map:
+
+1. For the same mask (x), add C(cnt[x], 2) to the total. But this counts all pairs within the same mask, which are valid (since their XOR is 0). However, we need to make sure that we only count this once. So during the iteration, when processing mask x, we can check if we have already considered x, and then add the combination.
+
+Wait, but this approach would involve:
+
+- For each mask x, check how many masks y exist where y is x or y is x XOR (1<<k) for any k. Then, for each such y, if x < y, add cnt[x] * cnt[y]. Then, for x itself, add C(cnt[x], 2) (the number of pairs within x).
+
+But how to avoid double-counting?
+
+Alternatively, for each mask x in the frequency map:
+
+1. Compute all possible masks y that can form a valid pair with x. For each such y, if x < y, then multiply cnt[x] * cnt[y] and add to the total. Then, after processing all x, add the C(cnt[x],2) for each x (since pairs within x are valid).
+
+Wait, but this might not capture all possibilities. Let me think.
+
+Another way: the total pairs are the sum for all x <= y of the number of pairs (a, b) where a is in x's group and b is in y's group, and x and y form a valid pair.
+
+So for x == y, the number of pairs is C(cnt[x], 2).
+
+For x < y, the number of pairs is cnt[x] * cnt[y] if x and y form a valid pair.
+
+So the approach is:
+
+Initialize total = 0.
+
+For each mask x in the frequency map:
+
+   total += C(freq[x], 2)  (since same mask pairs are valid)
+
+   for each possible mask y that is x XOR (mask with exactly one bit set):
+
+       if y is in the frequency map and y > x:
+
+           total += freq[x] * freq[y]
+
+   also, check the mask x XOR 0 (but that's x itself, which is handled by the C(freq[x],2) part).
+
+So the steps are:
+
+1. Precompute all masks for the input strings.
+
+2. Count the frequency of each mask.
+
+3. For each mask x in the frequency map:
+
+   a. Add combinations of choosing 2 from freq[x] to the total.
+
+   b. For each possible mask that is x XOR (1 << k) for k from 0 to 25:
+
+       i. If this mask y exists in the frequency map and y > x, add freq[x] * freq[y] to the total.
+
+This way, all valid pairs are counted once, either as same mask (handled by step 3a) or different masks (handled by step 3b, ensuring x < y to avoid duplicates).
+
+This seems manageable. Let's see.
+
+But how to generate all possible y masks for each x?
+
+For each x, there are 26 possible y's (since flipping each bit once). So for each x, generate 26 possible y's by XORing with each of the 26 possible bits.
+
+Then, for each y in those 26, check if y is present in the frequency map and y > x. Then, accumulate the product.
+
+But why check if y > x? Because if x and y can form a valid pair and x < y, we process it once when x is the current mask. If x is processed and y is in the frequency map, then when x is considered, y > x is checked. When y is considered later, x would be less than y and thus not processed again. This way, each pair (x,y) where x < y is considered exactly once.
+
+So this approach should work.
+
+So the steps in code:
+
+- Compute the mask for each string. The mask is a 26-bit number where each bit represents the parity (even or odd) of the count of that character. For example, if 'a' appears an odd number of times, the first bit is set.
+
+- Create a frequency dictionary (like a Counter) mapping each mask to the number of times it occurs.
+
+- Iterate through each mask in the frequency dictionary:
+
+   a. For the current mask x, add the combinations of choosing 2 (i.e., freq[x] * (freq[x] - 1) // 2) to the total.
+
+   b. For each bit position from 0 to 25:
+
+       i. Compute y = x ^ (1 << bit)
+
+       ii. If y is in the frequency map and y > x (to avoid duplicates), then add freq[x] * freq[y] to the total.
+
+But wait, what if x and y are such that x XOR y has exactly one bit set. Then, when x is processed, and y is in the frequency map, and y > x, then the product is added. But when y is processed, x would be less than y, so in step 3b, since y is the current mask, when generating the possible masks (y XOR (1 << bit)), which would be x, but since x < y, y's iteration would not add anything. So this way, each pair (x, y) with x < y and XOR mask with 1 bit is counted once.
+
+So yes, this approach works.
+
+So the code would look something like:
+
+from collections import defaultdict
+
+def main():
+    import sys
+    input = sys.stdin.read().split()
+    n = int(input[0])
+    strings = input[1:n+1]
+
+    freq = defaultdict(int)
+    for s in strings:
+        mask = 0
+        for c in s:
+            mask ^= 1 << (ord(c) - ord('a'))
+        freq[mask] +=1
+
+    total =0
+
+    for x in freq:
+        # Same mask combinations
+        cnt = freq[x]
+        total += cnt * (cnt -1) //2
+
+        # Now check masks differing by one bit
+        for bit in range(26):
+            y = x ^ (1 << bit)
+            if y in freq and y > x:
+                total += cnt * freq[y]
+
+    print(total)
+
+if __name__ == "__main__":
+    main()
+
+But wait, what about the case where two different masks XOR to a mask with zero bits set? Well, that's only possible if the masks are the same. So that's already covered by the same mask combinations.
+
+So the code above should handle all possible valid pairs.
+
+Let's test this code against the sample inputs.
+
+First sample input:
+
+3
+aa
+bb
+cd
+
+The masks for each string:
+
+aa: each character 'a' appears twice. So the parity is even for all. So mask is 0.
+
+bb: same, mask 0.
+
+cd: 'c' and 'd' each once. So mask is (1<<2) | (1<<3) = 0b1100 (binary) which is 12.
+
+So the freq map is {0: 2, 12:1}
+
+Processing each x in freq:
+
+First x=0:
+
+Same pairs: 2*1/2 =1.
+
+Then check each of the 26 bits. For each bit, y = 0 ^ (1<<bit) = mask with that bit set. Check if any of those y exists in the frequency and y >0.
+
+But the other mask is 12. So for x=0, when bit=2, y= 0^4=4. Not in freq. For bit=3, y=8. Not in. For bits 2 and 3, the sum would be 12. Wait, 0 ^ (1<<2) is 4. 0 ^ (1<<3) is 8. 0 ^ (1<<2 and 3) would be 12. But wait, each bit is considered individually. So x=0, for each bit (0-25), we check if x XOR (1<<bit) is in freq.
+
+So for x=0, the y is 1<<bit. The only possible y in the freq is 12. But 12 is 8 +4, which is bits 2 and 3. So for x=0, none of the y's generated by flipping a single bit would be 12. So no contribution from step 3b. So the total after x=0 is 1.
+
+Next x=12:
+
+Same pairs: 0 (since cnt=1, 1*0/2=0).
+
+Check each bit. For each bit, y=12 ^ (1<<bit). For example:
+
+If the bit is 2 (mask 4), then 12 ^4 = 8. Which is not in the freq. If bit is 3 (mask8), then 12^8=4. Not in freq. For any other bit, y would be 12 | (1<<bit). So none of those are present. So no contribution. So the total remains 1. Which matches the first sample.
+
+Second sample input:
+
+6
+aab
+abcac
+dffe
+ed
+aa
+aade
+
+We need to compute the masks for each string.
+
+Let's see:
+
+1. aab:
+
+a:2 times (even), b:1 (odd). So mask is 1 <<1 (since 'b' is the second character, index 1).
+
+Mask is 2 (binary 10).
+
+2. abcac:
+
+Counts:
+
+a: 2, b:1, c:2, so a even, b odd, c even. So mask is 1<<1 (b). So mask is 2.
+
+Wait, let's count each character:
+
+abcac:
+
+a: first and fourth positions? Let's see:
+
+a appears in positions 0 and 3 (0-based indices):
+
+The string is 'a', 'b', 'c', 'a', 'c'. Wait, the length is 5? Wait, the input string is 'abcac' which is 5 characters.
+
+So 'a' appears twice (positions 0 and 3), 'b' once, 'c' two times. So mask is 1<<1 (bit for 'b') = 2.
+
+3. dffe:
+
+d:1, f:2, e:1. So mask is 1<<3 (d) XOR 1<<4 (e) (since their counts are odd). So mask is 8 (d is 3, 1<<3=8) plus 16 (e is 4, 1<<4=16) → 24 (binary 11000).
+
+4. ed:
+
+e and d each appear once. So mask is 1<<3 (d) XOR 1<<4 (e) → same as above, 24.
+
+5. aa: mask 0 (even counts for a, others 0).
+
+6. aade:
+
+a:3 times (odd), d:1 (odd), e:1 (odd). So mask is 1<<0 (a) XOR 1<<3 (d) XOR 1<<4 (e) → 1 +8+16=25.
+
+So the masks are:
+
+[2, 2, 24, 24, 0, 25]
+
+Frequency map:
+
+mask 2 → 2 times (from aab and abcac)
+mask 24 → 2 times (dffe and ed)
+mask 0 →1 (aa)
+mask 25 →1 (aade)
+
+Then processing each mask:
+
+Process mask 0:
+
+Same pairs: 0 (since cnt=1). So total +=0.
+
+Check each bit. For each bit, compute y=0 ^ (1<<bit) → y is 1<<bit. So check if any of those are present in the frequency and y>0.
+
+For example, mask 2 (which is present). y=2. 0 <2, so add 1 * freq[2] (which is 2). So that's 2. But wait, the code checks if y is in the freq and y > x (x is 0). So for mask 0, flipping bits 0-25:
+
+For bit 1 (mask 2), y=2. So 2 is in the freq and y>0 (since x is 0). So add 1 *2 =2 to the total. So for mask 0, the code adds 2 here.
+
+Wait, but when processing mask 0, the code will check all possible y's that are x ^ (1<<bit). For each of these y's, if y exists in the freq and y> x (0), then add freq[x] (which is 1) * freq[y].
+
+So for mask 0, when bit is 1 (mask 2), y=2 is present and y>0. So contribution is 1 * 2=2. For other bits, like 3 (mask 8), 4 (16), etc., if those masks are present, but in this case, mask 24 is present (mask 24 is 16+8=24). So for mask 0, flipping bits 3 and 4 would lead to y=8 and 16, which are not present. So mask 0's contribution from step 3b is 2.
+
+So after processing mask 0, total is 0 (from 3a) +2 =2.
+
+Next, process mask 2:
+
+3a: cnt=2 → 2*(2-1)/2=1 → total becomes 2+1=3.
+
+3b: For each bit 0-25, compute y=2^(1<<bit). For example:
+
+bit 1: 2 ^ 2 →0. But y=0, which is in the freq and 0 <2. So since y <x (current x is 2), the code checks if y >x (which it's not), so no contribution.
+
+bit 0: 2^1=3. Is 3 in the freq? No.
+
+bit 2: 2^4=6. Not present.
+
+... etc. For all other bits, the resulting y is not present in the freq. So no contribution from step 3b. So total is 3.
+
+Next, mask 24:
+
+3a: cnt=2 → 1 → total 4.
+
+3b: For each bit:
+
+For example, flipping bit 3 (mask 8) →24^8= 16+8 → 24^8= 16 (since 24 is 8+16). 24 XOR 8 is 16. So y=16. Is 16 in the freq? No.
+
+Flipping bit 4 (mask 16) →24^16=8. Not present.
+
+Flipping bit 3 and 4: but no, each bit is considered separately. Wait, no. For each bit in 0-25:
+
+mask 24 is 8+16 = bits 3 and 4 set.
+
+So flipping bit 3: 24 XOR 8 = 16 → mask 16 (not present).
+
+Flipping bit 4: 24 XOR16=8 → mask 8 (not present).
+
+Flipping other bits: for example, bit 5: 24 XOR (32) → 24+32=56. Not present.
+
+But maybe flipping a bit that's already set in mask 24. For example, flipping bit 3 (which is set) would turn it off, leading to mask 16. Not present. So none of the possible y's for mask 24 are present, except perhaps others. Wait, but mask 25 is present (aade's mask). So how?
+
+mask 25 is 1 (a) +8 (d) +16 (e) → 25 (binary 11001). So mask 25 is x=25. So for mask 24, let's check flipping bit 0 (a's bit). 24 XOR 1 = 25. So y=25. Is y in the freq? Yes (mask 25 has cnt 1). So when x is 24, and bit is 0, y=25. Then check if y> x (24). 25>24 → yes. So add cnt[x] (2) * cnt[y] (1) → 2*1=2. So for this case, mask 24's step 3b would add 2. So total becomes 4 +2=6.
+
+So for mask 24:
+
+3a contributes 1 (2*1/2). 3b: for bit 0, y=25 is in freq and y>24. So 2*1=2 added. So total becomes 4 (3a) +2 (3b) =6.
+
+Then, processing mask 25:
+
+3a: cnt=1 →0.
+
+3b: check all bits. For each bit, y=25 ^ (1<<bit). For example:
+
+bit 0: 25 ^1 →24. Which is present. But 24 <25. So when x is 25, y=24, which is less than x. So no contribution. So no additions here.
+
+So after processing all masks, total is 3 (from 0,2,24) plus the contributions from mask 24's 3b (2) and mask 2's 3a (1) and mask 0's 3b (2) and mask 24's 3a (1) and mask 24's 3b (2):
+
+Wait, let's re-calculate:
+
+Original total after each step:
+
+mask 0: 0 (3a) +2 (3b) → total 2.
+
+mask 2: 1 (3a) +0 → total 3.
+
+mask 24: 1 (3a) +2 (3b) → total increases by 3 → 3+3=6.
+
+mask 25: 0 (3a) +0 → no change.
+
+So the total is 6, which matches the second sample's output.
+
+Yes! So the code works for the sample.
+
+Another test case: let's see.
+
+What if there are two masks that differ by two bits, but their XOR has exactly one bit set. Wait, no. XOR of two masks has exactly one bit set if and only if they differ by exactly one bit. So the code correctly checks for that.
+
+So the code seems correct.
+
+But wait, what about the case where a string is empty? For example, if a string is empty, its mask is 0. Because all characters have even counts (zero counts). So pairs with empty strings would be handled correctly.
+
+Another edge case: N=1. Then, no pairs, output 0.
+
+So the code should handle all cases.
+
+Now, considering the constraints: N up to 1e5, and each string can be up to 1e6 in total. Processing each string's mask is O(L) for L characters. But the total characters are up to 1e6, so that's acceptable.
+
+The frequency map would have O(N) entries (since each string contributes one mask). Then, for each mask, we process 26 possible bits. So O(N *26) operations, which for N=1e5 is 2.6e6 operations, manageable.
+
+Thus, the code should work.
+</think>
+To solve this problem, we need to determine the number of pairs of strings from a given array such that a permutation of their concatenation forms a palindrome. A string can be rearranged into a palindrome if the frequency of each character is even, except for at most one character. 
+
+### Approach
+1. **Character Parity Mask**: For each string, compute a bitmask where each bit represents the parity (even or odd) of the count of the corresponding character. For example, if the character 'a' appears an odd number of times, the least significant bit (bit 0) of the mask is set to 1.
+2. **Frequency Map**: Maintain a frequency map to count occurrences of each bitmask.
+3. **Valid Pairs Check**: For each bitmask, determine how many other bitmasks can form a valid pair. Two bitmasks form a valid pair if their XOR results in a bitmask with 0 or 1 bit set. This is done by checking the same bitmask and bitmasks differing by exactly one bit.
+
+### Solution Code
+```python
+from collections import defaultdict
+import sys
+
+def main():
+    input = sys.stdin.read().split()
+    n = int(input[0])
+    strings = input[1:n+1]
+    
+    freq = defaultdict(int)
+    for s in strings:
+        mask = 0
+        for c in s:
+            mask ^= 1 << (ord(c) - ord('a'))
+        freq[mask] += 1
+    
+    total = 0
+    
+    for x in freq:
+        cnt = freq[x]
+        # Add pairs within the same mask
+        total += cnt * (cnt - 1) // 2
+        
+        # Check all possible masks differing by one bit
+        for bit in range(26):
+            y = x ^ (1 << bit)
+            if y in freq and y > x:
+                total += cnt * freq[y]
+    
+    print(total)
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Character Parity Mask Calculation**: Each string is converted into a bitmask where each bit represents the parity of the count of a character. For example, if 'a' (bit 0) appears an odd number of times, bit 0 is set to 1.
+2. **Frequency Map**: This map keeps track of how many times each bitmask appears in the input array.
+3. **Valid Pairs Check**: For each bitmask `x`, check pairs with:
+   - The same bitmask `x`, contributing combinations of its frequency taken two at a time.
+   - Bitmasks `y` that differ from `x` by exactly one bit. This is done by XORing `x` with each possible single bit and checking if the resulting bitmask exists in the frequency map and is greater than `x` to avoid duplicate counting.
+
+This approach efficiently reduces the problem complexity from O(N^2) to O(N * 26), making it feasible for large input sizes.
+</bot>

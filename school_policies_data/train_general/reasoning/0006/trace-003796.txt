@@ -1,0 +1,675 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Two villages are separated by a river that flows from the north to the south. The villagers want to build a bridge across the river to make it easier to move across the villages.
+
+The river banks can be assumed to be vertical straight lines x = a and x = b (0 < a < b).
+
+The west village lies in a steppe at point O = (0, 0). There are n pathways leading from the village to the river, they end at points Ai = (a, yi). The villagers there are plain and simple, so their pathways are straight segments as well.
+
+The east village has reserved and cunning people. Their village is in the forest on the east bank of the river, but its exact position is not clear. There are m twisted paths leading from this village to the river and ending at points Bi = (b, y'i). The lengths of all these paths are known, the length of the path that leads from the eastern village to point Bi, equals li.
+
+The villagers want to choose exactly one point on the left bank of river Ai, exactly one point on the right bank Bj and connect them by a straight-line bridge so as to make the total distance between the villages (the sum of |OAi| + |AiBj| + lj, where |XY| is the Euclidean distance between points X and Y) were minimum. The Euclidean distance between points (x1, y1) and (x2, y2) equals <image>.
+
+Help them and find the required pair of points.
+
+Input
+
+The first line contains integers n, m, a, b (1 ≤ n, m ≤ 105, 0 < a < b < 106). 
+
+The second line contains n integers in the ascending order: the i-th integer determines the coordinate of point Ai and equals yi (|yi| ≤ 106). 
+
+The third line contains m integers in the ascending order: the i-th integer determines the coordinate of point Bi and equals y'i (|y'i| ≤ 106). 
+
+The fourth line contains m more integers: the i-th of them determines the length of the path that connects the eastern village and point Bi, and equals li (1 ≤ li ≤ 106).
+
+It is guaranteed, that there is such a point C with abscissa at least b, that |BiC| ≤ li for all i (1 ≤ i ≤ m). It is guaranteed that no two points Ai coincide. It is guaranteed that no two points Bi coincide.
+
+Output
+
+Print two integers — the numbers of points on the left (west) and right (east) banks, respectively, between which you need to build a bridge. You can assume that the points on the west bank are numbered from 1 to n, in the order in which they are given in the input. Similarly, the points on the east bank are numbered from 1 to m in the order in which they are given in the input.
+
+If there are multiple solutions, print any of them. The solution will be accepted if the final length of the path will differ from the answer of the jury by no more than 10 - 6 in absolute or relative value.
+
+Examples
+
+Input
+
+3 2 3 5
+-2 -1 4
+-1 2
+7 3
+
+
+Output
+
+2 2
+</user>
+<bot>
+<think>
+Okay, let's see. So the problem is about finding the best pair of points, one on the west bank (x=a) and one on the east bank (x=b), such that when you connect them with a bridge, the total distance from the west village (O at (0,0)) to the east village via the bridge is minimized. The total distance is the sum of OA_i (distance from O to Ai), AiBj (the bridge), and lj (the length of the eastern path from Bj to the east village).
+
+Hmm. Wait, the eastern village's position isn't given. The paths from the east village to Bj are of length lj. So for each Bj, the eastern village must lie somewhere such that the distance from Bj to the village is exactly lj, but the problem statement says that there's a point C (with x at least b) where all Bj's path lengths are at least the distance from Bj to C. So the village is possibly at C. But maybe we don't need to know where exactly C is. Because the total path length is OA_i + |AiBj| + lj. Because the path from the east village to Bj is of length lj, regardless of where the village is. So the problem simplifies to minimizing OA_i + |AiBj| + l_j.
+
+So the problem reduces to selecting i (from west points) and j (from east points), compute the sum sqrt(a^2 + y_i^2) (since OA_i is the distance from (0,0) to (a, y_i)) plus the distance between (a, y_i) and (b, y'_j) (which is sqrt( (b-a)^2 + (y'_j - y_i)^2 )) plus l_j. And we need to find the pair (i,j) that minimizes this sum.
+
+The challenge is to compute this efficiently given that n and m can be up to 1e5 each. So a brute-force O(nm) approach is impossible. So we need a smarter way.
+
+Let's break down the sum:
+
+For each j, the term l_j is fixed. Then, for each i, the sum is:
+
+sqrt(a² + y_i²) + sqrt( (b-a)² + (y'_j - y_i)^2 ) + l_j.
+
+But since l_j is fixed for j, when considering j, the minimal sum for that j would be the minimal value of [sqrt(a² + y_i²) + sqrt( (b-a)² + (y'_j - y_i)^2 )] plus l_j. So for each j, we need to find the i that minimizes the first two terms. Then, among all j, find the j that gives the minimal total.
+
+But even then, doing this for each j would be O(n) per j, leading to O(nm) time. Which is 1e10 operations, which is way too slow.
+
+So we need to find a way to compute for each j the best i quickly.
+
+Let's think about the function f(y_i) = sqrt(a² + y_i²) + sqrt( (b-a)^2 + (y'_j - y_i)^2 ). We need to find the y_i that minimizes this function. Since the y_i's are sorted, perhaps we can perform a binary search for each j's optimal y_i.
+
+Alternatively, maybe for a given j, the optimal i can be found by considering that the function is convex, so the minimum can be found using ternary search. But since the y_i are sorted, and the function is convex, the optimal i is the one that's closest to the optimal point in the continuous case, then check neighbors.
+
+Wait, the y_i are given in ascending order, same with y'_j. So for a given j, with y'_j, the function f(y_i) is a function of y_i. Let's treat y_i as a continuous variable and find the minimum, then find the closest y_i in the list.
+
+But how?
+
+Alternatively, the minimal for the continuous case can be found by taking the derivative and setting to zero.
+
+Let me model the continuous case. Let's denote:
+
+f(y) = sqrt(a² + y²) + sqrt( (b-a)^2 + (y_j' - y)^2 )
+
+We need to find the y that minimizes f(y).
+
+Take derivative df/dy:
+
+(y)/sqrt(a² + y²) + [ - (y_j' - y) ] / sqrt( (b-a)^2 + (y_j' - y)^2 ) ) = 0.
+
+So:
+
+(y)/sqrt(a² + y²) = (y_j' - y)/sqrt( (b-a)^2 + (y_j' - y)^2 )
+
+Hmm. Let's square both sides to eliminate square roots:
+
+(y²)/(a² + y²) = ( (y_j' - y)^2 ) / ( (b-a)^2 + (y_j' - y)^2 )
+
+Cross-multiplying:
+
+y² [ (b-a)^2 + (y_j' - y)^2 ] = (y_j' - y)^2 (a² + y² )
+
+Expand both sides:
+
+Left side: y² ( (b-a)^2 + (y_j' - y)^2 )
+
+Right side: (y_j' - y)^2 ( a² + y² )
+
+Subtract right side from left side:
+
+y² (b-a)^2 = a² (y_j' - y)^2 
+
+Take square roots? Wait, that's:
+
+y (b - a) = ±a (y_j' - y)
+
+Hmm. So two possibilities.
+
+Case 1: y (b -a) = a (y_j' - y )
+
+=> y (b -a) + a y = a y_j'
+
+=> y (b -a + a ) = a y_j'
+
+=> y b = a y_j'
+
+=> y = (a / b) y_j'
+
+Case 2: y (b -a) = -a (y_j' - y )
+
+=> y (b -a) = -a y_j' + a y
+
+=> y (b -a - a ) = -a y_j'
+
+=> y (b - 2a ) = -a y_j'
+
+But since a < b (given 0 < a < b), b-2a could be positive or negative. For example, if a is 3 and b is 5, then b-2a is -1, which is negative. So this case would depend on the values.
+
+But solving for y here:
+
+y = [ -a y_j' ] / (b - 2a )
+
+But this is getting complicated. So perhaps in the continuous case, the minimal point is at y = (a y_j') / b.
+
+Wait, the first case gives y = (a y_j') / b. Let's see. That's a possible candidate.
+
+So the critical point is y = (a y_j') / b. Then, for each j, the optimal y_i is close to that value. Since the y_i are sorted, perhaps for each j, we can compute this value and then perform a binary search on the list of y_i to find the closest points and compute f(y_i) for those points. Then pick the minimal one.
+
+But since the function f(y) is convex (as the sum of two convex functions?), perhaps the minimal occurs at this critical point, and the closest y_i would be the one that is around that value.
+
+Alternatively, maybe this is the case where the optimal y_i is (a y_j') / b. So for each j, compute this y_opt, then find the y_i in the west bank that is closest to y_opt, and check those nearby.
+
+So for each j, compute y_opt = (a y_j') / b, then find the insertion point in the sorted y_i list, and check the candidates around that (like the two or three closest points) to find the minimal f(y_i).
+
+This approach would take O(m log n) time, which is acceptable for 1e5 m and 1e5 n, since log n is about 20, leading to 2e6 operations.
+
+But how accurate is this? Because perhaps the minimal is not exactly at y_opt, but the critical point might be a local minimum, and the closest y_i would indeed be the minimal.
+
+Alternatively, maybe the function is such that the minimal for the continuous case is at y_opt, and among the discrete points, the minimal is either the closest to y_opt or the next.
+
+So, the approach would be:
+
+For each j in east points:
+
+1. Compute y_opt = (a * y'_j) / b.
+
+2. Find the position in the sorted list of y_i where y_opt would be inserted (using binary search).
+
+3. Check the y_i at that position, and the ones before and after (if they exist) to find the minimal sum.
+
+4. For each candidate i, compute the sum OA_i + |AiBj|, add l_j, and track the minimal sum.
+
+Once all j's are processed, select the j with the minimal sum and the corresponding i.
+
+Then, among all j's, pick the one that gives the minimal total sum, along with the best i for that j.
+
+But how many candidates per j do we need to check? Since the y_i are sorted, and the function is convex, the minimal is either at the found position or the immediate neighbors. So checking three points (prev, current, next) should suffice. For example, when the optimal y_opt is between two consecutive y_i's, the minimal could be at either of those two points.
+
+So for each j:
+
+- Find the closest y_i to y_opt via binary search.
+
+- Check the y_i at the found index, as well as the previous and next indices (if they exist).
+
+- Compute the sum for each of these y_i and keep the minimal one.
+
+This would take O(1) per j after the binary search, leading to O(m log n) time.
+
+Once we have the minimal sum for each j, we can track the j with the overall minimal sum, along with the best i for that j.
+
+But how do we handle the binary search for each j?
+
+In Python, the bisect module's bisect_left function can be used to find the insertion point. Then, the candidates would be the insertion point and insertion point -1. For example, if the insertion point is k, then the candidates are k-1 and k (if they are within the list's bounds). Because the y_i are sorted in ascending order.
+
+Wait, the problem states that the second line (y_i) is given in ascending order, and the third line (y'_j) is also in ascending order.
+
+So for each j, y'_j is sorted. But the optimal y_opt for j increases as y'_j increases. So perhaps the binary search for each j can be optimized, but given that m is 1e5, a binary search per j is manageable.
+
+So the steps are:
+
+1. Read n, m, a, b.
+
+2. Read the list of y_i (west points), sorted.
+
+3. Read the list of y'_j (east points), sorted.
+
+4. Read the list of l_j (lengths for east points).
+
+5. For each j (from 0 to m-1):
+
+   a. Compute y_opt = (a * y'_j) / b.
+
+   b. Find the index in the sorted y_i list where y_opt would be inserted.
+
+   c. Check the index and index-1 (and maybe index+1 if within bounds) to see which gives the minimal sum.
+
+   d. For those candidates, compute the sum OA_i + |AiBj| + l_j, and keep track of the minimal sum for this j.
+
+6. Among all j's, find the one with the minimal sum, and the corresponding i.
+
+Then, output the indices (i+1 and j+1, since they are 1-based).
+
+But wait, why not index+1? Because the binary search could return a position beyond the end of the list. For example, if y_opt is larger than all y_i, then the insertion point is n, so the candidate is index n-1 (the last element) and maybe n-2 (if exists). So in code:
+
+For each j:
+
+y_opt = (a * y_j) / b
+
+using the j-th y'_j.
+
+Then, using bisect.bisect_left on the y_i list to find the insertion point.
+
+Then, the possible candidates are insertion_point-1, insertion_point, insertion_point+1. But need to make sure they are within 0 and len(y_i)-1.
+
+So for example:
+
+indices = [insertion_point -1, insertion_point]
+
+if insertion_point < len(y_i), include insertion_point. Also check insertion_point -1 >=0.
+
+Then, maybe also check insertion_point +1 if it's less than len(y_i). But perhaps just checking insertion_point -1 and insertion_point is sufficient.
+
+Alternatively, for all possible candidates, check insertion_point-1, insertion_point, insertion_point+1, but only those that are within the list.
+
+Once the candidates are selected, compute their sum and pick the minimal one.
+
+Wait, but why check insertion_point+1? Because the optimal could be between insertion_point and insertion_point+1. But perhaps in most cases, insertion_point-1 and insertion_point are sufficient.
+
+But to cover all possibilities, maybe check insertion_point-1, insertion_point, and insertion_point+1.
+
+But since the y_i are sorted, perhaps the minimal sum is between insertion_point-1 and insertion_point.
+
+But to be safe, let's check all three candidates.
+
+For example:
+
+When the insertion point is 0: only 0 is considered, but maybe also 1 if exists.
+
+But wait, insertion point is the position where y_opt would be inserted. So if all y_i are larger than y_opt, insertion point is 0. Then the possible candidates are 0 (but y_i[0] is larger than y_opt), so maybe 0 and 1. But no, in that case, the best is 0. Or maybe the minimal is at 0.
+
+Alternatively, perhaps the code should collect all possible candidates within insertion_point-1, insertion_point, insertion_point+1, but clamped to the list's bounds.
+
+Once we have these candidates, compute their sum and choose the minimal.
+
+So the code would look something like this:
+
+from bisect import bisect_left
+
+y_west = ... # list of sorted y_i for west points.
+
+for j in range(m):
+    yj_east = y_east[j]
+    lj = l[j]
+    y_opt = a * yj_east / b
+
+    pos = bisect_left(y_west, y_opt)
+    candidates = []
+    if pos > 0:
+        candidates.append(pos-1)
+    if pos < len(y_west):
+        candidates.append(pos)
+    if pos +1 < len(y_west):
+        candidates.append(pos+1)
+    # remove duplicates and sort
+    candidates = list(set(candidates))
+    # compute for each candidate i in candidates the sum
+    min_sum_j = None
+    best_i = -1
+    for i in candidates:
+        if i < 0 or i >= len(y_west):
+            continue
+        yi = y_west[i]
+        oa = (a**2 + yi**2)**0.5
+        aibj = ((b - a)**2 + (yj_east - yi)**2)**0.5
+        total = oa + aibj + lj
+        if min_sum_j is None or total < min_sum_j:
+            min_sum_j = total
+            best_i = i
+    # now compare with the current global min
+    if min_sum_j < global_min:
+        global_min = min_sum_j
+        best_j = j
+        best_i_global = best_i
+
+But wait, this is for each j, and for each j, track the best i. Then, among all j, find the j with the minimal sum.
+
+But in Python, for 1e5 j's and each j taking up to 3 candidates, this would be 3e5 operations. Which is manageable.
+
+So that's the plan.
+
+But what about the case where the minimal sum for j is not among the three candidates? For example, maybe there's a y_i that is several steps away from the insertion point which gives a lower sum. But in that case, the function's convexity ensures that such a scenario is impossible, and the minimal is indeed near the optimal point.
+
+But how can we be sure? Let's think: the sum is the sum of two functions, each of which is convex.
+
+Wait, the function f(y) = sqrt(a² + y²) is convex. Because the second derivative is positive. Let's check:
+
+First derivative: y / sqrt(a² + y²)
+
+Second derivative: [sqrt(a² + y²) - y*(y)/sqrt(a² + y²)] / (a² + y²) )
+
+Which simplifies to [ (a² + y²) - y² ] / (a² + y²)^(3/2 ) = a² / (a² + y²)^(3/2 ), which is positive. So yes, this function is convex.
+
+Similarly, the second term is sqrt( (b-a)^2 + (y_j' - y)^2 ), which is also convex, as it's the same as the first function. The sum of two convex functions is convex, so the total function f(y) is convex. So the minimal is achieved at the point where the derivative is zero (the critical point). So the minimal in the continuous case is at y_opt. So in the discrete case, the minimal is either the y_i that is closest to y_opt, or possibly one of the adjacent points if the minimal is between two y_i's.
+
+Therefore, checking the insertion point and the adjacent points (up to three candidates) should suffice.
+
+So this approach should work.
+
+Now, let's test this logic against the sample input.
+
+Sample input:
+
+3 2 3 5
+
+-2 -1 4 (sorted y_i for west points)
+
+-1 2 (sorted y'_j for east points)
+
+7 3 (l_j for each j)
+
+So the west points are at (3, -2), (3, -1), (3,4). East points are at (5, -1) and (5,2), with l_j 7 and 3 respectively.
+
+The output is 2 2. Let's see why.
+
+For j=2 (east point 2: (5,2), l_j=3):
+
+y_opt = a * y_j' / b = 3 * 2 /5 = 6/5 = 1.2.
+
+The west y_i are [-2, -1,4]. The insertion point for 1.2 is 2 (since 1.2 is between -1 and 4). So pos=2.
+
+Candidates are 1 (pos-1=1) and 2 (pos=2). Also pos+1=3, which is beyond, so only 1 and 2.
+
+Check i=1 (y_i=-1):
+
+OA_i is sqrt(3² + (-1)^2 ) = sqrt(10) ≈3.162.
+
+distance between (3,-1) and (5,2) is sqrt( (2)^2 + (3)^2 )= sqrt(13)≈3.606. Sum is 3.162 +3.606 =6.768. Plus l_j 3 gives 9.768.
+
+Check i=2 (y_i=4):
+
+OA_i is sqrt(3² +4^2) =5.
+
+distance between (3,4) and (5,2) is sqrt( (2)^2 + (-2)^2 )=sqrt(8)≈2.828. Sum is5+2.828=7.828. Plus l_j 3 gives 10.828.
+
+So the minimal is i=1 (sum 9.768).
+
+But wait, the output is 2 2, which would be j=2 (the second east point) and i=2 (third west point). Wait, maybe I got the indices wrong here.
+
+Wait, the sample output is 2 2. So for the west points, they are numbered 1,2,3 (since there are 3 points). The east points are numbered 1,2 (since there are two points).
+
+So the output is west point 2 (y_i=-1), east point 2 (y_j'=2, l_j=3).
+
+So in that case, for j=1 (east point 1: y_j'=-1, l_j=7):
+
+y_opt =3*(-1)/5 =-0.6.
+
+The insertion point in west's y_i [-2,-1,4] would be 1 (since -0.6 is between -2 and -1). So candidates are 0 and 1.
+
+Check i=0 (y=-2):
+
+OA_i: sqrt(9+4)=sqrt(13)≈3.606. Distance to (5,-1): sqrt( (2)^2 + ( (-1 - (-2) )=1 )^2 ) = sqrt(4+1)=sqrt(5)≈2.236. Sum: 3.606+2.236=5.842. Add l_j=7 gives 12.842.
+
+i=1 (y=-1): OA_i sqrt(9+1)=sqrt(10)≈3.162. Distance to (5,-1): sqrt(2^2 +0^2 )=2. Sum:3.162+2=5.162 +7=12.162.
+
+So for j=1 (east point 1), the best is i=1 (sum 12.162).
+
+For j=2 (east point 2, y_j'=2, l_j=3):
+
+y_opt=3*2/5=1.2. Insertion point is 2. Candidates 1 and 2.
+
+i=1 (y=-1): sum is 3.162 (OA) + 3.606 (distance) =6.768 +3=9.768.
+
+i=2 (y=4): OA=5. Distance to (5,2): sqrt(2^2 + (2-4)^2 )=sqrt(4+4)=sqrt(8)=2.828. Sum 5+2.828=7.828+3=10.828.
+
+So the minimal is i=1, sum 9.768.
+
+So between j=1 (sum 12.162) and j=2 (sum 9.768), the minimal is j=2, sum 9.768. So the best is j=2, i=1. But in the sample output, the answer is 2 and 2.
+
+Wait, that's a problem. Because according to this calculation, for j=2, the best i is 1 (index 1 in 0-based, which is the second point in 1-based). So the output should be 2 2 (since j is 2 in 1-based, and i is 2 in 1-based? Wait, no. Because in 0-based, the j for the sample is 1 and 0-based indices. So for the east points, j=0 is the first (y=-1, l=7), j=1 is the second (y=2, l=3). So j=1 in 0-based corresponds to output 2.
+
+In our calculation, j=1 (0-based) gives sum 9.768, which is better than j=0 (sum 12.162). So the best j is j=1 (0-based), which is 2 in 1-based. The best i is i=1 (0-based, which is 2 in 1-based). So the output is 2 2. Which matches the sample.
+
+So the code works for the sample.
+
+Another test case: let's see for j=2 (y_j'=2), the candidates are i=1 (y=-1) and i=2 (y=4). The minimal is for i=1. So in the code, for j=1 (0-based), the best i is 1 (0-based, which is 2 in 1-based). So the code would find that.
+
+So the approach works.
+
+Now, implementing this in Python.
+
+But considering that for 1e5 j's and each j requiring a binary search, and each j checking 3 candidates, the code needs to be efficient.
+
+But in Python, using bisect from the bisect module is efficient.
+
+Now, code steps:
+
+Read n, m, a, b.
+
+Read the list of y_west (n integers, sorted).
+
+Read the list of y_east (m integers, sorted).
+
+Read the list l (m integers).
+
+For each j in 0..m-1:
+
+   yj = y_east[j]
+
+   lj = l[j]
+
+   compute y_opt = a * yj / b
+
+   find the insertion pos in y_west for y_opt.
+
+   collect candidates: pos-1, pos, pos+1 (clamped to 0..n-1)
+
+   for each candidate in the set (to avoid duplicates):
+
+       compute OA_i = sqrt(a^2 + yi^2)
+
+       compute AiBj = sqrt( (b-a)^2 + (yj - yi)^2 )
+
+       total = OA_i + AiBj + lj
+
+       track the minimal for this j.
+
+Once all j's are processed, find the j with the minimal total sum, and the corresponding i.
+
+Then output the 1-based indices.
+
+But how to manage the candidates:
+
+Implementing this:
+
+In Python:
+
+import bisect
+
+n, m, a, b = map(int, input().split())
+
+y_west = list(map(int, input().split()))
+y_east = list(map(int, input().split()))
+l_list = list(map(int, input().split()))
+
+min_total = float('inf')
+best_west = -1
+best_east = -1
+
+for j in range(m):
+    yj = y_east[j]
+    lj = l_list[j]
+    # compute y_opt
+    y_opt = (a * yj) / b
+    # find insertion point in y_west (sorted)
+    pos = bisect.bisect_left(y_west, y_opt)
+    # candidates: pos-1, pos, pos+1 (but within 0<=i <n)
+    candidates = []
+    for di in [-1, 0, 1]:
+        k = pos + di
+        if 0 <= k < n:
+            candidates.append(k)
+    # remove duplicates (but since we process in order, maybe not needed)
+    candidates = list(sorted(set(candidates)))
+    # for each candidate i in candidates:
+    current_min = None
+    current_i = -1
+    for i in candidates:
+        yi = y_west[i]
+        oa = (a**2 + yi**2)**0.5
+        dx = b - a
+        dy = yj - yi
+        aibj = (dx**2 + dy**2)**0.5
+        total = oa + aibj + lj
+        if current_min is None or total < current_min:
+            current_min = total
+            current_i = i
+    # compare to global min
+    if current_min < min_total:
+        min_total = current_min
+        best_west = current_i + 1  # converting to 1-based
+        best_east = j + 1          # 1-based
+
+print(best_west, best_east)
+
+Wait, but in the code above, for each j, current_i is the best i (0-based) for that j. Then, when we find a j that gives a lower total, we update best_west and best_east.
+
+Yes. This should work.
+
+Testing the sample:
+
+y_west = [-2, -1,4]
+
+y_east = [-1,2]
+
+l_list = [7,3]
+
+For j=0 (east point 1, yj=-1, lj=7):
+
+y_opt =3*(-1)/5 =-0.6. Insertion pos in [-2,-1,4] is 1 (since -0.6 is after -2, before -1). So candidates are 0,1,2 (but 2 is 1+1=2? Wait, pos is 1. di is -1, 0, 1: so candidates are 0,1,2. Wait, n=3. 0,1,2 are all valid.
+
+Wait, pos is 1. For di in -1,0,1:
+
+k = 0,1,2. So for i in 0,1,2.
+
+But wait, the y_opt is -0.6. The insertion point is 1, since the list is [-2,-1,4]. So bisect_left for -0.6 in the list would find the first position where the element is >=-0.6. The list elements are -2, -1,4. -0.6 is between -1 and 4. So the insertion point is 2? Wait, wait, wait. Wait the list is sorted in ascending order. The elements are [-2,-1,4]. So inserting -0.6 would go between -1 and 4, at position 2. So pos=2. Wait, no. Let me compute bisect.bisect_left([-2,-1,4], -0.6). Since -0.6 is greater than -1 and less than 4. So the insertion point is 2.
+
+Wait, because the list is ordered as [-2, -1,4]. So -0.6 is larger than -1, so the insertion point is 2.
+
+So for j=0 (east point 1, yj=-1):
+
+y_opt is (3 * (-1))/5 = -0.6.
+
+In the y_west list, bisect_left would find 2 as the insertion point (since -0.6 is between -1 and 4).
+
+So pos=2. candidates would be 1, 2,3. But n=3, so 3 is out of range. So candidates are 1,2.
+
+Wait, di in -1,0,1:
+
+k = pos-1=1, pos=2, pos+1=3.
+
+But 3 is >=n (3), so only 1 and 2 are valid.
+
+So candidates are 1 and 2.
+
+Wait, no. For j=0:
+
+y_east[j] is -1, lj=7.
+
+y_opt =3*(-1)/5 =-0.6.
+
+The insertion point in y_west (sorted as [-2,-1,4]) for -0.6 is 2. Because bisect_left finds the first element >= -0.6. The elements are -2, -1,4. So after -1 (index 1) comes 4 (index 2), which is larger than -0.6. So bisect_left returns 2.
+
+Thus, pos=2. So candidates are pos-1=1, pos=2, pos+1=3 (invalid). So candidates are 1 and 2.
+
+So for j=0, the code checks i=1 and 2.
+
+i=1: yi=-1.
+
+OA_i: sqrt(9 +1) = sqrt(10) ≈3.162.
+
+distance between (3,-1) and (5,-1) is sqrt( (2)^2 + 0^2 ) = 2. Sum is 3.162 +2 =5.162 +7=12.162.
+
+i=2: yi=4.
+
+OA_i: 5.
+
+distance between (3,4) and (5,-1) is sqrt(2^2 + (-5)^2 )=sqrt(4+25)=sqrt(29)≈5.385. Sum 5 +5.385=10.385 +7=17.385.
+
+So the best for j=0 is i=1, sum 12.162.
+
+For j=1 (east point 2, yj=2, lj=3):
+
+y_opt=3*2/5=1.2.
+
+bisect_left in y_west ([-2,-1,4], 1.2) is 2, since 1.2 is between -1 and 4.
+
+pos=2. candidates are 1,2.
+
+i=1: yi=-1.
+
+OA_i: sqrt(10)≈3.162.
+
+distance between (3,-1) and (5,2) is sqrt(2^2 +3^2 )=sqrt(13)≈3.606. Sum 3.162+3.606=6.768 +3=9.768.
+
+i=2: yi=4.
+
+OA_i:5.
+
+distance between (3,4) and (5,2): sqrt(2^2 + (-2)^2 )=sqrt(8)=2.828. Sum 5+2.828=7.828 +3=10.828.
+
+So best for j=1 is i=1 (sum 9.768).
+
+Thus, between j=0 (sum 12.162) and j=1 (sum 9.768), the minimal is j=1 (sum 9.768). So the code would set best_west=1+1=2 (since i is 0-based 1), best_east=1+1=2. Which matches the sample output.
+
+Thus, the code works.
+
+Now, to handle edge cases. For example, when the optimal y_opt is exactly a y_i.
+
+Another test case: suppose a=3, b=5, yj=5. So y_opt=3*5/5=3. If the y_west has 3, then insertion point is at the index of 3, and the code would check that index and adjacent.
+
+Another case: if the insertion point is 0. Then candidates are 0 and 1.
+
+But in code, the candidates are pos-1 (which is -1, invalid), pos (0), and pos+1 (1). So for pos=0, the code checks 0 and 1.
+
+Thus, the code covers all necessary cases.
+
+Therefore, the code should work.
+</think>
+To solve this problem, we need to determine the optimal points on the west and east banks of a river to build a bridge such that the total distance between the two villages is minimized. The total distance includes the sum of the distance from the west village to the bridge point on the west bank, the straight-line distance of the bridge, and the length of the path from the bridge point on the east bank to the east village.
+
+### Approach
+1. **Problem Analysis**:
+   - The river is represented by vertical lines at x = a (west bank) and x = b (east bank).
+   - We need to find points Ai on the west bank and Bj on the east bank such that the sum of distances OAi (from the west village to Ai), AiBj (the bridge), and lj (path from Bj to the east village) is minimized.
+
+2. **Key Insights**:
+   - For each point Bj on the east bank, calculate a potential optimal point on the west bank using a derived formula based on minimizing the continuous function of distances.
+   - Use binary search to efficiently find the closest points on the west bank to the calculated optimal point, and check adjacent points to ensure the minimum distance.
+
+3. **Algorithm**:
+   - For each point Bj on the east bank, compute the optimal y-coordinate on the west bank using the formula y_opt = (a * yj) / b.
+   - Use binary search to find the insertion point of y_opt in the sorted list of west bank y-coordinates.
+   - Check the insertion point and its adjacent points to find the minimum distance for each Bj.
+   - Track the minimum total distance across all points Bj and their corresponding optimal points Ai.
+
+### Solution Code
+```python
+import bisect
+import math
+
+n, m, a, b = map(int, input().split())
+y_west = list(map(int, input().split()))
+y_east = list(map(int, input().split()))
+l_list = list(map(int, input().split()))
+
+min_total = float('inf')
+best_west = -1
+best_east = -1
+
+for j_idx in range(m):
+    yj = y_east[j_idx]
+    lj = l_list[j_idx]
+    y_opt = (a * yj) / b
+    pos = bisect.bisect_left(y_west, y_opt)
+    candidates = []
+    for delta in (-1, 0, 1):
+        k = pos + delta
+        if 0 <= k < n:
+            candidates.append(k)
+    candidates = list(sorted(set(candidates)))  # Remove duplicates and sort
+    
+    current_min = None
+    current_i = -1
+    for i in candidates:
+        yi = y_west[i]
+        oa = math.hypot(a, yi)
+        aibj = math.hypot(b - a, yj - yi)
+        total = oa + aibj + lj
+        if current_min is None or total < current_min:
+            current_min = total
+            current_i = i
+    if current_min < min_total:
+        min_total = current_min
+        best_west = current_i + 1  # Convert to 1-based index
+        best_east = j_idx + 1
+
+print(best_west, best_east)
+```
+
+### Explanation
+- **Reading Input**: The input values are read and parsed into appropriate variables.
+- **Optimal Point Calculation**: For each point Bj on the east bank, compute the optimal y-coordinate on the west bank using the formula derived from minimizing the continuous distance function.
+- **Binary Search**: Use binary search to find the closest points on the west bank to the calculated optimal y-coordinate.
+- **Adjacent Points Check**: Check the insertion point and its adjacent points to ensure the minimum distance is found considering discrete points.
+- **Tracking Minimum**: Keep track of the minimum total distance and corresponding points across all Bj points.
+
+This approach efficiently narrows down the potential points using mathematical insights and binary search, ensuring the solution is optimal and runs in O(m log n) time complexity, which is feasible for large input sizes.
+</bot>

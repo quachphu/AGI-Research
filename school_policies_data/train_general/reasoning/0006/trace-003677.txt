@@ -1,0 +1,663 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.problem
+
+AOR Ika is at the $ S $ th bus stop at time $ 0 $ and wants to go from there to the $ G $ th bus stop. The number of bus stops $ N $ and $ M $ routes (*) connecting different bus stops are given. The bus stops are numbered $ 1, \ dots, and N $, respectively. Each route consists of $ 4 $ values: origin $ u $, destination $ v $, departure time $ t $, and travel time $ c $. You can catch the bus if you are at the departure $ u $ at the time $ t $ and arrive at the destination $ v $ at the time $ t + c $. While not on the bus, AOR Ika gets wet in the rain. When heading to the $ G $ th bus stop through the route that minimizes the time of getting wet in the rain, output the total time of getting wet in the rain from the time $ 0 $ to the arrival at the $ G $ th bus stop.
+
+(*) In graph theory terms, a path is a sequence of vertices and edges, but please note that it is used here to mean edges.
+
+
+
+input
+
+Input is given from standard input in the following format.
+
+$ N \ M \ S \ G $
+$ u_1 \ v_1 \ t_1 \ c_1 $
+$ \ vdots $
+$ u_M \ v_M \ t_M \ c_M $
+
+output
+
+Print the minimum amount of time you get wet in one line. Also, output a line break at the end.
+
+Example
+
+Input
+
+2 2 1 2
+1 2 10 100
+1 2 5 500
+
+
+Output
+
+5
+</user>
+<bot>
+<think>
+Okay, let's see. I need to find the minimal time AOR Ika gets wet when traveling from stop S to G. The problem says that the time getting wet is the total time spent not on the bus from time 0 until arrival at G. So, whenever he's not riding a bus, he's getting wet. The goal is to find the path where this total is minimized.
+
+Hmm. So each bus route is a directed edge, maybe? Because the departure is from u at time t, arriving at v at t + c. So the time on the bus is c, and during that time, he's not getting wet. The time between when he arrives at a bus stop and when he departs on the next bus is when he's waiting, which counts as getting wet.
+
+Wait, but how do we model this? Let's think. Suppose he takes a sequence of buses. For example, first he takes a bus from S to some u. Then from u to another stop, etc. Each time, he must be at the departure stop exactly at the departure time t of the bus. So the time between arriving at a stop (from the previous bus) and the departure time of the next bus is the time he's waiting, hence getting wet. Also, the initial time from 0 until he takes the first bus's departure time t is added to the wet time. And finally, after the last bus arrives at G, there's no more time added.
+
+So the total wet time is the sum of:
+
+1. The time from 0 to the departure time of the first bus (since he's waiting at the starting stop S until the first bus departs).
+2. For each subsequent bus, the time between the arrival of the previous bus and the departure time of the next bus.
+3. Any time after arriving at a stop (from a previous bus) but not taking any bus (if that's the end, but since the end is G, we don't count after arrival).
+
+So the problem reduces to finding a path from S to G using the buses, such that the sum of these waiting times is minimized. Also, the arrival time at G is the sum of the arrival times of the last bus (t + c for that route), but the total wet time is the sum of all the waiting times before each bus plus the initial waiting time.
+
+Wait, the initial waiting time is from 0 to the first bus's departure time. For example, in the sample input:
+
+Sample Input:
+2 2 1 2
+1 2 10 100
+1 2 5 500
+
+So S is 1, G is 2.
+
+Possible routes:
+
+Option 1: Take the first bus (depart 10, arrive 110). The initial waiting time is 10-0 =10. Then, arrives at 2. Total wet time is 10.
+
+Option 2: Take the second bus (depart 5, arrive 5+500=505). Initial waiting time 5-0=5. So total wet time is 5. That's why the sample output is 5.
+
+So the answer is the minimal sum of the initial waiting time and the waiting times between consecutive buses.
+
+But how do we model this?
+
+We need to model the state as (current_stop, arrival_time). The arrival_time is the time when he arrived at current_stop. Then, when he takes a bus from current_stop u to v, he must depart at time t. So the waiting time is t - arrival_time (assuming arrival_time <= t). Then, the arrival_time at v is t + c.
+
+We need to track for each possible arrival_time at each stop, the minimal accumulated wet time. Then, when we reach G, we take the minimal accumulated wet time.
+
+But arrival_time can be up to 1e18, so it's not feasible to track all possible times. So we need a priority queue approach, similar to Dijkstra's algorithm, where we track the earliest possible arrival time with the minimal accumulated wet time.
+
+Wait, but Dijkstra's usually finds the minimal path cost. Here, the cost is the accumulated wet time, and we want the minimal sum. So perhaps, the state is (current stop, arrival_time), and the accumulated wet time so far. For each state, when we take a bus, we add the waiting time (t - arrival_time) if arrival_time <= t. Then, the new arrival time is t + c. We need to find the minimal total.
+
+But how do we manage this efficiently?
+
+Alternatively, we can model this as a graph where each node is a bus stop and the arrival time. The edges would be taking a bus, which requires that the arrival time at the current stop is <= the bus's departure time. The cost of the edge is the waiting time (t - arrival_time). Then, the problem is to find the minimal cost path from (S, 0) to any (G, any time).
+
+But the state space is potentially large. However, for Dijkstra's algorithm, we can use a priority queue where we process the states in order of increasing total cost. Since we are looking for the minimal cost, once we reach G, that's the answer.
+
+So, the steps:
+
+1. For each bus route, we can pre-process them. But routes are directed edges.
+
+2. The initial state is (S, arrival_time=0) with accumulated cost 0. Because at time 0, he's at S. The next step is to take some bus departing from S. The waiting time for that bus is t (departure time) - 0 = t. Then, arrival at v is t + c.
+
+3. For each state (u, arrival_time) and cost_so_far, we look for all buses departing from u with t >= arrival_time. For each such bus, the new cost_so_far is cost_so_far + (t - arrival_time). The new arrival time is t + c. Then, we can add this to the priority queue.
+
+4. The priority queue is ordered by the accumulated cost (the wet time). The first time we reach G, that's the minimal possible.
+
+But how do we handle multiple ways to reach a node u with different arrival times and different accumulated costs?
+
+For example, suppose we have two paths to u: one arrives at time 5 with cost 3, and another arrives at time 6 with cost 2. Even though 5 is earlier, the cost 3 is higher. So, if from u we take a bus departing at time 10, the first path would add 10-5=5 (total cost 8), while the second path would add 10-6=4 (total cost 6). So even though arrival time is later, the accumulated cost is lower, leading to a better total.
+
+Therefore, when processing states, for each node u and arrival_time a, if we have a way to reach u with arrival time a and cost c, and there exists another way to reach u with arrival time a' and cost c' where a' >= a and c' <= c, then the second way is better for any future steps. Because any bus departing at t >= a' will have t - a' <= t - a. So, if we have a state (u, a') with lower cost than (u, a) and a' >= a, then (u, a') is better.
+
+So, perhaps we can model this with a way to track the minimal cost for each node and arrival time. However, since arrival times can be arbitrary, this is challenging.
+
+Alternatively, for each node u, we can track the earliest arrival time for each possible cost. Or, for each node u, keep track of the minimal arrival time for a given cost. Hmm, not sure.
+
+Alternatively, we can use Dijkstra's algorithm where the state is (u, arrival_time), and the priority is the accumulated cost. For each such state, when we process it, we consider all outgoing buses from u that depart at time >= arrival_time. For each such bus, compute the new cost (current cost + (t - arrival_time)), and the new arrival time (t + c). Then, add the new state (v, new_arrival_time) with new_cost to the priority queue.
+
+But to avoid processing the same state multiple times, we can keep a dictionary for each node u that records the minimal cost for each possible arrival_time. However, since arrival_time can be up to very large values, this is impractical.
+
+So perhaps, for each node u, we track the best (minimal cost) that can reach u with a certain arrival time. If a new state (u, arrival_time) has a cost higher than a previously recorded cost for the same arrival_time, we can ignore it. But how?
+
+Wait, the problem is that arrival_time can be the same but with different costs. Wait, no. If arrival_time is the same, then the cost should be the same. Because, the arrival_time is determined by the path taken. Hmm, no. Let's think: suppose two different paths reach u at the same time a, but with different accumulated costs. Then, the one with lower cost is better, and the higher cost can be discarded.
+
+So, for each node u, we can keep a dictionary that maps arrival_time to the minimal cost to reach u at that time. Whenever we process a state (u, a) with cost c, if there's already an entry in the dictionary for u with a arrival_time <= a and cost <= c, then we can skip processing this state. Because any future bus that departs at t >= a can be taken with a higher or equal waiting time compared to a previous arrival time that's earlier.
+
+Wait, maybe not. For example, if arrival_time a1 has cost c1, and a2 (a2 > a1) has cost c2 < c1. Then, even though a2 is later, if the cost is lower, it's better. So, perhaps we need to track for each node u, the minimal cost for any possible arrival time. But that's not feasible.
+
+Alternatively, for each node u, we can track the best (minimal) cost for arrival times up to some value. If we process states in order of increasing cost, then once we reach a state where u is G, we can return that cost immediately. Because Dijkstra's algorithm ensures that the first time we reach a node with minimal cost, it's the minimal possible.
+
+Wait, that's the key. Since the priority queue is ordered by the accumulated cost (the total wet time), the first time we reach G (any arrival time), that's the minimal possible total wet time. Because any other path to G would have a higher or equal cost, and thus would be processed later.
+
+So the algorithm would be:
+
+- Use a priority queue (min-heap) where each element is (total_wet_time, current_stop, arrival_time).
+
+- The initial state is (0, S, 0). Because at time 0, we are at S, and haven't gotten wet yet (but the first step is to wait until the departure time of the first bus).
+
+- For each state, we process it by looking at all buses departing from current_stop where departure_time >= arrival_time. For each such bus, compute the new_wet_time = total_wet_time + (t - arrival_time). The arrival_time at v is t + c. Then, push (new_wet_time, v, t + c) into the priority queue.
+
+- We also need to consider that once we arrive at G, that's the end. So whenever we extract a state where current_stop is G, we return the total_wet_time as the answer.
+
+- To prevent processing the same state multiple times, we can keep a dictionary for each node that tracks the minimal total_wet_time for each arrival_time. However, since arrival_time can be large, this might not be feasible. But in practice, for Dijkstra's algorithm, even if we process a state multiple times, the first time we reach a node with a certain arrival_time is with the minimal cost. So, if a node (u, a) is popped from the priority queue, and we have already processed a state for u with arrival_time a and a cost less than the current one, we can skip processing it.
+
+Wait, but how to track this? For each node u, we can maintain a dictionary that maps arrival_time to the minimal total_wet_time. So, when we generate a new state (new_wet_time, v, new_arrival_time), we check if in v's dictionary, there's an existing entry for new_arrival_time with a cost <= new_wet_time. If yes, skip adding to the queue. Otherwise, add to the queue and update the dictionary.
+
+This way, we avoid processing redundant states. However, for large arrival times, the dictionaries could take up a lot of memory. But given that M is up to, say, 1e5, and each state can generate multiple entries, but in practice, for the purposes of programming competition, perhaps this approach is manageable.
+
+Alternatively, in practice, the number of unique arrival times per node may not be that high, especially since each bus's departure time and travel time can be up to a certain limit.
+
+So, steps to implement:
+
+1. Read input: N, M, S, G. Then read M edges, each as u, v, t, c.
+
+2. For each bus stop u, collect all outgoing edges (u's routes). So, we can build an adjacency list where for each u, we have a list of (v, t, c).
+
+3. Initialize a priority queue (heap) with (0, S, 0). The priority is the first element (total_wet_time).
+
+4. Create a dictionary for each node u, which maps arrival_time to the minimal total_wet_time. Initially, for S, arrival_time 0 has total_wet_time 0.
+
+5. While the priority queue is not empty:
+
+   a. Extract the state with the minimal total_wet_time: (current_cost, current_stop, arrival_time).
+
+   b. If current_stop is G, return current_cost.
+
+   c. For each outgoing edge from current_stop (u = current_stop, so edges u->v with departure time t and c):
+
+      i. If t >= arrival_time:
+
+         - Compute waiting_time = t - arrival_time.
+
+         - new_cost = current_cost + waiting_time.
+
+         - new_arrival_time = t + c.
+
+         - Check if v is the destination G. If yes, then new_cost is a candidate for the answer.
+
+         - Check if in the dictionary for node v, there's an entry for new_arrival_time with a cost <= new_cost. If so, skip.
+
+         - Otherwise, add (new_cost, v, new_arrival_time) to the priority queue and update the dictionary for v.
+
+6. If the queue is exhausted and G is not reached (but according to the problem statement, it's guaranteed that there's a path?), but perhaps in some cases, no path exists. But according to the problem statement, it's possible that S = G, in which case the answer is 0.
+
+Wait, the problem says that he wants to go from S to G. So if S == G, then the answer is 0. Because he arrives at G at time 0, so no waiting.
+
+So, need to handle the case where S == G.
+
+So, in code:
+
+First, check if S == G. If yes, output 0 and exit.
+
+Otherwise, proceed with the algorithm.
+
+Now, the code structure:
+
+We can model the adjacency list as a list of lists. For each u in 1..N, adj[u] contains all the edges (v, t, c) departing from u.
+
+Then, for the Dijkstra's part:
+
+Use a priority queue, implemented as a heap. Each element is (current_cost, current_stop, arrival_time).
+
+The dictionaries for each node can be a defaultdict(dict), perhaps, where for each node u, arrival_time is stored as a key, and the value is the minimal cost to reach u at that time.
+
+Wait, but for each node u, we can have a dictionary (like a Python dict) that maps arrival_time to the minimal cost. When processing a new state (cost, u, a), if u's dict already has an arrival_time a' <= a with cost' <= cost, then this new state is worse and can be skipped. Otherwise, we add the arrival_time a to the dict with the cost and proceed.
+
+But how to check that efficiently?
+
+Alternatively, for each node u, whenever we process a state (cost, a), we can check all existing entries in the dict for u. If there's an entry with arrival_time <= a and cost <= current cost, then this state is not useful. But this is O(1) per check if we can find the latest arrival_time that is <= a and has a cost <= current cost. Hmm, but this is not straightforward.
+
+Alternatively, when considering adding a new state (cost, u, a), we check the dict for u. If there's an existing arrival_time a' where a' <= a and the cost for a' is <= cost, then we can skip adding this new state.
+
+But how to check this efficiently?
+
+Perhaps, for each node u, we can maintain a list of (a', cost') sorted by a'. Then, for a new a, we can find the largest a' <= a using binary search, and check if the corresponding cost' is <= current cost. If yes, then skip.
+
+But maintaining a sorted list for each node and performing binary search each time might be feasible, but could be time-consuming if the number of entries is large.
+
+Alternatively, for each node u, we can track the minimal cost for any arrival time up to a certain point. For example, if for arrival time a1, the cost is c1, and for a2 (a2 > a1), the cost is c2 < c1. Then, even though a2 is later, the cost is lower, so any future bus that departs at t >= a1 would have a higher waiting time (t - a1) compared to (t - a2) if t >= a2. So, the state with a2 is better.
+
+So, for node u, if we have arrival times a1 < a2 < ... < ak, and corresponding costs c1, c2, ..., ck, then we can keep these in a way that for any a in the list, the cost is strictly less than all earlier arrival times. Wait, no. For example, a1: c1=10, a2: c2=5 (a2 > a1). Then, even though a2 is later, it's better. So, for any arrival time a >= a2, the a2 state is better. For a arrival time between a1 and a2, if we have a new arrival time a3 with cost c3=8, then a3 is between a1 and a2. Then, for a bus departing at t in [a3, a2), the cost would be c3 + (t - a3), which may be worse than c2 + (t - a2) if t is close to a2. So it's not clear.
+
+Alternatively, perhaps the best way is to proceed with the priority queue and track for each (u, a) the minimal cost. Each time a state is popped from the queue, if the cost is higher than the recorded minimal cost for (u, a), then skip processing it. Otherwise, process all outgoing edges.
+
+This is the standard Dijkstra's approach. So, for each node u, we can have a dictionary that maps arrival_time to the minimal cost. When we generate a new state (new_cost, v, new_a), we check if v's dict has new_a with a cost <= new_cost. If yes, skip. Otherwise, add to the dict and push to the heap.
+
+This way, even if multiple states for the same (v, new_a) exist in the heap, the one with the lowest cost is processed first. Once it's processed, any subsequent states with higher cost can be ignored.
+
+So, the code steps would be:
+
+For each node u:
+
+   arrival_dict[u] = {}  # maps arrival_time to minimal cost.
+
+Initially, arrival_dict[S][0] = 0.
+
+Heap starts with (0, S, 0).
+
+While heap not empty:
+
+   current_cost, current_u, current_a = heappop(heap)
+
+   if current_u == G:
+       print(current_cost)
+       exit()
+
+   # Check if this state is outdated
+   if arrival_dict[current_u].get(current_a, inf) < current_cost:
+       continue
+
+   for each edge in adj[current_u]:
+       v, t, c = edge
+       if t < current_a:
+           continue  # can't catch this bus
+       waiting_time = t - current_a
+       new_cost = current_cost + waiting_time
+       new_a = t + c
+
+       # Check if v is already in arrival_dict and new_a is present with lower or equal cost
+       if new_a in arrival_dict.get(v, {}):
+           if arrival_dict[v][new_a] <= new_cost:
+               continue
+       # Also, check if there's any arrival time a' <= new_a in v's arrival_dict with cost <= new_cost
+       # Wait, no. Because even if there's a previous a' <= new_a with cost <= new_cost, this new state may have a different arrival time. But since we're trying to reach G, any path that arrives at G with minimal cost is acceptable.
+
+       # So, regardless of other arrival times, if this new_a has a cost that's better than any existing arrival time for v, then we need to consider it.
+
+       # But how to check if this new_cost is better than existing entries for v.
+
+       # For example, if arrival_dict[v] has an entry with arrival_time a' < new_a and cost <= new_cost, then this new state is worse. Because any future bus departing from v would require t >= a', leading to waiting_time t - a' >= t - new_a (if new_a > a'). But the cost for a' is lower, so the sum would be better.
+
+       # So, if there's any arrival time a' in v's arrival_dict where a' <= new_a and cost <= new_cost, then this new state is redundant.
+
+       # To check this, we can look for the maximum a' in v's arrival_dict where a' <= new_a, and see if its cost is <= new_cost.
+
+       # How to efficiently check this? For each v's arrival_dict, we can maintain a sorted list of a's. Then perform a binary search to find the largest a' <= new_a. If such a' exists, and its cost is <= new_cost, then skip adding this state.
+
+       # But maintaining a sorted list for each node's arrival times can be time-consuming.
+
+       # Alternative approach: when adding a new state (v, new_a, new_cost), check if there exists any a' in arrival_dict[v] where a' <= new_a and arrival_dict[v][a'] <= new_cost. If such a' exists, skip adding.
+
+       # However, this is expensive unless we have a way to quickly find the maximum a' <= new_a.
+
+       # Maybe using a bisect module in Python.
+
+       # So, for each node v, we keep a sorted list of arrival times, and their corresponding costs.
+
+       # So, for node v:
+
+       # sorted_arrivals = sorted list of arrival times.
+
+       # When checking for new_a and new_cost, perform a bisect right to find the insertion point. The index before that is the largest a' <= new_a.
+
+       # If such a' exists, and arrival_dict[v][a'] <= new_cost, then skip.
+
+       # Otherwise, proceed to add.
+
+       # This adds some overhead, but perhaps manageable.
+
+But implementing this would require for each node v, maintaining a sorted list of arrival times and their costs. However, this could be time-consuming, especially for large M.
+
+Alternatively, perhaps in practice, even without checking, the code will work, but will be slower. Because the priority queue will process the states in order of increasing cost, so when the first state (v, new_a) is processed, any later states for the same (v, new_a) with higher cost can be ignored.
+
+So, perhaps the code can proceed as:
+
+When considering adding (new_cost, v, new_a):
+
+   if v's arrival_dict doesn't have new_a, or the existing cost is higher than new_cost:
+
+       add to arrival_dict[v] new_a with new_cost
+
+       push to heap.
+
+But this may not account for previous arrival times in v that are <= new_a and have a lower cost. For example, suppose for v, there's an arrival time a' < new_a with cost c' < new_cost. Then, even though new_a is later, the new_cost is higher. So, this new state is worse and can be skipped.
+
+But how to check that?
+
+If there's a state (a', c') where a' <= new_a and c' <= new_cost, then the new state is worse. Because any future buses departing from v would have t >= a', and waiting_time t - a' >= t - new_a (since a' <= new_a). So, the accumulated cost for the new state (new_cost + t - new_a) is (c' + (t - a')) + (new_cost - c' + (t - new_a) - (t - a')) )?
+
+Wait, maybe not. Let's see:
+
+Suppose for v, there are two arrival times: a' and new_a (a' < new_a). Their costs are c' and new_cost, where c' <= new_cost.
+
+If we take a bus departing at time t >= new_a, then for the a' arrival time, the waiting time is t - a', and the cost would be c' + (t - a').
+
+For the new arrival time new_a, the waiting time is t - new_a, and the cost is new_cost + (t - new_a).
+
+The difference between these two is:
+
+(c' + (t - a')) vs (new_cost + (t - new_a)).
+
+Which is equal to (c' - a') + t vs (new_cost - new_a) + t.
+
+So the difference is (c' - a') - (new_cost - new_a) = (c' + new_a) - (a' + new_cost).
+
+If c' <= new_cost, then c' + new_a could be larger or smaller than a' + new_cost depending on the values of a' and new_a.
+
+So, it's possible that even if c' <= new_cost, the new state (new_a, new_cost) may provide a better or worse cost when combined with future steps.
+
+Therefore, it's not possible to determine in advance whether the new state is redundant based on existing states with a' <= new_a and c' <= new_cost.
+
+Thus, we cannot skip adding the new state to the priority queue in this case. Only if there's an existing state with arrival_time == new_a and cost <= new_cost, or a state with arrival_time >= new_a and cost <= new_cost can we skip.
+
+But arrival_time >= new_a and cost <= new_cost would dominate the new state. So, for example, if there's a state (v, a'') where a'' >= new_a and cost'' <= new_cost, then the new state (new_a, new_cost) can be skipped. Because for any future bus departing at t >= a'', the waiting time is t - a'' which is <= t - new_a (since a'' >= new_a). And since cost'' <= new_cost, adding (t - a'') to cost'' would be better than adding (t - new_a) to new_cost.
+
+So, in that case, the new state is redundant.
+
+But how to check if such a state exists?
+
+This seems complicated. Perhaps, given the time constraints for programming competition, the intended solution is to model this using a Dijkstra-like approach where the priority queue is ordered by the cost (total wet time), and for each state (u, a), track the minimal cost to reach u at time a. If a state is popped from the queue with a cost higher than the recorded minimal, it is skipped. Otherwise, process it.
+
+In this approach, even if there are other arrival times for u that are earlier or later, the priority queue ensures that the first time a state (u, a) is processed with the minimal cost for that (u, a) is considered, and any subsequent entries for (u, a) with higher cost are skipped.
+
+Thus, the code can proceed as follows:
+
+We use a priority queue sorted by current_cost. For each state (current_cost, u, a), we process it only if it's the first time we encounter (u, a) with that cost, or if the current_cost is the minimal for that (u, a).
+
+For each node u, we maintain a dictionary arrival_dict[u] that maps arrival_time a to the minimal cost known so far to reach u at a. When we generate a new state (v, new_a) with new_cost, we check if arrival_dict[v] contains new_a. If it does and the existing cost is <= new_cost, we skip adding this state. Otherwise, we add it to arrival_dict[v] and push it into the queue.
+
+This way, the priority queue processes states in order of increasing cost. When the first state (G, any a) is popped from the queue, it must be the minimal possible cost.
+
+So, in code:
+
+import heapq
+
+N, M, S, G = map(int, input().split())
+
+if S == G:
+    print(0)
+    exit()
+
+adj = [[] for _ in range(N+1)]  # nodes 1..N
+for _ in range(M):
+    u, v, t, c = map(int, input().split())
+    adj[u].append( (v, t, c) )
+
+# Dijkstra's setup
+heap = []
+heapq.heappush(heap, (0, S, 0))
+arrival_dict = [{} for _ in range(N+1)]  # arrival_dict[u] is a dict of {a: cost}
+arrival_dict[S][0] = 0
+
+found = False
+while heap:
+    current_cost, u, a = heapq.heappop(heap)
+    
+    if u == G:
+        print(current_cost)
+        found = True
+        break
+    
+    # Check if this state is outdated
+    if a not in arrival_dict[u] or arrival_dict[u][a] < current_cost:
+        continue
+    
+    # Process all edges from u
+    for edge in adj[u]:
+        v, t_edge, c_edge = edge
+        if t_edge < a:
+            continue  # can't catch this bus
+        
+        # compute new_cost and new_a
+        waiting_time = t_edge - a
+        new_cost = current_cost + waiting_time
+        new_a = t_edge + c_edge
+        
+        # Check if this new state is better than existing ones for v
+        if new_a in arrival_dict[v]:
+            if arrival_dict[v][new_a] <= new_cost:
+                continue
+        # Also check if there's any a_prev in arrival_dict[v] where a_prev <= new_a and arrival_dict[v][a_prev] <= new_cost
+        # But how to do this efficiently?
+        # For the purposes of this problem, perhaps skip this check and proceed. However, this may result in more states being pushed than necessary.
+        # But given that the priority queue processes the minimal cost first, the first time we reach v with new_a and new_cost, if it's the minimal, it will be processed first.
+        # So, even if there's a better a_prev <= new_a, but the new_cost is higher, but the arrival_dict will have a_prev's cost, so when the new state is processed, it will be skipped.
+
+        # So, in the arrival_dict[v], store the minimal cost for each a.
+
+        # So, proceed to add to the heap only if new_cost is better than existing for new_a.
+        if new_a not in arrival_dict[v] or new_cost < arrival_dict[v].get(new_a, float('inf')):
+            arrival_dict[v][new_a] = new_cost
+            heapq.heappush(heap, (new_cost, v, new_a))
+
+if not found:
+    # According to problem statement, there is always a path?
+    # But if not, but the problem may not guarantee it. However, given the sample input, it's better to assume that there is a path.
+    # But code should handle it. But since S and G are given, and if S == G is handled initially, but for S != G, perhaps the code can output something. But according to the problem statement, it's possible to reach G.
+
+    # So, in practice, if the queue is exhausted and G is not found, perhaps there is no path. But according to the problem statement, the input may have no route, but the code should output something. However, the problem says that you can choose the route, but perhaps the code can output 0 if S == G. But the initial check handles that.
+
+    # So, in the code, the 'found' variable is set to True when G is found. So, if not found, what to do? But according to the problem statement, it's possible that no routes exist. But the code must output something.
+
+    # But in the problem statement's input, S and G are given, and the routes are directed. So it's possible that there is no path. So the code may need to handle that. But how?
+
+    # However, the problem says, "through the route that minimizes the time of getting wet". So it's assumed that there is at least one path.
+
+    # So, perhaps the code can assume that there is always a path. But in code, if the heap is exhausted, we may need to output something. But in practice, this shouldn't happen.
+
+print(0)  # but this is not correct. Wait, no. The code breaks out of the loop when found is True. If not found, the code proceeds here, but this is an error. So perhaps we should raise an error, but the problem likely ensures that there is a path.
+
+But according to the sample input, when S=1 and G=2, there are two routes, so the code would find the answer.
+
+So, the code should work.
+
+Let's test the sample input.
+
+Sample Input:
+
+2 2 1 2
+1 2 10 100
+1 2 5 500
+
+The code starts with S=1, a=0, cost=0.
+
+The adj[1] has two edges: (2,10,100), (2,5,500).
+
+Processing the initial state (0, 1, 0):
+
+For the first edge (2,10,100):
+
+t_edge=10 >= a=0.
+
+waiting_time=10-0=10. new_cost=0+10=10. new_a=10+100=110.
+
+Check if arrival_dict[2] has 110: no. So add to arrival_dict[2][110] = 10. Push (10, 2, 110) into the heap.
+
+For the second edge (2,5,500):
+
+t_edge=5 >=0. waiting_time=5-0=5. new_cost=0+5=5. new_a=5+500=505.
+
+Check arrival_dict[2][505] not present. Add. Push (5,2,505).
+
+Heap now has (5, 2, 505) and (10, 2, 110).
+
+The next state popped from the heap is (5,2,505). Since u=G (2), we print 5 and exit. Which matches the sample output.
+
+So, the code works for the sample.
+
+Another test case: S=G. Input:
+
+3 0 2 2
+
+Then, output is 0.
+
+Another case: S != G but no routes. But according to the problem statement, there's a path. So perhaps the code will not handle this, but the problem likely ensures that there's a path.
+
+Now, code implementation.
+
+Edge Cases:
+
+- S == G: Output 0.
+
+- Only one route from S to G.
+
+- Multiple routes, some with longer waiting times but shorter travel times.
+
+So, the code should handle all cases.
+
+Now, in Python, the code would be:
+
+But we need to handle the initial check for S == G.
+
+Implementing this:
+
+Read N, M, S, G.
+
+If S == G, print 0.
+
+Else, build the adjacency list.
+
+Then, proceed with Dijkstra's algorithm as described.
+
+Now, the code:
+
+import heapq
+
+n, m, s, g = map(int, input().split())
+
+if s == g:
+    print(0)
+    exit()
+
+adj = [[] for _ in range(n + 1)]
+for _ in range(m):
+    u, v, t, c = map(int, input().split())
+    adj[u].append( (v, t, c) )
+
+# Dijkstra's
+heap = []
+heapq.heappush(heap, (0, s, 0))
+arrival = [{} for _ in range(n+1)]  # arrival[u][a] = minimal cost
+arrival[s][0] = 0
+
+found = False
+while heap:
+    cost, u, a = heapq.heappop(heap)
+    if u == g:
+        print(cost)
+        found = True
+        break
+    if a not in arrival[u] or arrival[u][a] < cost:
+        continue
+    # Process edges
+    for edge in adj[u]:
+        v, t, c = edge
+        if t < a:
+            continue
+        new_cost = cost + (t - a)
+        new_a = t + c
+        # Check if this new state is better than existing for v
+        # First, check if new_a is already present and better
+        if new_a in arrival[v]:
+            if arrival[v][new_a] <= new_cost:
+                continue
+        # Else, check if there's an a_prev <= new_a in arrival[v] with cost_prev <= new_cost
+        # To do this, find the maximum a_prev <= new_a in arrival[v]
+        # This step is skipped due to time constraints, but the code may not be correct without it.
+        # However, without this check, the code may add redundant states but still work.
+        # Proceed to add
+        if new_a not in arrival[v] or new_cost < arrival[v].get(new_a, float('inf')):
+            arrival[v][new_a] = new_cost
+            heapq.heappush(heap, (new_cost, v, new_a))
+
+if not found:
+    # Should not happen according to problem statement
+    pass
+
+But what if there is a state for v with a_prev <= new_a and cost_prev <= new_cost? Then adding this new state is redundant and may be processed later, but since the priority queue is ordered by cost, the minimal cost will be processed first.
+
+However, the code may not handle this correctly. For example:
+
+Suppose u has two edges:
+
+u -> v, t=5, c=1 (arrival at v at 6, cost 5 (waiting time 5-0=5).
+
+u -> v, t=10, c=1 (arrival at v at 11, cost 10 (waiting time 10-0=10).
+
+But perhaps there's another path to u with a later arrival time but lower cost. For example, if there's a path to u with arrival_time=3 and cost=0, then taking the first bus from u would have cost 0 + (5-3) =2. This would be better than the initial state.
+
+But in this case, the code would have already processed the state (0, u, 3), then for the edge t=5, new_cost=2, which is better than the initial state. So the code would push (2, v, 6), which is better than the initial (5, v, 6).
+
+Thus, the code would process the minimal cost states first.
+
+But the code may generate redundant states, but the priority queue ensures that the minimal cost is processed first.
+
+So, the code is correct.
+
+Therefore, the code should work for all test cases.
+</think>
+To solve this problem, we need to determine the minimum amount of time AOR Ika gets wet while traveling from bus stop S to bus stop G using available bus routes. The goal is to minimize the time spent waiting for buses, as waiting time is when AOR Ika gets wet.
+
+### Approach
+1. **Problem Analysis**: The problem can be modeled as a shortest path problem where the edge weights represent the waiting time before catching a bus. Each bus route is a directed edge with a specific departure time and travel time. The key is to find the path from S to G that minimizes the total waiting time.
+
+2. **Graph Representation**: Represent the bus stops and routes using an adjacency list. Each entry in the list contains the destination bus stop, departure time, and travel time for each route.
+
+3. **Dijkstra's Algorithm**: Use a modified Dijkstra's algorithm to find the shortest path in terms of waiting time. The priority queue (min-heap) will store tuples of (total waiting time, current bus stop, arrival time at current stop). This helps in exploring the shortest waiting time paths first.
+
+4. **Tracking Arrival Times**: Maintain a dictionary for each bus stop to track the minimum waiting time required to reach that stop at each possible arrival time. This helps in avoiding redundant processing of states with higher waiting times.
+
+### Solution Code
+```python
+import heapq
+
+def main():
+    import sys
+    input = sys.stdin.read().split()
+    idx = 0
+    n = int(input[idx]); idx +=1
+    m = int(input[idx]); idx +=1
+    s = int(input[idx]); idx +=1
+    g = int(input[idx]); idx +=1
+
+    if s == g:
+        print(0)
+        return
+
+    adj = [[] for _ in range(n+1)]  # 1-based indexing
+    for _ in range(m):
+        u = int(input[idx]); idx +=1
+        v = int(input[idx]); idx +=1
+        t = int(input[idx]); idx +=1
+        c = int(input[idx]); idx +=1
+        adj[u].append( (v, t, c) )
+
+    # Dijkstra's setup
+    heap = []
+    heapq.heappush(heap, (0, s, 0))
+    arrival = [{} for _ in range(n+1)]  # arrival[u] maps arrival time to min cost
+    arrival[s][0] = 0
+
+    found = False
+    while heap:
+        cost, u, a = heapq.heappop(heap)
+        if u == g:
+            print(cost)
+            found = True
+            break
+        # Skip if this state is outdated
+        if a not in arrival[u] or arrival[u][a] < cost:
+            continue
+        # Explore all edges from u
+        for edge in adj[u]:
+            v, t_depart, c_travel = edge
+            if t_depart < a:
+                continue  # Can't catch this bus
+            new_cost = cost + (t_depart - a)
+            new_a = t_depart + c_travel
+            # Check if this new state is better than existing ones for v
+            if new_a in arrival[v]:
+                if arrival[v][new_a] <= new_cost:
+                    continue
+            # Check if there's any a_prev in arrival[v] <= new_a with cost <= new_cost
+            # This part is omitted for efficiency, relying on Dijkstra's property
+            if new_a not in arrival[v] or new_cost < arrival[v].get(new_a, float('inf')):
+                arrival[v][new_a] = new_cost
+                heapq.heappush(heap, (new_cost, v, new_a))
+    if not found:
+        print(0)  # According to problem constraints, this case shouldn't occur
+
+if __name__ == '__main__':
+    main()
+```
+
+### Explanation
+1. **Initialization**: Read the input values and check if the start and end bus stops are the same. If they are, the answer is immediately 0.
+
+2. **Adjacency List**: Construct an adjacency list to represent the directed bus routes with their respective departure and travel times.
+
+3. **Priority Queue**: Use a priority queue to explore paths starting from the initial bus stop S. Each entry in the queue is a tuple containing the total waiting time, current bus stop, and arrival time at that stop.
+
+4. **Processing States**: For each state processed, check all outgoing bus routes. Calculate the new waiting time and arrival time if the bus is caught. Update the priority queue and arrival times dictionary only if the new state offers a shorter waiting time.
+
+This approach efficiently finds the minimum waiting time path using Dijkstra's algorithm, ensuring optimal performance and correctness.
+</bot>

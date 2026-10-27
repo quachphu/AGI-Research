@@ -1,0 +1,587 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.There is a square grid of size n × n. Some cells are colored in black, all others are colored in white. In one operation you can select some rectangle and color all its cells in white. It costs max(h, w) to color a rectangle of size h × w. You are to make all cells white for minimum total cost.
+
+Input
+
+The first line contains a single integer n (1 ≤ n ≤ 50) — the size of the square grid.
+
+Each of the next n lines contains a string of length n, consisting of characters '.' and '#'. The j-th character of the i-th line is '#' if the cell with coordinates (i, j) is black, otherwise it is white.
+
+Output
+
+Print a single integer — the minimum total cost to paint all cells in white.
+
+Examples
+
+Input
+
+
+3
+###
+#.#
+###
+
+
+Output
+
+
+3
+
+
+Input
+
+
+3
+...
+...
+...
+
+
+Output
+
+
+0
+
+
+Input
+
+
+4
+#...
+....
+....
+#...
+
+
+Output
+
+
+2
+
+
+Input
+
+
+5
+#...#
+.#.#.
+.....
+.#...
+#....
+
+
+Output
+
+
+5
+
+Note
+
+The examples and some of optimal solutions are shown on the pictures below.
+
+<image>
+</user>
+<bot>
+<think>
+Okay, let's try to figure out this problem. The task is to find the minimum total cost to paint all the black cells white using rectangle operations, where each rectangle operation's cost is the maximum of its height and width. Hmm, right.
+
+So first, the problem is about covering all the '#' cells with possibly overlapping rectangles, but the sum of the costs (max(h,w) for each rectangle) should be minimized. The challenge is to determine the optimal set of rectangles to cover all black cells with the least cost.
+
+Let me think about the approach. Dynamic programming comes to mind because the grid can be divided into regions, and we can compute the minimal cost for subregions. But how to model the subproblems?
+
+Maybe we can model the problem using dynamic programming where the state represents a rectangular area of the grid. For each such rectangle, we need to compute the minimal cost to cover all the black cells within it. Then, the answer would be the DP value for the entire grid.
+
+So, the state would be the rectangle from (i1, j1) to (i2, j2), and DP[i1][j1][i2][j2] represents the minimal cost to cover all black cells in that rectangle. Then, the transitions would involve considering splitting the rectangle into two parts, either horizontally or vertically, and combining their costs. Alternatively, we can cover the entire rectangle with a single rectangle, whose cost is max(h, w), where h is the height (i2 - i1 + 1) and w is the width (j2 - j1 + 1). We need to choose the minimum between these options.
+
+Wait, but how do we know if there are any black cells in the current rectangle? Because if there are none, then the cost is 0. So for each rectangle, first check if there are any '#' in it. If not, DP is 0. Otherwise, try to split it into two parts (either horizontally or vertically) and take the sum of their DP values. Compare that to the cost of covering the entire rectangle with one operation. The minimal of these options would be the DP value for that rectangle.
+
+Yes, that makes sense. So the steps are:
+
+1. Precompute for every possible rectangle (i1, j1, i2, j2) whether it contains any black cells. This can be done using a prefix sum matrix of the grid, so that we can quickly check if a rectangle has any '#' in O(1) time.
+
+2. Use dynamic programming with memoization to compute the minimal cost for each rectangle. The base case is when the rectangle is empty (no black cells), cost is 0. Otherwise, the DP value is the minimum between:
+   a) The cost of covering the entire rectangle with one rectangle (cost is max(h, w)), and
+   b) The minimal sum from splitting the rectangle into two parts (either split vertically or horizontally), considering all possible splits.
+
+But splitting into two parts for all possible splits can be computationally heavy. How do we handle that?
+
+For a given rectangle, to split it into two parts, we can iterate over all possible vertical splits (split the columns into left and right) and horizontal splits (split the rows into top and bottom). For each split position, compute the sum of the DP values of the two resulting subrectangles, and take the minimum over all possible splits.
+
+So for each rectangle (i1, j1, i2, j2), if it has black cells:
+
+min_cost = min( max(i2-i1+1, j2-j1+1), min( split vertically at k: DP(i1,j1,i2,k) + DP(i1,k+1,i2,j2) for all k between j1 and j2-1 ), min( split horizontally at k: DP(i1,j1,k,j2) + DP(k+1,j1,i2,j2) for all k between i1 and i2-1 ) ) )
+
+But this seems like a lot of possibilities. Considering that n can be up to 50, the total number of rectangles is O(n^4) (each i1, i2, j1, j2). For each rectangle, splitting involves O(n) possibilities for vertical and O(n) for horizontal. So the total time complexity would be O(n^5), which for n=50 is 50^5 = 312,500,000 operations. Hmm, that's manageable? Well, 3e8 operations might be tight for Python, but maybe with memoization and some optimizations it can work.
+
+Alternatively, maybe we can precompute the prefix sums to check if a rectangle has any black cells quickly.
+
+So first, let's create a 2D prefix sum array. Let's say grid is 1 for '#' and 0 for '.'.
+
+Then, the prefix sum array sum_2d[i][j] represents the sum of the grid from (0,0) to (i-1, j-1). Then, the number of '#' in the rectangle (i1, j1) to (i2, j2) (inclusive) can be computed as sum_2d[i2+1][j2+1] - sum_2d[i1][j2+1] - sum_2d[i2+1][j1] + sum_2d[i1][j1]. If this is greater than 0, then the rectangle contains at least one '#'.
+
+So that's how we can check if a rectangle is empty.
+
+Now, the DP steps.
+
+We can memoize the DP function. Since Python allows memoization via lru_cache, but for mutable structures like grids it's hard, but since we are working with coordinates, perhaps we can represent the state as i1, j1, i2, j2. But even with n=50, the number of possible states is 50 * 50 * 50 * 50 = 6,250,000. That's manageable. Each state would require O(n) time for splits.
+
+Wait, but even 6 million states with O(n) operations each would be 312 million operations. Hmm. Python might handle that, but perhaps with some optimizations.
+
+Alternatively, we can precompute all possible splits and memoize the DP.
+
+But how to structure this in code.
+
+Let's outline the steps:
+
+1. Read the grid and convert it into a 2D array of 0s and 1s.
+
+2. Compute the prefix sum matrix.
+
+3. For each rectangle (i1, j1, i2, j2), check if it has any black cells. If not, cost is 0.
+
+4. Otherwise, compute the minimal cost as the minimum between:
+
+   a. The cost of covering the entire rectangle with one operation, which is max(h, w) where h = (i2 - i1 + 1), w = (j2 - j1 + 1).
+
+   b. The minimal sum from splitting the rectangle into two parts vertically (all possible splits between j1 and j2-1), sum the DP of left and right.
+
+   c. The minimal sum from splitting the rectangle into two parts horizontally (all possible splits between i1 and i2-1), sum the DP of top and bottom.
+
+   Then take the minimal between a, the minimal of b and c.
+
+So the DP function is recursive, but with memoization.
+
+Now, in Python, implementing this with memoization using functools.lru_cache could be feasible, but we need to pass the i1, j1, i2, j2 as parameters. However, for n=50, the maximum i1 and i2 can be up to 49 (assuming 0-based indices), so the parameters can be represented as integers.
+
+But first, let's confirm the indices. Let's assume the grid is 0-based. So for a grid of size n x n, the rows and columns go from 0 to n-1.
+
+So for the rectangle from (i1, j1) to (i2, j2), where i1 <= i2 and j1 <= j2.
+
+The DP function would compute the minimal cost for that rectangle.
+
+So the code structure would be:
+
+- Precompute the prefix sum.
+
+- Implement a helper function to check if a rectangle has any '#'.
+
+- Implement the DP with memoization.
+
+Let's think about memoization. Using memoization via a decorator would require that the parameters are hashable. So, the DP function would take i1, j1, i2, j2 as parameters.
+
+But in Python, recursion with memoization for this might be too slow. Because for each state, even if it's computed once, the splits would take O(n) time.
+
+Alternatively, we can use memoization with a 4-dimensional array, and compute the DP in a bottom-up manner. But for 4D arrays, even with n=50, it's 50^4 = 6,250,000 elements. For each element, we can compute the value based on smaller subproblems.
+
+But bottom-up might be more efficient than top-down recursion with memoization. However, the order in which we compute the subproblems is important. We need to process smaller rectangles first.
+
+The dimensions of the rectangles can be ordered by their size. For example, for a rectangle of height h and width w, process them in order of increasing h and w. Or process all possible (i1, j1, i2, j2) where the size of the rectangle is such that all smaller rectangles have already been computed.
+
+But for the DP, each rectangle can be split into two smaller rectangles. So when computing the DP for a rectangle, all possible split points would have their sub-rectangles already computed (since their sizes are smaller). So bottom-up approach is feasible.
+
+But how to loop through all possible rectangles in the correct order. Hmm. For example, for a rectangle of size h x w, the possible splits are either vertical (creating two subrectangles of width w1 and w2, sum of which is w) or horizontal (split into h1 and h2).
+
+But maybe we can iterate over all possible i1, j1, and then compute the rectangles in increasing order of i2 and j2. For example, for each i1 from 0 to n-1, then for each j1 from 0 to n-1, then for i2 from i1 to n-1, and j2 from j1 to n-1. Then, for each (i1, j1, i2, j2), compute the DP value based on the smaller sub-rectangles.
+
+But in this order, when we compute (i1, j1, i2, j2), all possible sub-rectangles within this rectangle would have been processed already. Because the sub-rectangles have i1' >= i1, j1' >= j1, and their i2' <= i2, j2' <= j2.
+
+Wait, not exactly. For example, if we split a rectangle into two parts vertically, the left part is (i1, j1, i2, k), and the right part is (i1, k+1, i2, j2). So when processing (i1, j1, i2, j2), the left part (i1, j1, i2, k) may not have been processed yet if j2 is large. Because for the same i1, j1, the left part's j2 is k, which is less than j2.
+
+But if we loop i2 from i1 to n-1, and j2 from j1 to n-1, then for the left part (j2 = k) which is <= current j2, but j1 is fixed. So perhaps the left part has been processed already.
+
+Alternatively, perhaps the order should be such that for all rectangles with i1, j1 fixed, we process them in increasing order of i2 and j2.
+
+Alternatively, perhaps the order can be:
+
+For all possible rectangle heights from 0 to n-1, and for all possible rectangle widths from 0 to n-1, and for all possible starting i1, j1, etc. But this is getting complicated.
+
+Alternatively, for each possible i1 from 0 to n-1, and j1 from 0 to n-1, then for each possible i2 >= i1, j2 >= j1, sorted by increasing (i2 - i1) and (j2 - j1). But I'm not sure.
+
+Alternatively, for a rectangle of size h x w (h = i2 - i1 + 1, w = j2 - j1 + 1), process rectangles in order of increasing h and then w. But even that might not capture all dependencies.
+
+Hmm. Maybe it's easier to implement the top-down approach with memoization, even though it might be slightly slower. Let's think about that.
+
+So in Python, using lru_cache with a memoization function. But for n=50, the maximum parameters would be i1=0, i2=49, j1=0, j2=49, etc. So 50 possibilities for each of the four parameters, leading to 50^4 = 6.25e6 possible states. Each state could have O(n) splits. But in practice, not all possible splits would be considered, because if a split leads to a subrectangle that is empty, then its DP is 0, so we can skip those splits.
+
+Wait, but how?
+
+The helper function can check if a rectangle is empty. So when splitting, for each possible split position, we first check if the left/top part is empty, in which case the cost is the DP of the right/bottom part, and vice versa. If both parts are non-empty, then we sum their DP values.
+
+But even so, for each rectangle, the code would need to check all possible splits (vertical and horizontal), compute the minimal sum, and compare with the cost of covering the entire rectangle.
+
+Now, let's think about how to implement this in code.
+
+First, read the grid, build the 2D array. Then compute the prefix sum. Then implement the DP function with memoization.
+
+The code outline:
+
+n = int(input())
+grid = []
+for _ in range(n):
+    line = input().strip()
+    grid.append( [1 if c == '#' else 0 for c in line] )
+
+Compute the prefix sum:
+
+prefix = [[0]*(n+1) for _ in range(n+1)]
+for i in range(n):
+    row_sum = 0
+    for j in range(n):
+        row_sum += grid[i][j]
+        prefix[i+1][j+1] = prefix[i][j+1] + row_sum
+
+def has_black(i1, j1, i2, j2):
+    # Check if there's any black cell in the rectangle (i1, j1) to (i2, j2)
+    # All are 0-based, inclusive.
+    sum_val = prefix[i2+1][j2+1] - prefix[i1][j2+1] - prefix[i2+1][j1] + prefix[i1][j1]
+    return sum_val > 0
+
+Then, the DP function. Let's use memoization.
+
+But in Python, for memoization with recursive functions, using lru_cache is convenient, but the parameters need to be integers. So the function will take i1, j1, i2, j2 as parameters.
+
+We can implement the DP as follows:
+
+from functools import lru_cache
+
+@lru_cache(maxsize=None)
+def dp(i1, j1, i2, j2):
+    if i1 > i2 or j1 > j2:
+        return 0  # empty rectangle
+    if not has_black(i1, j1, i2, j2):
+        return 0
+    # Compute cost of covering the entire rectangle
+    h = i2 - i1 + 1
+    w = j2 - j1 + 1
+    min_cost = max(h, w)
+    # Check vertical splits
+    for k in range(j1, j2):
+        # Split into left (j1..k) and right (k+1..j2)
+        cost = dp(i1, j1, i2, k) + dp(i1, k+1, i2, j2)
+        if cost < min_cost:
+            min_cost = cost
+    # Check horizontal splits
+    for k in range(i1, i2):
+        # Split into top (i1..k) and bottom (k+1..i2)
+        cost = dp(i1, j1, k, j2) + dp(k+1, j1, i2, j2)
+        if cost < min_cost:
+            min_cost = cost
+    return min_cost
+
+Then, the answer is dp(0, 0, n-1, n-1).
+
+But wait, in the code above, the has_black function is called for each (i1, j1, i2, j2) in the DP. But how is the has_black function implemented? Because the prefix array is precomputed, and for each call, it's O(1) time. So that's manageable.
+
+But let's see. For each DP call, first we check if the rectangle has any black cells. If not, return 0. Otherwise, proceed to compute the min cost.
+
+This seems correct.
+
+But for the example input 3:
+
+3
+###
+#.#
+###
+
+The entire grid is covered with #. So the DP for (0,0,2,2) would first check if there are any #. Yes. Then the initial min_cost is max(3,3) = 3. Then it tries all vertical splits (k=0,1). For each split, the left and right parts.
+
+But for example, vertical split at k=0: left is (0,0,2,0), right is (0,1,2,2). The left part is 3x1, cost max(3,1) is 3. The right part is 3x2, cost max(3,2) is 3. Sum is 6, which is higher than 3. Similarly for other splits. So the minimal is 3, which matches the first example.
+
+Another example: when the grid is all white, the answer is 0.
+
+The third example input:
+
+4
+#...
+....
+....
+#...
+
+The two # are at (0,0) and (3,0). So the minimal cost is to cover each with a 1x1 rectangle, but maybe it's cheaper to cover them with a single vertical rectangle. Wait, but the output is 2. Let's see.
+
+The two # are in column 0. So a vertical rectangle covering rows 0 to 3, column 0. The height is 4, width 1. So cost max(4,1) =4. That's not better than covering each with a 1x1 (cost 1+1=2). Oh right. So the answer is 2.
+
+So the code would split the entire grid into two parts: the two #s. Each is a 1x1 rectangle. So sum 2.
+
+So the code should handle that correctly.
+
+But let's see. The entire grid is considered. The code would check if the entire rectangle (0,0,3,3) has any #. Yes. Then the initial cost is max(4,4) =4. Then, check splits. For example, horizontal split at row 0. Then the top part is (0,0,0,3), which has a #. The bottom part is (1,0,3,3), which has a #. The sum would be the cost for top plus cost for bottom. The top (0,0,0,3) has a # at (0,0). The cost for top is max(1,4) =4. The bottom (1,0,3,3) has a # at (3,0). The cost for bottom is max(3,4) =4. Sum is 8. But the minimal split may be vertical split. Or, perhaps during splits, the code would split into smaller regions. For example, in the top, perhaps split vertically into (0,0,0,0) and (0,1,0,3). The first part has a #, cost 1. The second part is all white, cost 0. So the top cost is 1. Similarly for the bottom, perhaps the code would split it into (3,0,3,0) and others. So the overall sum would be 1 (top) + 1 (bottom) =2. So the code would find that splitting the entire grid into two separate 1x1 regions gives the minimal cost.
+
+But how does that happen? The entire rectangle (0,0,3,3) is considered, and in the vertical splits, perhaps there's a split that allows the two #s to be covered by two 1x1 rectangles. But the split would have to be vertical at k=0, then left is (0,0,3,0) which has two #s. The right is (0,1,3,3) which is all white. Then the left part (0,0,3,0) has two #s. The code would split this vertically (but since width is 1, split is not possible), so the cost is max(4,1) =4. Then the total would be 4 + 0 =4, which is worse than 2.
+
+Wait, but maybe the code finds a horizontal split that allows splitting the left part into two parts. For example, split (0,0,3,0) horizontally into (0,0,0,0) and (1,0,3,0). Then each of those has a #. Each has cost 1, sum 2. So the entire cost would be 2 (left) + 0 (right) = 2. But how does the code reach that?
+
+Ah, because when processing the entire grid (0,0,3,3), the code tries all vertical splits. When splitting at k=0, the left is (0,0,3,0) (all rows, column 0). The code computes the DP for (0,0,3,0). That rectangle has two #s. So the DP for (0,0,3,0) would compute the minimal cost. The initial cost is max(4, 1) =4. Then, it tries splits. For vertical splits: since the width is 1, can't split. For horizontal splits: split into top and bottom. For example, split after row 0: top (0,0,0,0) has cost 1, bottom (1,0,3,0) has cost max(3,1)=3. Sum is 4. Or split after row 3? No. Alternatively, split after row 1: top (0,0,1,0) has two #s. Split that into horizontal again. Hmm. Wait, perhaps the minimal cost for (0,0,3,0) is splitting horizontally into two parts, each of which covers a single #. For example, split at k=0: top is (0,0,0,0), cost 1. Bottom is (1,0,3,0), which has one #. The cost for bottom is 1 (max(3 rows, 1 column) is 3? Wait, no. The height is 3 (rows 1,2,3) and width 1. So max(3,1)=3. So sum 1+3=4, which is the same as the initial cost. So the minimal cost for (0,0,3,0) is 3? Or maybe there's a better way.
+
+Alternatively, maybe the code would split the (0,0,3,0) into two horizontal parts. For example, split at row 3: top is (0,0,3,0), bottom is empty. So no. Alternatively, split into (0,0,0,0) and (1,0,3,0). The first has cost 1, the second has cost 3. Sum is 4, which is higher than the initial cost of 4. So the code would take 4.
+
+Wait, then the entire cost would be 4 (left) + 0 (right) =4, which is higher than the correct answer of 2. But the correct answer is achieved by covering the two #s with two 1x1 rectangles, cost 1+1=2. So how does the code find this?
+
+Ah, perhaps the code splits the entire rectangle (0,0,3,3) into two horizontal splits. For example, split at row 0. The top part is (0,0,0,3), which has a #. The bottom part is (1,0,3,3), which has a #. Then, for the top part (0,0,0,3), the code would split vertically into (0,0,0,0) (cost 1) and (0,1,0,3) (cost 0). Sum 1. For the bottom part (1,0,3,3), the code would split into (3,0,3,0) (cost 1) and (1,0,2,3) (cost 0). So sum 1+1=2. So the total cost is 1 (top) +1 (bottom) =2.
+
+But how does the code reach this? Because when the code tries all possible horizontal splits for the entire rectangle (0,0,3,3), split at row 0, the cost would be the sum of the top and bottom parts. The top part's cost is 1, and the bottom part's cost is 1. Sum 2, which is better than the initial cost of 4.
+
+So the code would choose that split, leading to the correct answer.
+
+Ah, right. So the code's approach of checking all possible splits (vertical and horizontal) and taking the minimal sum will find the optimal split.
+
+So the code seems correct.
+
+Now, the problem is to implement this in Python efficiently.
+
+But what about the time constraints? For n=50, the DP has 50^4 states, which is 6,250,000. For each state, in the worst case, we loop through all possible splits (up to 49 vertical splits and 49 horizontal splits). So the total operations would be 6,250,000 * 100 = 625,000,000. That's a lot for Python. But perhaps with memoization and the early termination when splits yield lower costs than the current min, maybe it's manageable.
+
+Alternatively, the code may need some optimizations.
+
+One optimization is that, during the split loops, once we find a split that gives a sum equal to the minimal possible (which is the minimal between the initial cost and the splits), we can break early. But the minimal possible is not known. However, perhaps for some splits, like when one of the subrectangles has a cost of 0 (if it's empty), then the sum is the other subrectangle's cost. So if during the split loops we find a split where one of the subrectangles is empty, then the sum is the other's cost, which may be lower.
+
+Another optimization is to check the current min_cost and if during splits we find a split where the sum is 0 (but that's impossible, since the current rectangle has black cells).
+
+Alternatively, perhaps we can process splits in a way that checks for the best possible split first. But it's not obvious.
+
+Another possible optimization is to precompute all the rectangles and their has_black status, but I'm not sure.
+
+But given the problem constraints (n up to 50) and that the code may work within the time limit, perhaps it's worth proceeding.
+
+Testing the code with the examples:
+
+First example:
+
+3
+###
+#.#
+###
+
+The code should return 3. The entire rectangle is covered by one 3x3 square, cost 3.
+
+Second example: all white, returns 0.
+
+Third example: output 2.
+
+Fourth example: output 5.
+
+But how to test code for these cases?
+
+But assuming the code is correct, now the code would read the input, compute the prefix sum, then compute dp(0, 0, n-1, n-1).
+
+But in Python, for large n=50, the code may take some time, but given the problem's constraints, perhaps it's acceptable.
+
+Another possible optimization is to precompute the has_black for all possible rectangles and store it in a memo, but that would take O(n^4) space. For n=50, 50^4 is 6.25e6, which is manageable.
+
+So the code could precompute a memo[i1][j1][i2][j2] which is True if the rectangle has any black cells.
+
+But for n=50, that's 50*50*50*50 =6.25e6 entries. For each entry, compute has_black once. That's O(n^4) time, which for n=50 is 6.25e6 steps. Each step is a O(1) lookup in the prefix sum.
+
+So precomputing this array could speed up the code by avoiding multiple calls to has_black, which is O(1) but with some computations.
+
+Alternatively, in the current code, each time the DP function is called, it calls has_black. But for the same rectangle, this is called multiple times. So precomputing a memo for has_black is better.
+
+So modifying the code:
+
+precompute a 4-dimensional array, black_memo[i1][j1][i2][j2], which is True if the rectangle has any #.
+
+This can be done with nested loops:
+
+n = len(grid)
+black_memo = [[[[False for _ in range(n)] for __ in range(n)] for ___ in range(n)] for ____ in range(n)]
+
+for i1 in range(n):
+    for j1 in range(n):
+        for i2 in range(i1, n):
+            for j2 in range(j1, n):
+                sum_val = prefix[i2+1][j2+1] - prefix[i1][j2+1] - prefix[i2+1][j1] + prefix[i1][j1]
+                black_memo[i1][j1][i2][j2] = sum_val > 0
+
+But this would take O(n^4) time. For n=50, 50^4 =6,250,000 iterations, which is manageable.
+
+Then, in the DP function, instead of calling has_black, we just look up black_memo[i1][j1][i2][j2].
+
+This can speed up the code.
+
+But even so, for Python, it's manageable.
+
+Now, putting it all together.
+
+The code would look like this:
+
+Read n.
+
+Read the grid, convert to 0 and 1.
+
+Compute prefix sums.
+
+Precompute black_memo.
+
+Implement the DP with memoization, using black_memo.
+
+Finally, print the DP(0,0,n-1,n-1).
+
+But in Python, nested loops for precomputing black_memo can be slow. Let's see.
+
+Alternatively, compute the has_black function inline with the prefix sum. But for the code's readability, perhaps precompute the black_memo.
+
+But in Python, creating a 4-dimensional list is possible, but may be slow for n=50.
+
+Alternative approach: compute the has_black function on the fly using the prefix sum. But in the DP function, each time we need to check has_black, we compute it using the prefix sum. But that's O(1) each time.
+
+So perhaps the code can avoid precomputing the black_memo and compute it on the fly. The has_black function is:
+
+def has_black(i1, j1, i2, j2):
+    if i1 > i2 or j1 > j2:
+        return False
+    return prefix[i2+1][j2+1] - prefix[i1][j2+1] - prefix[i2+1][j1] + prefix[i1][j1] > 0
+
+So in the DP function, we check if has_black(i1, j1, i2, j2). If not, return 0.
+
+So, in code, the function is:
+
+from functools import lru_cache
+
+n = int(input())
+grid = []
+for _ in range(n):
+    line = input().strip()
+    grid.append([1 if c == '#' else 0 for c in line])
+
+# Compute prefix sums
+prefix = [[0]*(n+1) for _ in range(n+1)]
+for i in range(n):
+    row_sum = 0
+    for j in range(n):
+        row_sum += grid[i][j]
+        prefix[i+1][j+1] = prefix[i][j+1] + row_sum
+
+def has_black(i1, j1, i2, j2):
+    if i1 > i2 or j1 > j2:
+        return False
+    return (prefix[i2+1][j2+1] - prefix[i1][j2+1] - prefix[i2+1][j1] + prefix[i1][j1]) > 0
+
+@lru_cache(maxsize=None)
+def dp(i1, j1, i2, j2):
+    if not has_black(i1, j1, i2, j2):
+        return 0
+    h = i2 - i1 + 1
+    w = j2 - j1 + 1
+    min_cost = max(h, w)
+    # Try vertical splits
+    for k in range(j1, j2):
+        cost = dp(i1, j1, i2, k) + dp(i1, k+1, i2, j2)
+        if cost < min_cost:
+            min_cost = cost
+    # Try horizontal splits
+    for k in range(i1, i2):
+        cost = dp(i1, j1, k, j2) + dp(k+1, j1, i2, j2)
+        if cost < min_cost:
+            min_cost = cost
+    return min_cost
+
+print(dp(0, 0, n-1, n-1))
+
+But wait, in Python, the maximum recursion depth is a problem. For example, for large n, the recursive calls might hit the recursion limit. However, since the code uses memoization and iterative splitting, the recursion depth is not very large. For example, splitting the rectangle into two parts would have a recursion depth of O(n), but n is up to 50. Python's default recursion depth is 1000, so it should be okay.
+
+But perhaps for certain test cases, the recursion depth could be larger. To avoid this, it's better to implement the DP in an iterative manner, using memoization with a table.
+
+But for now, let's proceed with this code and see.
+
+Now, let's test this code with the third example.
+
+Third input:
+
+4
+#...
+....
+....
+#...
+
+The grid has two '#' at (0,0) and (3,0). The code should compute:
+
+dp(0,0,3,3) would split into horizontal split at k=0. The top is (0,0,0,3). has_black is True. The bottom is (1,0,3,3). has_black is True.
+
+The top's cost is max(1,4)=4. But wait, the top is (0,0,0,3), which has a # at (0,0). So the minimal cost for the top could be 1 (covering just that cell). Let's see.
+
+The code for (0,0,0,3):
+
+h=1, w=4. cost max(1,4)=4. Then, split vertically. For example, split at k=0: left is (0,0,0,0) (cost 1), right is (0,1,0,3) (no #, cost 0). So sum 1. So the minimal cost for the top is 1.
+
+The bottom (1,0,3,3) has a # at (3,0). The code for this rectangle: h=3, w=4. The minimal cost is 4 (max(3,4)), but split into horizontal split at k=3. The top part is (1,0,3,3) is (1,0,3,3) has #. Wait, the split would be after k=2 (since k ranges from i1 to i2-1). For example, split at k=2: top is (1,0,2,3) (no #), cost 0. Bottom is (3,0,3,3), which has # at (3,0). The cost for bottom is max(1,4) =4. Sum is 4. But maybe split vertically. The bottom rectangle (3,0,3,3) has a # at (3,0). So for (3,0,3,3), the minimal cost is 1 (split vertically at k=0: left is (3,0,3,0), cost 1. Right is (3,1,3,3), cost 0. Sum 1. So the bottom part (1,0,3,3) is processed as follows: code checks vertical splits, perhaps splitting at j=0. Left is (1,0,3,0) which has # at (3,0). The cost for left is max(3,1) =3. The right is (1,1,3,3), no #. Sum 3. Or split horizontally at k=2: sum is 0 (top) +4 (bottom) =4. But maybe the code would split the left (1,0,3,0) into horizontal splits. For example, split at k=2: top is (1,0,2,0) (no #), cost 0. Bottom is (3,0,3,0), cost 1. Sum 1. So the left's cost is 1. So the overall cost for the bottom part (1,0,3,3) is 1 +0=1. So the code's total cost is 1 (top) +1 (bottom) =2. Which is the correct answer.
+
+So the code correctly handles this case.
+
+Another example, the fourth input:
+
+5
+#...#
+.#.#.
+.....
+.#...
+#....
+
+The output is 5. So the code should find a way to cover all #s with a cost of 5.
+
+Assuming that the code can find that combination of rectangles that sum to 5.
+
+But regardless, given that the code correctly handles the other examples, it's likely correct.
+
+In terms of performance, the code may take some time for n=50, but in Python, with memoization and the optimizations (like lru_cache and O(1) has_black checks), it's possible that it works within the time limits.
+
+Therefore, the code should be correct.
+</think>
+To solve this problem, we need to find the minimum total cost to paint all black cells (denoted by '#') in an n×n grid white using rectangle operations. Each operation's cost is determined by the maximum of the rectangle's height and width. The goal is to cover all black cells with the least possible cost.
+
+### Approach
+1. **Dynamic Programming (DP) with Memoization**: We use a DP approach to compute the minimal cost for each sub-rectangle of the grid. The state of our DP function is defined by the coordinates of the top-left and bottom-right corners of a rectangle.
+2. **Prefix Sum Array**: To efficiently check if a sub-rectangle contains any black cells, we use a prefix sum array. This allows us to determine the presence of black cells in constant time.
+3. **Splitting Strategy**: For each rectangle, we consider both covering it with a single operation and splitting it into smaller sub-rectangles (either vertically or horizontally) to find the minimum cost.
+
+### Solution Code
+```python
+from functools import lru_cache
+
+n = int(input())
+grid = []
+for _ in range(n):
+    line = input().strip()
+    grid.append([1 if c == '#' else 0 for c in line])
+
+# Compute the 2D prefix sum array
+prefix = [[0] * (n + 1) for _ in range(n + 1)]
+for i in range(n):
+    row_sum = 0
+    for j in range(n):
+        row_sum += grid[i][j]
+        prefix[i + 1][j + 1] = prefix[i][j + 1] + row_sum
+
+def has_black(i1, j1, i2, j2):
+    if i1 > i2 or j1 > j2:
+        return False
+    return (prefix[i2 + 1][j2 + 1] - prefix[i1][j2 + 1] - prefix[i2 + 1][j1] + prefix[i1][j1]) > 0
+
+@lru_cache(maxsize=None)
+def dp(i1, j1, i2, j2):
+    if not has_black(i1, j1, i2, j2):
+        return 0
+    h = i2 - i1 + 1
+    w = j2 - j1 + 1
+    min_cost = max(h, w)
+    # Try all vertical splits
+    for k in range(j1, j2):
+        cost = dp(i1, j1, i2, k) + dp(i1, k + 1, i2, j2)
+        if cost < min_cost:
+            min_cost = cost
+    # Try all horizontal splits
+    for k in range(i1, i2):
+        cost = dp(i1, j1, k, j2) + dp(k + 1, j1, i2, j2)
+        if cost < min_cost:
+            min_cost = cost
+    return min_cost
+
+print(dp(0, 0, n - 1, n - 1))
+```
+
+### Explanation
+1. **Prefix Sum Array**: The prefix sum array helps quickly determine if any sub-rectangle contains black cells. This is done by calculating the sum of the sub-rectangle using the prefix sums.
+2. **Dynamic Programming Function (dp)**: The function `dp(i1, j1, i2, j2)` computes the minimum cost to clear all black cells in the rectangle defined by the coordinates (i1, j1) to (i2, j2). It checks if the rectangle is empty using the prefix sum array. If not, it considers both covering the entire rectangle in one operation and splitting it into smaller sub-rectangles to find the minimum cost.
+3. **Splitting Strategy**: For each rectangle, we explore all possible vertical and horizontal splits. The cost of each split is the sum of the costs of the resulting sub-rectangles. The minimum of these costs and the cost of covering the entire rectangle in one operation is taken as the result.
+
+This approach ensures that we efficiently explore all possible ways to clear the grid with minimal cost using dynamic programming and memoization.
+</bot>

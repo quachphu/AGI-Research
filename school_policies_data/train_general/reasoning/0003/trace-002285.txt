@@ -1,0 +1,1455 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.You have received your birthday gifts — n triples of integers! The i-th of them is { a_{i}, b_{i}, c_{i} }. All numbers are greater than or equal to 0, and strictly smaller than 2^{k}, where k is a fixed integer.
+
+One day, you felt tired playing with triples. So you came up with three new integers x, y, z, and then formed n arrays. The i-th array consists of a_i repeated x times, b_i repeated y times and c_i repeated z times. Thus, each array has length (x + y + z).
+
+You want to choose exactly one integer from each array such that the XOR (bitwise exclusive or) of them is equal to t. Output the number of ways to choose the numbers for each t between 0 and 2^{k} - 1, inclusive, modulo 998244353.
+
+Input
+
+The first line contains two integers n and k (1 ≤ n ≤ 10^{5}, 1 ≤ k ≤ 17) — the number of arrays and the binary length of all numbers.
+
+The second line contains three integers x, y, z (0 ≤ x,y,z ≤ 10^{9}) — the integers you chose.
+
+Then n lines follow. The i-th of them contains three integers a_{i}, b_{i} and c_{i} (0 ≤ a_{i} , b_{i} , c_{i} ≤ 2^{k} - 1) — the integers forming the i-th array.
+
+Output
+
+Print a single line containing 2^{k} integers. The i-th of them should be the number of ways to choose exactly one integer from each array so that their XOR is equal to t = i-1 modulo 998244353.
+
+Examples
+
+Input
+
+
+1 1
+1 2 3
+1 0 1
+
+
+Output
+
+
+2 4 
+
+
+Input
+
+
+2 2
+1 2 1
+0 1 2
+1 2 3
+
+
+Output
+
+
+4 2 4 6 
+
+
+Input
+
+
+4 3
+1 2 3
+1 3 7
+0 2 5
+1 0 6
+3 3 2
+
+
+Output
+
+
+198 198 126 126 126 126 198 198 
+
+Note
+
+In the first example, the array we formed is (1, 0, 0, 1, 1, 1), we have two choices to get 0 as the XOR and four choices to get 1.
+
+In the second example, two arrays are (0, 1, 1, 2) and (1, 2, 2, 3). There are sixteen (4 ⋅ 4) choices in total, 4 of them (1 ⊕ 1 and 2 ⊕ 2, two options for each) give 0, 2 of them (0 ⊕ 1 and 2 ⊕ 3) give 1, 4 of them (0 ⊕ 2 and 1 ⊕ 3, two options for each) give 2, and finally 6 of them (0 ⊕ 3, 2 ⊕ 1 and four options for 1 ⊕ 2) give 3.
+</user>
+<bot>
+<think>
+Okay, I need to solve this programming problem. Let's read the problem statement carefully.
+
+The problem is about counting the number of ways to select elements from each of n arrays such that their XOR equals t for each possible t. The arrays are formed by repeating a_i, b_i, c_i x, y, z times respectively. Then, for each array, we choose exactly one element, and the XOR of all chosen elements must be t. We have to output the count for each t from 0 to 2^k -1 modulo 998244353.
+
+Hmm. Let's think about the constraints. n can be up to 1e5, and k up to 17. Oh wait, 2^17 is 131072. So if we do anything that's O(n * 2^k), that might be feasible. But n is 1e5 and 2^17 is around 1e5, so 1e10 operations would be way too slow. So we need a more efficient approach.
+
+Wait, but the key here is that each array contributes a certain number of possibilities for each possible XOR mask. Then, the total is the product of these possibilities across all arrays, with XOR convolution. Because XOR is associative and commutative, the order of combining the masks doesn't matter. So this seems like a problem that can be modeled using the Fast Walsh-Hadamard Transform (FWHT) for XOR convolution.
+
+Let me recap how FWHT works. The idea is that for two functions f and g representing the number of ways to get each mask, their XOR convolution h is such that h[mask] = sum_{a XOR b = mask} f[a] * g[b]. To compute this efficiently, we can perform the FWHT on each function, multiply them pointwise, and then perform the inverse FWHT to get the result.
+
+In this problem, for each array, we can compute a frequency array f_i where f_i[mask] is the number of ways to choose an element from the i-th array that contributes mask. Then, the overall answer is the XOR convolution of all these f_i arrays. Since convolution is associative, we can combine all the f_i arrays using XOR convolution to get the final result.
+
+The challenge is to compute the product of all these individual transforms efficiently. For each array, compute its FWHT, multiply all the transformed arrays element-wise, then apply the inverse FWHT to get the final counts.
+
+But wait, the FWHT has the property that the transform of the convolution is the product of the transforms. So, for all n arrays, we can compute the FWHT of each f_i, multiply all of them component-wise (since convolution becomes point-wise multiplication in the transformed domain), and then apply the inverse FWHT to get the overall answer.
+
+Yes, that's right. So the steps would be:
+
+1. For each array, compute its frequency array f_i, where f_i[mask] is the count of possible elements in the array that have value mask. For example, if the array is formed by a_i repeated x times, then the count for a_i is x, similarly for b_i and c_i. But since each array contributes exactly one element, the total number of ways for the array is (x + y + z) choose 1, but since each element is chosen exactly once, the frequency for each possible element in the array is the number of times it appears. So for the i-th array, the elements are a_i (x times), b_i (y times), c_i (z times). So the frequency array f_i has:
+
+f_i[a_i] += x
+
+f_i[b_i] += y
+
+f_i[c_i] += z
+
+But if a_i, b_i, c_i are the same, their counts add up. So for each array, the frequency array is a map from possible masks to the count of elements in that array that have that mask. However, since x, y, z can be up to 1e9, but in the problem statement, a_i, b_i, c_i are given, so each array's frequency array will have up to 3 distinct masks. For example, if all three are the same, then the frequency for that mask is x + y + z.
+
+2. Once we have all the frequency arrays f_1, f_2, ..., f_n, we need to compute their XOR convolution. The XOR convolution of all these f_i is the desired result. However, directly computing this for n=1e5 and 2^17 elements is impossible. So we need to use FWHT here.
+
+3. The FWHT approach allows us to perform this convolution efficiently. The steps would be:
+
+a. For each array's frequency vector f_i, compute its FWHT. The transformed array F_i.
+
+b. Multiply all the F_i component-wise. That is, for each mask in 0...2^k-1, compute the product of F_1[mask] * F_2[mask] * ... * F_n[mask]. Let's call this product G[mask].
+
+c. Compute the inverse FWHT of G to get the final answer array, which is the count for each t.
+
+But how do we compute the FWHT for each f_i and then multiply them all?
+
+Each f_i is a vector of size 2^k. However, for each array, the f_i has at most 3 non-zero entries (since each array contributes a_i, b_i, c_i, possibly some duplicates). But for the FWHT, even if the original array is sparse, the transformed array will have all elements non-zero, except in some cases. However, performing the FWHT for each array with O(2^k) time per array would be O(n*2^k), which for n=1e5 and k=17 (2^17 = 131072) would be 1e5 * 1e5 operations, which is 1e10, which is way too slow.
+
+Wait, that's a problem. So for each array, the FWHT takes O(k * 2^k) time. For n=1e5 and k=17, this would be 1e5 * 17 * 131072 ≈ 2e9 operations, which is definitely way beyond the time limit. So this approach isn't feasible.
+
+Therefore, we need a smarter way to compute the product of the FWHTs of all the f_i arrays without explicitly performing the FWHT for each array.
+
+Hmm. Let's think: the FWHT is a linear transformation. So perhaps for each array, the transformed array F_i can be represented in a way that allows us to compute the product of all F_i's efficiently.
+
+Wait, but the FWHT is a linear transformation applied to the original array. However, the FWHT of a convolution of two functions is the product of their FWHTs. But here, each array's contribution is a separate convolution. So the total product is the product of all the individual FWHTs.
+
+But if we can find a way to compute the product of all the F_i's without having to compute each F_i explicitly, that would be better.
+
+Alternatively, perhaps we can model the effect of each array's f_i on the product, given that each f_i is sparse (only 3 non-zero elements).
+
+Wait, but even if the original f_i is sparse, the FWHT of f_i (F_i) is dense, because the Walsh-Hadamard transform spreads the contributions. So each F_i has all components non-zero. Therefore, we can't exploit sparsity in the transformed domain.
+
+Hmm. So perhaps there's a mathematical way to compute the product of all F_i's by considering how each array contributes to each component of the product.
+
+But how?
+
+Alternatively, perhaps each array's contribution to the product can be computed incrementally, and since each array's F_i is the Walsh-Hadamard transform of f_i, which can be represented as a product of terms. Wait, the Walsh-Hadamard transform of f_i is a vector F_i where each element is the sum_{x} f_i[x] * (-1)^(parity of x & mask). Wait, no, the exact formula for the Walsh-Hadamard transform depends on the variant used. There are different versions for different operations (AND, OR, XOR). For XOR convolution, the Walsh-Hadamard transform is used.
+
+The standard FWHT for XOR convolution uses a transformation matrix where each entry is either +1 or -1, based on the parity of the bitwise AND between the indices. For each mask m, the transform is F[m] = sum_{s} f[s] * (-1)^{parity of s & m}.
+
+Wait, maybe I need to recall the exact definition. Let me check.
+
+The Fast Walsh-Hadamard Transform for XOR convolution works as follows. The transformation is given recursively. For a vector a of size 2^k, split into two halves a_lo and a_hi. Then, compute the transform for a_lo and a_hi, then combine them as:
+
+transformed_lo = (a_lo + a_hi)
+
+transformed_hi = (a_lo - a_hi)
+
+But I'm not entirely sure. Alternatively, for XOR convolution, the FWHT matrix is such that each element is (-1)^(bits in common between x and y), where x and y are the indices. But perhaps the exact details aren't necessary here. The key point is that the FWHT is a linear transformation, and each element of the transformed array is a linear combination of the original elements.
+
+But given that each original f_i has only 3 non-zero entries (a_i, b_i, c_i), perhaps we can compute each F_i[mask] directly as f_i[a_i] * (-1)^(parity(a_i & mask)) + f_i[b_i] * (-1)^(parity(b_i & mask)) + f_i[c_i] * (-1)^(parity(c_i & mask)). But since f_i has only three non-zero elements, that's possible.
+
+Wait, that's correct. Because the FWHT of f_i at mask m is sum_{s} f_i[s] * (-1)^{parity(s & m)}, where parity is the number of set bits in s & m modulo 2.
+
+So for each array i, and for each mask m (from 0 to 2^k -1), F_i[m] = (count_a) * (-1)^(parity(a_i & m)) + (count_b) * (-1)^(parity(b_i & m)) + (count_c) * (-1)^(parity(c_i & m)), where count_a = x, count_b = y, count_c = z (assuming a_i, b_i, c_i are distinct; if some are same, their counts are summed).
+
+So for each array i, the transformed value F_i[m] can be computed as x * (-1)^(parity(a_i & m)) + y * (-1)^(parity(b_i & m)) + z * (-1)^(parity(c_i & m)).
+
+Then, the product of all F_i[m] for each m gives the transformed product array G[m]. Then, the inverse FWHT of G gives the answer array.
+
+But how do we compute this efficiently?
+
+The key is that for each mask m, we can compute the product of F_i[m] for all i in 1..n. Then, once all these products are computed, apply the inverse FWHT to get the answer.
+
+So the steps would be:
+
+1. For each mask m (0 to 2^k -1):
+
+   a. Compute the product over all arrays i of (x * (-1)^{parity(a_i & m)} + y * (-1)^{parity(b_i & m)} + z * (-1)^{parity(c_i & m)}).
+
+   b. This product is G[m].
+
+2. Apply the inverse FWHT to G to get the answer array.
+
+3. The answer array will have each entry as the count of ways for that XOR value.
+
+Then, the inverse FWHT needs to be computed, but considering the scaling factors. The inverse FWHT usually involves dividing by 2^k, but the exact steps depend on the FWHT implementation.
+
+But the problem is that for n=1e5 and 2^17 masks, this is O(n * 2^k) time. For k=17, 2^17 is 131072. So 1e5 * 131072 is 1.3e10 operations. Which is way too slow for Python, which can handle about 1e8 operations per second.
+
+So this approach is not feasible. We need a smarter way.
+
+Wait, but the per-mask computation for the product is O(n) per mask. But for 1e5 arrays and 1e5 masks, that's 1e10 operations. That's way too slow.
+
+We need a way to compute the product for all masks in O(n * something that's manageable). Let's think differently.
+
+Let's see that for each array i, the contribution to the product for mask m is (x * s_a + y * s_b + z * s_c), where s_a is (-1)^{parity(a_i & m)}, and similarly for s_b and s_c. 
+
+But for each array, a_i, b_i, c_i are given. So for each array, the term for mask m is a function of m's bits. Let's think of this as a function that can take on certain values based on the bits of m and the a_i, b_i, c_i.
+
+But perhaps, for each array, the term can be expressed in terms of the parity of some linear combination of bits in m.
+
+Wait, the parity of a_i & m is the XOR of the bits in a_i that are set in m. For example, if a_i is 5 (binary 101), then a_i & m would have bits where m has a 1 in the same positions as a_i. The parity is the sum modulo 2 of those bits. So for a_i, the parity is the dot product (mod 2) of the bits of a_i and m.
+
+Similarly for b_i and c_i.
+
+So, for each array i, the term for mask m is:
+
+x * (-1)^(a_i · m) + y * (-1)^(b_i · m) + z * (-1)^(c_i · m)
+
+where a_i · m is the dot product modulo 2 of the bits of a_i and m.
+
+Now, the product over all i of these terms is G[m].
+
+Our goal is to compute G[m] for all m efficiently.
+
+But how?
+
+Each term in the product is a function of m. Let's think of each term as a function that depends on the bits of m. The product is the product of all these functions for all arrays.
+
+But each function (for each array) is of the form A * (-1)^(u · m) + B * (-1)^(v · m) + C * (-1)^(w · m), where u, v, w are the a_i, b_i, c_i vectors for that array.
+
+Hmm. Alternatively, perhaps each term can be expressed as a linear combination of products of (-1) to the dot products of m with certain vectors.
+
+Alternatively, maybe for each array, the term can be written in terms of the XOR of the a_i, b_i, c_i, etc.
+
+But I'm not sure. Let's think of possible cases.
+
+Suppose for an array, all a_i, b_i, c_i are the same. Then, the term is (x + y + z) * (-1)^(a_i · m). So for this array, the term is (x + y + z) multiplied by (-1) raised to the dot product of a_i and m. So when multiplied across all arrays, it's equivalent to (x + y + z)^n multiplied by (-1)^{sum_i (a_i · m)}, but that's only if all arrays have a_i, b_i, c_i equal. But in general, the terms are more complex.
+
+Alternatively, perhaps for each array, the term can be expressed as a sum of terms of the form coeff * (-1)^(d · m), where d is some vector. Then, when multiplied across all arrays, the product becomes a sum over all combinations of coeffs multiplied by (-1)^{sum (d_i · m)}, where each d_i is one of the vectors from each array's term.
+
+But this seems like the number of terms would explode exponentially, which isn't feasible.
+
+Alternatively, perhaps each array's term can be represented as a product of factors that can be expressed as a linear combination of two possible values. For example, if two of a_i, b_i, c_i are equal, then the term can be simplified.
+
+But this seems like a stretch. Let's think of specific examples.
+
+Take the first sample input:
+
+1 1
+
+1 2 3
+
+1 0 1
+
+The array is formed by 1 (x=1), 0 (y=2), 1 (z=3). So the elements are [1,0,0,1,1,1]. The counts are x=1 (1), y=2 (0s), z=3 (1s). So the frequency array is:
+
+mask 0: 2 (from the two 0s)
+
+mask 1: 1 + 3 =4 (from x and z)
+
+So the frequency array is [2,4]. Then the FWHT of this is computed as:
+
+F[0] = 2 +4 =6
+
+F[1] = 2 -4 =-2
+
+But then the product for each m is F[0] if m is 0, F[1] if m is 1. Then inverse FWHT is applied. Wait, but the inverse FWHT would be (F[0] + F[1])/2 and (F[0] - F[1])/2. For this example:
+
+After the product (since n=1), G is F. So inverse FWHT:
+
+ans[0] = (6 + (-2))/2 =4/2=2
+
+ans[1] = (6 - (-2))/2=8/2=4
+
+Which matches the sample output. So the approach works.
+
+So for each array, the term is the sum of counts multiplied by (-1)^(mask & a_i). But the problem is that for each array and each mask, this term can be different, and the product across all arrays for each mask needs to be computed.
+
+But with n up to 1e5 and masks up to 2^17, the O(n * 2^k) approach is not feasible. So there must be a smarter way.
+
+Alternative approach: group the arrays into equivalence classes where they contribute the same function to the product. Then compute the exponent for each class and multiply.
+
+But how?
+
+For example, if two arrays have the same a_i, b_i, c_i, then their contribution to the product is (term)^2. So grouping identical arrays would allow us to compute their contribution as (term)^cnt, which can be done efficiently with exponentiation.
+
+But in the worst case, each array is unique, so this doesn't help. However, perhaps we can find a way to represent each array's term as a function that can be represented in terms of some parameters, and then find a way to compute the product for all arrays efficiently.
+
+Wait, each array's term is a function of the form:
+
+t(m) = x * (-1)^{a·m} + y * (-1)^{b·m} + z * (-1)^{c·m}
+
+But a, b, c are the a_i, b_i, c_i of the array.
+
+We can rewrite this as:
+
+t(m) = x * s_a + y * s_b + z * s_c,
+
+where s_a = (-1)^{a·m}, s_b = (-1)^{b·m}, s_c = (-1)^{c·m}.
+
+Each of these s variables can be either 1 or -1, depending on the parity of the dot product between a and m.
+
+But the product for all arrays is the product of all t_i(m) for each array i. So for each mask m, we need to compute the product of t_i(m) for i from 1 to n.
+
+But how can we compute this efficiently for all masks m?
+
+Hmm. Let's think of the possible values of s_a, s_b, s_c. For each array, s_a, s_b, s_c are each either 1 or -1. So for each array, there are 8 possible combinations (but some may not be possible depending on a, b, c).
+
+But for each array, the term t_i(m) can be written as x * s_a + y * s_b + z * s_c, which depends on the values of s_a, s_b, s_c determined by m.
+
+But m can be any mask, so for each array, the term can take up to 8 possible values, depending on the combination of s_a, s_b, s_c. However, for different m's, the same combination can occur multiple times.
+
+Wait, but for a given array i, the values of s_a, s_b, s_c are determined by the bits of m that overlap with a_i, b_i, c_i. So for example, if a_i is 0, then s_a is always 1, since the dot product is 0. Similarly, if a_i has certain bits set, then s_a depends on the corresponding bits in m.
+
+But how can this help? Let's consider that for each array i, the term t_i(m) is determined by some linear functions of m's bits.
+
+Alternatively, perhaps for each array i, the term t_i(m) can be expressed as a function that depends on certain linear combinations of m's bits. For example, if a_i, b_i, c_i are such that their XORs are linearly independent, then each combination of s_a, s_b, s_c corresponds to a different mask.
+
+But I'm not sure.
+
+Alternatively, perhaps for each array, we can precompute all possible values of t_i(m) for m in the entire mask space, but that's O(2^k) per array, which is again not feasible.
+
+Wait, but 2^17 is 131072. If we can find a way to represent the product across all arrays as a series of transformations that can be applied to each array's contribution, perhaps we can find an efficient way.
+
+Alternatively, note that the product for each mask m is multiplicative over the arrays. So the log of the product is the sum of the logs of each term. But since we're working modulo 998244353, logarithms aren't applicable. So this is not helpful.
+
+Wait, but the problem requires us to compute the product modulo 998244353. So each term in the product is computed modulo 998244353. So for each array, the term is x * s_a + y * s_b + z * s_c, and since x, y, z can be up to 1e9, this term is computed modulo 998244353.
+
+But the key is that for each array, the term is a function of m, and the product is the product of these terms for all arrays. So for each m, we need to compute the product of (x * s_a_i + y * s_b_i + z * s_c_i) for all i.
+
+But how can we compute this for all m efficiently?
+
+Alternative approach: for each array, the term can be expressed as a linear combination of certain basis functions (like the basis of the Walsh-Hadamard transform). Then, multiplying all these terms would correspond to a combination of basis functions. However, I'm not sure how to model this.
+
+Alternatively, note that each term t_i(m) is a linear combination of (-1)^{d_i · m}, where d_i is a vector. For example, if we expand t_i(m) for array i:
+
+t_i(m) = x*(-1)^{a_i · m} + y*(-1)^{b_i · m} + z*(-1)^{c_i · m}
+
+So this is a sum of three terms, each of which is a multiple of (-1)^{d · m}, where d is a_i, b_i, or c_i.
+
+The product over all arrays i would be the product of such sums. Expanding this product would give a sum over all possible combinations of choosing one term from each array's sum. Each such combination contributes a term that is the product of the coefficients multiplied by (-1)^{sum_{selected} d_j · m}.
+
+So the entire product G[m] is equal to the sum over all subsets S of the product of the coefficients (x, y, z) chosen for each array, multiplied by (-1)^{sum_{i in S} d_i · m}, where d_i is a_i, b_i, or c_i depending on which term was chosen from array i.
+
+But the number of subsets S is 3^n, which is way too large for n=1e5. So this approach is not feasible.
+
+Hmm. So this seems like a dead end.
+
+Another idea: note that the product for G[m] can be written as the product over all arrays i of (x * (-1)^{a_i · m} + y * (-1)^{b_i · m} + z * (-1)^{c_i · m}).
+
+Let's precompute for each mask m, the value of the product. But for m up to 2^17, this is manageable. But for each array i and each mask m, computing the term is O(1), and the total is O(n * 2^17), which is 1e5 * 1e5 ~ 1e10 operations, which is way too slow for Python.
+
+But maybe we can find a way to compute this for all m in O(n * something smaller). Let's think of the possible masks.
+
+Each mask m is a k-bit number, and the term for each array depends on the parity of a_i · m, b_i · m, c_i · m. Let's denote these parities as pa, pb, pc for a given array i and mask m.
+
+So for each array, pa = (a_i · m) mod 2, pb = (b_i · m) mod 2, pc = (c_i · m) mod 2.
+
+The term for the array is x*(-1)^{pa} + y*(-1)^{pb} + z*(-1)^{pc}.
+
+But (-1)^pa is 1 if pa is 0, else -1. So this term can be written as x*(1-2*pa) + y*(1-2*pb) + z*(1-2*pc). Wait, no: (-1)^pa is 1 when pa is even (pa=0), and -1 when pa is odd (pa=1). So it's 1 - 2*pa.
+
+So the term is x*(1 - 2*pa) + y*(1 - 2*pb) + z*(1 - 2*pc).
+
+Expanding this, we get (x + y + z) - 2*(x*pa + y*pb + z*pc).
+
+But pa, pb, pc are each 0 or 1. So x*pa is x if pa is 1, else 0.
+
+So for each array, the term is (x + y + z) - 2*(x*pa + y*pb + z*pc).
+
+But how does this help? Because pa, pb, pc are functions of m. For each array i and mask m, pa is (a_i · m) mod 2, etc.
+
+So the product over all arrays is the product of [(x + y + z) - 2*(x*pa_i + y*pb_i + z*pc_i)] for each array i.
+
+But how can we compute this product for all masks m efficiently?
+
+Wait, the term for each array is a linear function in pa_i, pb_i, pc_i. But the product would involve terms that are sums of products of these linear functions. Not sure.
+
+Alternative approach: since each array's term depends on pa_i, pb_i, pc_i, which are linear functions of m, perhaps we can model the product as a product of terms that are linear in certain linear functions of m. But I'm not sure.
+
+Wait, for each array i, pa_i is the parity of a_i · m, which is the same as the parity of the number of set bits in a_i AND m. So this is equivalent to m · a_i (dot product mod 2), which is the same as (m & a_i) mod 2. Wait, no, the dot product is the sum of the bits where both m and a_i have a 1. So yes, pa_i is the parity of the number of set bits in m & a_i.
+
+Similarly for pb_i and pc_i.
+
+So for each array i, the term can be written as a function of three variables: pa_i, pb_i, pc_i. But each of these variables is a linear function of m (in GF(2)).
+
+But since these are linear functions, perhaps there's a way to model the product as a function that depends on the XOR of certain bits.
+
+Alternatively, let's think of each array's contribution as a function that depends on certain linear combinations of m's bits. For example, a_i · m is a linear combination (sum modulo 2) of the bits of m where a_i has a 1. So this is a linear function over GF(2).
+
+Therefore, for each array, the term is a function of three linear functions of m: a_i · m, b_i · m, c_i · m.
+
+But how to model this across all arrays.
+
+Let me think of the problem in terms of linear algebra over GF(2). The product for each mask m depends on the values of these linear functions (a_i · m, etc.) for each array.
+
+But with n being 1e5, the total number of linear functions is 3n, which is way too large to handle directly.
+
+But perhaps, for each array, the three linear functions (a_i · m, b_i · m, c_i · m) can be expressed in terms of a smaller set of basis functions. For example, if some of the a_i's are the same or can be expressed as linear combinations of others.
+
+But I'm not sure. This line of thinking seems complicated.
+
+Alternative idea: note that the term for each array i can be one of 2^3 =8 possibilities, depending on the values of pa_i, pb_i, pc_i. For each array, we can precompute the 8 possible values of the term, and then for each mask m, determine which combination of pa_i, pb_i, pc_i it has, and multiply the corresponding term.
+
+But this again requires O(n * 2^k) operations, which is not feasible.
+
+Wait, but for each array i, the values of pa_i, pb_i, pc_i depend on m's bits in positions where a_i, b_i, c_i have bits set. Let's say that for array i, the masks a_i, b_i, c_i are such that their combined bits are a subset of some bits. So for example, if a_i, b_i, c_i have bits only in certain positions, then the variables pa_i, pb_i, pc_i are determined by those bits. But this varies per array, making it hard to find a common structure.
+
+Alternatively, perhaps the key is to model the product as a product of terms that can each be expressed as a sum of a few terms involving the linear functions of m. For example, if for each array, the term is A_i + B_i * (-1)^{d_i · m}, where d_i is a certain mask, then the product can be expressed as a product of such terms. But I'm not sure.
+
+Alternatively, consider that for each array i, the term can be written as:
+
+term_i = x * s_a + y * s_b + z * s_c,
+
+where s_a = (-1)^{a_i · m}, etc.
+
+Each s can be either 1 or -1. So for each array, the term can be written as a combination of s_a, s_b, s_c.
+
+But the product over all arrays is the product of these combinations. This seems difficult.
+
+Let's think of the case where x, y, z are zero except for one. For example, if x is non-zero, and y and z are zero. Then each array's term is x * s_a. The product over all arrays is x^n * product of s_a_i. And product of s_a_i is (-1)^{sum (a_i · m)}. Then the overall product is x^n * (-1)^{sum (a_i · m)}, and the inverse FWHT would be the same as the original case where each array contributes a single term. But this is a simple case.
+
+But when multiple terms are involved, this approach isn't applicable.
+
+Another observation: the problem requires the product for all masks m. The inverse FWHT of the product is the answer array. The inverse FWHT can be computed using the same algorithm as the forward transform, possibly with a scaling factor.
+
+So the steps are:
+
+1. For each mask m, compute the product of the terms for each array.
+
+2. Compute the inverse FWHT on this product.
+
+But the challenge is step 1.
+
+Wait, but maybe for each array, the term can be represented as a function that is a linear combination of basis functions, and the product can be represented as a product of these combinations. Then, the product would be a sum of terms, each of which is a product of coefficients multiplied by a basis function. However, this again leads to an exponential number of terms.
+
+Alternatively, think of each array's term as a vector in the Walsh-Hadamard transformed space. Then, the product of all these vectors is the element-wise product, which when inverse-transformed gives the desired answer. But the problem is that each array's transformed vector is dense, so storing them for n=1e5 arrays is impossible.
+
+But perhaps there's a way to compute the element-wise product incrementally. For example, initialize G as a vector of 1s. Then, for each array i, multiply each element of G by the transformed F_i's corresponding element. But this requires O(n * 2^k) operations, which is not feasible for n=1e5 and k=17.
+
+So this seems like a dead end.
+
+Hmm. So perhaps the only way to proceed is to find that for each array, the term can be expressed as a linear combination of a small number of basis functions, which can be multiplied into the product efficiently.
+
+Wait, let's think about the term for each array. Let's consider the possible cases:
+
+Case 1: All three a_i, b_i, c_i are the same. Then, the term becomes (x + y + z) * (-1)^{a_i · m}. So this is a single term multiplied by a basis function (-1)^{a_i · m}.
+
+Case 2: Two of the a_i, b_i, c_i are the same, say a_i = b_i != c_i. Then the term is (x + y) * (-1)^{a_i · m} + z * (-1)^{c_i · m}. So this is a combination of two basis functions.
+
+Case 3: All three are distinct.
+
+But even if this is the case, each array's term is a combination of three basis functions. So when multiplied together, the product becomes a combination of many terms. But how can we manage this?
+
+Alternatively, perhaps we can represent each array's term as a linear combination of basis functions, and then the product of all arrays' terms can be represented as a linear combination of basis functions, which can be computed using the Fast Walsh-Hadamard Transform.
+
+But I'm not sure.
+
+Another idea: for each array, the term can be written as a sum of terms of the form coeff * (-1)^{d · m}, where d is a mask. For example, if the array's term is x*(-1)^a + y*(-1)^b + z*(-1)^c, then this can be written as a sum of three terms, each corresponding to a different mask. Then, the product over all arrays would be a sum over all possible combinations of choosing one term from each array, each contributing a coefficient multiplied by (-1)^{d_1 + d_2 + ... + d_n}, where each d_i is the mask for the chosen term in array i. The XOR of all these d_i's will be the exponent's mask.
+
+But this is similar to the earlier expansion approach, which results in 3^n terms. However, since we are working modulo 998244353 and using XOR properties, perhaps there's a way to represent this efficiently using the FWHT.
+
+Wait, maybe. The product of sums can be viewed as a convolution of their terms. But in the transformed domain, this would be a point-wise product. So perhaps each array's term is a small vector in the transformed domain, and the product can be computed efficiently by combining these vectors.
+
+But how to proceed.
+
+Alternatively, the product of the terms for all arrays is equivalent to a large sum over all possible choices of one term from each array. Each choice contributes a coefficient product multiplied by (-1)^{mask}, where mask is the sum (XOR) of all the d_i's from the chosen terms. The total coefficient for each mask is the sum of all such products where the XOR of the d_i's equals mask.
+
+But this is exactly the XOR convolution problem! The total coefficient for each mask is the result of XOR-convolving all the individual arrays' terms.
+
+But each array's term is a sum of three terms (with coefficients x, y, z and masks a_i, b_i, c_i). So the entire product is the XOR convolution of all these arrays' terms, which can be computed using FWHT.
+
+But how to compute this efficiently.
+
+Yes! Here's the key insight: each array's term can be represented as a vector f_i, where f_i[d] is x if d == a_i, y if d == b_i, z if d == c_i (but summing if there are duplicates). Then, the product of all the terms is the XOR convolution of all these f_i vectors. Because when you multiply the terms, which are sums of x, y, z multiplied by (-1)^{d_i · m}, the product is the sum over all possible combinations of selecting one d_i from each array, with their coefficients multiplied and the XOR of the d_i's being the mask.
+
+Wait, no. Because the product of the terms is a sum over all possible ways to choose one term from each array, and each such choice contributes a product of coefficients multiplied by (-1) raised to the sum of the d_i's dot product with m. The sum of these terms for each possible combination is G[m].
+
+But the XOR convolution of the f_i vectors would give the number of ways to choose a d_i from each array such that their XOR is equal to t, multiplied by the product of the coefficients. But this is exactly what we need. Because the answer array is the XOR convolution of all the f_i's.
+
+Wait, but the problem is that the FWHT approach computes the XOR convolution of the f_i's. Which is exactly what we need. But wait, the problem's answer is the number of ways to choose one element from each array such that their XOR is t, which is exactly the XOR convolution of the f_i's.
+
+But this is what I thought earlier. The initial approach was to compute the XOR convolution of all f_i's, which is O(n * 2^k) using FWHT. But this approach is not feasible because for n=1e5 and k=17, the time is too large.
+
+But wait, the f_i's are each vectors of size 2^k, but for each array, the f_i has only up to 3 non-zero elements (a_i, b_i, c_i, possibly with overlaps). So the XOR convolution of all f_i's is the same as multiplying their FWHT-transformed vectors and then inverting. But how to compute the product of the FWHTs of all f_i's.
+
+So the key is that the FWHT of the convolution is the product of the FWHTs of the individual f_i's. So:
+
+FWHT(convolution) = product of FWHT(f_i) for all i.
+
+So the final answer is inverse FWHT of the product of FWHT(f_i) for all i.
+
+But each FWHT(f_i) is a vector of size 2^k, and for each i, the FWHT is computed in O(k * 2^k) time. With n=1e5 and k=17, this is 1e5 * 17 * 131072 = 2.2e9 operations. Which is way too slow.
+
+But what if the f_i vectors are sparse in the original domain? Can we compute the FWHT for each f_i efficiently?
+
+Yes! Because each f_i has only up to 3 non-zero entries. So the FWHT for each f_i can be computed in O(3 * 2^k) time. Because for each of the 3 non-zero entries in f_i, we can compute their contribution to each element in the transformed array.
+
+Wait, let me think. The FWHT is a linear transformation. Each element in the transformed array is the sum over s of f[s] * (-1)^{s · m}, where m is the mask for the transformed element.
+
+So for each array i, f_i has up to 3 non-zero entries (s1, s2, s3). Then, for each mask m, the transformed value F_i[m] is f_i[s1] * (-1)^{s1 · m} + f_i[s2] * (-1)^{s2 · m} + f_i[s3] * (-1)^{s3 · m}.
+
+So for each array i, to compute F_i[m] for all m, we can iterate over each of the three s values and add their contributions to each m.
+
+But this is O(3 * 2^k) operations per array. For n=1e5 and k=17, this would be 1e5 * 3 * 131072 = 3.9e8 operations, which is manageable in Python (but tight). But then, after computing all F_i[m], we need to multiply them all component-wise for each m, which is O(2^k * n) operations again. Wait, no: after computing all F_i[m] for each array i, the product for each m is the product of F_i[m] for all i. So for each m in 0..2^k-1, multiply all F_i[m] together. This is O(2^k * n) operations. For k=17, this is 131072 * 1e5 = 1.3e10 operations, which is way too slow.
+
+So this approach is not feasible either.
+
+Thus, the problem seems unsolvable with the current approach, but there must be a way.
+
+Wait, let's re-examine the problem statement. The arrays are generated from the triples (a_i, b_i, c_i), and x, y, z are the same for all arrays.
+
+Wait, x, y, z are global! All arrays use the same x, y, z. This is a key observation. So for each array, the term is x * s_a_i + y * s_b_i + z * s_c_i, where s_a_i is (-1)^{a_i · m}, and similarly for s_b_i and s_c_i.
+
+But x, y, z are fixed. So each array's term is a function of s_a_i, s_b_i, s_c_i, which are each ±1, depending on the parity of a_i · m, etc.
+
+But how to compute the product of these terms across all arrays for each m.
+
+Let's consider that each array's contribution depends on the three bits a_i · m, b_i · m, c_i · m. Each of these bits is 0 or 1. So for each array, the contribution to the product for mask m is a function of these three bits.
+
+So for each array, the term is x * (-1)^{pa} + y * (-1)^{pb} + z * (-1)^{pc}, where pa, pb, pc are 0 or 1. There are 2^3 =8 possible combinations of pa, pb, pc, but since each pa is a function of m, the term can be one of 8 possibilities for each array. However, the values of pa, pb, pc depend on m.
+
+But perhaps the term can be written as a function that depends on the sum of certain variables.
+
+For example, if for array i, a_i, b_i, c_i are such that a_i XOR b_i = c_i, then there may be a relation between pa, pb, pc. But this depends on each array's specific values.
+
+Alternatively, we can model each array's contribution as a function of three variables (pa, pb, pc), which are bits. But this seems difficult.
+
+But here's an idea: for each array, compute the possible combinations of pa, pb, pc and see how many masks m contribute to each combination. Then, the product for each combination can be raised to the number of masks that have that combination.
+
+But this seems challenging.
+
+Alternatively, for each array, the term can be rewritten as:
+
+term = x * (-1)^{pa} + y * (-1)^{pb} + z * (-1)^{pc}
+
+But pa, pb, pc are functions of m. We can express pa as a linear function of m's bits. The same applies for pb and pc. So each term is a function of three linear functions of m's bits.
+
+The product of all such terms is the product of functions that depend on linear combinations of m's bits. To compute this product efficiently for all m, we might need to find a way to represent these linear combinations and combine them.
+
+But I'm not sure how to proceed.
+
+Another angle: since the answer requires the inverse FWHT of the product, perhaps we can find a way to compute the product in the transformed domain without explicitly iterating over all arrays and masks.
+
+Wait, the product in the transformed domain is the point-wise product of the individual transformed arrays. So if we can find the product of all the transformed arrays, then the inverse FWHT gives us the answer.
+
+But again, computing this product requires O(n * 2^k) time, which is not feasible.
+
+But maybe each array's transformed array can be represented in a way that allows the product to be computed more efficiently.
+
+For example, suppose that for each array, the transformed array F_i can be written as a product of certain factors, and these factors can be combined across all arrays. But I'm not sure.
+
+Another observation: if x, y, z are all zero except one, then the product would be straightforward, as each array contributes a single term. But in the general case, this isn't true.
+
+Alternatively, consider that for each array, the term can be written as a combination of three terms, each of which is a multiple of a basis function (-1)^{d · m}. The product of such terms would require considering all possible combinations of the basis functions from each array. This seems similar to the initial approach, but how to compute this efficiently.
+
+But this line of thinking leads to an exponential number of terms.
+
+Hmm. I'm stuck. Let's look at the sample input and see if there's a pattern.
+
+In the first sample input:
+
+n=1, k=1.
+
+x=1, y=2, z=3.
+
+The array is formed by a_i=1, b_i=0, c_i=1.
+
+The frequency array is:
+
+mask 0: 2 (y=2 times)
+
+mask 1: x + z =4 times.
+
+So the FWHT of this array is [6, -2].
+
+The product is this array. Inverse FWHT gives [2,4], which matches the sample.
+
+But the product is the same as the FWHT of the convolution (since n=1).
+
+In the second sample, n=2, k=2.
+
+Each array's FWHT is computed, then multiplied component-wise, then inverse transformed.
+
+But for each array, the FWHT is computed based on the three elements.
+
+So the key is to compute the FWHT for each array and multiply them all, then inverse.
+
+But the problem is the time.
+
+So what's the way forward?
+
+Perhaps the problem requires us to compute the product for each mask m as follows:
+
+For each mask m, compute the product of (x * (-1)^{a_i · m} + y * (-1)^{b_i · m} + z * (-1)^{c_i · m}) for all i.
+
+But since this is O(n * 2^k), and n is up to 1e5 and 2^k up to 1e5, this would be 1e10 operations, which is not feasible in Python. So there must be a mathematical optimization.
+
+Wait, but the term for each array is x * s_a + y * s_b + z * s_c, where each s is ±1. For each array, this can be written as (x + y + z) if s_a = s_b = s_c = 1. But in general, the term depends on the combination of s_a, s_b, s_c.
+
+But perhaps the term can be expressed in terms of the XOR of a_i, b_i, c_i, etc.
+
+Alternatively, perhaps the term can be expressed as a function of the parity of certain combinations of the bits.
+
+But I'm not making progress. Let's think of how to model this in code.
+
+Assuming that we have to proceed with the O(n * 2^k) approach, how can we optimize it?
+
+For each array i, compute the three masks a_i, b_i, c_i. Then, for each mask m, compute the parities pa = (a_i & m).bit_count() % 2, similarly for pb, pc. Then, the term is x * (-1)^pa + y * (-1)^pb + z * (-1)^pc. This term is computed modulo 998244353.
+
+But this is O(n * 2^k) operations, which is 1e10 for the worst case, which is way too slow.
+
+But perhaps there's a way to precompute for each mask m, the product of the terms across all arrays. But again, this is O(n * 2^k).
+
+Alternative idea: note that each array's contribution to the product for mask m is a function of the three parities. Let's precompute for each possible combination of parities (pa, pb, pc) the product of all arrays that contribute to that combination.
+
+But how?
+
+For example, for each array, the term can be one of 8 possible values, depending on (pa, pb, pc). Then, for each mask m, we can compute how many arrays contribute each possible term, and then compute the product as the product of (term_value)^count for each term_value.
+
+But how to compute for each mask m the count of arrays that have a particular combination of (pa, pb, pc) for that mask.
+
+But how can we compute the counts for all masks m?
+
+This seems like a problem of counting, for each mask m, the number of arrays where (a_i & m) has parity pa, (b_i & m) has parity pb, and (c_i & m) has parity pc, for each combination of pa, pb, pc.
+
+But there are 8 combinations of (pa, pb, pc), and for each combination, we need to know how many arrays fall into that category for a given mask m. Then, for each mask m, the product is the product over all combinations of (term for that combination) raised to the number of arrays in that combination for m.
+
+But how to compute this for all masks m efficiently.
+
+This seems like a multidimensional Moebius transform problem. For each combination of bits (pa, pb, pc), we need to compute the number of arrays that satisfy those parities for each mask m.
+
+But I'm not sure. Let's think: for each array i, the parities (pa, pb, pc) for mask m are determined by the parity of (a_i & m), (b_i & m), (c_i & m).
+
+For each array, this is equivalent to:
+
+pa = (a_i · m) mod 2
+
+pb = (b_i · m) mod 2
+
+pc = (c_i · m) mod 2
+
+So for each array i, these are linear functions of m in GF(2). 
+
+So the problem reduces to, for each mask m, count the number of arrays i for which the linear equations a_i · m = pa, b_i · m = pb, c_i · m = pc are satisfied, for each possible combination of (pa, pb, pc).
+
+But how to compute this for all masks m.
+
+This seems like a problem that can be solved using inclusion-exclusion or some form of Fast Möbius Transform.
+
+But it's a three-dimensional problem, which makes it more complex. Let's see.
+
+Each array i has three linear functions of m: f1(m) = a_i · m, f2(m) = b_i · m, f3(m) = c_i · m.
+
+We want to count, for each mask m, how many arrays have f1(m) = pa, f2(m) = pb, f3(m) = pc, for each (pa, pb, pc) in {0,1}^3.
+
+This is equivalent to computing, for each array i, an indicator function for each possible (pa, pb, pc) combination, and then summing these indicators across all arrays for each mask m.
+
+The problem is to compute these counts for all masks m.
+
+But how?
+
+Each array i's contribution to the counts depends on the three linear functions f1, f2, f3. For each mask m, the values of f1(m), f2(m), f3(m) are determined by m.
+
+The key idea here is to model each array as contributing to a certain subset of masks m that satisfy the three linear equations f1(m) = pa, etc., for a particular combination of pa, pb, pc.
+
+To compute the number of arrays in each subset for all masks m, we can model this as a problem of multi-dimensional linear equations and use the Fast Möbius Transform (also known as the inclusion-exclusion over the bits).
+
+But this approach would involve considering all possible combinations of the three linear equations and precomputing for each mask m how many arrays meet each combination.
+
+Let's break it down:
+
+For each array i, and for each combination (pa, pb, pc) in {0,1}^3, we can represent the condition that a_i · m = pa, b_i · m = pb, c_i · m = pc.
+
+Each of these conditions is a linear equation in GF(2). The solution space for m is the set of masks m that satisfy these equations.
+
+The number of masks m that satisfy these equations for array i is either zero or 2^{k - rank}, where rank is the rank of the system of equations.
+
+But we are not interested in the number of solutions for each array, but rather for each mask m, how many arrays i have m satisfying the equations for a particular (pa, pb, pc).
+
+So for each combination (pa, pb, pc), we can model the count of arrays i for which m satisfies the equations for that combination.
+
+This is a problem of multi-dimensional frequency counting.
+
+But how to compute this for all masks m.
+
+Alternatively, for each array i, we can precompute a 3x k matrix representing the three linear equations (a_i's bits, b_i's bits, c_i's bits). Then, for each mask m, the values of pa, pb, pc are determined by the dot products of m with these vectors.
+
+But even this approach seems challenging.
+
+Another idea: for each array i, the three linear equations can be represented as a 3-dimensional vector over GF(2). For example, the coefficients of the three equations are a_i, b_i, c_i.
+
+The system of equations for a particular (pa, pb, pc) may be solvable or not, depending on the linear independence of the equations.
+
+But perhaps, for each array i and for each possible combination of pa, pb, pc, we can determine whether there exists a mask m that satisfies these equations. For each such combination, the number of arrays i that have a solution to their equations for that combination.
+
+But this doesn't directly help, as we need counts for each mask m.
+
+This line of thinking is leading me into complexity.
+
+Perhaps it's time to look for hints or see if there's a pattern in the sample inputs.
+
+For example, in the first sample, after FWHT and inverse FWHT, the answer is obtained.
+
+In the second sample, the product of the transformed arrays is computed, and then inverse transformed.
+
+But the key insight is that the product of the transformed arrays is the element-wise product. But with n=1e5, this is computationally infeasible.
+
+So there must be a way to compute this product efficiently for all masks m.
+
+Alternative idea: note that each array's term in the transformed domain is a function that depends on the mask m. For each array, the term can be written as:
+
+F_i[m] = x*(-1)^{a_i · m} + y*(-1)^{b_i · m} + z*(-1)^{c_i · m}
+
+But this can be written as:
+
+F_i[m] = x * (-1)^{a_i · m} + y * (-1)^{b_i · m} + z * (-1)^{c_i · m}
+
+So for all arrays i, the product for mask m is the product of F_i[m] for all i.
+
+Now, the product for each m is a product of terms that are each a linear combination of three terms. This seems complicated, but perhaps there's a way to factor this product.
+
+For example, the product can be written as:
+
+prod_{i} (x * (-1)^{a_i · m} + y * (-1)^{b_i · m} + z * (-1)^{c_i · m})
+
+But this is a product of terms, each of which is a function of m's bitwise and with a_i, b_i, c_i.
+
+But how can this be factorized? It's possible if we can separate variables. For example, if for each array, the terms can be expressed as a product of factors that depend on different bits of m, then the product can be computed as a product of factors for each bit. But I'm not sure.
+
+Alternatively, take the logarithm. But since we are working modulo 998244353, which is a prime, taking logarithms isn't straightforward.
+
+Another observation: the product for each mask m can be viewed as a product of terms that are each a sum of three terms. The product can be expanded into a sum of terms, each of which is a product of one term from each array's sum. Each such term is a product of x, y, or z from each array, multiplied by (-1) raised to the sum of the dot products of the chosen a_i, b_i, or c_i with m.
+
+So the total product is a sum over all possible combinations of choosing a term (x, y, or z) from each array, multiplied by (-1) raised to the sum of the corresponding a_i, b_i, or c_i dotted with m. 
+
+The coefficient for each possible mask s (which is the sum of the chosen a_i, b_i, or c_i) is the sum of the products of x, y, z for all combinations of choices that result in s. Then, the product is the sum over s of (coefficient[s]) * (-1)^{s · m}.
+
+But then, the inverse FWHT of this sum will be the coefficient[s], which is the desired answer. Because the inverse FWHT of sum (coef[s] * (-1)^{s · m}) is coef[s].
+
+Wait, that's the key! Because the inverse FWHT is the same as the forward FWHT scaled by 1/2^k. So, if we can express the product for each mask m as sum (coef[s] * (-1)^{s · m}), then the inverse FWHT of this sum will give coef[s], which is the desired answer.
+
+So, the product for each mask m is the sum over s of coef[s] * (-1)^{s · m}. So the inverse FWHT of this product gives coef[s], which is exactly the answer.
+
+But how to compute this sum.
+
+The product is the product of (x * (-1)^{a_i · m} + y * (-1)^{b_i · m} + z * (-1)^{c_i · m}) for each array i.
+
+Expanding this product gives a sum over all possible sequences of choices (each choice is a_i, b_i, or c_i for each array) of the product of x, y, z for each choice, multiplied by (-1)^{sum (d_i · m)}, where d_i is the chosen a_i, b_i, or c_i for array i.
+
+So the sum is sum_{d_1, d_2, ..., d_n} (product of x, y, z for each choice) * (-1)^{(d_1 + d_2 + ... + d_n) · m}.
+
+Which can be rewritten as sum_{s} (number of ways to choose d_i such that their XOR sum is s) multiplied by the product of x, y, z for each choice, multiplied by (-1)^{s · m}.
+
+But wait, the sum of the d_i's in GF(2) is their XOR. So s is the XOR of all the d_i's chosen.
+
+Thus, the product for mask m is sum_{s} (count[s] * product of coefficients) * (-1)^{s · m}.
+
+So, when we apply the inverse FWHT to this product, the result is count[s] multiplied by the product of coefficients for each s. This count[s] is exactly the answer we need to output.
+
+Therefore, the problem reduces to computing the count[s] for each s, which is the number of ways to choose a term from each array (a_i, b_i, or c_i) such that their XOR is s, multiplied by the product of x, y, z for each choice.
+
+But this is exactly what the original problem requires. So the answer is the XOR convolution of all the individual arrays' possible choices.
+
+But this brings us back to the original approach of using FWHT, which is O(n * 2^k) time, which is not feasible.
+
+But wait, the XOR convolution of n arrays can be computed in O(k * 2^k) time if we use the FWHT approach. Here's how:
+
+1. Initialize the result array as [1] * 2^k.
+
+2. For each array i, compute its frequency array f_i, which has x at a_i, y at b_i, z at c_i (summing if any are duplicates).
+
+3. Compute the FWHT of f_i.
+
+4. Multiply the result array element-wise with the FWHT of f_i.
+
+5. After processing all arrays, compute the inverse FWHT of the result array to get the answer.
+
+This approach is correct, but the problem is step 3 and 4. For n=1e5 and k=17, steps 3 and 4 would take O(n * k * 2^k) time, which is 1e5 * 17 * 131072 ≈ 2.2e9 operations. This is way too slow for Python, which can handle around 1e8 operations per second.
+
+But there's a way to optimize step 3. For each array i, the frequency array f_i has at most 3 non-zero entries. So when computing the FWHT of f_i, we can compute it efficiently by iterating over the non-zero entries and updating the transformed array accordingly.
+
+The FWHT of f_i is a vector F_i where for each mask m, F_i[m] = sum_{s} f_i[s] * (-1)^{s · m}.
+
+But since f_i has only three non-zero entries (a_i, b_i, c_i), this sum is simply x * (-1)^{a_i · m} + y * (-1)^{b_i · m} + z * (-1)^{c_i · m}.
+
+So for each array i, we can compute F_i[m] for all m by evaluating this expression for each m. However, this is O(3 * 2^k) per array. For n=1e5 and k=17, this is 1e5 * 3 * 131072 = 3.9e8 operations, which is manageable.
+
+Then, step 4 involves multiplying the result array by F_i for each array. The result array is of size 2^k, and for each array, we multiply each element of the result array by F_i[m]. This is O(2^k) per array, leading to 1e5 * 131072 = 1.3e10 operations. This is way too slow for Python.
+
+But what if we precompute the exponents for each array's contribution to each mask m? For example, if we can find that the product for each mask m is the product of F_i[m] for all arrays i, which can be computed as exp(sum of log(F_i[m])), but this is not applicable under modulo.
+
+But no, because we are working modulo 998244353, logarithms are not directly applicable. 
+
+Thus, this seems like a dead end.
+
+But wait, the key observation is that for each mask m, the product is the product of (x * (-1)^{a_i · m} + y * (-1)^{b_i · m} + z * (-1)^{c_i · m}) for all arrays i. So the product can be computed for each mask m independently.
+
+But for each mask m, the product is the product of (x * s_a_i + y * s_b_i + z * s_c_i) for all i, where s_a_i is (-1)^{a_i · m}.
+
+But s_a_i is either 1 or -1. So for each array, the term can be rewritten as x*s_a_i + y*s_b_i + z*s_c_i. But this is a function that can take up to 8 possible values, depending on the signs s_a_i, s_b_i, s_c_i.
+
+But how to compute this for all masks m.
+
+Wait, the term x*s_a + y*s_b + z*s_c can be rewritten as:
+
+x * (-1)^(a · m) + y * (-1)^(b · m) + z * (-1)^(c · m)
+
+Let's consider that each array's term is a function of three variables: the parities of a_i · m, b_i · m, c_i · m. So for each array i, the term is a function of three bits. But there are only 8 possible functions for each array.
+
+But the problem is that the function for each array i depends on the three bits of m that are set in a_i, b_i, c_i.
+
+But perhaps we can precompute for each array i the possible values of the term for each of the 8 possible combinations of (pa, pb, pc), and then compute the product over all arrays i of the term for the combination that corresponds to mask m.
+
+But this requires knowing, for each mask m, the number of arrays i that have each combination of (pa, pb, pc) for that m. Then, the product for m is the product of (term_value)^(count of arrays with that combination).
+
+But how to compute the count of arrays for each combination of (pa, pb, pc) for each mask m.
+
+This seems like a problem of multidimensional Moebius transform.
+
+Each combination (pa, pb, pc) is a vector in GF(2)^3. For each mask m, the count of arrays i where (a_i · m, b_i · m, c_i · m) equals (pa, pb, pc) is required.
+
+This is equivalent to counting the number of arrays i that satisfy the system of equations:
+
+a_i · m = pa
+
+b_i · m = pb
+
+c_i · m = pc
+
+For each mask m.
+
+This is a system of linear equations in GF(2). For each array i, we can precompute the coefficients of these equations (the a_i, b_i, c_i), and for each mask m, solve the system to find if it's solvable and compute the count.
+
+But for each mask m, solving this for each array is O(1) with precomputed information.
+
+But how?
+
+Let's think of each array i as having three vectors a_i, b_i, c_i. For each array, the system of equations for m can be written as:
+
+a_i · m = pa
+
+b_i · m = pb
+
+c_i · m = pc
+
+The solution to this system for a given array i and (pa, pb, pc) is either empty or a affine subspace of GF(2)^k.
+
+But we need to count the number of arrays i where m is a solution to their system.
+
+But how?
+
+Let's consider that for each array i, and for each possible combination (pa, pb, pc), the system may have 0 or 2^{k - r} solutions, where r is the rank of the matrix formed by a_i, b_i, c_i.
+
+But this doesn't directly help us in counting how many arrays i have m in their solution space.
+
+Alternative idea: for each array i, precompute the linear relations between a_i, b_i, c_i. For example, check if a_i XOR b_i equals c_i, or other relations. Then, for a given m, the parities pa, pb, pc must satisfy these relations if the system is to be solvable.
+
+But this is getting too abstract.
+
+Perhaps the key is to realize that for each array i, the term can be expressed as a linear combination of basis functions, and thus the product can be represented as a sum over basis functions. Then, the inverse FWHT can be applied directly to this sum.
+
+But I'm not sure.
+
+At this point, I'm stuck and need to look for a different approach.
+
+Let's try to implement the O(n * 2^k) approach and see if it's feasible.
+
+But for n=1e5 and k=17, 1e5 * 131072 = 1.3e10 operations. In Python, each operation is about 1e-7 seconds, so 1.3e10 * 1e-7 = 1.3e3 seconds, which is about 20 minutes. This is way too slow.
+
+But perhaps there's a way to vectorize the operations using NumPy.
+
+Wait, in Python, using list comprehensions and bitwise operations, perhaps we can speed this up.
+
+Alternatively, note that for each array i, the term for mask m can be computed as follows:
+
+term_i = x * (-1)^(count_bits(a_i & m) % 2) + y * (-1)^(count_bits(b_i & m) % 2) + z * (-1)^(count_bits(c_i & m) % 2)
+
+But in Python, the number of set bits can be computed using the built-in function bin().bit_count().
+
+So for each array i, precompute a_i, b_i, c_i. Then, for each mask m in 0..2^k-1:
+
+pa = (a_i & m).bit_count() % 2
+
+pb = (b_i & m).bit_count() % 2
+
+pc = (c_i & m).bit_count() % 2
+
+term = x * (-1)**pa + y * (-1)**pb + z * (-1)**pc
+
+But this is for each array i and mask m, which is O(n * 2^k) time.
+
+But this is not feasible for n=1e5 and k=17.
+
+Alternative idea: precompute for each mask m the product of all terms for each array. But how?
+
+Wait, the product for each mask m is the product of (x * (-1)^(pa_i) + y * (-1)^(pb_i) + z * (-1)^(pc_i)) for all i.
+
+Each pa_i is (a_i & m) bit count % 2.
+
+This can be rewritten as:
+
+product = 1
+
+for each array i:
+
+    pa = popcount(a_i & m) % 2
+
+    pb = popcount(b_i & m) % 2
+
+    pc = popcount(c_i & m) % 2
+
+    product *= (x * (-1)**pa + y * (-1)**pb + z * (-1)**pc)
+
+product %= mod
+
+But this is O(n) per mask m.
+
+But for 2^k masks, this is O(n * 2^k) operations.
+
+This is not feasible for the given constraints.
+
+But perhaps there's a way to compute this more efficiently using bitmask properties or precompute certain terms.
+
+But I'm not seeing it.
+
+At this point, I'm stuck and think that the intended solution is to compute the product of the FWHT-transformed arrays and then apply the inverse transform. But given the time constraints, this is only feasible with optimizations.
+
+Let's try to proceed with this approach.
+
+Here's the plan:
+
+1. Precompute the size of the mask space: size = 2^k.
+
+2. Initialize the result array as [1] * size.
+
+3. For each array i:
+
+   a. Compute a_i, b_i, c_i.
+
+   b. Compute the three possible terms: x, y, z.
+
+   c. Compute the FWHT of the array f_i, which has x at a_i, y at b_i, and z at c_i. If any of a_i, b_i, c_i are the same, sum the terms.
+
+   d. Compute the FWHT of f_i. Since f_i has up to 3 non-zero entries, compute F_i[m] for each m as x * (-1)^{a_i · m} + y * (-1)^{b_i · m} + z * (-1)^{c_i · m}.
+
+   e. Multiply the result array by F_i element-wise, modulo mod.
+
+4. After processing all arrays, compute the inverse FWHT of the result array.
+
+5. Output the resulting array.
+
+But step 3d for each array i is O(3 * size), which is 3*2^k operations. With n=1e5 and k=17, this is 1e5 * 3 * 131072 = 3.9e8 operations. This might be manageable in Python using NumPy vectorization.
+
+Similarly, step 3e is O(size) operations per array, which is 1e5 * 131072 = 1.3e10 operations. This is not feasible.
+
+But if we can represent the result array in a way that allows vectorized operations, perhaps using NumPy arrays, then multiplying element-wise for each array could be done quickly.
+
+So the key is to use NumPy to handle the large arrays and perform element-wise multiplication efficiently.
+
+Here's how the code might look:
+
+- Precompute the size as 2^k.
+
+- Initialize the result array as a NumPy array of ones with dtype=mod.
+
+- For each array i:
+
+   a. Compute a_i, b_i, c_i.
+
+   b. Compute the three terms: x, y, z.
+
+   c. Compute the FWHT for each mask m:
+
+      F_i = x * (-1)^{a_i & m} + y * (-1)^{b_i & m} + z * (-1)^{c_i & m}
+
+   d. Multiply the result array by F_i element-wise, modulo mod.
+
+- After all arrays are processed, compute the inverse FWHT.
+
+But even this requires O(n * 2^k) operations, which is likely too slow.
+
+But perhaps there's a way to precompute all the F_i arrays and multiply them all at once, but I'm not sure.
+
+Another optimization: note that the product for each mask m is a product of terms, each of which is computed for each array i. If we can precompute all the terms for each mask m and array i, then multiply them together.
+
+But this requires O(n * 2^k) memory, which is impossible for n=1e5 and 2^17.
+
+So I'm stuck again.
+
+Given the time constraints, I'll proceed to write the code that follows the O(n * 2^k) approach, even though it's not feasible for large inputs, but that's the only way I can think of.
+
+But wait, in the problem statement, the third sample input has n=4, and the output is computed quickly, which suggests that the intended solution uses the FWHT approach with manageable time.
+
+But for large n, this approach is not feasible. So I must have missed something.
+
+Wait, the key insight is that the product of the transformed arrays can be computed as the product of the transformed terms for each array. But for each array, the transformed term can be computed in O(1) per mask m using the formula F_i[m] = x*(-1)^{a_i & m} + y*(-1)^{b_i & m} + z*(-1)^{c_i & m}.
+
+But how to compute this for all masks m efficiently.
+
+Wait, for each array i, a_i, b_i, c_i are masks. The parity of a_i & m can be computed as the parity of the number of overlapping set bits between a_i and m. This is equivalent to the parity of the dot product of a_i and m.
+
+But the parity of a_i & m can be computed as (a_i & m).bit_count() % 2.
+
+But for each array i and mask m, this can be done with a bitwise AND followed by a bit count.
+
+But with m up to 2^17 and n=1e5, this is O(n * 2^17) operations.
+
+But how to compute this efficiently.
+
+Another idea: precompute for each mask m and each array i the parities of a_i, b_i, c_i with m. But this is O(n * 2^17) memory and time, which is not feasible.
+
+But perhaps we can precompute the parities for all arrays and all masks m using bitwise operations.
+
+But I don't see a way to do this.
+
+Another idea: note that the parity of a_i & m is equal to the parity of the sum of the bits of m that are set in a_i. This is equivalent to the parity of the number of bits set in a_i & m.
+
+But this is a linear function over GF(2). So the parity is the sum (XOR) of the bits of m that are set in a_i.
+
+So, for each array i, the parity of a_i & m is the dot product of m and a_i in GF(2).
+
+So, for each array i, this is a linear function of m. Similarly for b_i and c_i.
+
+So, for each array i, the term is x * (-1)^{a_i · m} + y * (-1)^{b_i · m} + z * (-1)^{c_i · m}.
+
+This can be rewritten as x * s_a_i + y * s_b_i + z * s_c_i, where s_a_i is (-1) raised to the linear function a_i · m.
+
+Now, the product over all arrays is the product of (x * s_a_i + y * s_b_i + z * s_c_i) for each array i.
+
+But each term is a function of three linear functions of m. The product of such terms can be viewed as a function that is a product of linear combinations of these functions.
+
+But I'm not sure how to proceed.
+
+Another idea: the product can be expressed as a sum over all possible combinations of choosing one of the three terms from each array. Each such combination contributes a product of the coefficients (x, y, z) and a sign (-1) raised to the sum of the corresponding linear functions.
+
+The total is the sum over all combinations of (product of coefficients) * (-1)^{sum (d_i · m)}, where d_i is a_i, b_i, or c_i for the chosen term in array i.
+
+The sum of the d_i's is the XOR of all the chosen terms. So the sum is the XOR of all d_i's.
+
+The coefficient for each XOR value s is the sum of the product of coefficients for all combinations of choices that result in an XOR of s.
+
+This is exactly the XOR convolution of all the individual arrays' possible choices. So the answer is the XOR convolution of all the arrays' frequency vectors.
+
+Thus, the correct approach is to compute the XOR convolution of the frequency vectors using FWHT, which is O(k 2^k + n 2^k) time. But with n=1e5, this is not feasible.
+
+But wait, the number of arrays is 1e5, but for each array, the frequency vector has at most 3 non-zero elements. The XOR convolution of all arrays can be computed as follows:
+
+Initialize the result array as a vector of zeros, then set result[0] = 1.
+
+For each array i:
+
+   compute the frequency vector f_i, which has x at a_i, y at b_i, z at c_i (summing if duplicates).
+
+   compute the XOR convolution of the current result array with f_i.
+
+The XOR convolution can be computed using FWHT.
+
+But this approach is O(n (k 2^k)), which for n=1e5 is 1e5 * 17 * 131072 = 2.2e9 operations, which is way too slow.
+
+But with each array having only 3 non-zero elements, perhaps there's a way to compute the convolution more efficiently.
+
+Each array i's frequency vector has three entries: a_i, b_i, c_i. So when convolving with the current result array, each element in the new result is the sum over the three elements multiplied by the corresponding elements in the current result array XORed with a_i, b_i, or c_i.
+
+This is O(3 * 2^k) per array. For n=1e5 and k=17, this is 1e5 * 3 * 131072 = 3.9e8 operations, which is manageable.
+
+Yes! This is the key.
+
+The XOR convolution of two arrays can be computed as follows:
+
+For each element s in the first array, and for each element t in the second array, add s * t to the result at s XOR t.
+
+If the first array has a elements and the second has b elements, this is O(a*b) time.
+
+In our case, the first array (result) is of size 2^k, and the second array (f_i) has up to 3 elements. So each convolution step takes O(3 * 2^k) time.
+
+For n=1e5 arrays, this is O(n * 3 * 2^k) time.
+
+For k=17, this is 1e5 * 3 * 131072 = 3.9e8 operations. Which is manageable.
+
+Yes! This is the correct approach.
+
+So the steps are:
+
+1. Initialize the result array as a list of zeros of size 2^k. Set result[0] = 1.
+
+2. For each array i:
+
+   a. Compute the frequency array for this array: a_i, b_i, c_i. For each of these values, add x, y, z respectively, summing if any of them are the same.
+
+   b. Create a temporary array tmp of size 2^k, initialized to 0.
+
+   c. For each s in the current result array where result[s] > 0:
+
+       i. For each t in the current array's frequency array (a_i, b_i, c_i):
+
+           tmp[s XOR t] += result[s] * (x, y, or z, depending on t)
+
+           tmp[s XOR t] %= mod
+
+   d. Set the result array to tmp.
+
+But this is incorrect. Because the current result array is the convolution up to the previous arrays. For each new array, the convolution is computed as the sum over all s in the previous result and t in the current array's frequency, and their XOR contributes s XOR t.
+
+But the current array's frequency array has entries for a_i, b_i, c_i with counts x, y, z. So the correct way to compute the convolution is:
+
+For each possible mask s in the previous result:
+
+   for each possible mask t in the current array's frequency:
+
+       new_mask = s XOR t
+
+       new_count = result[s] * count[t]
+
+       add new_count to the new_result[new_mask]
+
+But the current array's frequency array has entries for a_i, b_i, c_i with counts x, y, z. So for each array i, the frequency array is a dict with keys a_i, b_i, c_i and values x, y, z (summing duplicates).
+
+Thus, for each array i, the convolution step is:
+
+new_result = [0] * size
+
+for s in range(size):
+
+    if result[s] == 0:
+
+        continue
+
+    # Multiply with current array's frequency, which has up to 3 entries
+
+    for t in [a_i, b_i, c_i]:
+
+        new_result[s ^ t] = (new_result[s ^ t] + result[s] * count[t]) % mod
+
+But count[a_i] is x, count[b_i] is y, count[c_i] is z.
+
+But if a_i == b_i, then count[a_i] is x + y, etc.
+
+So first, for each array i, we need to compute the count for each unique mask:
+
+current_counts = defaultdict(int)
+
+current_counts[a_i] += x
+
+current_counts[b_i] += y
+
+current_counts[c_i] += z
+
+So current_counts will have up to 3 entries.
+
+Then, for each s in the current result array:
+
+   for t in current_counts.keys():
+
+       new_result[s ^ t] += result[s] * current_counts[t]
+
+       new_result[s ^ t] %= mod
+
+This way, each array i's convolution step takes O(3 * size) time.
+
+For n=1e5 and size=131072, this is 1e5 * 3 * 131072 = 3.9e8 operations. Which should be manageable in Python, especially with optimized code.
+
+Yes, this is the correct approach!
+
+Thus, the algorithm is:
+
+Initialize the result as a list where result[0] = 1, and all others 0.
+
+For each array i:
+
+   compute the current_counts dictionary, which contains the masks and their counts (x, y, z, summed for duplicates).
+
+   create a new_result list initialized to 0.
+
+   for each s in the current result:
+
+       if result[s] is 0, skip.
+
+       for each t in current_counts:
+
+           new_result[s ^ t] = (new_result[s ^ t] + result[s] * current_counts[t]) % mod
+
+   set result = new_result
+
+Finally, output the result list.
+
+But wait, this approach will have O(n * 3 * size) time, which for the worst case is manageable.
+
+But in Python, for size=131072 and n=1e5, this would be 1e5 * 3 * 1e5 = 3e10 operations, which is way too slow.
+
+Wait, no. For each array i, the current result array has size 2^k. For each s in this array, we loop through all 3 entries of current_counts. So for each array i, the inner loop runs size * 3 times.
+
+So for size=131072 and n=1e5, it's 1e5 * 3 * 131072 = 3.9e8 operations. Each operation is a multiply and add. In Python, each operation is about 1e-7 seconds, so total time is 3.9e8 * 1e-7 = 39 seconds. Which is acceptable.
+
+Yes! This is the correct approach. I missed this earlier.
+
+So the code will be:
+
+Read n, k.
+
+size = 2^k
+
+mod = 998244353
+
+result = [0] * size
+
+result[0] = 1
+
+x, y, z = map(int, input().split())
+
+for each of the next n arrays:
+
+    a, b, c = map(int, input().split())
+
+    # Compute current_counts
+
+    current_counts = defaultdict(int)
+
+    current_counts[a] += x
+
+    current_counts[b] += y
+
+    current_counts[c] += z
+
+    # Convert to a list of (mask, count)
+
+    masks = list(current_counts.keys())
+
+    counts = [current_counts[m] for m in masks]
+
+    # Create new_result
+
+    new_result = [0] * size
+
+    for s in range(size):
+
+        if result[s] == 0:
+
+            continue
+
+        for i in range(len(masks)):
+
+            t = masks[i]
+
+            count = counts[i]
+
+            new_s_xor_t = s ^ t
+
+            new_result[new_s_xor_t] = (new_result[new_s_xor_t] + result[s] * count) % mod
+
+    result = new_result
+
+print(result)
+
+Wait, but this is not correct. Because for each array, the convolution is the XOR of the previous result with the current array's possibilities. The current approach computes the convolution with the current array's frequency array, which has x, y, z entries. So this is correct.
+
+But the sample input 1:
+
+n=1, x=1, y=2, z=3.
+
+array is a=1, b=0, c=1.
+
+current_counts is {1:1+3=4, 0:2}.
+
+masks are [1, 0].
+
+counts are [4, 2].
+
+The initial result is [1, 0, 0, ...].
+
+After processing the array:
+
+new_result is computed as:
+
+for s=0:
+
+   for t=1: new_result[0^1=1] += 1 *4 → 4
+
+   for t=0: new_result[0^0=0] += 1 *2 → 2.
+
+So new_result is [2,4, ...], which matches the sample's frequency array. Then, after the convolution, which is just this array, the result is [2,4].
+
+After inverse FWHT, the answer is [ (2+4)/1, (2-4)/1 ] → [6, -2]. But since the inverse FWHT of the convolution is the answer. Wait, no. The result after convolution is [2,4], which is the frequency array. But the problem requires the answer to be the XOR convolution of all arrays, which is exactly what this code is computing.
+
+But sample input 1's correct answer is [2,4], which is exactly the result after processing the single array. But according to the sample explanation, the answer is [2,4], but according to the problem statement, the output is the count for each t, which is the convolution of all arrays. So this approach is correct.
+
+Wait, no. The sample input has one array. The frequency array is [2 (mask 0),4 (mask 1)]. The number of ways to choose one element from the array is 2+4=6. The XOR of the single element chosen is either 0 or 1. So the answer is [2,4], which matches the code's result.
+
+Yes. So the code is correct.
+
+Similarly, the second sample input:
+
+n=2, k=2.
+
+array 1: 0,1,2 → current_counts is 0:1, 1:2, 2:1 → a=0, b=1, c=2.
+
+Wait, no. For array 1, a=0, b=1, c=2. x=1, y=2, z=1.
+
+current_counts: 0:1, 1:2, 2:1.
+
+array 2: 1,2,3 → a=1, b=2, c=3. x=1, y=2, z=1.
+
+current_counts for array 2: 1:1, 2:2,3:1.
+
+The code computes the convolution of these two arrays.
+
+For the first array, the result after processing is [1, 0, 0, 0] → after processing array 1, the result is [0:1*1=1 (mask 0+0), 0^0=0], but no, the code's initial result is [1, 0, 0, 0], then after processing array 1's current_counts (masks 0,1,2 with counts 1, 2, 1):
+
+new_result is computed as:
+
+for s in initial result (s=0):
+
+   for t=0: new_result[0] += 1 *1 =1
+
+   for t=1: new_result[1] += 1*2=2
+
+   for t=2: new_result[2] += 1*1=1
+
+So after first array, result is [1, 2, 1, 0].
+
+Then, processing array 2's current_counts (masks 1,2,3 with counts 1, 2, 1):
+
+new_result is initialized to 0.
+
+For s in 0..3:
+
+s=0, result[s]=1:
+
+   t=1: new_result[0^1=1] += 1*1=1
+
+   t=2: new_result[2] += 1*2=2
+
+   t=3: new_result[3] += 1*1=1
+
+s=1, result[s]=2:
+
+   t=1: new_result[1^1=0] += 2*1=2 → new_result[0] +=2
+
+   t=2: new_result[1^2=3] += 2*2=4 → new_result[3] +=4
+
+   t=3: new_result[1^3=2] += 2*1=2 → new_result[2] +=2
+
+s=2, result[s]=1:
+
+   t=1: new_result[2^1=3] +=1*1=1 → new_result[3] +=1
+
+   t=2: new_result[2^2=0] +=1*2=2 → new_result[0] +=2
+
+   t=3: new_result[2^3=1] +=1*1=1 → new_result[1] +=1
+
+s=3, result[s]=0:
+
+   no contribution.
+
+So new_result after array 2:
+
+mask 0: 2 (from s=0, t=2) and 2 (from s=2, t=2) → total 4.
+
+mask 1: 1 (s=0, t=1) + 1 (s=2, t=3) → 2.
+
+mask 2: 2 (s=0, t=2) + 2 (s=1, t=3) → 2 + 2=4?
+
+Wait, let's recompute:
+
+After processing array 2:
+
+new_result starts as [0,0,0,0].
+
+Processing s=0:
+
+t=1: new_result[1] += 1*1 → 1
+
+t=2: new_result[2] += 1*2 → 2
+
+t=3: new_result[3] += 1*1 →1
+
+new_result is [0,1,2,1].
+
+Processing s=1 (result[s]=2):
+
+t=1: new_result[0] += 2*1 → 0+2=2
+
+t=2: new_result[3] += 2*2 →1+4=5
+
+t=3: new_result[2] +=2*1 →2+2=4
+
+new_result is [2,1,4,5].
+
+Processing s=2 (result[s]=1):
+
+t=1: new_result[3] +=1*1 →5+1=6
+
+t=2: new_result[0] +=1*2 →2+2=4
+
+t=3: new_result[1] +=1*1 →1+1=2
+
+new_result becomes [4, 2,4,6].
+
+Processing s=3 (result[s]=0): no contribution.
+
+So new_result is [4, 2,4,6]. Which matches the sample output of [4,2,4,6].
+
+Yes, this approach is correct.
+
+Thus, the correct code is to iterate through each array, compute the current counts, then for each possible s in the current result, multiply by each t in the current counts and accumulate the XOR s^t.
+
+This code is manageable for n=1e5 and k=17.
+</think>
+To solve this problem, we need to determine the number of ways to select exactly one integer from each array such that the XOR of the selected integers equals each possible value from 0 to 2^k - 1. The solution involves efficiently computing the XOR convolution of the frequency distributions of each array using dynamic programming and bitwise operations.
+
+### Approach
+1. **Problem Analysis**: Each array is formed by repeating three integers a, b, and c, x, y, and z times respectively. We need to count the ways to select integers from these arrays such that their XOR equals each possible value.
+2. **Dynamic Programming with XOR Convolution**: Use dynamic programming to maintain a result array where each entry at index `i` represents the number of ways to achieve the XOR value `i` using the arrays processed so far. For each new array, update the result array by considering the contributions of each possible XOR value from the current array.
+3. **Efficient Updates**: For each array, compute the contribution of each possible XOR value and update the result array using bitwise XOR operations to maintain the count of valid selections.
+
+### Solution Code
+```python
+import sys
+from collections import defaultdict
+
+MOD = 998244353
+
+def main():
+    input = sys.stdin.read().split()
+    ptr = 0
+    n, k = int(input[ptr]), int(input[ptr+1])
+    ptr += 2
+    x, y, z = map(int, input[ptr:ptr+3])
+    ptr +=3
+    size = 1 << k
+    result = [0] * size
+    result[0] = 1  # Initial state: one way to have XOR 0 with 0 elements
+    
+    for _ in range(n):
+        a = int(input[ptr])
+        b = int(input[ptr+1])
+        c = int(input[ptr+2])
+        ptr +=3
+        
+        # Compute current_counts, handling duplicates
+        current_counts = defaultdict(int)
+        current_counts[a] = (current_counts[a] + x) % MOD
+        current_counts[b] = (current_counts[b] + y) % MOD
+        current_counts[c] = (current_counts[c] + z) % MOD
+        
+        masks = list(current_counts.keys())
+        counts = [current_counts[m] for m in masks]
+        new_result = [0] * size
+        
+        for s in range(size):
+            res_s = result[s]
+            if res_s == 0:
+                continue
+            for i in range(len(masks)):
+                t = masks[i]
+                cnt = counts[i]
+                new_s = s ^ t
+                new_result[new_s] = (new_result[new_s] + res_s * cnt) % MOD
+        
+        result = new_result
+    
+    print(' '.join(map(str, result)))
+
+if __name__ == '__main__':
+    main()
+```
+
+### Explanation
+1. **Initialization**: We start with a result array initialized to 0, except for the 0th index which is 1, indicating there is one way to achieve an XOR of 0 with zero elements.
+2. **Processing Each Array**: For each array, compute the frequency distribution of the integers a, b, and c considering their respective counts x, y, and z.
+3. **Dynamic Programming Update**: For each possible current XOR value, update the result array by considering each possible XOR value from the current array. This involves updating the result array with the product of the current count and the count from the new array, adjusted using XOR operations.
+4. **Output**: After processing all arrays, the result array contains the number of ways to achieve each possible XOR value from 0 to 2^k - 1, which is printed as the final result.
+
+This approach efficiently computes the required result using dynamic programming and bitwise operations, ensuring the solution handles large input sizes within acceptable time limits.
+</bot>

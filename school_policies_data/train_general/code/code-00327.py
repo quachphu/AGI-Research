@@ -1,0 +1,4866 @@
+    ret = []
+    n = head
+    while True:
+        if n is not None:
+            ret.append(n)
+        if n == tail:
+            break
+        n = next_dict[n]  # type: ignore[index]
+    return ret
+
+
+def _is_corresponding_collective_wait(
+    collective_snode: BaseSchedulerNode,
+    wait_snode: BaseSchedulerNode,
+    node_output_sets: dict[BaseSchedulerNode, frozenset[str]],
+    node_dep_sets: dict[BaseSchedulerNode, frozenset[str]],
+) -> bool:
+    """
+    Check if a wait node corresponds to a given collective node.
+    Uses pre-computed sets for O(1) lookup.
+    """
+    collective_outs = node_output_sets[collective_snode]
+    unmet_deps = node_dep_sets[wait_snode]
+    return bool(unmet_deps & collective_outs)
+
+
+def _coll_exposed_communication_time(
+    collective_snode: BaseSchedulerNode,
+    next_dict: dict[BaseSchedulerNode, BaseSchedulerNode | None],
+    runtimes: dict[BaseSchedulerNode, float],
+    node_output_sets: dict[BaseSchedulerNode, frozenset[str]],
+    node_dep_sets: dict[BaseSchedulerNode, frozenset[str]],
+) -> tuple[float, float, str]:
+    """
+    Calculate exposed communication time by iterating directly over linked list.
+    Avoids O(N) list construction for each call.
+
+    The collective_snode is the starting point, iteration continues via next_dict.
+    """
+    comm_time = runtimes[collective_snode]
+    comp_time = 0.0
+    collective_outs = node_output_sets[collective_snode]
+    overlap_info = ""
+    collectives_found: list[BaseSchedulerNode] = []
+
+    snode = next_dict[collective_snode]
+    while snode is not None:
+        unmet_deps = node_dep_sets[snode]
+
+        if unmet_deps & collective_outs:
+            overlap_info += f"->W[{snode.get_name()}]"
+            break
+
+        if contains_collective(snode):
+            if not contains_async_collective(snode):
+                break
+            else:
+                collectives_found.append(snode)
+                snode = next_dict[snode]
+                continue
+        if contains_wait(snode):
+            has_wait_for_collectives_found = False
+            for _coll in collectives_found:
+                if _is_corresponding_collective_wait(
+                    collective_snode, snode, node_output_sets, node_dep_sets
+                ):
+                    has_wait_for_collectives_found = True
+                    break
+            if has_wait_for_collectives_found:
+                break
+
+        comp_time_before = comp_time
+
+        def accumulate_time(_snode: BaseSchedulerNode) -> None:
+            nonlocal comp_time
+            comp_time += runtimes[_snode]
+
+        _temp_group_visit_leaves(snode, accumulate_time)
+        comp_time_after = comp_time
+        overlap_info += f"+{snode.get_name()}[{comp_time_after - comp_time_before}]"
+
+        snode = next_dict[snode]
+
+    return comm_time, comp_time, overlap_info
+
+
+def _wait_exposed_communication_time(
+    wait_snode: BaseSchedulerNode,
+    head: BaseSchedulerNode,
+    prev_dict: dict[BaseSchedulerNode, BaseSchedulerNode | None],
+    runtimes: dict[BaseSchedulerNode, float],
+    node_output_sets: dict[BaseSchedulerNode, frozenset[str]],
+    node_dep_sets: dict[BaseSchedulerNode, frozenset[str]],
+) -> tuple[float, float, str]:
+    """
+    Calculate exposed communication time for a wait operation by iterating
+    directly over linked list backwards. Avoids O(N) list construction.
+
+    Iterates from wait_snode backwards using prev_dict to find corresponding collective.
+    """
+    comm_time = 0.0
+    comp_time = 0.0
+    overlap_info = ""
+    waits_found: list[BaseSchedulerNode] = []
+
+    snode = prev_dict[wait_snode]
+    while snode is not None:
+        if contains_wait(snode):
+            waits_found.append(snode)
+        if contains_collective(snode):
+            if _is_corresponding_collective_wait(
+                snode, wait_snode, node_output_sets, node_dep_sets
+            ):
+                comm_time = runtimes[snode]
+                overlap_info += f"->C[{snode.get_name()}]"
+                break
+
+            if not contains_async_collective(snode):
+                comp_time = 0.0
+                snode = prev_dict[snode]
+                continue
+            else:
+                for w in waits_found:
+                    if _is_corresponding_collective_wait(
+                        snode, w, node_output_sets, node_dep_sets
+                    ):
+                        comp_time = 0.0
+                        break  # inner loop break
+                snode = prev_dict[snode]
+                continue
+
+        comp_time_before = comp_time
+
+        def accumulate_time(_snode: BaseSchedulerNode) -> None:
+            nonlocal comp_time
+            comp_time += runtimes[_snode]
+
+        _temp_group_visit_leaves(snode, accumulate_time)
+        comp_time_after = comp_time
+        overlap_info += f"+{snode.get_name()}[{comp_time_after - comp_time_before}]"
+
+        snode = prev_dict[snode]
+
+    return comm_time, comp_time, overlap_info
+
+
+def _perform_double_linked_list_swap(
+    candidate: BaseSchedulerNode,
+    group_head: BaseSchedulerNode,
+    group_tail: BaseSchedulerNode,
+    prev_dict: dict[BaseSchedulerNode, BaseSchedulerNode | None],
+    next_dict: dict[BaseSchedulerNode, BaseSchedulerNode | None],
+    head: BaseSchedulerNode,
+) -> BaseSchedulerNode:
+    """
+    Swap positions of candidate and group in doubly-linked list.
+
+    Transforms:
+    candidate_prev -> candidate -> group_head...group_tail -> group_tail_next
+    Into:
+    candidate_prev -> group_head...group_tail -> candidate -> group_tail_next
+
+    Args:
+        candidate: Node to swap with group
+        group_head: First node of group
+        group_tail: Last node of group
+        prev_dict: Dictionary mapping nodes to their previous nodes
+        next_dict: Dictionary mapping nodes to their next nodes
+        head: Current head of the linked list
+
+    Returns:
+        New head of the linked list (may change if candidate was the head)
+    """
+    # 0: Update candidate's previous node
+    candidate_prev = prev_dict[candidate]
+    if candidate_prev:
+        next_dict[candidate_prev] = group_head
+    prev_dict[group_head] = candidate_prev
+
+    # 2: Update group_tail's next node
+    group_tail_next = next_dict[group_tail]
+    if group_tail_next:
+        prev_dict[group_tail_next] = candidate
+    next_dict[candidate] = group_tail_next
+
+    # 1: Link group_tail to candidate
+    prev_dict[candidate] = group_tail
+    next_dict[group_tail] = candidate
+
+    # Update head if candidate was the head
+    if head == candidate:
+        return group_head
+    return head
+
+
+def _calculate_potential_peak_memory_reorder(
+    candidate: BaseSchedulerNode,
+    gns: list[BaseSchedulerNode],
+    group_tail: BaseSchedulerNode,
+    group_peak_memory: int,
+    candidate_delta_mem: int,
+    candidate_allocfree: SNodeMemory,
+    group_n_to_bufs_after_swap_dealloc_by_candidate: dict,
+    curr_memory: dict,
+) -> tuple[int, dict[BaseSchedulerNode, int]]:
+    """
+    Calculate potential peak memory after swapping candidate with group (reorder version).
+
+    Computes new memory levels for all affected nodes and returns the potential
+    peak memory along with cached post-allocation memory values for each node.
+
+    Args:
+        candidate: Node being moved
+        gns: Group nodes
+        group_tail: Last node of group
+        group_peak_memory: Current peak memory within the group
+        candidate_delta_mem: Net memory change from candidate (alloc - free)
+        candidate_allocfree: Candidate's allocation/free info
+        group_n_to_bufs_after_swap_dealloc_by_candidate: Buffers whose deallocation moves to candidate
+        curr_memory: Current memory state dict
+
+    Returns:
+        Tuple of (potential_peak_memory, post_alloc_update_dict)
+    """
+    # Caching calculations of memory for group nodes and candidate,
+    # to apply without recalculation after swap.
+    _post_alloc_update: dict[BaseSchedulerNode, int] = {}
+    potential_peak: int = 0
+    if not group_n_to_bufs_after_swap_dealloc_by_candidate:
+        # Not accounting for buffers last use change
+        potential_peak = max(
+            group_peak_memory - candidate_delta_mem,
+            curr_memory[group_tail][1]
+            - candidate_delta_mem
+            + candidate_allocfree.size_alloc,
+        )
+        return potential_peak, _post_alloc_update
+
+    # If candidate will be after group, the starting memory level of group nodes
+    # changes to the -(candidate.size_alloc - candidate.size_free)
+    mem_after_reorder_delta: int = -candidate_delta_mem
+    for gn in gns:
+        gn_post_alloc_mem = curr_memory[gn][0] + mem_after_reorder_delta
+        _post_alloc_update[gn] = gn_post_alloc_mem
+        potential_peak = max(potential_peak, gn_post_alloc_mem)
+
+        bufs = group_n_to_bufs_after_swap_dealloc_by_candidate.get(gn)
+        if bufs is not None:
+            for buf in bufs:
+                # Candidate will deallocate those buffers
+                mem_after_reorder_delta += buf.mpi_buffer.size_free
+
+    candidate_mem_post_alloc = (
+        curr_memory[group_tail][1]
+        + mem_after_reorder_delta
+        + candidate_allocfree.size_alloc
+    )
+    _post_alloc_update[candidate] = candidate_mem_post_alloc
+    potential_peak = max(potential_peak, candidate_mem_post_alloc)
+    return potential_peak, _post_alloc_update
+
+
+def _update_memory_tracking_after_swap_reorder(
+    candidate: BaseSchedulerNode,
+    gns: list[BaseSchedulerNode],
+    group_tail: BaseSchedulerNode,
+    candidate_delta_mem: int,
+    candidate_allocfree: SNodeMemory,
+    group_n_to_bufs_after_swap_dealloc_by_candidate: dict,
+    post_alloc_update: dict[BaseSchedulerNode, int],
+    curr_memory: dict,
+    buf_to_snode_last_use: dict,
+    snodes_allocfree: dict,
+) -> None:
+    """
+    Update memory tracking structures after swap (reorder version).
+
+    Updates curr_memory, buf_to_snode_last_use, and snodes_allocfree dictionaries
+    to reflect the new memory state after swapping candidate with group.
+
+    Args:
+        candidate: Node that was moved
+        gns: Group nodes
+        group_tail: Last node of group
+        candidate_delta_mem: Net memory change from candidate (alloc - free)
+        candidate_allocfree: Candidate's allocation/free info
+        group_n_to_bufs_after_swap_dealloc_by_candidate: Buffers whose deallocation moves to candidate
+        post_alloc_update: Cached post-allocation memory values
+        curr_memory: Current memory state dict (mutated)
+        buf_to_snode_last_use: Buffer to last-use node mapping (mutated)
+        snodes_allocfree: Node allocation/free info dict (mutated)
+    """
+    if not group_n_to_bufs_after_swap_dealloc_by_candidate:
+        for gn in gns:
+            cm = curr_memory[gn]
+            curr_memory[gn] = (
+                cm[0] - candidate_delta_mem,
+                cm[1] - candidate_delta_mem,
+            )
+        _candidate_post_alloc_mem = (
+            curr_memory[group_tail][1] + candidate_allocfree.size_alloc
+        )
+        _candidate_post_free_mem = (
+            _candidate_post_alloc_mem - candidate_allocfree.size_free
+        )
+        curr_memory[candidate] = (
+            _candidate_post_alloc_mem,
+            _candidate_post_free_mem,
+        )
+        return
+
+    # Candidate becomes last use of some bufs
+    for bufs in group_n_to_bufs_after_swap_dealloc_by_candidate.values():
+        for buf in bufs:
+            buf_to_snode_last_use[buf] = candidate
+
+    size_free_to_move_to_candidate_sum: int = 0
+    for n in gns:
+        _gn_post_alloc_mem: int = post_alloc_update[n]
+        size_free_to_move_to_candidate: int = sum(
+            buf.mpi_buffer.size_free
+            for buf in group_n_to_bufs_after_swap_dealloc_by_candidate[n]
+        )
+        size_free_to_move_to_candidate_sum += size_free_to_move_to_candidate
+        # group node does not deallocate this after swap
+        snodes_allocfree[n].size_free -= size_free_to_move_to_candidate
+        gn_post_free_mem: int = _gn_post_alloc_mem - snodes_allocfree[n].size_free
+        curr_memory[n] = (_gn_post_alloc_mem, gn_post_free_mem)
+    _candidate_post_alloc_mem = post_alloc_update[candidate]
+    snodes_allocfree[candidate].size_free += size_free_to_move_to_candidate_sum
+    candidate_post_free_mem = (
+        _candidate_post_alloc_mem - snodes_allocfree[candidate].size_free
+    )
+    curr_memory[candidate] = (
+        _candidate_post_alloc_mem,
+        candidate_post_free_mem,
+    )
+
+
+def _find_buffers_with_changed_last_use(
+    candidate: BaseSchedulerNode,
+    gns: list[BaseSchedulerNode],
+    buf_to_snode_last_use: dict,
+    candidate_buffer_map: dict[BaseSchedulerNode, OrderedSet],
+) -> dict[BaseSchedulerNode, list[FreeableInputBuffer | Any]]:
+    """
+    Find buffers whose last use will change after swapping candidate with group.
+
+    When we swap [candidate [group]] to [[group] candidate], some buffers that
+    were last used by a group node will now be last used by candidate instead.
+    This affects memory deallocation timing.
+
+    Args:
+        candidate: The node being moved
+        gns: Group nodes being swapped with candidate
+        buf_to_snode_last_use: Mapping of buffers to their current last-use nodes
+        candidate_buffer_map: Pre-computed map of node -> buffers using that node
+
+    Returns:
+        Dict mapping group nodes to buffers that will change their last-use node
+    """
+    group_n_to_bufs_after_swap_dealloc_by_candidate: dict[
+        BaseSchedulerNode, list[FreeableInputBuffer | Any]
+    ] = defaultdict(list)
+
+    # Optimization: only check buffers where candidate is a successor
+    # Reduces from O(all_buffers) to O(buffers_per_candidate)
+    candidate_bufs = candidate_buffer_map.get(candidate, OrderedSet())
+    gns_set = OrderedSet(gns)  # O(1) membership testing
+
+    for buf in candidate_bufs:
+        snode_last_use = buf_to_snode_last_use[buf]
+        if snode_last_use in gns_set:
+            group_n_to_bufs_after_swap_dealloc_by_candidate[snode_last_use].append(buf)
+
+    return group_n_to_bufs_after_swap_dealloc_by_candidate
+
+
+def _is_node_groupable_for_reorder(
+    candidate: BaseSchedulerNode,
+) -> tuple[bool, str | None]:
+    """
+    Check if a candidate node can be grouped with collective during reordering.
+
+    This pass processes collectives left to right, so we avoid grouping with
+    already-processed collectives based on configuration.
+
+    Args:
+        candidate: Node to check for groupability
+
+    Returns:
+        Tuple of (is_groupable, reason_if_not_groupable)
+    """
+    # This pass processes collectives left to right,
+    # Do not group with processed collectives.
+    # Leaving config for experimentation in 2D
+    if not config_comms.reorder_iterative_group_with_collectives:
+        if contains_async_collective(candidate):
+            return (
+                False,
+                f"candidate contains_collective {candidate.get_name()}",
+            )
+    if not config_comms.reorder_iterative_use_runtime_estimations:
+        if contains_gemm_like(candidate):
+            return False, "contains_gemm_like"
+    return True, None
+
+
+def _format_and_log_reordering_stats(
+    stats: dict[BaseSchedulerNode, ReorderInfo],
+    head: BaseSchedulerNode,
+    next_dict: dict[BaseSchedulerNode, BaseSchedulerNode | None],
+    original_snodes_num: int,
+    peak_memory: int,
+    name_to_freeable_input_buf: dict,
+    graph_outputs: OrderedSet[str],
+) -> list[BaseSchedulerNode]:
+    """
+    Format reordering statistics, log them, and return final node list.
+
+    Computes improvement metrics, creates a formatted table (using tabulate if
+    available), validates the reordered node count, recalculates peak memory,
+    and logs all information.
+
+    Args:
+        stats: Per-node reordering statistics
+        head: Head of the reordered linked list
+        next_dict: Linked list next pointers
+        original_snodes_num: Original number of nodes (for validation)
+        peak_memory: Initial peak memory before reordering
+        name_to_freeable_input_buf: Buffer memory tracking info
+        graph_outputs: Graph output names
+
+    Returns:
+        Final reordered list of scheduler nodes
+    """
+    node_stats = stats
+    improvement = {snode: node_stats[snode].improvement for snode in node_stats}
+    total_improvement = sum([improvement[snode] for snode in improvement])
+    total_moves = sum([node_stats[snode].moves for snode in node_stats])
+
+    reorder_log_str = (
+        f"reorder_communication_preserving_peak_memory improved overlap by {total_improvement} ns"
+        f" after {total_moves} reorders.\n"
+    )
+    headers = [
+        "Collective node",
+        "comm_time(us)",
+        "comp_time(us)",
+        "initial exposed(us)",
+        "final exposed(us)",
+        "improvement(us)",
+        "limiting factor",
+        "moves",
+        "grouped",
+        "grouped_info",
+        "overlap_info",
+    ]
+    rows = [
+        [
+            node_summary(snode),
+            node_info.comm_time / 1e3,
+            node_info.comp_time / 1e3,
+            node_info.initial_exposed / 1e3,
+            node_info.final_exposed / 1e3,
+            node_info.improvement / 1e3,
+            node_info.limiting_factor,
+            node_info.moves,
+            node_info.grouped,
+            node_info.grouped_info,
+            node_info.overlap_info,
+        ]
+        for snode, node_info in node_stats.items()
+    ]
+    if importlib.util.find_spec("tabulate"):
+        from tabulate import tabulate
+
+        reorder_log_str += tabulate(
+            rows,
+            headers=headers,
+        )
+    else:
+        reorder_log_str += (
+            "Please `pip install tabulate` to nicely render overlap stats.\n"
+        )
+        reorder_log_str += str(headers) + "\n"
+        reorder_log_str += "\n".join(map(str, rows))
+
+    new_snodes = _group_nodes_from_linked_list(head, None, next_dict)
+    if len(new_snodes) != original_snodes_num:
+        raise AssertionError(
+            f"expected {original_snodes_num} nodes, got {len(new_snodes)}"
+        )
+    new_peak_memory, _, _, _ = estimate_peak_memory_allocfree(
+        new_snodes, name_to_freeable_input_buf, graph_outputs
+    )
+    reorder_log_str += f"\n peak_memory_before:{peak_memory}"
+    reorder_log_str += f"\n peak_memory_after:{new_peak_memory}"
+
+    overlap_log.info(reorder_log_str)
+    trace_structured(
+        "artifact",
+        metadata_fn=lambda: {
+            "name": "reorder_communication_preserving_peak_memory",
+            "encoding": "string",
+        },
+        payload_fn=lambda: reorder_log_str,
+    )
+
+    return new_snodes
+
+
+def _reorder_communication_preserving_peak_memory_internal(
+    snodes: list[BaseSchedulerNode],
+) -> tuple[list[BaseSchedulerNode], dict[BaseSchedulerNode, ReorderInfo]]:
+    """
+    Internal testing helper that also returns debug info.
+    Returns:
+        - reordered snodes list
+        - dict {snode: ReorderInfo}
+    """
+    has_collectives = False
+    for snode in snodes:
+        if contains_collective(snode):
+            has_collectives = True
+            break
+    if not has_collectives:
+        return snodes, {}
+
+    original_snodes_num = len(snodes)
+    # heuristic to avoid degenerating to quadratic time
+    graph_inputs: OrderedSet[str] = OrderedSet(V.graph.graph_inputs.keys())
+    graph_outputs: OrderedSet[str] = OrderedSet(V.graph.get_output_names())
+    (
+        peak_memory,
+        _curr_memory,
+        snodes_allocfree,
+        buf_to_snode_last_use,
+        name_to_freeable_input_buf,
+        candidate_buffer_map,
+    ) = _initialize_memory_tracking(snodes, graph_inputs, graph_outputs)
+
+    runtimes: dict[BaseSchedulerNode, float] = {
+        snode: estimate_op_runtime(snode) * _op_runtime_estimate_mult(snode)
+        for snode in snodes
+    }
+
+    # Pre-compute output and dependency sets for O(1) lookup instead of O(N) creation per iteration
+    node_output_sets: dict[BaseSchedulerNode, frozenset[str]] = {
+        snode: frozenset(o.get_name() for o in snode.get_outputs()) for snode in snodes
+    }
+    node_dep_sets: dict[BaseSchedulerNode, frozenset[str]] = {
+        snode: frozenset(
+            d.name for d in snode.unmet_dependencies if not _is_fake_dep(d)
+        )
+        for snode in snodes
+    }
+
+    # debug stats
+    stats: dict[BaseSchedulerNode, ReorderInfo] = {}
+
+    total_moves = 0
+
+    _prev, _next, _head = _initialize_double_linked_list(snodes)
+
+    debug_num_collectives_to_reorder: int | None = (
+        config_comms.reorder_iterative_debug_limit_to_reorder
+    )
+
+    num_processed_collectives: int = 0
+    curr: BaseSchedulerNode | None = _head
+    debug_iterative_memory_recompute = (
+        config_comms.reorder_iterative_debug_memory_recompute
+    )
+    iterative_recompute_error = False
+
+    while curr is not None and _next[curr] is not None:
+        _next_curr = _next[curr]
+        if iterative_recompute_error:
+            break
+
+        if not contains_async_collective(curr):
+            curr = _next_curr
+            continue
+
+        if debug_num_collectives_to_reorder is not None and (
+            num_processed_collectives >= debug_num_collectives_to_reorder
+        ):
+            break
+        num_processed_collectives += 1
+
+        info = stats[curr] = ReorderInfo()
+        comm_time, comp_time, overlap_info = _coll_exposed_communication_time(
+            curr, _next, runtimes, node_output_sets, node_dep_sets
+        )
+        info.comm_time = comm_time
+        info.comp_time = comp_time
+        info.initial_exposed = info.final_exposed = comm_time - comp_time
+        info.overlap_info = overlap_info
+
+        candidate = _prev[curr]
+        group_head = curr
+        group_tail = curr
+        group_waits = {}
+        group_runtime = 0.0
+        group_peak_memory = _curr_memory[curr][0]  # post_alloc memory
+
+        # Track group dependencies incrementally - initialize from pre-computed sets
+        group_unmet_deps_names = OrderedSet(node_dep_sets[curr])
+        group_output_names = OrderedSet(node_output_sets[curr])
+
+        while candidate is not None:
+            if config_comms.reorder_iterative_use_runtime_estimations and (
+                info.final_exposed
+                < -config_comms.reorder_iterative_extra_comm_comp_overlap
+                * info.comm_time
+            ):
+                info.limiting_factor = "unexposed by runtime estimations"
+                break
+
+            if (
+                not config_comms.reorder_iterative_unsafe_collectives_reorder
+                and contains_collective(candidate)
+            ):
+                info.limiting_factor = "collective ordering"
+                break
+
+            # Early exit: if group has no unmet dependencies, candidate can't have data dependency
+            data_deps_names = group_unmet_deps_names - group_output_names
+            if not data_deps_names:
+                data_dep = False
+            else:
+                # Calculate effective dependencies (not satisfied within group)
+                # Use pre-computed set for O(1) lookup
+                candidate_out_names = node_output_sets[candidate]
+                data_dep = bool(candidate_out_names & data_deps_names)
+
+            if data_dep:
+                is_groupable_result, grouping_reason = _is_node_groupable_for_reorder(
+                    candidate
+                )
+                if is_groupable_result:
+                    group_head = candidate
+
+                    # Update incremental dependency tracking using pre-computed sets
+                    group_unmet_deps_names.update(node_dep_sets[candidate])
+                    group_output_names.update(node_output_sets[candidate])
+
+                    if config_comms.reorder_iterative_use_runtime_estimations:
+                        if contains_wait(candidate):
+                            comm_time, comp_time, _ = _wait_exposed_communication_time(
+                                candidate,
+                                _head,
+                                _prev,
+                                runtimes,
+                                node_output_sets,
+                                node_dep_sets,
+                            )
+                            group_waits[candidate] = comm_time, comp_time
+                        if not contains_async_collective(candidate):
+                            group_runtime += runtimes[candidate]
+
+                    group_peak_memory = max(
+                        group_peak_memory, _curr_memory[candidate][0]
+                    )
+                    info.grouped += 1
+                    candidate = _prev[candidate]
+                    continue
+                else:
+                    msg = (
+                        f"data dependency detected"
+                        f"\n candidate:{candidate.get_name()}(outs:{[o.get_name() for o in candidate.get_outputs()]})"
+                        f"\n non_group_reason:{grouping_reason}"
+                    )
+                    info.limiting_factor = msg
+                    break
+
+            if config_comms.reorder_iterative_use_runtime_estimations:
+                # Check if candidate has sync runtime
+                if not contains_async_collective(candidate):
+                    c_runtime = runtimes[candidate]
+
+                    if c_runtime > 0 and len(group_waits) > 0:
+                        # pyrefly: ignore[no-matching-overload]
+                        exposed_before = max(0, info.comm_time - info.comp_time)
+                        # pyrefly: ignore[no-matching-overload]
+                        exposed_after = max(
+                            0, info.comm_time - info.comp_time - c_runtime
+                        )
+                        exposed_delta = exposed_after - exposed_before
+                        for gw_comm_time, gw_comp_time in group_waits.values():
+                            # pyrefly: ignore [no-matching-overload]
+                            gw_exposed_before = max(0, gw_comm_time - gw_comp_time)
+                            # pyrefly: ignore [no-matching-overload]
+                            gw_exposed_after = max(
+                                0, gw_comm_time - gw_comp_time + c_runtime
+                            )
+
+                            exposed_delta += gw_exposed_after - gw_exposed_before
+
+                        if exposed_delta > 0:
+                            info.limiting_factor = (
+                                f"candidate has compute {c_runtime},"
+                                f" group contains waits, total_exposed_delta {exposed_delta}"
+                            )
+                            break
+                        else:
+                            # Update all group_colls comm_time, comp_time
+                            for gw, (
+                                gw_comm_time,
+                                gw_comp_time,
+                            ) in group_waits.items():
+                                group_waits[gw] = (
+                                    gw_comm_time,
+                                    gw_comp_time - c_runtime,
+                                )
+                else:
+                    # Candidate is async_collective
+
+                    # Unsafe collectives reordering
+                    # Cj -> [...group_runtime..., Ci] -> Wj
+                    # Checking that we are not increasing exposed time of Cj
+                    if group_runtime > 0:
+                        comm_time, comp_time, _ = _coll_exposed_communication_time(
+                            candidate, _next, runtimes, node_output_sets, node_dep_sets
+                        )
+                        # pyrefly: ignore[no-matching-overload]
+                        exposed_before = max(0, comm_time - comp_time)
+                        # pyrefly: ignore[no-matching-overload]
+                        exposed_after = max(0, comm_time - comp_time + group_runtime)
+                        exposed_delta = exposed_after - exposed_before
+                        if exposed_delta > 0:
+                            info.limiting_factor = (
+                                f"candidate {candidate.get_name()} is collective,"
+                                f" group_runtime:{group_runtime},"
+                                f" exposed_delta:{exposed_delta} c_comm_time:{comm_time} c_comp_time:{comp_time}"
+                            )
+                            break
+
+            # Create group nodes list once for swap operations
+            gns: list[BaseSchedulerNode] = _group_nodes_from_linked_list(
+                group_head, group_tail, _next
+            )
+
+            candidate_allocfree: SNodeMemory = snodes_allocfree[candidate]
+            candidate_delta_mem: int = (
+                candidate_allocfree.size_alloc - candidate_allocfree.size_free
+            )
+            # candidate and one of group nodes are successors of the same buffer
+            # and last use of the buffer happen in group nodes.
+            # This last use deallocates it.
+            # If we swap [candidate [group]] to [[group] candidate],
+            # candidate becomes the last use
+            # and deallocated this buffer instead of group node.
+            # we need to update size_free accordingly to group_node and candidate,
+            # and recalculate post_alloc, post_free for them.
+            #
+            # Buf that changes its last use snode,
+            # after swap will be deallocated only by candidate,
+            # while before it was deallocated by group node.
+            group_n_to_bufs_after_swap_dealloc_by_candidate = (
+                _find_buffers_with_changed_last_use(
+                    candidate, gns, buf_to_snode_last_use, candidate_buffer_map
+                )
+            )
+
+            potential_peak, _post_alloc_update = (
+                _calculate_potential_peak_memory_reorder(
+                    candidate,
+                    gns,
+                    group_tail,
+                    group_peak_memory,
+                    candidate_delta_mem,
+                    candidate_allocfree,
+                    group_n_to_bufs_after_swap_dealloc_by_candidate,
+                    _curr_memory,
+                )
+            )
+
+            if (
+                potential_peak - peak_memory
+                > peak_memory * config_comms.reorder_iterative_peak_memory_budget
+            ):
+                info.limiting_factor = (
+                    f"peak memory new:{potential_peak} vs base:{peak_memory}"
+                )
+                break
+            info.moves += 1
+            total_moves += 1
+
+            _head = _perform_double_linked_list_swap(
+                candidate, group_head, group_tail, _prev, _next, _head
+            )
+
+            comm_time, comp_time, overlap_info = _coll_exposed_communication_time(
+                curr, _next, runtimes, node_output_sets, node_dep_sets
+            )
+            info.comm_time = comm_time
+            info.comp_time = comp_time
+            info.overlap_info = overlap_info
+            info.final_exposed = comm_time - comp_time
+
+            _update_memory_tracking_after_swap_reorder(
+                candidate,
+                gns,
+                group_tail,
+                candidate_delta_mem,
+                candidate_allocfree,
+                group_n_to_bufs_after_swap_dealloc_by_candidate,
+                _post_alloc_update,
+                _curr_memory,
+                buf_to_snode_last_use,
+                snodes_allocfree,
+            )
+
+            if debug_iterative_memory_recompute:
+                # Compare iteratively recomputed memory data
+                # with full run of estimate_peak_memory
+
+                from .comms_debug import _debug_iterative_memory_recompute
+
+                iterative_recompute_error = _debug_iterative_memory_recompute(
+                    candidate,
+                    gns,
+                    _group_names(gns),
+                    _group_nodes_from_linked_list(_head, None, _next),
+                    name_to_freeable_input_buf,
+                    graph_outputs,
+                    peak_memory,
+                    _curr_memory,
+                    snodes_allocfree,
+                    "reorder_communication_preserving_peak_memory",
+                    group_n_to_bufs_after_swap_dealloc_by_candidate,
+                )
+                if iterative_recompute_error:
+                    break
+            candidate = _prev[group_head]
+        curr = _next_curr
+
+    if not config_comms.reorder_sink_verbose_logging:
+        new_snodes = _group_nodes_from_linked_list(_head, None, _next)
+        return new_snodes, stats
+
+    new_snodes = _format_and_log_reordering_stats(
+        stats,
+        _head,
+        _next,
+        original_snodes_num,
+        peak_memory,
+        name_to_freeable_input_buf,
+        graph_outputs,
+    )
+
+    return new_snodes, stats
+
+
+def _schedule_for_comm(
+    snodes: list[BaseSchedulerNode],
+    raise_comms: bool,
+    sink_waits: bool,
+    reorder_for_overlap: bool,
+) -> list[BaseSchedulerNode]:
+    """
+    Schedule `snodes` for various comm optimization objectives.
+
+    Args:
+        snodes: the nodes to be scheduled.
+        raise_comms: whether to greedily schedule collectives as early as possible
+        sink_wait: whether to greedily schedule waits as late as possible
+        reorder_compute_for_overlap: whether to reorder compute nodes to
+            optimize for compute/communication overlapping.
+
+    Returns:
+        The new schedule order.
+
+    Some notes on the synergy between different options:
+        - `raise_comms` provides more overlapping opportunities for `reorder_compute_for_overlap`.
+        - When both `raise_comms` and `sink_waits` is `True`, `raise_comms` is prioritized.
+    """
+    # We assign each node a tuple of scores (score_0, score_1, score_2),
+    # decreasing in importance, with a lower value indicating a higher ranking:
+    #
+    # - score_0: the lowest comm_idx among the comm nodes that the node blocks.
+    # If a node doesn't block any comm nodes, its score_0 is set to
+    # sys.maxsize. This score ensures that comm nodes get scheduled as early as
+    # possible.
+    # - score_1: 1 if the node is a wait node, 0 otherwise. This score ensures
+    # that wait nodes are deferred as late as possible.
+    # - score_2: the index of the node in the original topological order. This
+    # score provides stability in case of ties.
+    #
+    # When only raise_comms is True, only score_0 and score_2 are considered.
+    # When only sink_waits is True, only score_1 and score_2 are considered.
+    # When neither is True, the original order is yielded.
+    buf_name_to_snode = {}
+    name_to_fused_node = {}
+    scores_0, scores_1, scores_2 = {}, {}, {}
+    for idx, snode in enumerate(snodes):
+        for buf_name in snode.get_buffer_names():
+            buf_name_to_snode[buf_name] = snode
+
+        for op_name in snode.get_operation_names():
+            name_to_fused_node[op_name] = snode
+        name_to_fused_node[snode.get_name()] = snode
+
+        node_name = snode.get_name()
+        scores_0[node_name] = sys.maxsize
+        scores_1[node_name] = 0
+        scores_2[node_name] = idx
+
+    comm_idx = 0
+    for snode in snodes:
+        if raise_comms and contains_collective(snode):
+            scores_0[snode.get_name()] = comm_idx
+            for ancestor in snode.ancestors:
+                anc_fused_name = name_to_fused_node[ancestor].get_name()
+                scores_0[anc_fused_name] = min(scores_0[anc_fused_name], comm_idx)
+            comm_idx += 1
+        elif sink_waits and contains_wait(snode):
+            scores_1[snode.get_name()] = 1
+
+    class Runnable:
+        def __init__(self, snode) -> None:
+            self.snode = snode
+            name = next(iter(snode.get_operation_names()))
+            fused_name = name_to_fused_node[name].get_name()
+            self.score = (
+                scores_0[fused_name],
+                scores_1[fused_name],
+                scores_2[fused_name],
+            )
+
+        def __lt__(self, other):
+            return self.score < other.score
+
+    unmet_deps: dict[BaseSchedulerNode, OrderedSet[str]] = {
+        snode: OrderedSet(dep.name for dep in snode.unmet_dependencies)
+        for snode in snodes
+    }
+
+    ready: list[Runnable] = []
+    buffer_users: dict[str, OrderedSet[BaseSchedulerNode]] = defaultdict(OrderedSet)
+    snode_to_cost = {snode: estimate_op_runtime(snode) for snode in snodes}
+
+    for snode, deps in unmet_deps.items():
+        if len(deps) == 0:
+            heapq.heappush(ready, Runnable(snode))
+        for dep in deps:
+            buffer_users[dep].add(snode)
+
+    scheduled = []
+
+    def schedule(snode):
+        """
+        Schedules `snode` and put all unblocked nodes onto the ready queue.
+        """
+        scheduled.append(snode)
+        for buf_name in snode.get_buffer_names():
+            for snode in buffer_users[buf_name]:
+                unmet_deps[snode].remove(buf_name)
+                if len(unmet_deps[snode]) == 0:
+                    heapq.heappush(ready, Runnable(snode))
+
+    def get_overlapping_candidate():
+        """
+        Return the next node in the ready queue that's neither a collective or
+        a wait.
+        """
+        candidates = [
+            x
+            for x in ready
+            if not contains_collective(x.snode) and not contains_wait(x.snode)
+        ]
+        if len(candidates) == 0:
+            return None
+        return min(candidates, key=lambda x: x.score)
+
+    def schedule_collective_for_overlap(snode):
+        """
+        Schedules collective node `snode`, along with one or more compute nodes
+        to overlap with it. The strategy is described in the comment of
+        `reorder_compute_for_overlap`.
+        """
+        if not contains_collective(snode):
+            raise AssertionError("expected snode to contain a collective")
+        schedule(snode)
+
+        collective_cost = snode_to_cost[snode]
+        while (
+            collective_cost > 0
+            and (candidate := get_overlapping_candidate()) is not None
+        ):
+            ready.remove(candidate)
+
+            schedule(candidate.snode)
+
+            collective_cost -= snode_to_cost[candidate.snode]
+        heapq.heapify(ready)
+
+    while ready:
+        snode = heapq.heappop(ready).snode
+        if reorder_for_overlap and contains_collective(snode):
+            schedule_collective_for_overlap(snode)
+        else:
+            schedule(snode)
+
+    for deps in unmet_deps.values():
+        if len(deps) != 0:
+            raise AssertionError(
+                f"Detected unscheduled nodes. Nodes with unmet dependencies: {unmet_deps}"
+            )
+    return scheduled
+
+
+def decide_global_ordering_of_comms(
+    nodes: list[BaseSchedulerNode], name_to_buf, name_to_fused_node
+) -> list[BaseSchedulerNode]:
+    """
+    Decide global ordering of comms, by just enforcing the ordering that's in the input graph
+    (might not be the same ordering as the eager mode program).
+    TODO: Come up with a better approach
+    """
+    if not torch.distributed.is_available():
+        return nodes
+
+    comm_nodes = [n for n in nodes if contains_collective(n)]
+
+    for i in range(1, len(comm_nodes)):
+        # Enforce ordering by making previous comm a `WeakDep` dependency of the next comm
+        mutating_buf = next(iter(comm_nodes[i].get_buffer_names()))
+        for buf in comm_nodes[i - 1].get_buffer_names():
+            comm_nodes[i].add_fake_dep(
+                WeakDep(buf, mutating_buf=mutating_buf, is_fake=True)
+            )
+
+    return nodes
+
+
+@dataclass
+class SinkWaitInfo:
+    grouped: int = 0
+    grouped_info: str = ""
+    moves: int = 0
+    moves_info: str = ""
+    limiting_factor: str = "None"
+    comm_time: float = -1.0
+    comp_time: float = -1.0
+    initial_exposed: float = -1.0
+    final_exposed: float = -1.0
+    overlap_info: str = "None"
+
+    @property
+    def improvement(self):
+        return self.initial_exposed - self.final_exposed
+
+
+def _is_node_groupable_for_sink_waits(
+    candidate: BaseSchedulerNode,
+) -> tuple[bool, str | None]:
+    """
+    Check if a candidate node can be grouped during sink_waits pass.
+
+    Sink Waits traverses waits right to left, so we don't group with
+    processed waits on the right or with async collectives.
+
+    Args:
+        candidate: Node to check for groupability
+
+    Returns:
+        Tuple of (is_groupable, reason_if_not_groupable)
+    """
+    # Sink Waits traverse Waits right to left,
+    # => we do not group with processed Waits on the right.
+    if contains_wait(candidate):
+        return False, f"candidate contains wait {candidate.get_name()}"
+    if contains_async_collective(candidate):
+        return (
+            False,
+            f"candidate contains_async_collective {candidate.get_name()}",
+        )
+
+    if not config_comms.sink_iterative_use_runtime_estimations:
+        # Heuristics pre-use_runtime_estimations:
+        # TODO(ivankobzarev): Remove them after confirming,
+        # that using runtime estimations always give better results.
+        # We do not want to group with collectives to not reorder them forward.
+        if contains_collective(candidate):
+            return (
+                False,
+                f"candidate contains collective {candidate.get_name()}",
+            )
+        if contains_gemm_like(candidate):
+            return (
+                False,
+                f"candidate contains gemm_like {candidate.get_name()}",
+            )
+    return True, None
+
+
+def _update_memory_tracking_after_swap_sink_waits(
+    candidate: BaseSchedulerNode,
+    gns: list[BaseSchedulerNode],
+    candidate_delta_mem: int,
+    candidate_allocfree: SNodeMemory,
+    group_n_to_bufs_after_swap_dealloc_instead_of_candidate: dict,
+    post_alloc_update: dict[BaseSchedulerNode, int],
+    size_free_delta_update: dict[BaseSchedulerNode, int],
+    curr_memory: dict,
+    snodes_allocfree: dict,
+) -> None:
+    """
+    Update memory tracking structures after swap (sink_waits version).
+
+    Updates curr_memory and snodes_allocfree dictionaries to reflect the new
+    memory state after swapping candidate with group.
+
+    Args:
+        candidate: Node that was moved
+        gns: Group nodes
+        candidate_delta_mem: Net memory change from candidate (alloc - free)
+        candidate_allocfree: Candidate's allocation/free info
+        group_n_to_bufs_after_swap_dealloc_instead_of_candidate: Buffers whose deallocation moves from candidate to group
+        post_alloc_update: Cached post-allocation memory values
+        size_free_delta_update: Cached size-free delta values
+        curr_memory: Current memory state dict (mutated)
+        snodes_allocfree: Node allocation/free info dict (mutated)
+    """
+    group_head = gns[0]
+    pre_group_mem = curr_memory[group_head][0] - snodes_allocfree[group_head].size_alloc
+    if not group_n_to_bufs_after_swap_dealloc_instead_of_candidate:
+        candidate_post_alloc = pre_group_mem + candidate_allocfree.size_alloc
+        curr_memory[candidate] = (
+            candidate_post_alloc,
+            candidate_post_alloc - candidate_allocfree.size_free,
+        )
+        for gn in gns:
+            cm = curr_memory[gn]
+            curr_memory[gn] = (
+                cm[0] + candidate_delta_mem,
+                cm[1] + candidate_delta_mem,
+            )
+        return
+
+    for n in [candidate, *gns]:
+        post_alloc = post_alloc_update[n]
+        snodes_allocfree[n].size_free += size_free_delta_update.get(n, 0)
+        curr_memory[n] = (
+            post_alloc,
+            post_alloc - snodes_allocfree[n].size_free,
+        )
+
+
+def _calculate_potential_peak_memory_sink_waits(
+    candidate: BaseSchedulerNode,
+    gns: list[BaseSchedulerNode],
+    group_head: BaseSchedulerNode,
+    group_peak_memory: int,
+    candidate_delta_mem: int,
+    candidate_allocfree: SNodeMemory,
+    group_n_to_bufs_after_swap_dealloc_instead_of_candidate: dict,
+    curr_memory: dict,
+    snodes_allocfree: dict,
+) -> tuple[int, dict[BaseSchedulerNode, int], dict[BaseSchedulerNode, int]]:
+    """
+    Calculate potential peak memory after swapping candidate with group (sink_waits version).
+
+    Computes new memory levels for all affected nodes and returns the potential
+    peak memory along with cached post-allocation and size-free delta values.
+
+    Args:
+        candidate: Node being moved
+        gns: Group nodes
+        group_head: First node of group
+        group_peak_memory: Current peak memory within the group
+        candidate_delta_mem: Net memory change from candidate (alloc - free)
+        candidate_allocfree: Candidate's allocation/free info
+        group_n_to_bufs_after_swap_dealloc_instead_of_candidate: Buffers whose deallocation moves from candidate to group
+        curr_memory: Current memory state dict
+        snodes_allocfree: Allocation/free info for all nodes
+
+    Returns:
+        Tuple of (potential_peak_memory, post_alloc_update_dict, size_free_delta_update_dict)
+    """
+    pre_group_mem = curr_memory[group_head][0] - snodes_allocfree[group_head].size_alloc
+    # Stash memory tracing updates to not recompute them after swap
+    _post_alloc_update: dict[BaseSchedulerNode, int] = {}
+    _size_free_delta_update: dict[BaseSchedulerNode, int] = {}
+
+    potential_peak = 0
+    if not group_n_to_bufs_after_swap_dealloc_instead_of_candidate:
+        # Not accounting for buffers liveliness change
+        potential_peak = max(
+            group_peak_memory + candidate_delta_mem,
+            pre_group_mem + candidate_allocfree.size_alloc,
+        )
+        return potential_peak, _post_alloc_update, _size_free_delta_update
+
+    candidate_post_alloc = pre_group_mem + candidate_allocfree.size_alloc
+    _post_alloc_update[candidate] = candidate_post_alloc
+    potential_peak = candidate_post_alloc
+    candidate_size_free_to_move = sum(
+        buf.mpi_buffer.size_free  # type: ignore[attr-defined]
+        for buf in itertools.chain.from_iterable(
+            group_n_to_bufs_after_swap_dealloc_instead_of_candidate.values()
+        )
+    )
+    _size_free_delta_update[candidate] = -candidate_size_free_to_move
+    delta_mem = candidate_delta_mem + candidate_size_free_to_move
+    for gn in gns:
+        gn_post_alloc = curr_memory[gn][0] + delta_mem
+        _post_alloc_update[gn] = gn_post_alloc
+        potential_peak = max(potential_peak, gn_post_alloc)
+        gn_size_free_to_add = 0
+        if gn in group_n_to_bufs_after_swap_dealloc_instead_of_candidate:
+            bufs = group_n_to_bufs_after_swap_dealloc_instead_of_candidate[gn]
+            for buf in bufs:
+                gn_size_free_to_add += buf.mpi_buffer.size_free
+            _size_free_delta_update[gn] = gn_size_free_to_add
+        delta_mem -= gn_size_free_to_add
+    return potential_peak, _post_alloc_update, _size_free_delta_update
+
+
+def _perform_double_linked_list_swap_sink_waits(
+    candidate: BaseSchedulerNode,
+    group_head: BaseSchedulerNode,
+    group_tail: BaseSchedulerNode,
+    prev_dict: dict[BaseSchedulerNode, BaseSchedulerNode | None],
+    next_dict: dict[BaseSchedulerNode, BaseSchedulerNode | None],
+    head: BaseSchedulerNode,
+) -> BaseSchedulerNode:
+    """
+    Swap positions of candidate and group in doubly-linked list (sink_waits version).
+
+    Transforms (moves candidate to the left):
+    group_head_prev -> group_head...group_tail -> candidate -> candidate_next
+    Into:
+    group_head_prev -> candidate -> group_head...group_tail -> candidate_next
+
+    Args:
+        candidate: Node to swap with group
+        group_head: First node of group
+        group_tail: Last node of group
+        prev_dict: Dictionary mapping nodes to their previous nodes
+        next_dict: Dictionary mapping nodes to their next nodes
+        head: Current head of the linked list
+
+    Returns:
+        New head of the linked list (may change if group_head was the head)
+    """
+    # 0: Update group_head's previous node
+    group_head_prev = prev_dict[group_head]
+    if group_head_prev:
+        next_dict[group_head_prev] = candidate
+    prev_dict[candidate] = group_head_prev
+
+    # 2: Update candidate's next node
+    candidate_next = next_dict[candidate]
+    if candidate_next:
+        prev_dict[candidate_next] = group_tail
+    next_dict[group_tail] = candidate_next
+
+    # 1: Link candidate to group_head
+    prev_dict[group_head] = candidate
+    next_dict[candidate] = group_head
+
+    # Update head if group_head was the head
+    if group_head == head:
+        return candidate
+    return head
+
+
+def _format_and_log_sink_waits_stats(
+    stats: dict[BaseSchedulerNode, SinkWaitInfo],
+    head: BaseSchedulerNode,
+    next_dict: dict[BaseSchedulerNode, BaseSchedulerNode | None],
+    original_snodes_num: int,
+    peak_memory: int,
+    name_to_freeable_input_buf: dict,
+    graph_outputs: OrderedSet[str],
+) -> list[BaseSchedulerNode]:
+    """
+    Format sink_waits statistics, log them, and return final node list.
+
+    Computes improvement metrics, creates a formatted table (using tabulate if
+    available), validates the reordered node count, recalculates peak memory,
+    and logs all information.
+
+    Args:
+        stats: Per-node sink_waits statistics
+        head: Head of the reordered linked list
+        next_dict: Linked list next pointers
+        original_snodes_num: Original number of nodes (for validation)
+        peak_memory: Initial peak memory before reordering
+        name_to_freeable_input_buf: Buffer memory tracking info
+        graph_outputs: Graph output names
+
+    Returns:
+        Final reordered list of scheduler nodes
+    """
+    headers = [
+        "Wait node",
+        "comm_time(us)",
+        "comp_time(us)",
+        "initial exposed(us)",
+        "final exposed(us)",
+        "improvement(us)",
+        "limiting factor",
+        "grouped",
+        "grouped_info",
+        "moves",
+        "moves_info",
+        "overlap_info",
+    ]
+    rows = [
+        [
+            node_summary(snode),
+            info.comm_time / 1e3,
+            info.comp_time / 1e3,
+            info.initial_exposed / 1e3,
+            info.final_exposed / 1e3,
+            info.improvement / 1e3,
+            info.limiting_factor,
+            info.grouped,
+            info.grouped_info,
+            info.moves,
+            info.moves_info,
+            info.overlap_info,
+        ]
+        for snode, info in stats.items()
+    ]
+    log_str = ""
+    if importlib.util.find_spec("tabulate"):
+        from tabulate import tabulate
+
+        log_str += tabulate(
+            rows,
+            headers=headers,
+        )
+    else:
+        log_str += "Please `pip install tabulate` to nicely render overlap stats.\n"
+        log_str += str(headers) + "\n"
+        log_str += "\n".join(map(str, rows))
+    overlap_log.info(log_str)
+    new_snodes = _group_nodes_from_linked_list(head, None, next_dict)
+    if len(new_snodes) != original_snodes_num:
+        raise AssertionError(
+            f"expected {original_snodes_num} nodes, got {len(new_snodes)}"
+        )
+    new_peak_memory, _, _, _ = estimate_peak_memory_allocfree(
+        new_snodes, name_to_freeable_input_buf, graph_outputs
+    )
+    log_str += f"\n sink_waits_iterative peak_memory_before:{peak_memory}"
+    log_str += f"\n sink_waits_iterative peak_memory_after:{new_peak_memory}"
+    trace_structured(
+        "artifact",
+        metadata_fn=lambda: {
+            "name": "sink_waits_iterative_info",
+            "encoding": "string",
+        },
+        payload_fn=lambda: log_str,
+    )
+    return new_snodes
+
+
+def _find_buffers_with_changed_last_use_sink_waits(
+    candidate: BaseSchedulerNode,
+    gns: list[BaseSchedulerNode],
+    buf_to_snode_last_use: dict,
+    candidate_buffer_map: dict[BaseSchedulerNode, OrderedSet],
+) -> dict[BaseSchedulerNode, list[FreeableInputBuffer | Any]]:
+    """
+    Find buffers whose last use will change after swapping in sink_waits pass.
+
+    When we swap [group] candidate to candidate [group], some buffers that
+    were last used by candidate will now be last used by a group node instead.
+    This is the opposite direction from the reorder version.
+
+    Args:
+        candidate: The node being moved (currently last use)
+        gns: Group nodes being swapped with candidate
+        buf_to_snode_last_use: Mapping of buffers to their current last-use nodes
+        candidate_buffer_map: Pre-computed map of node -> buffers using that node
+
+    Returns:
+        Dict mapping group nodes to buffers that will change their last-use node
+    """
+    group_n_to_bufs_after_swap_dealloc_instead_of_candidate: dict[
+        BaseSchedulerNode, list[FreeableInputBuffer | Any]
+    ] = defaultdict(list)
+
+    # Optimization: only check buffers where candidate is a successor
+    # Reduces from O(all_buffers) to O(buffers_per_candidate)
+    candidate_bufs = candidate_buffer_map.get(candidate, OrderedSet())
+
+    for buf in candidate_bufs:
+        snode_last_use = buf_to_snode_last_use[buf]
+        if snode_last_use != candidate:
+            continue
+
+        # candidate is last use of buf
+        # Find last group node in successors (maintains order)
+        succ_nodes = buf.mpi_buffer.succ_nodes
+        last_succ_gn = None
+        for gn in gns:
+            if gn in succ_nodes:
+                last_succ_gn = gn
+
+        if last_succ_gn is None:
+            continue
+
+        # gn has successors of buf that after potential swap will become
+        # last use of buf and start deallocating buf instead of candidate
+        group_n_to_bufs_after_swap_dealloc_instead_of_candidate[last_succ_gn].append(
+            buf
+        )
+
+    return group_n_to_bufs_after_swap_dealloc_instead_of_candidate
+
+
+def _sink_waits_iterative_internal(
+    snodes: list[BaseSchedulerNode],
+) -> tuple[list[BaseSchedulerNode], dict[BaseSchedulerNode, SinkWaitInfo]]:
+    original_snodes_num = len(snodes)
+    if original_snodes_num == 0:
+        return snodes, {}
+    graph_inputs: OrderedSet[str] = OrderedSet(V.graph.graph_inputs.keys())
+    graph_outputs: OrderedSet[str] = OrderedSet(V.graph.get_output_names())
+    (
+        peak_memory,
+        _curr_memory,
+        snodes_allocfree,
+        buf_to_snode_last_use,
+        name_to_freeable_input_buf,
+        candidate_buffer_map,
+    ) = _initialize_memory_tracking(snodes, graph_inputs, graph_outputs)
+
+    _prev, _next, _head = _initialize_double_linked_list(snodes)
+
+    stats: dict[BaseSchedulerNode, SinkWaitInfo] = {}
+
+    runtimes: dict[BaseSchedulerNode, float] = {
+        snode: estimate_op_runtime(snode) * _op_runtime_estimate_mult(snode)
+        for snode in snodes
+    }
+
+    # Pre-compute output and dependency sets for O(1) lookup instead of O(N) creation per iteration
+    node_output_sets: dict[BaseSchedulerNode, frozenset[str]] = {
+        snode: frozenset(o.get_name() for o in snode.get_outputs()) for snode in snodes
+    }
+    node_dep_sets: dict[BaseSchedulerNode, frozenset[str]] = {
+        snode: frozenset(
+            d.name for d in snode.unmet_dependencies if not _is_fake_dep(d)
+        )
+        for snode in snodes
+    }
+
+    curr: BaseSchedulerNode | None = snodes[-1]
+
+    processed_waits = OrderedSet()  # type: ignore[var-annotated]
+    debug_iterative_memory_recompute = (
+        config_comms.reorder_iterative_debug_memory_recompute
+    )
+    debug_num_sink_waits_to_reorder: int | None = (
+        config_comms.sink_waits_iterative_debug_limit_to_sink
+    )
+
+    iterative_recompute_error = False
+    while curr is not None and _prev[curr] is not None:
+        _prev_curr = _prev[curr]
+        if iterative_recompute_error:
+            break
+        if (
+            debug_num_sink_waits_to_reorder is not None
+            and len(processed_waits) >= debug_num_sink_waits_to_reorder
+        ):
+            break
+
+        if not (contains_wait(curr) and curr not in processed_waits):
+            curr = _prev_curr
+            continue
+
+        processed_waits.add(curr)
+        info = stats[curr] = SinkWaitInfo()
+        comm_time, comp_time, overlap_info = _wait_exposed_communication_time(
+            curr, _head, _prev, runtimes, node_output_sets, node_dep_sets
+        )
+        info.initial_exposed = info.final_exposed = comm_time - comp_time
+        info.comm_time = comm_time
+        info.comp_time = comp_time
+        info.overlap_info = overlap_info
+
+        candidate = _next[curr]
+        group_head = curr
+        group_tail = curr
+        group_colls = {}
+        group_runtime = 0.0
+        group_peak_memory = _curr_memory[curr][0]
+
+        # Track group outputs and check collective status incrementally - initialize from pre-computed set
+        group_output_names = OrderedSet(node_output_sets[curr])
+        group_contains_collective = contains_collective(curr)
+
+        while candidate is not None:
+            if config_comms.sink_iterative_use_runtime_estimations and (
+                info.final_exposed
+                < -config_comms.sink_iterative_extra_comm_comp_overlap * info.comm_time
+            ):
+                info.limiting_factor = "unexposed by runtime estimations"
+                break
+
+            # Early exit: if group has no outputs, candidate can't depend on it
+            if not group_output_names:
+                data_dep = False
+            else:
+                # Calculate candidate dependencies using pre-computed set
+                candidate_dep_names = node_dep_sets[candidate]
+                data_dep = bool(candidate_dep_names & group_output_names)
+
+            # Conservative sink wait, limiting by space before next collective.
+            # The global strategy is that bucketing should create space.
+            # For 2D we can experiment with allowing to sink Wait beyond non current group collective.
+
+            if not config_comms.sink_waits_iterative_swap_with_collectives:
+                if contains_async_collective(candidate):
+                    info.limiting_factor = (
+                        f"candidate contains_async_collective {candidate.get_name()}"
+                    )
+                    break
+
+            # 1. If we have data_dep - we can not swap => trying to group
+            # 2. If swap candidate and current node both contain collectives => trying to group
+            both_contain_comms = group_contains_collective and contains_collective(
+                candidate
+            )
+            if data_dep or both_contain_comms:
+                _is_groupable, groupable_reason = _is_node_groupable_for_sink_waits(
+                    candidate
+                )
+                if _is_groupable:
+                    group_tail = candidate
+
+                    # Update incremental tracking using pre-computed set
+                    group_output_names.update(node_output_sets[candidate])
+                    group_contains_collective = (
+                        group_contains_collective or contains_collective(candidate)
+                    )
+
+                    if (
+                        config_comms.sink_iterative_use_runtime_estimations
+                        and contains_collective(candidate)
+                    ):
+                        comm_time, comp_time, _ = _coll_exposed_communication_time(
+                            candidate, _next, runtimes, node_output_sets, node_dep_sets
+                        )
+                        group_colls[candidate] = (comm_time, comp_time)
+                        if not contains_async_collective(candidate):
+                            group_runtime += runtimes[candidate]
+
+                    group_peak_memory = max(
+                        group_peak_memory, _curr_memory[candidate][0]
+                    )
+                    info.grouped += 1
+                    candidate = _next[candidate]
+                    continue
+                elif not data_dep:
+                    if (
+                        not config_comms.sink_waits_iterative_unsafe_collectives_reorder
+                        and both_contain_comms
+                    ):
+                        info.limiting_factor = (
+                            f"collective ordering"
+                            f"\n with candidate:{candidate.get_name()}"
+                        )
+                        break
+                else:
+                    info.limiting_factor = (
+                        f"data dependency detected"
+                        f"\n candidate:{candidate.get_name()}"
+                        f"\n non_group_reason:{groupable_reason}"
+                    )
+                    break
+
+            if config_comms.sink_iterative_use_runtime_estimations:
+                if is_wait(candidate.node):
+                    # Corresponding collective is before the group,
+                    # Swap can increase exposed time of corresponding collective
+                    comm_time, comp_time, _ = _wait_exposed_communication_time(
+                        candidate,
+                        _head,
+                        _prev,
+                        runtimes,
+                        node_output_sets,
+                        node_dep_sets,
+                    )
+                    # pyrefly: ignore[no-matching-overload]
+                    exposed_before = max(0, comm_time - comp_time)
+                    # pyrefly: ignore[no-matching-overload]
+                    exposed_after = max(0, comm_time - comp_time + group_runtime)
+                    # We do not know how much we can sink more after this swap,
+                    # Just comparing advantage at the moment for now.
+                    if exposed_after > exposed_before:
+                        info.limiting_factor = (
+                            "candidate is wait,"
+                            f" exposed_before:{exposed_before} vs exposed_after:{exposed_after}"
+                        )
+                        break
+
+                # Check if candidate has sync runtime
+                if not contains_async_collective(candidate):
+                    # If candidate has sync runtime,
+                    # Waits of gorup_colls are on the right from group.
+                    # Swap can increase their exposed time.
+                    c_runtime = runtimes[candidate]
+
+                    if c_runtime > 0 and len(group_colls) > 0:
+                        # pyrefly: ignore[no-matching-overload]
+                        exposed_before = max(0, info.comm_time - info.comp_time)
+                        # pyrefly: ignore[no-matching-overload]
+                        exposed_after = max(
+                            0, info.comm_time - info.comp_time - c_runtime
+                        )
+                        exposed_delta = exposed_after - exposed_before
+                        for gc_comm_time, gc_comp_time in group_colls.values():
+                            # pyrefly: ignore [no-matching-overload]
+                            gc_exposed_before = max(0, gc_comm_time - gc_comp_time)
+                            # pyrefly: ignore [no-matching-overload]
+                            gc_exposed_after = max(
+                                0, gc_comm_time - gc_comp_time + c_runtime
+                            )
+                            exposed_delta += gc_exposed_after - gc_exposed_before
+                        if exposed_delta > 0:
+                            info.limiting_factor = (
+                                f"candidate has compute {c_runtime}, group contains collectives,"
+                                f" total_exposed_delta {exposed_delta}"
+                            )
+                            break
+                        else:
+                            # Update all group_colls comm_time, comp_time
+                            for gc, (
+                                gc_comm_time,
+                                gc_comp_time,
+                            ) in group_colls.items():
+                                group_colls[gc] = (
+                                    gc_comm_time,
+                                    gc_comp_time - c_runtime,
+                                )
+
+            # Create group nodes list once for swap operations
+            gns: list[BaseSchedulerNode] = _group_nodes_from_linked_list(
+                group_head, group_tail, _next
+            )
+
+            candidate_allocfree: SNodeMemory = snodes_allocfree[candidate]
+            candidate_delta_mem = (
+                candidate_allocfree.size_alloc - candidate_allocfree.size_free
+            )
+            # [group] candidate -> candidate [group]
+            # Check for buffers with successors in group and candidate last successor
+            #
+            # Buf that  changes its last use snode,
+            # It was deallocated by candidate,
+            # but after swap it will be deallocated by group node.
+            group_n_to_bufs_after_swap_dealloc_instead_of_candidate = (
+                _find_buffers_with_changed_last_use_sink_waits(
+                    candidate, gns, buf_to_snode_last_use, candidate_buffer_map
+                )
+            )
+
+            potential_peak, _post_alloc_update, _size_free_delta_update = (
+                _calculate_potential_peak_memory_sink_waits(
+                    candidate,
+                    gns,
+                    group_head,
+                    group_peak_memory,
+                    candidate_delta_mem,
+                    candidate_allocfree,
+                    group_n_to_bufs_after_swap_dealloc_instead_of_candidate,
+                    _curr_memory,
+                    snodes_allocfree,
+                )
+            )
+            if (
+                potential_peak - peak_memory
+                > peak_memory * config_comms.sink_iterative_peak_memory_budget
+            ):
+                info.limiting_factor = (
+                    f"peak memory new:{potential_peak} vs base:{peak_memory}"
+                )
+                break
+
+            info.moves += 1
+            info.moves_info += f"+{candidate.get_name()}"
+
+            _head = _perform_double_linked_list_swap_sink_waits(
+                candidate, group_head, group_tail, _prev, _next, _head
+            )
+
+            comm_time, comp_time, overlap_info = _wait_exposed_communication_time(
+                curr, _head, _prev, runtimes, node_output_sets, node_dep_sets
+            )
+            info.comm_time = comm_time
+            info.comp_time = comp_time
+            info.final_exposed = comm_time - comp_time
+            info.overlap_info = overlap_info
+
+            _update_memory_tracking_after_swap_sink_waits(
+                candidate,
+                gns,
+                candidate_delta_mem,
+                candidate_allocfree,
+                group_n_to_bufs_after_swap_dealloc_instead_of_candidate,
+                _post_alloc_update,
+                _size_free_delta_update,
+                _curr_memory,
+                snodes_allocfree,
+            )
+
+            if debug_iterative_memory_recompute:
+                from .comms_debug import _debug_iterative_memory_recompute
+
+                iterative_recompute_error = _debug_iterative_memory_recompute(
+                    candidate,
+                    gns,
+                    _group_names(gns),
+                    _group_nodes_from_linked_list(_head, None, _next),
+                    name_to_freeable_input_buf,
+                    graph_outputs,
+                    peak_memory,
+                    _curr_memory,
+                    snodes_allocfree,
+                    "sink_waits_iterative",
+                    group_n_to_bufs_after_swap_dealloc_instead_of_candidate,
+                )
+                if iterative_recompute_error:
+                    break
+
+            candidate = _next[group_tail]
+        curr = _prev_curr
+
+    if not config_comms.reorder_sink_verbose_logging:
+        new_snodes = _group_nodes_from_linked_list(_head, None, _next)
+        return new_snodes, stats
+
+    new_snodes = _format_and_log_sink_waits_stats(
+        stats,
+        _head,
+        _next,
+        original_snodes_num,
+        peak_memory,
+        name_to_freeable_input_buf,
+        graph_outputs,
+    )
+
+    return new_snodes, stats
+
+
+def sink_waits_iterative(snodes: list[BaseSchedulerNode]) -> list[BaseSchedulerNode]:
+    """
+    Similarly to reorder_communication_preserving_peak_memory this pass will try to iteratively
+    push Wait nodes later, recomputing estimated peak memory before each swap,
+    and preventing peak memory regressions.
+
+    Pass will be applied to every Wait node. If there are immediate dependencies with next node,
+    pass will try to group them together and on the next step to swap the group with next candidate.
+
+    If _inductor.config_comms.sink_iterative_use_runtime_estimations is set True,
+    pass will stop reordering of Wait once corresponding Collective is unexposed,
+    based on runtime estimations.
+
+    inductor.config_comms.sink_iterative_peak_memory_budget allows to tune how much pass
+    can regress initial peak memory.
+    E.g.:
+    sink_iterative_peak_memory_budget == 0.0 - No regression of initial peak memory is allowed
+    sink_iterative_peak_memory_budget == 0.2 - Pass can improve comm-compute overlap, sacrificing
+    20% of initial peak memory value.
+
+    inductor.config_comms.sink_iterative_extra_comm_comp_overlap config allows to more aggressively
+    sink waits, stopping only when overlap_compute >= (1 + extra_comm_comp_overlap) * comm_time
+    """
+    return _sink_waits_iterative_internal(snodes)[0]
+
+
+def estimate_op_runtime(snode: BaseSchedulerNode) -> float:
+    """
+    Returns estimated op runtime in milliseconds (ms)
+    """
+    if config.estimate_op_runtime == "default":
+        runtime = snode.get_estimated_runtime()
+    else:
+        if not callable(config.estimate_op_runtime):
+            raise AssertionError("expected config.estimate_op_runtime to be callable")
+        runtime = config.estimate_op_runtime(snode)
+    return runtime
+
+
+def node_summary(snode):
+    snodes = snode.get_nodes()
+    if len(snodes) == 1:
+        detail = ""
+        if isinstance(snode.node, (ir.ExternKernelOut, ir._CollectiveKernel)):
+            outs_str = f"outs:{[o.get_name() for o in snode.get_outputs()]}"
+            ins_str = f"ins:{[d.name for d in snode.unmet_dependencies]}"
+            detail = f" {snode.get_name()} ({snode.node.python_kernel_name})\n {outs_str}({ins_str})"
+        layouts = [child.node.get_output_spec() for child in snode.get_nodes()]
+        out_tensor_info = ",".join(
+            [
+                f" (size={layout.size}, stride={layout.stride})"
+                if isinstance(layout, ir.Layout)
+                else ""
+                for layout in layouts
+            ]
+        )
+        try:
+            node_name = snode.node.maybe_get_name()
+        except AttributeError:
+            # TODO: node_summary was written without FusedSchedulerNode in mind, generally needs to be hardened
+            node_name = ""
+        return f"{snode.node.__class__.__name__}{detail}{out_tensor_info} ({node_name} ({snode.get_estimated_runtime():.0f} ns)"
+
+    # Flatten the summaries for Fused/Foreach/Grouped nodes
+    summaries = []
+    for child_snode in snodes:
+        summaries.append(node_summary(child_snode))
+    return f"{snode.__class__.__name__}: {', '.join(summaries)}"
+
+
+def visualize_overlap(order):
+    # TODO - this function probably doesn't do a very good job estimating the runtime because it doesn't carefully model
+    # streams and overlap. For now its mostly useful as a debug visualization.
+
+    total_est_runtime: float = 0.0
+    cur_comm_node = None
+
+    def step_log(step, msg):
+        overlap_log.debug(f"{step:>6}: {msg}")
+
+    for step, snode in enumerate(order):
+        if cur_comm_node is None:
+            if contains_collective(snode):
+                total_est_runtime += estimate_op_runtime(snode)
+                cur_comm_node = snode.node
+            elif is_wait(snode.node):
+                # raise AssertionError(
+                #     "Wait is not expected when there is no collective running"
+                # )
+                pass
+            else:  # exposed compute op
+                total_est_runtime += estimate_op_runtime(snode)
+            step_log(step, f"{node_summary(snode)}")
+        else:  # cur_comm_node is not None
+            if contains_collective(snode):
+                total_est_runtime += estimate_op_runtime(snode)
+                cur_comm_node = snode.node
+                step_log(step, f"{node_summary(snode)}")
+            elif is_wait(snode.node):  # end of this comm op
+                step_log(step, f"{node_summary(snode)}")
+                cur_comm_node = None
+            else:  # overlapped compute op
+                step_log(step, f"| {node_summary(snode)}")
+    overlap_log.debug(f"Est. runtime (ms): {total_est_runtime / 1000 / 1000}")
+
+
+def simple_overlap(snodes: list[BaseSchedulerNode]) -> list[BaseSchedulerNode]:
+    """Move collectives earlier and waits later via adjacent swaps.
+    Each swap is safe: no collective reordering, no memory regression."""
+    if len(snodes) < 2:
+        return snodes
+
+    collectives = [s for s in snodes if contains_async_collective(s)]
+    waits = [s for s in snodes if contains_wait(s)]
+    if not collectives and not waits:
+        return snodes
+
+    outputs_of: dict[BaseSchedulerNode, frozenset[str]] = {
+        s: frozenset(o.get_name() for o in s.get_outputs()) for s in snodes
+    }
+    # Fake WeakDeps encode ordering-only constraints, such as collective order.
+    deps_of: dict[BaseSchedulerNode, frozenset[str]] = {
+        s: frozenset(d.name for d in s.unmet_dependencies) for s in snodes
+    }
+
+    _prev, _next, _head = _initialize_double_linked_list(snodes)
+    (
+        peak_memory,
+        _curr_memory,
+        snodes_allocfree,
+        _buf_last_use,
+        _freeable,
+        _cand_buf_map,
+    ) = _initialize_memory_tracking(snodes)
+
+    n_moved_colls = 0
+    n_moved_waits = 0
+
+    def peak_memory_safe_swap(
+        candidate: BaseSchedulerNode,
+        group_node: BaseSchedulerNode,
+        *,
+        sink_wait: bool,
+    ) -> bool:
+        nonlocal _head
+
+        group_nodes = [group_node]
+        candidate_af = snodes_allocfree[candidate]
+        candidate_delta = candidate_af.size_alloc - candidate_af.size_free
+        size_free_cache: dict[BaseSchedulerNode, int] = {}
+
+        if sink_wait:
+            changed_bufs = _find_buffers_with_changed_last_use_sink_waits(
+                candidate, group_nodes, _buf_last_use, _cand_buf_map
+            )
+            potential_peak, post_alloc_cache, size_free_cache = (
+                _calculate_potential_peak_memory_sink_waits(
+                    candidate,
+                    group_nodes,
+                    group_node,
+                    _curr_memory[group_node][0],
+                    candidate_delta,
+                    candidate_af,
+                    changed_bufs,
+                    _curr_memory,
+                    snodes_allocfree,
+                )
+            )
+        else:
+            changed_bufs = _find_buffers_with_changed_last_use(
+                candidate, group_nodes, _buf_last_use, _cand_buf_map
+            )
+            potential_peak, post_alloc_cache = _calculate_potential_peak_memory_reorder(
+                candidate,
+                group_nodes,
+                group_node,
+                _curr_memory[group_node][0],
+                candidate_delta,
+                candidate_af,
+                changed_bufs,
+                _curr_memory,
+            )
+
+        if potential_peak > peak_memory:
+            return False
+
+        if sink_wait:
+            _head = _perform_double_linked_list_swap_sink_waits(
+                candidate, group_node, group_node, _prev, _next, _head
+            )
+            _update_memory_tracking_after_swap_sink_waits(
+                candidate,
+                group_nodes,
+                candidate_delta,
+                candidate_af,
+                changed_bufs,
+                post_alloc_cache,
+                size_free_cache,
+                _curr_memory,
+                snodes_allocfree,
+            )
+        else:
+            _head = _perform_double_linked_list_swap(
+                candidate, group_node, group_node, _prev, _next, _head
+            )
+            _update_memory_tracking_after_swap_reorder(
+                candidate,
+                group_nodes,
+                group_node,
+                candidate_delta,
+                candidate_af,
+                changed_bufs,
+                post_alloc_cache,
+                _curr_memory,
+                _buf_last_use,
+                snodes_allocfree,
+            )
+
+        return True
+
+    # Phase 1: move each collective earlier via adjacent swaps
+    # Swap [pred, coll] -> [coll, pred]: pred is the "candidate" (moves later)
+    for coll in collectives:
+        coll_deps = deps_of[coll]
+        moved = False
+
+        pred = _prev[coll]
+        while pred is not None:
+            if outputs_of[pred] & coll_deps:
+                break
+            if contains_async_collective(pred):
+                break
+            if not peak_memory_safe_swap(pred, coll, sink_wait=False):
+                break
+
+            moved = True
+            pred = _prev[coll]
+
+        if moved:
+            n_moved_colls += 1
+
+    # Phase 2: move each wait later via adjacent swaps
+    # Swap [wait, succ] -> [succ, wait]: succ is the "candidate" (moves earlier)
+    for wait in reversed(waits):
+        wait_outs = outputs_of[wait]
+        moved = False
+
+        succ = _next[wait]
+        while succ is not None:
+            if deps_of[succ] & wait_outs:
+                break
+            if contains_wait(succ):
+                break
+            if not peak_memory_safe_swap(succ, wait, sink_wait=True):
+                break
+
+            moved = True
+            succ = _next[wait]
+
+        if moved:
+            n_moved_waits += 1
+
+    if n_moved_colls or n_moved_waits:
+        log.info(
+            "simple_overlap: moved %d collectives, %d waits (peak %d MB)",
+            n_moved_colls,
+            n_moved_waits,
+            peak_memory // (1024 * 1024),
+        )
+
+    return _group_nodes_from_linked_list(_head, None, _next)
+
+
+def reorder_compute_and_comm_for_overlap(
+    snodes: list[BaseSchedulerNode],
+) -> list[BaseSchedulerNode]:
+    order = snodes
+    # pyrefly: ignore [bad-assignment]
+    for p in config.reorder_for_compute_comm_overlap_passes:
+        if isinstance(p, str) and p in globals():
+            p = globals()[p]  # it is a builtin pass
+        if not callable(p):
+            raise AssertionError(
+                f"Invalid reorder_compute_and_comm_for_overlap pass: {p} is not callable"
+            )
+        order = p(order)  # type: ignore[operator]
+    # pyrefly: ignore [bad-return]
+    return order
+<|endoftext|>from __future__ import annotations
+
+import contextlib
+import functools
+import itertools
+import logging
+import operator
+import os
+import re
+import sys
+import textwrap
+import time
+import typing_extensions
+from collections import defaultdict
+from contextlib import contextmanager
+from typing import Any, cast, Literal, NoReturn, TYPE_CHECKING
+
+import sympy
+from sympy import Expr
+
+import torch
+import torch._logging
+import torch.fx
+from torch import device, Tensor
+from torch._decomp import get_decompositions
+from torch._dynamo.utils import defake, dynamo_timed
+from torch._library.fake_class_registry import FakeScriptObject
+from torch._library.opaque_object import (
+    is_custom_class,
+    is_opaque_constant_type,
+    is_opaque_symbolic_type,
+)
+from torch._library.utils import get_layout_constraint_tag
+from torch._logging import LazyString, trace_structured
+from torch._prims_common import (
+    compute_required_storage_length,
+    make_channels_last_strides_for,
+)
+from torch._subclasses.fake_tensor import is_fake_tensor
+from torch._utils_internal import full_aoti_runtime_assert
+from torch.fx.experimental._backward_state import BackwardState
+from torch.fx.experimental.symbolic_shapes import (
+    _get_placeholder_expr,
+    free_unbacked_symbols,
+    has_free_symbols,
+    resolve_unbacked_bindings,
+    RuntimeAssert,
+    ShapeEnv,
+    SympyBoolean,
+    SymTypes,
+)
+from torch.fx.node import Node
+from torch.fx.passes.reinplace import _is_view_op
+from torch.utils._mode_utils import no_dispatch
+from torch.utils._ordered_set import OrderedSet
+from torch.utils._sympy.numbers import int_oo
+from torch.utils._typing_utils import not_none
+
+from . import config, ir
+from .codegen.common import (
+    BackendFeature,
+    DeviceOpOverrides,
+    FileBackedGraphModule,
+    get_backend_features,
+    get_device_op_overrides,
+    get_wrapper_codegen_for_device,
+    init_backend_registration,
+    WorkspaceArg,
+)
+from .exc import (
+    CppWrapperCodegenError,
+    LoweringException,
+    MissingOperatorWithDecomp,
+    MissingOperatorWithoutDecomp,
+)
+from .fx_utils import count_flops_fx
+from .ir import (
+    assign_origin_node,
+    Constant,
+    DonatedBuffer,
+    FixedLayout,
+    get_device_type,
+    GraphPartitionSignature,
+    InputBuffer,
+    Pointwise,
+    Reduction,
+    ShapeAsConstantBuffer,
+    StorageBox,
+    TensorBox,
+    TorchBindObject,
+)
+from .lowering import (
+    constrain_to_fake_tensors,
+    constrain_to_fx_strides,
+    FALLBACK_ALLOW_LIST,
+    fallback_handler,
+    fallback_node_due_to_unsupported_type,
+    lowerings,
+    make_fallback,
+    maybe_layout_constraints,
+    needs_realized_inputs,
+    require_contiguous,
+    tag_to_layout_constraint,
+    unsupported_output_tensor,
+    user_lowerings,
+)
+from .runtime import autotune_cache
+from .runtime.autotune_cache import AutotuneCacheBundler
+from .sizevars import SizeVarAllocator
+from .utils import (
+    gather_origins,
+    get_cloned_parameter_buffer_name,
+    get_donated_idxs,
+    get_sympy_Expr_dtype,
+    GraphPartitionMap,
+    is_same_tensor,
+    maybe_get_suppress_shape_guards_ctx,
+    normalize_name,
+    should_assume_input_aligned,
+    should_fallback_by_default,
+    SUPPORTED_MKLDNN_DEVICES,
+    ValueWithLineMap,
+)
+from .virtualized import NullHandler, V
+
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable, Iterator, Sequence
+    from types import ModuleType
+
+    from torch._higher_order_ops.effects import _EffectType
+    from torch.fx import GraphModule
+    from torch.fx.graph import Graph
+
+    from .codegen.wrapper import PythonWrapperCodegen
+    from .dependencies import Dep
+    from .scheduler import BaseSchedulerNode
+
+    CompiledModule = ModuleType | FileBackedGraphModule
+
+from torch._inductor.codecache import output_code_log
+
+
+log = logging.getLogger(__name__)
+perf_hint_log = torch._logging.getArtifactLogger(__name__, "perf_hints")
+
+aten = torch.ops.aten
+
+_post_grad_graph_counter = itertools.count()
+
+if config.is_fbcode():
+    from torch._inductor.fb.triton_kernel_metadata import (
+        save_triton_kernel_perf_artifact,
+    )
+    from torch._inductor.fb.utils import log_module_code
+else:
+
+    def log_module_code(*args: Any, **kwargs: Any) -> None:
+        pass
+
+    def save_triton_kernel_perf_artifact(*args: Any, **kwargs: Any) -> None:
+        pass
+
+
+def may_get_constant_buffer_dtype(constant_buffer: sympy.Expr) -> torch.dtype | None:
+    if not isinstance(
+        constant_buffer, (sympy.Symbol, sympy.Expr, sympy.core.numbers.Integer)
+    ):
+        raise AssertionError(
+            "get_constant_buffer_dtype only supports input of sympy.Symbol, sympy.Expr or sympy.core.numbers.Integer"
+        )
+    if isinstance(constant_buffer, sympy.core.numbers.Integer):
+        return torch.int64
+
+    if isinstance(constant_buffer, sympy.Expr):
+        return get_sympy_Expr_dtype(constant_buffer)
+
+    if constant_buffer.is_integer:
+        return torch.int64
+    elif constant_buffer.is_float:
+        return torch.float32
+    else:
+        return None
+
+
+def getattr_recursive(
+    obj: GraphModule, target: str
+) -> Tensor | torch._C.ScriptObject | GraphModule:
+    target_atoms = target.split(".")
+    attr_itr = obj
+    for i, atom in enumerate(target_atoms):
+        if not hasattr(attr_itr, atom):
+            raise RuntimeError(
+                f"Node referenced nonexistent target {'.'.join(target_atoms[:i])}"
+            )
+        attr_itr = getattr(attr_itr, atom)
+    return attr_itr
+
+
+def get_user_visible_output_strides(g: Graph) -> dict[Node, tuple[int, ...]]:
+    ret: dict[Node, tuple[int, ...]] = {}
+    output_node = g.find_nodes(op="output")[0]
+
+    if "user_visible_output_idxs" not in output_node.meta:
+        return ret
+
+    if not isinstance(output_node.args[0], torch.fx.Node):
+        output_node_args = output_node.args[0]
+    else:
+        output_node_args = output_node.args
+
+    for idx, node in enumerate(output_node_args):
+        if idx in output_node.meta["user_visible_output_idxs"]:
+            ret[node] = output_node.meta["original_output_strides"][idx]
+    return ret
+
+
+def _is_cpu_strided_tensor_pinned(t: torch.Tensor) -> bool:
+    return t.device.type == "cpu" and t.layout == torch.strided and t.is_pinned()
+
+
+def extend_user_visible_output_strides(
+    user_visible_outputs: dict[Node, tuple[int, ...]],
+) -> dict[Node, object]:
+    """
+    Extend user_visible_output_strides to include view ops that lead to user-visible outputs.
+    """
+    result: dict[Node, object] = {**user_visible_outputs}
+    queue = [*result.keys()]
+    visited = OrderedSet([*queue])
+    while queue:
+        current = queue.pop()
+        if (
+            _is_view_op(current.target)
+            and current.args
+            and isinstance(current.args[0], torch.fx.Node)
+        ):
+            base = current.args[0]
+            if base not in visited:
+                result.setdefault(base, None)
+                visited.add(base)
+                queue.append(base)
+    return result
+
+
+def mark_nodes_dislike_padding(
+    g: Graph, user_visible_output_strides: dict[Node, tuple[int, ...]]
+) -> None:
+    """
+    Nodes like convolution/convolution_backward want its input to be dense.
+    If we pad their inputs, we result in extra calls to copy kernels!  On the other hand, padding usually helps reduction.
+
+    The pass finds nodes that dislike padding. These are nodes that can be reached
+    from a convolution/convolution_backward in the backward direction without
+    going thru a reduction.
+    """
+    if not config.comprehensive_padding:
+        return
+
+    extended_user_visible_nodes = extend_user_visible_output_strides(
+        user_visible_output_strides
+    )
+    ops_dislike_padding = OrderedSet(
+        [
+            aten.convolution,
+            aten.convolution_backward,
+            aten._scaled_mm,
+            aten._scaled_mm_v2,
+        ]
+    )
+    # what's a better way to collect the reduction ops?
+    ops_like_padding = OrderedSet(
+        [
+            aten.var_mean,
+            aten.sum,
+            aten.mean,
+            aten.prod,
+            aten.any,
+            aten.amin,
+            aten.amax,
+            aten.min,
+            aten.max,
+            aten.argmin,
+            aten.argmax,
+            aten.scatter_reduce,
+        ]
+    )
+
+    def _get_overload_packet(
+        node: torch.fx.Node,
+    ) -> torch._ops.OpOverloadPacket | None:
+        return (
+            node.target._overloadpacket
+            if node.op == "call_function"
+            # hasattr on OpOverloadPacket is slow, do isinstance first
+            and isinstance(node.target, torch._ops.OpOverload)
+            and hasattr(node.target, "_overloadpacket")
+            else None
+        )
+
+    for cur in reversed(g.nodes):
+        if isinstance(
+            cur.target,
+            torch._higher_order_ops.triton_kernel_wrap.TritonKernelWrapperMutation,
+        ):
+            cur.meta["dislike_padding"] = True
+            continue
+
+        if (
+            isinstance(cur.target, torch._ops.OpOverload)
+            and get_layout_constraint_tag(cur.target)
+            == torch._C.Tag.needs_exact_strides
+        ):
+            cur.meta["dislike_padding"] = True
+            continue
+
+        op = _get_overload_packet(cur)
+        if not op:
+            continue
+        if op in ops_dislike_padding:
+            cur.meta["dislike_padding"] = True
+
+        if cur.meta.get("dislike_padding", False):
+            # propagate
+            for prior in cur.all_input_nodes:
+                prior_op = _get_overload_packet(prior)
+                if not prior_op:
+                    continue
+                if prior_op not in ops_like_padding:
+                    prior.meta["dislike_padding"] = True
+        # We only want to mark output nodes. So, move it after the above prior nodes process.
+        if not config.pad_outputs and cur in extended_user_visible_nodes:
+            # Reductions (ops_like_padding) produce new output buffers with
+            # fresh strides, so their output stride constraint is already
+            # enforced by allow_padding=False in as_exact_strides. Setting
+            # dislike_padding here would suppress input padding during
+            # freeze, causing a stride mismatch when an earlier lowering
+            # step (e.g. is_contiguous_storage_and_layout) already mutated
+            # the input layout to padded strides.
+            if op not in ops_like_padding:
+                cur.meta["dislike_padding"] = True
+
+
+def is_mkldnn_conv(node: Node) -> bool:
+    # When mkldnn_fusion is enabled, conv will be replaced by the lowering pattern function.
+    # See _register_unary_fusion_lowering in torch/_inductor/fx_passes/mkldnn_fusion.py.
+    if (
+        getattr(torch.ops, "mkldnn", None) is not None
+        and getattr(torch.ops.mkldnn, "_convolution_pointwise", None) is not None
+        and isinstance(node.target, functools.partial)
+        and len(node.target.args) > 0
+        and hasattr(node.target.args[0], "targets")
+    ):
+        for target in node.target.args[0].targets:
+            if target.fns[0] in [
+                torch.ops.mkldnn._convolution_pointwise.default,
+                torch.ops.mkldnn._convolution_pointwise.binary,
+                torch.ops.mkldnn._convolution_pointwise_.binary,
+            ]:
+                return True
+
+    return False
+
+
+def _realize_efficient_zerotensor_output(r: ir.IRNode, fx_node: object) -> ir.IRNode:
+    if (
+        isinstance(fx_node, torch.fx.Node)
+        and fx_node.target is torch.ops.aten._efficientzerotensor.default
+        and isinstance(r, (ir.TensorBox, ir.BaseView))
+    ):
+        return ir.ExternKernel.realize_input(
+            fallback_handler(
+                torch.ops.aten._efficientzerotensor.default,
+                add_to_fallback_set=False,
+            )(
+                list(r.get_size()),
+                dtype=r.get_dtype(),
+                layout=torch.strided,
+                device=r.get_device(),
+                pin_memory=False,
+            )
+        )
+    return r
+
+
+class GraphLowering(torch.fx.Interpreter):
+    """Lowers an FX graph to Inductor IR and drives backend code generation.
+
+    Walks the FX graph node-by-node, materializing inputs/outputs and
+    constants, dispatching each call to an Inductor lowering, and accumulating
+    the resulting IR nodes. Holds graph-wide state needed by lowerings and
+    codegen (sizevars, scheduler inputs, device/dtype tracking, wrapper code,
+    etc.) and orchestrates the call into `codegen()` to produce a wrapper +
+    kernel module via the configured backend (Python/C++ wrappers, AOTI).
+    """
+
+    graph_outputs: list[ir.IRNode]
+
+    def __init__(
+        self,
+        gm: torch.fx.GraphModule,
+        example_inputs: Sequence[object] | None = None,
+        shape_env: ShapeEnv | None = None,
+        graph_id: int | None = None,
+        cpp_wrapper: bool = False,
+        aot_mode: bool = False,
+        layout_opt: bool | None = None,
+        extern_node_serializer: Callable[[list[ir.ExternKernelNode]], Any]
+        | None = None,
+        is_inference: bool = False,
+        is_backward: bool = False,
+        is_const_graph: bool = False,
+        const_output_index: dict[str, int] | None = None,
+        const_wrapper_code: str | None = None,
+        const_kernel_code: str | None = None,
+        const_module: GraphLowering | None = None,
+        name: str | None = None,
+        inputs_to_check: Sequence[int] | None = None,
+        fx_wrapper: bool = False,
+        get_decomp_fn: Callable[..., dict[Any, Callable[..., Any]]] | None = None,
+    ) -> None:
+        super().__init__(gm)
+        self.get_decomp_fn = get_decomp_fn
+        self.example_inputs = example_inputs
+        self.layout_opt = (
+            layout_opt
+            if layout_opt is not None
+            else self.decide_layout_opt(gm, is_inference=is_inference)
+        )
+        self.num_channels_last_conv = 0
+        self.is_inference = is_inference
+        self.is_backward = is_backward
+        self.is_const_graph = is_const_graph
+        self.const_wrapper_code = const_wrapper_code
+        self.const_kernel_code = const_kernel_code
+        self.const_module = const_module
+        self.inputs_to_check = inputs_to_check
+        self._defers_input_alignment = False
+
+        self.extra_traceback = False  # we do our own error wrapping
+        if shape_env is None:
+            shape_env = ShapeEnv()
+            self.reuse_shape_env = False
+        else:
+            self.reuse_shape_env = True
+        self._shape_env = shape_env
+        # We're going to mutate ras_by_symbol as we finish generating them
+        self.ras_by_symbol: dict[sympy.Symbol | None, list[RuntimeAssert]] = (
+            shape_env.deferred_runtime_asserts.copy()
+        )
+        self.bound_unbacked_symbols = OrderedSet[sympy.Symbol]()
+
+        self.sizevars = SizeVarAllocator(shape_env)
+        self.graph_input_names: list[str] = []
+        self.graph_inputs: dict[str, TensorBox | TorchBindObject | sympy.Expr] = {}
+        self.graph_inputs_original: dict[str, InputBuffer] = {}
+        # InputBuffer offsets are relative to input.data_ptr(); explicit FX
+        # as_strided storage offsets are relative to the input's storage.
+        self.graph_input_storage_offsets: dict[str, Expr] = {}
+        self.symbolic_input_sources: dict[
+            sympy.Symbol, tuple[str, Literal["size", "stride"], int]
+        ] = {}
+        self.partition_maps: list[GraphPartitionMap] | None = None
+        self.zero_dim_cpu_tensor_list: OrderedSet[str] = OrderedSet()
+        self.device_types: OrderedSet[str] = (
+            const_module.device_types if const_module else OrderedSet()
+        )
+        self.device_idxs: OrderedSet[int] = (
+            const_module.device_idxs if const_module else OrderedSet()
+        )
+        self.device_type = "cpu"
+        self.additional_buffer_deps: dict[str, OrderedSet[str]] = defaultdict(
+            OrderedSet
+        )
+        self.additional_star_deps: dict[str, OrderedSet[str]] = defaultdict(OrderedSet)
+        # Maps control_deps FX node to operation names created when lowering it,
+        # for void ops (e.g. record_event) that return None and therefore cannot
+        # be referenced by name in subsequent control_deps ordering constraints.
+        self._void_ctrl_dep_op_names: dict[torch.fx.Node, list[str]] = {}
+
+        # Inplace padding may require Inductor to allocate slightly larger
+        # tensor for padding.
+        self.buffer_to_padded_size: dict[str, list[int]] = {}
+
+        self.buffers: list[ir.Buffer] = []
+        self.operations: list[ir.Operation] = []
+        self.const_output_index: dict[str, int] = (
+            const_output_index if const_output_index else {}
+        )
+        self.folded_constants: OrderedSet[str] = (
+            OrderedSet(const_output_index.keys())
+            if const_output_index
+            else OrderedSet()
+        )
+        self.constants: dict[str, torch.Tensor] = (
+            const_module.constants if const_module else {}
+        )
+        self.named_buffers: dict[str, torch.Tensor] = (
+            const_module.named_buffers if const_module else {}
+        )
+        self.mutated_named_buffers: OrderedSet[torch.Tensor] = gm.meta.get(
+            "mutated_named_buffers", OrderedSet()
+        )
+        self.named_parameters: dict[str, torch.Tensor] = (
+            const_module.named_parameters if const_module else {}
+        )
+        self.torchbind_constants: dict[
+            str, torch._C.ScriptObject | FakeScriptObject
+        ] = {}
+        self.torchbind_replay_objects: dict[
+            str, torch._C.ScriptObject | FakeScriptObject
+        ] = {}
+        self.opaque_value_type_classes: dict[str, type] = {}
+        self.seen_subgraphs: dict[str, ir.Subgraph] = {}
+        self.constant_reprs: dict[str, str] = {}
+        self.removed_operations: OrderedSet[str] = OrderedSet()
+        self.removed_buffers: OrderedSet[str] = OrderedSet()
+        self.removed_inplace_buffers: OrderedSet[str] = OrderedSet()
+        self.mutated_buffers: OrderedSet[str] = OrderedSet()
+        self.sdpa_constraint_cache: dict[tuple, ir.IRNode] = {}
+        self.never_reuse_buffers: OrderedSet[str] = OrderedSet()
+        self.inplaced_to_remove: OrderedSet[str] = OrderedSet()
+        self.device_ops: DeviceOpOverrides = None  # type: ignore[assignment]
+        self.wrapper_code: PythonWrapperCodegen = None  # type: ignore[assignment]
+
+        from torch._inductor.extern_node_serializer import extern_node_json_serializer
+
+        self.extern_node_serializer: Callable[[list[ir.ExternKernelNode]], Any] = (
+            extern_node_serializer
+            if config.is_fbcode() and extern_node_serializer
+            else extern_node_json_serializer
+        )
+
+        self.current_node: torch.fx.Node = None  # type: ignore[assignment]
+        self.lists: dict[str, list[str]] = {}
+        self.mutated_inputs: OrderedSet[str] = OrderedSet()
+        self.mutated_input_idxs: list[int] = []
+        self.name_to_buffer: dict[str, ir.Buffer] = {}
+        self.name_to_users: defaultdict[str, list[ir.IRNode]] = defaultdict(list)
+        self.name_to_op: dict[str, ir.Operation] = {}
+        # Side table for CuteDSL capture nodes (may include ReinterpretViews)
+        self._cutedsl_capture_nodes: dict[str, ir.IRNode] = {}
+        self.creation_time = time.time()
+        self.name = name  # type: ignore[assignment]
+        self.cpp_wrapper = cpp_wrapper
+        self.fx_wrapper = fx_wrapper
+
+        # record multi_kernel choice for cpp_wrapper so the second pass knows
+        # which sub-kernel is picked. Copy cpp_wrapper to another variable
+        # since cpp_wrapper flag is OrderedSet to false for the first pass of codegen.
+        self.record_multi_kernel_choice = cpp_wrapper
+        self.multi_kernel_to_choice: dict[str, str] = {}
+
+        self.aot_mode = aot_mode
+        self.graph_id = graph_id
+        self.post_grad_graph_id = next(_post_grad_graph_counter)
+        self.scheduler: torch._inductor.scheduler.Scheduler = None  # type: ignore[assignment]
+
+        # record intermediate results for input of UsedDefinedTritonKernels
+        # This will be used if autotuning is done in one pass.
+        self.autotuning_inputs: list[torch.Tensor] | None = None
+        self.autotuning_mapping: dict[str, dict[str, int]] | None = None
+        self.autotuning_grids: dict[str, Any] | None = None
+
+        # current_device is set only during codegen of a device-specific kernel
+        # a graph can have many devices
+        self.current_device: torch.device | None = None
+
+        self.nodes_prefer_channels_last = (
+            self.find_nodes_prefer_channels_last() if self.layout_opt else OrderedSet()
+        )
+        self._warned_fallback = OrderedSet(["aten.convolution_backward"])
+        self.user_visible_output_strides = get_user_visible_output_strides(gm.graph)
+        mark_nodes_dislike_padding(gm.graph, self.user_visible_output_strides)
+        self.cache_key: str = ""  # This is the cache key for the compiled artifact
+        self.cache_path: str = ""  # This is the path in the filesystem where the compiled artifact is stored
+        self.cache_linemap: list[
+            tuple[int, str]
+        ] = []  # This is the linemap used by the profiler to mark custom compiled kernels getting run
+        # Used if lowering encounters cases where cudagraphs are not supported
+        self.disable_cudagraphs_reason: str | None = None
+        self.kernel_free_cudagraph: bool = False
+
+        # only keeping one node per device for stack trace purposes
+        self.device_node_mapping: dict[torch.device, torch.fx.Node] = {}
+        self.orig_gm: torch.fx.GraphModule = gm.__copy__()
+        for k, v in self.orig_gm.named_buffers():
+            self.named_buffers[k] = v
+        for k, v in self.orig_gm.named_parameters():
+            self.named_parameters[k] = v
+        self.dynamo_flat_name_to_original_fqn = self.module.meta.get(  # type: ignore[operator, union-attr]
+            "dynamo_flat_name_to_original_fqn", {}
+        )
+        self.allocated_constant_name: dict[str, str] = (
+            const_module.allocated_constant_name if const_module is not None else {}
+        )
+        init_backend_registration()
+        self.get_backend_features = functools.lru_cache(None)(get_backend_features)
+
+        self.effectful_ops: dict[_EffectType, ir.Buffer] = {}
+        # Track the buffers that we know is unaligned
+        # This can either be a graph input or the output of fallback
+        # kernels.
+        self.unaligned_buffers: OrderedSet[str] = OrderedSet()
+        self.no_fuse_buffer_names: OrderedSet[str] = OrderedSet()
+
+        # Layout constraints for Triton template buffers.
+        # Maps buffer name -> expected FixedLayout (computed speculatively without freezing)
+        self.buffer_layout_constraints: dict[str, ir.FixedLayout] = {}
+
+        self.low_precision_codegen_ops: OrderedSet[str] = OrderedSet()
+        # more aggressive prologue fusion
+        self.invoke_quant_ops: OrderedSet[str] = OrderedSet()
+
+        # Below field is related to printing debug intermediate tensor values info for debugging
+        self.all_codegen_kernel_names: OrderedSet[str] = OrderedSet()
+
+        # state used by for KernelArgs.workspace
+        self.workspace_id = itertools.count()
+
+        # track the current placeholder index that we are processing
+        self.placeholder_idx = -1
+
+        self.bw_donated_idxs = get_donated_idxs()
+
+        # Cache for dep size hints to avoid expensive recomputation
+        self.dep_size_hint_cache: dict[tuple[Dep, bool], int] = {}
+
+    def freeze_runtime_asserts(self) -> None:
+        self._shape_env.freeze_runtime_asserts()
+
+    def get_placeholder_sizes_strides(
+        self, ex: torch.Tensor
+    ) -> tuple[Sequence[int | Expr], Sequence[int | Expr]]:
+        sizes, strides, _ = self.symbolic_sizes_strides_storage_offset(ex)
+        return sizes, strides
+
+    def symbolic_sizes_strides_storage_offset(
+        self, ex: torch.Tensor
+    ) -> tuple[Sequence[int | Expr], Sequence[int | Expr], Expr]:
+        """
+        Support dynamic shapes and dynamic strides by assigning variables
+        to each dimension.  We duck-shape tensors, so if two tensors
+        have the same size they get assigned the same symbolic variable.
+        """
+        if self.reuse_shape_env:
+            size, stride = ex.size(), ex.stride()
+            storage_offset = ex.storage_offset()
+        else:
+            from torch._dynamo.source import ConstantSource
+
+            # TODO: this should not be needed once #93059 lands
+            # https://github.com/pytorch/pytorch/pull/94031#discussion_r1096044816
+            # TODO: make a dedicated UnknownSource for this?
+            # NB: This is using the legacy default behavior from
+            # transfer_symbols_from_foreign_shape_env but we hope we can
+            # just delete this entirely
+            source = ConstantSource(
+                f"__inductor_unknown_tensor_{len(self._shape_env.backed_var_to_val)}"
+            )
+            (
+                size,
+                stride,
+                storage_offset,
+            ) = self._shape_env.transfer_symbols_from_foreign_shape_env(
+                ex.size(),
+                ex.stride(),
+                ex.storage_offset(),
+                source,
+            )
+
+        r_size = [sympy.sympify(i) for i in size]
+        r_stride = [sympy.sympify(i) for i in stride]
+        r_storage_offset = (
+            storage_offset.node.expr
+            if isinstance(storage_offset, torch.SymInt)
+            else sympy.sympify(storage_offset)
+        )
+        return r_size, r_stride, r_storage_offset
+
+    def static_sizes_strides(
+        self, ex: torch.Tensor
+    ) -> tuple[list[sympy.Expr], list[sympy.Expr]]:
+        """
+        Primarily used to weights
+        """
+        size = [sympy.Integer(i) for i in ex.size()]
+        stride = [sympy.Integer(i) for i in ex.stride()]
+        return size, stride
+
+    def get_allocation_size(
+        self,
+        node: ir.TensorBox
+        | ir.StorageBox
+        | ir.Buffer
+        | WorkspaceArg
+        | ir.TorchBindObject,
+    ) -> Sequence[Expr]:
+        if isinstance(node, ir.TensorBox):
+            node = node.data  # type: ignore[assignment]
+        if isinstance(node, ir.StorageBox):
+            node = node.data  # type: ignore[assignment]
+        if (
+            isinstance(node, ir.ComputedBuffer)
+            and node.name in self.buffer_to_padded_size
+        ):
+            # pyrefly: ignore [bad-index, index-error]
+            return self.buffer_to_padded_size[node.name]
+        else:
+            return node.get_size()
+
+    def get_allocation_storage_size(
+        self, node: ir.Buffer | WorkspaceArg | ir.TorchBindObject
+    ) -> Expr:
+        layout = node.get_layout()
+        size = self.get_allocation_size(node)  # consider inplace padding
+        stride = layout.stride
+        offset = layout.offset
+        return compute_required_storage_length(size, stride, offset)  # type: ignore[arg-type]
+
+    def has_feature(
+        self,
+        device: torch._inductor.ir.IRNode | device | None,
+        feature: BackendFeature,
+    ) -> bool:
+        if not isinstance(feature, BackendFeature):
+            raise AssertionError(
+                f"Expected BackendFeature, got {type(feature)}: {feature}"
+            )
+        return feature in self.get_backend_features(get_device_type(device))
+
+    def get_dep_size_hint(self, dep: Dep, count_bytes: bool = True) -> int:
+        """
+        Get the size hint for a dependency with caching to avoid expensive recomputation.
+        """
+        if (dep, count_bytes) not in self.dep_size_hint_cache:
+            res = 0
+            # Non-tensor graph inputs (TorchBindObject, OpaqueObjectState)
+            # have no meaningful size — skip the size computation entirely.
+            inp = self.graph_inputs.get(dep.name)
+            if isinstance(inp, ir.NonTensorObj):
+                self.dep_size_hint_cache[(dep, count_bytes)] = 0
+                return 0
+            try:
+                if (
+                    not dep.has_unbacked_symbols()
+                    or self.sizevars.all_unbacked_explicitly_hinted(dep.get_numel())
+                ):
+                    if count_bytes:
+                        res = dep.numbytes_hint()
+                    else:
+                        res = dep.numel_hint()
+            except KeyError:
+                # In at least one test (test/inductor/test_torchbind.py) we
+                # create a StarDep that doesn't exist in the graph and calling
+                # `has_unbacked_symbols()` throws an error.
+                pass
+            self.dep_size_hint_cache[(dep, count_bytes)] = res
+        return self.dep_size_hint_cache[(dep, count_bytes)]
+
+    def get_current_device_or_throw(self) -> torch.device:
+        if device := self.current_device:
+            return device
+        else:
+            raise RuntimeError("No current device")
+
+    @contextlib.contextmanager
+    def set_current_device(self, device: torch.device) -> Iterator[None]:
+        prior = self.current_device
+        self.current_device = device
+        try:
+            yield
+        finally:
+            self.current_device = prior
+
+    def get_training_phase(self) -> str:
+        if self.is_inference:
+            return "inference"
+        if self.is_backward:
+            return "backward"
+        return "forward"
+
+    @staticmethod
+    def decide_layout_opt(gm: GraphModule, *, is_inference: bool) -> bool:
+        """
+        Decide if we should enable layout optimization for this graph based on
+        heuristics.
+        """
+        if not config.layout_optimization:
+            return False
+
+        if config.force_layout_optimization:
+            return True
+
+        conv_nodes = [
+            n for n in gm.graph.nodes if n.target is torch.ops.aten.convolution.default
+        ]
+
+        for n in gm.graph.nodes:
+            if is_mkldnn_conv(n):
+                conv_nodes.append(n)
+
+        nconv = len(conv_nodes)
+
+        if nconv == 0:
+            return False
+
+        # For cpu backend and mkldnn enabled, we always use channels_last for better performance.
+        if (
+            torch.backends.mkldnn.enabled  # pyrefly: ignore [unbound-name]
+            and torch.backends.mkldnn.is_available()  # pyrefly: ignore [unbound-name]
+            and all(
+                n.args[idx].meta["val"].device.type in SUPPORTED_MKLDNN_DEVICES
+                for n in conv_nodes
+                for idx in [0, 1]
+            )
+        ):
+            return True
+
+        # Following models are skipped due to this:
+        # jx_nest_base
+        # volo_d1_224
+        if len(list(gm.graph.nodes)) >= 300 * nconv:
+            log.debug("Skipped layout opt because only a few conv")
+            return False
+
+        if any(
+            has_free_symbols(n.args[idx].meta["val"])
+            for n in conv_nodes
+            for idx in [0, 1]
+        ):
+            log.debug(
+                "See perf regression with dynamic shape. Follow up in https://github.com/pytorch/pytorch/issues/102670"
+            )
+            return False
+
+        def is_grouped(n: Any) -> bool:
+            meta_val = n.args[1].meta["val"]  # type: ignore[union-attr, operator]
+            if not isinstance(meta_val, torch.Tensor):
+                raise AssertionError(f"Expected torch.Tensor, got {type(meta_val)}")
+            return n.args[-1] > 1 and meta_val.size(1) > 1  # type: ignore[union-attr, operator]
+
+        def is_in_out_channel(n: torch.fx.Node) -> bool:
+            return (
+                n.args[1].meta["val"].size(0) * 2 <= n.args[1].meta["val"].size(1)  # type: ignore[union-attr, operator]
+                and n.args[1].meta["val"].size(2) > 1  # type: ignore[union-attr, operator]
+            )
+
+        def is_small_channel(n: torch.fx.Node) -> bool:
+            return (
+                n.args[1].meta["val"].size(0) <= 64  # type: ignore[union-attr, operator]
+                and n.args[1].meta["val"].size(1) <= 64  # type: ignore[union-attr, operator]
+            )
+
+        # only grouped convolutions benchmarked as slower in conv samples for inference only
+        if is_inference:
+            flop_counts: dict[str, float] = defaultdict(float)
+            for node in conv_nodes:
+                counted_flops = count_flops_fx(node)
+                if counted_flops is None:
+                    continue
+
+                if is_grouped(node):
+                    node_type = "grouped"
+                elif is_small_channel(node):
+                    node_type = "small"
+                elif is_in_out_channel(node):
+                    node_type = "in_out"
+                else:
+                    node_type = "default"
+
+                flop_counts[node_type] += counted_flops
+            else:
+                log.debug("Conv inputs meta not found")
+
+            # average benchmarked channels last speedup / slowdown, < 1 is speedup.
+            # taken from the set of convolution inputs in benchmarks/dynamo/microbenchmarks/operator_inp_logs/torchbench_train/
+            # To regenerate these numbers follow https://gist.github.com/eellison/55d7a6ed6f39829d68ac56f95f4df5bb
+            GROUPED_MULTIPLIER = 1.358
+            DEFAULT_MULTIPLIER = 0.823
+            IN_OUT_MULTIPLIER = 0.725
+            SMALL_MULTIPLIER = 0.783
+
+            total_flops = sum(flop_counts.values())
+            # TODO - get different values per hardware
+            weighted_flops = (
+                flop_counts["grouped"] * GROUPED_MULTIPLIER
+                + flop_counts["small"] * SMALL_MULTIPLIER
+                + flop_counts["in_out"] * IN_OUT_MULTIPLIER
+                + flop_counts["default"] * DEFAULT_MULTIPLIER
+            )
+            do_layout_opt = weighted_flops <= total_flops
+            if not do_layout_opt:
+                log.debug(
+                    "Skipped layout opt in inference because weighted flops indicate slowdown, default: %d, channels last: %d",
+                    total_flops,
+                    weighted_flops,
+                )
+            return do_layout_opt
+
+        # Channels last layout can dramatically hurt grouped conv perf. E.g.
+        # Conv with arguments like
+        #   {"input_shape": [32, 224, 112, 112], "weight_shape": [224, 112, 3, 3],
+        #    "stride": [2, 2], "padding": [1, 1], "groups": 2}
+        # slows down 31x using channels last..
+
+        # But a lot of timm models use depthwise separable convolution which will
+        # result in grouped convolution with in-channel size == 1.
+        # For those grouped convolution, channels last still helps a lot.
+        # E.g.
+        # Conv with arguments
+        #   {"input_shape": [128, 58, 56, 56], "weight_shape": [58, 1, 3, 3],
+        #    "stride": [2, 2], "padding": [1, 1], "groups": 58}
+        # get 1.86x speedup with channels last layout.
+        #
+        # The following heuristics skip using channels-last if the model contains
+        # grouped convolution with in-channels > 1.
+        if any(map(is_grouped, conv_nodes)):
+            log.debug(
+                "Skip layout opt because found grouped convolution with >1 in_channels!"
+            )
+            return False
+
+        # For some models that contain convolution with larger in-channel than out-channel, applying
+        # channels last hurts performance.
+        # Following models are skipped due to this:
+        # - pytorch_unet
+        # - phlippe_densenet (slightly worse)
+        # - Background_Matting (1.22x -> 0.821x)
+        # - pytorch_CycleGAN_and_pix2pix (1.597x -> 1.294x)
+        if any(map(is_in_out_channel, conv_nodes)):
+            log.debug(
+                "Skip layout opt because some convolutions have smaller out_channel"
+            )
+            return False
+
+        # Following models are skipped due to this:
+        # - functorch_maml_omniglot
+        if all(map(is_small_channel, conv_nodes)):
+            log.debug("Skip layout opt because all convolution channels are too small")
+            return False
+
+        return True
+
+    def qualify_name(self, name: str) -> str:
+        """Prepend the given name with the graph name if any."""
+        if self.name is not None:
+            return f"{self.name}_{name}"
+        return name
+
+    def make_subgraph(
+        self,
+        gm: torch.fx.GraphModule,
+        example_inputs: list[torch.Tensor],
+        subgraph_name: str,
+    ) -> SubgraphLowering:
+        """
+        Make a subgraph of the current graph with all inherited parts, except
+        the graph module (`gm`) and `example_inputs`.  The subgraphs are lowered
+        separately and lifted into a separate function in the parent output
+        wrapper code.  The subgraph name is qualified by the parent graph's
+        name. Note that the lifting of subgraph is supported for python wrapper
+        only. For cpp wrapper, we inline the subgraphs in the parent wrapper.
+        """
+        return SubgraphLowering(
+            parent=self,
+            gm=gm,
+            example_inputs=example_inputs,
+            shape_env=self._shape_env,
+            cpp_wrapper=self.cpp_wrapper,
+            aot_mode=self.aot_mode,
+            extern_node_serializer=self.extern_node_serializer,
+            is_inference=self.is_inference,
+            is_backward=self.is_backward,
+            name=self.qualify_name(subgraph_name),
+        )
+
+    def find_nodes_prefer_channels_last(self) -> OrderedSet[Node]:
+        """
+        The rule to decide if a node prefers channels last is simple.
+        1. if it's input/output of a convolution
+        2. if one of its user prefers channels last
+
+        We have rule 1 because cudnn runs a faster convolution kernel for channels last inputs;
+        Rule 2 is also important. It makes sure that indirect inputs to convolution also prefers
+        channels last.
+
+        Consider the scenario: conv -> batch-norm -> relu -> conv
+        Without rule 2, batch-norm output may use a contiguous layout. That will cause 2 extra copies:
+        1. the output of batch-norm should be channels last initially since its input is a conv's output.
+           Forcing the batch-norm's output to be contiguous results in the first copy
+        2. The second conv's input is initially contiguous. This layout is propagated from the batch-norm's output.
+           We need to convert it to channels last layout which results in the second copy.
+        With rule 2, we make sure all the tensors in the chain use channels last layout. So both copies
+        can be saved.
+        """
+        last_conv = None
+        nodes_cannot_propagate = [torch.ops.aten.bmm.default]
+        output_set = OrderedSet[Node]()
+        for n in reversed(self.module.graph.nodes):  # type: ignore[arg-type, union-attr]
+            if n.target is torch.ops.aten.convolution.default:
+                output_set.add(n)
+                if last_conv is None:
+                    last_conv = n
+                continue
+            if n.target in nodes_cannot_propagate:
+                continue
+            if is_mkldnn_conv(n):
+                output_set.add(n)
+                continue
+            for user in n.users:
+                if user in output_set:
+                    output_set.add(n)
+                    break
+
+        # need a second pass to add downstream nodes of those channel last nodes to the sets.
+        # This pass is especially needed to avoid mix-layout kernel inputs in backward pass.
+        #
+        # Let's say a conv-batchnorm 's output is passed to relu whose output is in turn returned
+        # from the fwd graph. Without this second pass, we will force relu's output to be contiguous.
+        # Then in the kernel in backward pass, the contiguous output of relu may be mix with other channels last
+        # tensors and passed to a kernel.
+        #
+        # This pass improve yolov3 training speedup from 1.116x (worse than disabling layout optimization speedup 1.196x) to 1.457x.
+        # It also improves dla102 training speedup from 1.240x (worse than disabling layout optimization speedup 1.523x) to 1.835x .
+        # This also helps the following models:
+        # - res2net101_26w_4s
+        # - res2net50_14w_8s
+        # - sebotnet33ts_256
+        for n in self.module.graph.nodes:  # type: ignore[union-attr]
+            # layout propagation ends at last conv node, which will benefit vison transformers.
+            if last_conv is not None and n == last_conv:
+                break
+            if n in output_set:
+                for user in n.users:
+                    if user.target in nodes_cannot_propagate:
+                        continue
+                    output_set.add(user)
+
+        return output_set
+
+    def warn_fallback(self, name: str) -> None:
+        if name not in self._warned_fallback:
+            self._warned_fallback.add(name)
+            perf_hint_log.info("Using FallbackKernel: %s", name)
+
+    def add_device_info(self, device: torch.device) -> None:
+        self.device_types.add(device.type)
+        if device.index is not None:
+            self.device_idxs.add(device.index)
+        if V.graph.current_node and device not in self.device_node_mapping:
+            self.device_node_mapping[device] = V.graph.current_node
+
+    @property
+    def fake_mode(self) -> torch._subclasses.fake_tensor.FakeTensorMode:
+        return V.fake_mode
+
+    @property
+    def is_dual_wrapper_mode(self) -> bool:
+        """True when generating dual-wrapper-mode C++ for both JIT and AOTI.
+
+        Dual-wrapper mode emits a JIT pass that drives Triton autotune/compile
+        alongside the AOTI output, so it is needed iff at least one device in
+        the graph uses the Triton backend.
+        """
+        if not self.aot_mode or config.triton.autotune_at_compile_time:
+            return False
+        return any(ir.is_triton(d) for d in self.device_types)
+
+    def try_get_buffer(
+        self, buffer_name: str
+    ) -> ir.TensorBox | ir.Buffer | ir.TorchBindObject | None:
+        if buffer_name in self.name_to_buffer:
+            return self.name_to_buffer[buffer_name]
+        if buffer_name in self.graph_inputs:
+            return self.graph_inputs[buffer_name]
+        if buffer_name in self.constants:
+            data = V.graph.constants[buffer_name]
+            return ir.ConstantBuffer(
+                name=buffer_name,
+                layout=ir.FixedLayout(
+                    data.device, data.dtype, *V.graph.static_sizes_strides(data)
+                ),
+            )
+
+        return None
+
+    def add_symbol_graph_input(self, symbol: sympy.Expr) -> None:
+        raise RuntimeError("Should not be called for the main graph")
+
+    def get_buffer(
+        self, buffer_name: str
+    ) -> ir.TensorBox | ir.Buffer | ir.TorchBindObject:
+        buf = self.try_get_buffer(buffer_name)
+        if buf is not None:
+            return buf
+        raise RuntimeError(f"Failed to find buffer matching name {buffer_name}")
+
+    def get_dtype(self, buffer_name: str) -> torch.dtype:
+        if buffer_name in self.constants:
+            return self.constants[buffer_name].dtype
+        # For a mutation op we should return the dtype of the buffer being mutated
+        if (
+            hasattr(self.scheduler, "mutation_real_name")
+            and buffer_name in self.scheduler.mutation_real_name
+        ):
+            mutated_buf = self.scheduler.mutation_real_name[buffer_name]
+            if mutated_buf in self.name_to_buffer:
+                return self.name_to_buffer[mutated_buf].get_dtype()
+            if mutated_buf in self.graph_inputs:
+                return self.graph_inputs[mutated_buf].get_dtype()
+        if buffer_name in self.name_to_buffer:
+            return self.name_to_buffer[buffer_name].get_dtype()
+        if buffer_name in self.graph_inputs:
+            return self.graph_inputs[buffer_name].get_dtype()
+        m = re.match(r"(as_strided|reinterpret_tensor)\(([a-zA-Z0-9_]+),", buffer_name)
+        if m:
+            return self.get_dtype(m.group(1))
+        raise KeyError(f"could not find {buffer_name}")
+
+    def get_numel(self, buffer_name: str) -> int | Expr:
+        if buffer_name in self.constants:
+            return self.constants[buffer_name].numel()
+        if buffer_name in self.name_to_buffer:
+            buf = self.name_to_buffer[buffer_name]
+            if not buf.has_tensor_output():
+                return 1
+            return buf.get_numel()
+        if buffer_name in self.graph_inputs:
+            return self.graph_inputs[buffer_name].get_numel()
+        raise KeyError(f"could not find {buffer_name}")
+
+    def run(self, *args: Any) -> Any:  # type: ignore[override]
+        with dynamo_timed("GraphLowering.run"):
+            return super().run(*args)
+
+    def register_operation(self, op: ir.Operation) -> str:
+        if op.operation_name is not None:
+            raise AssertionError(f"Operation registered twice: {op}")
+        if not isinstance(op, ir.Operation):
+            raise AssertionError(f"Expected ir.Operation, got {type(op)}")
+        name = self.qualify_name(f"op{len(self.operations)}")
+        self.operations.append(op)
+        self.name_to_op[name] = op
+        op.operation_name = name
+        return name
+
+    def register_buffer(self, buffer: ir.Buffer, *, set_name: bool = False) -> str:
+        name = self.qualify_name(f"buf{len(self.buffers)}")
+        self.buffers.append(buffer)
+        self.name_to_buffer[name] = buffer
+        device = buffer.get_device()
+        if (
+            # Skip empty CPU tensor so that CUDA graphs can succeed, see https://github.com/pytorch/pytorch/pull/114144
+            device is not None
+            and not (
+                isinstance(buffer, ir.ComputedBuffer)
+                and buffer.is_zero_elements()
+                and device == torch.device("cpu")
+            )
+        ):
+            self.add_device_info(device)
+
+        if set_name:
+            buffer.name = name
+        return name
+
+    def register_operation_list(self, operation_names: list[str]) -> str:
+        name = self.qualify_name("list_" + "_".join(operation_names))
+        self.lists[name] = operation_names
+        return name
+
+    def register_users_of(self, node_output: Iterable[ir.IRNode] | ir.IRNode) -> None:
+        def register(value: Iterable[ir.IRNode] | ir.IRNode) -> None:
+            if isinstance(value, (list, tuple)):
+                for x in value:
+                    register(x)
+            if isinstance(value, ir.TensorBox):
+                for read_name in value.get_read_names():
+                    self.name_to_users[read_name].append(value)
+
+        register(node_output)
+
+    def mark_buffer_mutated(self, name: str) -> None:
+        """
+        When a buffer is mutated we need to make sure all the reads to
+        the old version are realized before the mutation happens.
+        """
+        if not isinstance(name, str):
+            raise AssertionError(f"Expected str, got {type(name)}")
+        self.mutated_buffers.add(name)
+
+        if name not in self.name_to_users:
+            return
+
+        for user in self.name_to_users[name]:
+            user.realize()
+
+    def get_original_value_of_constant(self, name: str) -> torch.Tensor:
+        """
+        In AOTI, module buffers may have been mutated during the tracing and compilation.
+        Thus we need to read from previously stored original buffers, to make sure the
+        generated model.so uses correct initial values.
+        """
+        if name not in self.allocated_constant_name or name not in self.constants:
+            raise AssertionError("Can not find the original value for " + name)
+        orig_name = get_cloned_parameter_buffer_name(self.allocated_constant_name[name])
+        return (
+            self.module.meta[orig_name]  # type: ignore[index]
+            if orig_name in self.module.meta  # type: ignore[operator]
+            else self.constants[name]
+        )
+
+    def allocate_non_dup_const_name(self, name: str | None, data: Tensor) -> str:
+        if not config.aot_inductor.use_runtime_constant_folding:
+            for constant_name, value in self.constants.items():
+                if is_same_tensor(data, value):
+                    return constant_name
+
+        if name is None:
+            name = f"constant{len(self.constants)}"
+        orig_name = name
+        if name[0].isdigit():
+            name = f"constant_{name}"
+        name = self.qualify_name(name)
+        # We may generate a var name for each constant in the codegen.
+        # Let's only keep sane characters.
+        prefix = normalize_name(name)
+        name = prefix
+        cnt = 0
+        while name in self.constants:
+            name = f"{prefix}_{cnt}"
+            cnt += 1
+        self.constants[name] = data
+        self.constant_reprs[name] = (
+            f"{data.device!r} {data.dtype!r} "
+            f"{tuple(data.size())!r} {tuple(data.stride())!r} "
+            f"{hash(data):x}"
+        )
+        self.allocated_constant_name[name] = orig_name  # type: ignore[assignment]
+        return name
+
+    def add_tensor_constant(self, data: Tensor, name: str | None = None) -> TensorBox:
+        new_name = self.allocate_non_dup_const_name(name, data)
+        return TensorBox.create(
+            ir.ConstantBuffer(
+                name=new_name,
+                layout=FixedLayout(
+                    data.device,
+                    data.dtype,
+                    *self.static_sizes_strides(data),
+                    is_pinned=_is_cpu_strided_tensor_pinned(data),
+                ),
+            )
+        )
+
+    def constant_name(self, name: str, device_override: torch.device | None) -> str:
+        """
+        We AOT copy constants to the devices they are needed on.
+        If device_override doesn't match the constant's device, then
+        copy it and return a different name.
+        """
+        if self.constants[name].device == device_override or device_override is None:
+            return name
+        with torch.utils._python_dispatch._disable_current_modes():
+            # caller might have OrderedSet fake tensor mode which will create a fake tensor
+            # when calling .to, so unset modes here
+            non_dup_const_name = self.allocate_non_dup_const_name(
+                f"{name}_{device_override.type}{device_override.index or 0}",
+                self.constants[name].to(device_override),
+            )
+
+            if non_dup_const_name not in self.constants:
+                raise AssertionError(
+                    f"{non_dup_const_name} should be in V.graph.constants already"
+                )
+
+            # register device-copied buffers and parameters to graph as well
+            # to codegen correct torch::aot_inductor::ConstantType for them rather than `Unknown`
+            if any(
+                name == normalize_name(buffer_name)
+                for buffer_name in self.named_buffers
+            ):
+                self.named_buffers[non_dup_const_name] = self.constants[
+                    non_dup_const_name
+                ]
+
+            if any(
+                name == normalize_name(param_name)
+                for param_name in self.named_parameters
+            ):
+                self.named_parameters[non_dup_const_name] = self.constants[
+                    non_dup_const_name
+                ]
+
+            return non_dup_const_name
+
+    @typing_extensions.override
+    def placeholder(  # pyrefly: ignore [bad-override]
+        self,
+        target: str,  # type: ignore[override]
+        args: tuple[object],  # type: ignore[override]
+        kwargs: dict[str, object],
+    ) -> Expr | TensorBox | None:
+        self.placeholder_idx += 1
+        example = super().placeholder(target, args, kwargs)  # type: ignore[arg-type]
+        target = self.qualify_name(target)
+        if isinstance(example, SymTypes):
+            expr = _get_placeholder_expr(example.node)
+            self.graph_inputs[target] = expr
+            self.graph_input_names.append(target)
+            return expr
+        elif isinstance(example, (int, bool, float)):
+            expr = sympy.sympify(example)
+            self.graph_inputs[target] = expr
+            self.graph_input_names.append(target)
+            return expr
+        elif isinstance(example, FakeScriptObject):
+            obj = TorchBindObject(name=target, value=example)
+            self.graph_inputs[target] = obj
+            self.graph_input_names.append(target)
+            return obj
+        elif example is None:
+            self.graph_input_names.append(target)
+            return None
+        if isinstance(example, BackwardState):
+            # Ignored arg, must be unused
+            # Alternately we could filter this out in AotAutograd
+            self.graph_input_names.append(target)
+            return None
+        # See note: Note: [Generator arguments in AOTDispatcher]
+        elif isinstance(example, torch.Generator):
+            gen = ir.GeneratorState(name=target, device=example.device)
+            self.graph_inputs[target] = gen  # type: ignore[assignment]
+            self.graph_input_names.append(target)
+            return gen
+        elif is_opaque_symbolic_type(type(example)):
+            opaque_obj = ir.OpaqueObjectState(name=target, value=example)
+            self.graph_inputs[target] = opaque_obj  # type: ignore[assignment]
+            self.graph_input_names.append(target)
+            return opaque_obj
+
+        if not isinstance(example, torch.Tensor):
+            raise AssertionError(
+                f"Expected torch.Tensor, got {type(example)}: {example}"
+            )
+        # todo(chilli): We can remove the last check once we turn buffers into
+        # static shape tensors. That's a hack to workaround Inductor believing
+        # the buffer should be static but us passing in a fake tensor with
+        # symbolic shapes.
+        if not example._has_symbolic_sizes_strides:
+            # the first N inputs are weights
+            sizes, strides = self.static_sizes_strides(example)
+            storage_offset = sympy.Integer(example.storage_offset())
+        else:
+            sizes, strides, storage_offset = self.symbolic_sizes_strides_storage_offset(
+                example
+            )
+
+        if (
+            self.is_backward
+            and self.bw_donated_idxs
+            and self.placeholder_idx in self.bw_donated_idxs
+        ):
+            tensor = TensorBox.create(
+                DonatedBuffer(
+                    name=target,
+                    layout=FixedLayout(example.device, example.dtype, sizes, strides),
+                )
+            )
+        else:
+            # TODO(jansel): handle input aliasing
+            tensor = TensorBox.create(
+                InputBuffer(
+                    name=target,
+                    layout=FixedLayout(example.device, example.dtype, sizes, strides),
+                )
+            )
+
+        self.graph_inputs[target] = tensor
+        self.graph_input_names.append(target)
+        self.graph_input_storage_offsets[target] = storage_offset
+        self.graph_inputs_original[target] = tensor.data.data  # type: ignore[union-attr]
+        if self.current_node.users:  # cudagraphs should work with an unused CPU input
+            self.add_device_info(example.device)
+
+        # Note: [Input Alignment handling in Inductor]
+        # Alignment matters for generating efficient code. Some operations,
+        # e.g. vectorized loads, can only be performed on aligned inputs.
+        #
+        # But if we codegen assuming aligned inputs and then get unaligned
+        # inputs at runtime, then we are forced to clone - which is bad for
+        # both perf and memory usage.
+        #
+        # One option would be to guard on storage_offset%ALIGNMENT, and then
+        # codegen based on this. But storage_offset guards turned out to be
+        # expensive and cause recompiles; Instead, we're generating code
+        # based on the alignment of the example input without guarding.
+        with maybe_get_suppress_shape_guards_ctx():
+            if not should_assume_input_aligned(example):
+                self.unaligned_buffers.add(target)
+        return tensor
+
+    @typing_extensions.override
+    def call_function(self, target: Callable, args: Any, kwargs: dict[str, Any]) -> Any:  # type: ignore[type-arg]
+        if target is operator.getitem and isinstance(args[0], (list, tuple, dict)):
+            return super().call_function(target, args, kwargs)
+
+        # hasattr on OpOverloadPacket is slow, check isinstance first
+        if not isinstance(target, torch._ops.OpOverloadPacket) and hasattr(
+            target, "_inductor_lowering_function"
+        ):
+            # passthrough lowerings from .pattern_matcher
+            return target(*args, **kwargs)
+
+        if target not in lowerings:
+            if not isinstance(target, torch._ops.OpOverload):
+                raise AssertionError(f"{target} is not an OpOverload")
+            base_name = target.name().split(".")[0]
+            if base_name in FALLBACK_ALLOW_LIST:
+                make_fallback(
+                    target,
+                    warn=False,
+                    get_decomp_fn=self.get_decomp_fn,
+                    override_decomp=True,
+                )
+            elif config.implicit_fallbacks:
+                error = (
+                    MissingOperatorWithDecomp
+                    if get_decompositions([target])
+                    else MissingOperatorWithoutDecomp
+                )
+                log.info(
+                    "Creating implicit fallback for:\n%s",
+                    LazyString(error.operator_str, target, args, kwargs),
+                )
+
+                tag: torch._C.Tag | None = get_layout_constraint_tag(
+                    target, with_default=False
+                )
+                if (
+                    tag is None
+                    and torch._library.utils.is_builtin(target)
+                    and self.is_backward
+                ):
+                    # for implicit fallback ATen ops during backward, if there
+                    # is no layout constraint tag, we conservatively require contiguous
+                    # input since some eager kernels do not
+                    # support non-contiguous inputs. Otherwise they may silently cause
+                    # accuracy problems. Check https://github.com/pytorch/pytorch/issues/140452
+                    # We only do this For ATen ops and for backward.
+                    #
+                    # TODO: should really switch to "needs_fixed_stride" constraint on these
+                    # and identify them one by one.
+                    decided_constraint: Callable[..., tuple[Any, Any]] | None = (
+                        require_contiguous
+                    )
+                else:
+                    default_tag: torch._C.Tag = get_layout_constraint_tag(
+                        target, with_default=True
+                    )
+                    decided_constraint = tag_to_layout_constraint(default_tag)
+
+                make_fallback(
+                    target,
+                    layout_constraint=decided_constraint,
+                    get_decomp_fn=self.get_decomp_fn,
+                )
+
+            elif get_decompositions([target]):
+                # There isn't a good way to dynamically patch this in
+                # since AOT Autograd already ran.  The error message tells
+                # the user how to fix it.
+                raise MissingOperatorWithDecomp(target, args, kwargs)
+            else:
+                raise MissingOperatorWithoutDecomp(target, args, kwargs)
+
+        try:
+            log.debug("  via %s", lowerings[target])  # type: ignore[index]
+
+            n = self.current_node
+            layout_constraints = maybe_layout_constraints(target)
+            if layout_constraints:
+                old_args, old_kwargs = args, kwargs
+                if layout_constraints is constrain_to_fake_tensors:
+                    # only constrain_to_fake_tensor if this exists.
+                    # otherwise, no constraints at all: the implication is
+                    # that this operator was inserted by a custom pass
+                    # so we'll give them the freedom.
+                    if "eager_input_vals" in n.meta:
+                        fake_args, fake_kwargs = n.meta["eager_input_vals"]
+
+                        # (fake_args, fake_kwargs) might not align with (args, kwargs).
+                        # we need to normalize them based on the schema
+                        if not isinstance(target, torch._ops.OpOverload):
+                            raise AssertionError(
+                                f"Expected torch._ops.OpOverload, got {type(target)}"
+                            )
+
+                        def normalize(args: Any, kwargs: Any) -> tuple[Any, Any]:
+                            result = torch.fx.operator_schemas.normalize_function(
+                                target, args, kwargs
+                            )
+                            if result is None:
+                                raise AssertionError(
+                                    f"normalize_function returned None for {target}"
+                                )
+                            return result[0], result[1]
+
+                        fake_args, fake_kwargs = normalize(fake_args, fake_kwargs)
+                        args, kwargs = normalize(args, kwargs)
+                        old_args, old_kwargs = normalize(old_args, old_kwargs)
+
+                        args, kwargs = constrain_to_fake_tensors(
+                            args, kwargs, fake_args, fake_kwargs
+                        )
+                else:
+                    args, kwargs = layout_constraints(n, *args, **kwargs)
+
+            if "should_fallback" in n.meta or n.meta.get("custom", {}).get(
+                "fallback_to_eager"
+            ):
+                out = fallback_handler(target, add_to_fallback_set=False)(
+                    *args, **kwargs
+                )
+            else:
+                out = None
+
+                if (
+                    target in user_lowerings
+                    and target not in V.active_user_lowering_ops
+                ):
+                    # User-registered lowering takes priority, with recursion guard
+                    V.active_user_lowering_ops.add(target)
+                    try:
+                        # pyrefly: ignore[bad-index]
+                        out = user_lowerings[target](*args, **kwargs)
+                    finally:
+                        V.active_user_lowering_ops.discard(target)
+
+                # If no user_lowering, or it returned None fall back to normal lowering
+                if out is None:
+                    if target in lowerings:
+                        out = lowerings[target](*args, **kwargs)
+                    else:
+                        # Fallback for ops not in lowerings (e.g., custom ops during recursion)
+                        out = fallback_handler(target, add_to_fallback_set=False)(
+                            *args, **kwargs
+                        )
+
+            if layout_constraints:
+                # layout_constraints are allowed to make new copies of the inputs.
+                # if they do, and if the target is mutable, then we need to
+                # write the new values back into the original inputs.
+                self.propagate_mutation(n, old_args, old_kwargs, args, kwargs)  # type: ignore[possibly-undefined]
+
+            return out
+        except Exception as e:
+            stack_trace = None
+            if (
+                hasattr(self, "current_node")
+                and self.current_node is not None
+                and hasattr(self.current_node, "meta")
+                and self.current_node.meta is not None
+            ):
+                stack_trace = self.current_node.meta.get("stack_trace", None)
+            raise LoweringException(
+                e, target, args, kwargs, stack_trace=stack_trace
+            ).with_traceback(e.__traceback__) from None
+
+    @staticmethod
+    def can_inline_constant(t: torch.Tensor) -> bool:
+        """
+        True if this is a small constant attr that will be inlined.
+        """
+        return len(t.shape) == 1 and t.shape[0] <= 8
+
+    # pyrefly: ignore [bad-override]
+    def get_attr(
+        self,
+        target: str,  # type: ignore[override]
+        args: tuple[()],  # type: ignore[override]
+        kwargs: dict[str, object],
+    ) -> Constant | TensorBox | ShapeAsConstantBuffer | ir.Subgraph | TorchBindObject:
+        # this is a constant
+        value = getattr_recursive(self.module, target)  # type: ignore[arg-type]
+
+        if isinstance(value, torch.fx.GraphModule):
+            # Reuse the existing subgraph if we have seen it before already.
+            if target in self.seen_subgraphs:
+                return self.seen_subgraphs[target]
+
+            nested_config = getattr(value, "meta", {}).get("nested_region_config")
+            inductor_config_patches = getattr(
+                nested_config, "inductor_config_patches", None
+            )
+            out = ir.Subgraph(
+                name=target,
+                graph_module=value,
+                inductor_config_patches=inductor_config_patches,
+            )
+            self.seen_subgraphs[target] = out
+            return out
+
+        if isinstance(value, torch._C.ScriptObject):
+            self.torchbind_constants[target] = value
+            self.constant_reprs[target] = ""
+            return TorchBindObject(name=target, value=value)
+        elif isinstance(value, FakeScriptObject):
+            self.torchbind_constants[target] = value
+            self.constant_reprs[target] = ""
+            return TorchBindObject(name=target, value=value)
+        elif is_custom_class(type(value)):
+            self.torchbind_constants[target] = value  # type: ignore[arg-type]
+            self.constant_reprs[target] = ""
+            return TorchBindObject(name=target, value=value)  # type: ignore[arg-type]
+
+        if not isinstance(value, torch.Tensor):
+            raise AssertionError(f"Expected torch.Tensor, got {type(value)}")
+        if (
+            config.aot_inductor.use_runtime_constant_folding
+            or config.always_keep_tensor_constants
+            or unsupported_output_tensor(value)
+            or target in self.mutated_named_buffers
+        ):
+            return self.add_tensor_constant(value, target)
+
+        with no_dispatch():
+            if value.shape == ():
+                return Constant(
+                    value=value.item(), dtype=value.dtype, device=value.device
+                )
+            if self.can_inline_constant(value):
+                log.debug("Inlining constant: %s ", target)
+                # tensor lowering has constant inlining logic
+                from .lowering import tensor
+
+                return tensor(
+                    value.tolist(),
+                    dtype=value.dtype,
+                    device=value.device,
+                    pin_memory=_is_cpu_strided_tensor_pinned(value),
+                )
+
+        return self.add_tensor_constant(value, target)
+
+    def call_module(self, target: Any, args: Any, kwargs: Any) -> NoReturn:
+        raise AssertionError
+
+    def call_method(self, target: Any, args: Any, kwargs: Any) -> NoReturn:
+        raise AssertionError
+
+    @typing_extensions.override
+    def output(
+        self,
+        target: torch.fx.node.Target,
+        args: tuple[torch.fx.node.Argument, ...],
+        kwargs: dict[str, object],
+    ) -> None:
+        result = super().output(target, args, kwargs)  # type: ignore[arg-type]
+        if not isinstance(result, (tuple, list)):
+            # nested subgraphs can have singleton outputs
+            result = (result,)
+        if not isinstance(result, (tuple, list)):
+            raise AssertionError(f"Expected tuple or list, got {type(result)}")
+        result = [
+            ir.OpaqueValueTypeConstant(value=x)
+            if is_opaque_constant_type(type(x))
+            else x
+            for x in result
+        ]
+        _allowed_output_types = (
+            TensorBox,
+            ir.Constant,
+            type(None),
+            ir.ConstantBuffer,
+            sympy.Expr,
+            sympy.logic.boolalg.Boolean,
+            int,
+            ir.EffectfulKernel,
+            ir.ShapeAsConstantBuffer,
+            TorchBindObject,
+            ir.OpaqueMultiOutput,
+            ir.OpaqueValueTypeConstant,
+            ir.OpaqueObjectState,
+        )
+        if not all(isinstance(x, _allowed_output_types) for x in result):
+            bad = [x for x in result if not isinstance(x, _allowed_output_types)]
+            raise AssertionError(
+                f"Unexpected output types: {[type(x) for x in bad]}, full result: {result}"
+            )
+
+        fx_node_args = V.graph.current_node.args[0]  # type: ignore[arg-type]
+        if not isinstance(fx_node_args, (tuple, list)):
+            # nested subgraphs can have singleton outputs
+            fx_node_args = (fx_node_args,)
+        result = [ir.ExternKernel.realize_input(x) for x in result]
+        result_correct_strides = []
+
+        if len(fx_node_args) != len(result):
+            raise AssertionError(
+                f"Mismatch between fx_node_args length ({len(fx_node_args)}) and result length ({len(result)})"
+            )
+        for r, fx_node in zip(result, fx_node_args):
+            r = _realize_efficient_zerotensor_output(r, fx_node)
+            if not isinstance(r, (ir.TensorBox, ir.BaseView)):
+                result_correct_strides.append(r)
+            elif isinstance(r.get_output_spec(), ir.CommBufferLayout):
+                # Active references to persistent comm buffers are not allowed
+                # outside of graphs
+                result_correct_strides.append(ir.ExternKernel.copy_input(r))
+            else:
+                # AOT Autograd tries to detect stride divergence of inductor from output metadata.
+                # Here, we try to avoid spurious divergence by matching insignificant strides such as
+
+                # should have already been realized
+                if not torch._inductor.ir.is_storage_and_layout(r):
+                    raise AssertionError(f"Expected storage_and_layout, got {type(r)}")
+                meta_strides = [
+                    s.node.expr if isinstance(s, torch.SymInt) else s
+                    # pyrefly: ignore [missing-attribute]
+                    for s in fx_node.meta["val"].stride()
+                ]
+                result_correct_strides.append(
+                    ir.try_match_insignificant_strides(r, meta_strides)
+                )
+
+        self.graph_outputs = result_correct_strides
+        value: ir.IRNode
+        for name, value in self.graph_inputs.items():
+            if isinstance(
+                value,
+                (
+                    TorchBindObject,
+                    sympy.Basic,
+                    torch._inductor.ir.GeneratorState,
+                    torch._inductor.ir.OpaqueObjectState,
+                ),
+            ):
+                continue
+            if not isinstance(value, TensorBox):
+                raise AssertionError(
+                    f"Unsupported inductor graph input type: {type(value)}"
+                )
+            value.realize()
+            if not isinstance(value, TensorBox):
+                raise AssertionError(
+                    f"Expected TensorBox after realize(), got {type(value)}"
+                )
+            value = value.data
+            if not isinstance(value, ir.StorageBox):
+                raise AssertionError(f"Expected ir.StorageBox, got {type(value)}")
+            value_storage_box = value
+            value = value.data
+            if not isinstance(value, InputBuffer) or value.get_name() != name:
+                # one of our inputs was mutated, need to turn that into a copy
+                ir.MutationLayoutSHOULDREMOVE.realize_into(
+                    value, self.graph_inputs_original[name]
+                )
+                # replace output with mutated input
+                try:
+                    ind = self.graph_outputs.index(value_storage_box)
+                    self.graph_outputs[ind] = self.graph_inputs_original[name]
+                except ValueError:
+                    pass
+
+        self.finalize()
+        log.debug(
+            "Force channels last inputs for %d conv for the current graph with id %d",
+            self.num_channels_last_conv,
+            self.graph_id if self.graph_id is not None else -1,
+        )
+
+    def finalize(self) -> None:
+        for buf in self.buffers:
+            buf.decide_layout()
+
+    @contextmanager
+    def set_current_node(self, node: torch.fx.Node):  # type: ignore[no-untyped-def]
+        old = self.current_node
+        try:
+            self.current_node = node
+            yield
+        finally:
+            self.current_node = old
+
+    @contextmanager
+    def set_current_wrapper_code(self) -> Iterator[None]:
+        old = self.wrapper_code
+        try:
+            yield
+        finally:
+            self.wrapper_code = old
+
+    def propagate_mutation(
+        self,
+        fx_node: torch.fx.Node,
+        old_args: tuple[Any],
+        old_kwargs: dict[str, Any],
+        new_args: tuple[Any],
+        new_kwargs: dict[str, Any],
+    ) -> None:
+        """Propagate mutations on new_args/new_kwargs back to old_args/old_kwargs.
+
+        Assumes we may have cloned old_args/old_kwargs into new_args/new_kwargs
+        and then called fx_node(*new_args, **new_kwargs).
+
+        If fx_node mutates any of new_args/new_kwargs, and they are different from
+        old_args/old_kwargs, then we need to update the original tensor.
+        """
+        if len(old_args) != len(new_args):
+            raise AssertionError(
+                f"old_args length ({len(old_args)}) != new_args length ({len(new_args)})"
+            )
+        if len(old_kwargs) != len(new_kwargs):
+            raise AssertionError(
+                f"old_kwargs length ({len(old_kwargs)}) != new_kwargs length ({len(new_kwargs)})"
+            )
+
+        def already_reflected(old_arg: Any, new_arg: Any) -> bool:
+            # No propagation is needed when new_arg already reflects the
+            # mutation of old_arg: either they are the same object, or they are
+            # distinct IR nodes aliasing the same buffer (e.g. an in-place op
+            # whose output was not cloned). Emitting copy_ in the aliasing case
+            # would lower to a self-referential (buf = buf) node, which the
+            # scheduler's compute_ancestors cannot represent (self-edge).
+            if old_arg is new_arg:
+                return True
+            if isinstance(old_arg, ir.IRNode) and isinstance(new_arg, ir.IRNode):
+                name = old_arg.maybe_get_name()
+                return name is not None and name == new_arg.maybe_get_name()
+            return False
+
+        if fx_node.target is torch.ops.higher_order.triton_kernel_wrapper_mutation:
+            kwargs = fx_node.kwargs["kwargs"]
+            if not isinstance(kwargs, dict):
+                raise AssertionError(f"Expected dict, got {type(kwargs)}")
+            mutated = torch._higher_order_ops.triton_kernel_wrap.get_mutated_tensors(
+                old_kwargs["kernel_idx"],
+                old_kwargs["constant_args_idx"],
+                {
+                    k: v.meta["val"] if isinstance(v, torch.fx.Node) else v
+                    for k, v in kwargs.items()
+                },
+                old_kwargs["tma_descriptor_metadata"],
+            )
+            for name in mutated:
+                old_arg = old_kwargs["kwargs"][name]
+                new_arg = new_kwargs["kwargs"][name]
+                if already_reflected(old_arg, new_arg):
+                    continue
+
+                self.call_function(torch.ops.aten.copy_.default, (old_arg, new_arg), {})
+            return
+
+        if not isinstance(fx_node.target, torch._ops.OpOverload):
+            raise AssertionError(
+                f"Expected torch._ops.OpOverload, got {type(fx_node.target)}"
+            )
+
+        def maybe_propagate(
+            schema_arg: torch._C.Argument, old_arg: ir.IRNode, new_arg: ir.IRNode
+        ) -> None:
+            if old_arg is new_arg:
+                return
+            if schema_arg.alias_info is not None and schema_arg.alias_info.is_write:
+                # The lowering for copy_ is smart enough to "replace" old_arg with
+                # new_arg in all future uses so a copy_ kernel never gets emitted.
+                # old_arg, new_arg may be immutable_list
+                if isinstance(old_arg, ir.IRNode):
+                    old_arg = (old_arg,)  # type: ignore[assignment]
+                    new_arg = (new_arg,)  # type: ignore[assignment]
+
+                for old_arg_item, new_arg_item in zip(old_arg, new_arg):  # type: ignore[call-overload]
+                    if already_reflected(old_arg_item, new_arg_item):
+                        continue
+                    self.call_function(
+                        torch.ops.aten.copy_.default, (old_arg_item, new_arg_item), {}
+                    )
+
+        schema = fx_node.target._schema
+        for idx, (old_arg, new_arg) in enumerate(zip(old_args, new_args)):
+            schema_arg = schema.arguments[idx]
+            maybe_propagate(schema_arg, old_arg, new_arg)
+
+        schema_kwargs = {arg.name: arg for arg in schema.arguments}
+
+        for key in old_kwargs:
+            old_arg = old_kwargs[key]
+            new_arg = new_kwargs[key]
+            schema_arg = schema_kwargs[key]
+            maybe_propagate(schema_arg, old_arg, new_arg)
+
+    @staticmethod
+    def _get_node_stream(n: torch.fx.Node) -> int | None:
+        """Get the user-annotated stream index from FX node metadata."""
+        return n.meta.get("custom", {}).get("stream")
+
+    @staticmethod
+    def _get_node_mempool(n: torch.fx.Node) -> tuple[int, int] | None:
+        """Get the user-annotated CUDA MemPool from FX node metadata."""
+        custom = n.meta.get("custom", {})
+        if "mempool" not in custom:
+            return None
+        return custom["mempool"], custom["mempool_device"]
+
+    def _realize_inputs_at_context_boundaries(self, n: torch.fx.Node) -> None:
+        """Realize IR inputs that are in a different stream or mempool context.
+
+        Without this, pointwise ops across context boundaries would be inlined
+        into each other during lowering, making it impossible for the scheduler
+        to split them into separate kernels or allocate buffers in the right
+        memory pool.
+
+        None means the default stream, so it is compared like any other value.
+        """
+        node_stream = self._get_node_stream(n)
+        node_mempool = self._get_node_mempool(n)
+        for input_node in n.all_input_nodes:
+            input_stream = self._get_node_stream(input_node)
+            input_mempool = self._get_node_mempool(input_node)
+            if input_stream == node_stream and input_mempool == node_mempool:
+                continue
+            ir_value = self.env.get(input_node)
+            if isinstance(ir_value, ir.TensorBox):
+                ir_value.realize()
+
+    def run_node(self, n: torch.fx.Node) -> object:
+        """Lower and execute a single FX node into Inductor IR."""
+
+        def debug(msg: str) -> None:
+            log.debug("lowering %s %s", LazyString(n.format_node), msg)  # type: ignore[arg-type]
+
+        # Use channels-last stride order for certain
+        # dense 4D intermediates when layout optimization determines a
+        # downstream consumer (typically conv) prefers channels-last.
+        def maybe_apply_channels_last_stride_order(
+            result: ir.IRNode, n: torch.fx.Node
+        ) -> ir.IRNode:
+            dense = torch._prims_common.is_non_overlapping_and_dense_or_false(
+                n.meta["val"]
+            )
+            strides = n.meta["val"].stride()
+            unbacked_symbols_in_strides = len(free_unbacked_symbols(strides)) > 0
+            if (
+                not unbacked_symbols_in_strides
+                and dense
+                and len(result.get_size()) == 4
+                and n in self.nodes_prefer_channels_last
+                and not is_user_visible
+                and not is_input_for_as_strided
+            ):
+                result = ir.ExternKernel.require_stride_order(
+                    result,
+                    ir.get_stride_order(
+                        make_channels_last_strides_for(n.meta["val"].shape)
+                    ),
+                )
+            return result
+
+        from torch._inductor.compiler_bisector import CompilerBisector
+
+        buffer_watermark = len(self.buffers)
+        operation_watermark = len(self.operations)
+
+        # origins: OrderedSet[Union[Node, ir.IRNode]] = OrderedSet([n])
+        origins: OrderedSet[Any] = OrderedSet([n])
+        is_call_function = n.op == "call_function"
+        if (
+            is_call_function
+            and isinstance(n.target, torch._ops.OpOverload)
+            and n.target.name() in ("mempool::begin", "mempool::end")
+        ):
+            # Drop marker ops; codegen reintroduces use_mem_pool blocks from
+            # per-node metadata around scheduler nodes that may allocate.
+            return None
+        if is_call_function:
+            args, kwargs = self.fetch_args_kwargs_from_env(n)
+            origins |= gather_origins(args, kwargs)
+            self._realize_inputs_at_context_boundaries(n)
+        node_mempool = self._get_node_mempool(n)
+        if node_mempool is not None and self.disable_cudagraphs_reason is None:
+            # User MemPool regions must route allocations to the explicit pool.
+            # CUDA graphs use a private capture pool, so capture would violate
+            # that routing and trip cudagraph memory-pool assertions.
+            self.disable_cudagraphs_reason = (
+                "user CUDA MemPool contexts are not compatible with CUDA graphs"
+            )
+        with (
+            ir.IRNode.current_origins(origins),
+            ir.IRNode.current_stream_idx(self._get_node_stream(n)),
+            ir.IRNode.current_mempool(node_mempool),
+            self.set_current_node(n),
+            V.set_current_node(n),
+        ):
+            if (
+                is_call_function
+                # this path only for built-in operators
+                and n.target
+                and isinstance(n.target, torch._ops.OpOverload)
+                and torch._library.utils.is_builtin(n.target)
+                and (
+                    fallback_node_due_to_unsupported_type(n)
+                    or CompilerBisector.disable_subsystem(
+                        "inductor", "lowerings", lambda: repr(n)
+                    )
+                )
+            ):
+                debug("fallback_handler")
+                result = fallback_handler(n.target, add_to_fallback_set=False)(
+                    *args,  # type: ignore[possibly-undefined]
+                    **kwargs,  # type: ignore[possibly-undefined]
+                )
+            elif (
+                n.op == "call_function"
+                and isinstance(
+                    n.target, (torch._ops.OpOverload, torch._ops.HigherOrderOperator)
+                )
+                and should_fallback_by_default(n)
+            ):
+                # this path supports fallback due to inductor lite mode. It supports
+                # both OpOverload and HOPs (e.g., triton_kernel_wrapper_functional).
+                debug("fallback_handler")
+                result = fallback_handler(n.target, add_to_fallback_set=False)(
+                    *args,  # type: ignore[possibly-undefined]
+                    **kwargs,  # type: ignore[possibly-undefined]
+                )
+            elif (
+                n.op == "call_function"
+                and n.target is torch.ops.higher_order.triton_kernel_wrapper_mutation
+                and config.triton_kernel_default_layout_constraint != "flexible_layout"
+            ):
+                debug("user_defined_triton_kernel_layout_constraints")
+                if (
+                    config.triton_kernel_default_layout_constraint
+                    == "needs_fixed_stride_order"
+                ):
+                    old_args = args  # type: ignore[possibly-undefined]
+                    old_kwargs = kwargs  # type: ignore[possibly-undefined]
+
+                    if eager_input_vals := n.meta.get("eager_input_vals"):
+                        inp_args = eager_input_vals[0]
+                        inp_kwargs = eager_input_vals[1]
+                        args, kwargs = constrain_to_fake_tensors(
+                            # pyrefly: ignore [unbound-name]
+                            args,
+                            # pyrefly: ignore [unbound-name]
+                            kwargs,
+                            inp_args,
+                            inp_kwargs,
+                        )
+                    else:
+                        args, kwargs = constrain_to_fx_strides(n, *args, **kwargs)  # type: ignore[index]
+                    result = self.call_function(n.target, args, kwargs)  # type: ignore[arg-type]
+                    self.propagate_mutation(n, old_args, old_kwargs, args, kwargs)  # type: ignore[possibly-undefined]
+                else:
+                    raise RuntimeError(
+                        f"Unknown triton_kernel_default_layout_constraint: {config.triton_kernel_default_layout_constraint}"
+                    )
+            else:
+                debug("")
+                result = super().run_node(n)
+
+            # require the same stride order for dense outputs,
+            # 1. user-land view() will not throw because inductor
+            # output different strides than eager
+            # long term the solution is to make view() always succeed
+            # with infallible strides.
+            # 2: as_strided ops, we need to make sure its input has same size/stride with
+            # eager model to align with eager behavior.
+            as_strided_ops = [
+                torch.ops.aten.as_strided.default,
+                torch.ops.aten.as_strided_.default,
+                torch.ops.aten.as_strided_scatter.default,
+                torch.ops.aten.resize.default,
+                torch.ops.aten.resize_as.default,
+            ]
+            is_output = any(user.op == "output" for user in n.users)
+            is_user_visible = n in self.user_visible_output_strides
+            is_input_for_as_strided = any(
+                user.target in as_strided_ops for user in n.users
+            )
+
+            if n.meta.get("inductor_realize_to_strides", False) and isinstance(
+                result, TensorBox
+            ):
+                result.realize()
+                strides = n.meta["val"].stride()
+                sym_strides = torch._inductor.utils.any_is_symbolic(*strides)
+                if result.maybe_get_stride() != strides and not sym_strides:
+                    stride_order = ir.get_stride_order(strides)
+                    result = ir.ExternKernel.require_stride_order(result, stride_order)
+            if (
+                is_output
+                and isinstance(result, TensorBox)
+                and isinstance(result.data, ir.BaseView)
+            ):
+                # Realize so that outputs are correctly aliased
+                result.realize()
+
+            if (is_output or is_input_for_as_strided) and isinstance(
+                n.meta.get("val"), torch.Tensor
+            ):
+                if is_user_visible:
+                    strides = self.user_visible_output_strides.get(n)
+                else:
+                    strides = n.meta["val"].stride()
+
+                if strides is not None and len(strides) > 0:
+                    allow_padding = (
+                        config.pad_outputs or not is_user_visible
+                    ) and not is_input_for_as_strided
+                    dense = torch._prims_common.is_non_overlapping_and_dense_or_false(
+                        n.meta["val"]
+                    )
+                    unbacked_symbols_in_strides = (
+                        len(free_unbacked_symbols(strides)) > 0
+                    )
+                    if (
+                        not unbacked_symbols_in_strides
+                        and dense
+                        and len(result.get_size()) == 4
+                        and n in self.nodes_prefer_channels_last
+                        and not is_user_visible
+                        and not is_input_for_as_strided
+                    ):
+                        strides = ir.FlexibleLayout.stride_ordered_for_memory_format(
+                            result.get_size(), torch.channels_last
+                        )
+                    if not unbacked_symbols_in_strides and len(strides):
+                        is_view = n.meta["val"]._is_view() or isinstance(
+                            result.data,  # type: ignore[missing-attribute]
+                            ir.BaseView,
+                        )
+                        if is_view and not (is_output and config.strict_output_strides):
+                            result = ir.ExternKernel.require_stride_order(
+                                result,
+                                ir.get_stride_order(strides),
+                                allow_padding=allow_padding,
+                            )
+                        else:
+                            if len(result.get_size()) == 0 and len(strides) > 0:
+                                strides = []
+                            result = ir.ExternKernel.require_exact_strides(
+                                result, strides, allow_padding=allow_padding
+                            )
+
+            # Realize if (1) any user need inputs realized, or (2) there is
+            # already too many reads and rematerializing can be bad.
+            num_users = len(OrderedSet(n.users))
+            if num_users > 1 and isinstance(result, TensorBox):
+                for user in n.users:
+                    if user.target in needs_realized_inputs:
+                        result.realize_hint()
+                        # This inclusion is somewhat controversial (from
+                        # discussion between Horace, Natalia, and Elias).
+                        # Currently, it's not very clear why this is helpful.
+                        # The general idea here is that even though a node may
+                        # have FlexibleLayout, we still often *treat* it as if
+                        # it was contiguous. This appears to sometimes result in
+                        # suboptimal behavior.
+                        #
+                        # When we do a better job selecting layout, we should
+                        # revisit this.
+                        need_fixed_layout = [
+                            torch.ops.aten.convolution_backward.default,
+                            torch.ops.aten.mm.default,
+                            torch.ops.aten._int_mm.default,
+                        ]
+                        need_fixed_channels_last_layout = []
+                        if not self.layout_opt:
+                            need_fixed_layout.append(torch.ops.aten.convolution.default)
+                        if torch._C._has_mkldnn:
+                            need_fixed_layout += [
+                                torch.ops.mkldnn._linear_pointwise.default,
+                                torch.ops.mkldnn._linear_pointwise.binary,
+                                torch.ops.aten.mkldnn_rnn_layer.default,
+                                torch.ops.onednn.qlinear_pointwise.default,
+                                torch.ops.onednn.qlinear_pointwise.tensor,
+                                torch.ops.onednn.qlinear_pointwise.binary,
+                                torch.ops.onednn.qlinear_pointwise.binary_tensor,
+                            ]
+                            need_fixed_channels_last_layout += [
+                                torch.ops.mkldnn._convolution_pointwise.default,
+                                torch.ops.mkldnn._convolution_pointwise.binary,
+                                torch.ops.mkldnn._convolution_pointwise_.binary,
+                                torch.ops.mkldnn._convolution_transpose_pointwise.default,
+                                torch.ops.onednn.qconv_pointwise.default,
+                                torch.ops.onednn.qconv2d_pointwise.binary,
+                            ]
+                            if torch._C.has_mkl:
+                                need_fixed_layout += [torch.ops.mkl._mkl_linear.default]
+                        if user.target in need_fixed_layout:
+                            result = ir.ExternKernel.require_stride_order(
+                                result,
+                                ir.get_stride_order(n.meta["val"].stride()),
+                                allow_padding=True,
+                            )
+                        if (
+                            user.target in need_fixed_channels_last_layout
+                            and n is user.args[0]
+                        ):
+                            result = ir.ExternKernel.require_stride_order(
+                                result,
+                                ir.get_stride_order(
+                                    make_channels_last_strides_for(n.meta["val"].shape)
+                                ),
+                            )
+                    if user.op == "output":
+                        # pyrefly: ignore [missing-attribute]
+                        if isinstance(result.data.data, (Pointwise, Reduction)):
+                            # Cheap-to-recompute nodes (0 buffer reads, e.g.
+                            # index arithmetic or constant fills) can be
+                            # deferred to realize_input at output processing.
+                            # This prevents cascade materialization where
+                            # shared constants inflate downstream read counts.
+                            if (
+                                config.delay_realize_cheap_outputs
+                                # pyrefly: ignore [missing-attribute]
+                                and result.data.num_reads() == 0
+                                # pyrefly: ignore [missing-attribute]
+                                and not result.data.has_large_inner_fn()
+                            ):
+                                continue
+                            result.realize()
+
+                _data = result.data  # type: ignore[attr-defined]
+                while not isinstance(_data, StorageBox) and isinstance(
+                    _data, (ir.BaseView, ir.MutableBox)
+                ):
+                    _data = _data.data
+
+                if isinstance(_data, StorageBox) and _data.should_realize_on_reuse(
+                    len(n.users)
+                ):
+                    result = maybe_apply_channels_last_stride_order(result, n)
+
+                # TODO(jansel): introduce a store vs inline choice
+                result.mark_reuse(len(n.users))
+
+            # Realize if the IRNode already has accumulated lots of reads
+            if isinstance(result, TensorBox) and result.has_exceeded_max_reads():
+                # Prevent excessive accumulation in a computed buffer, when
+                # there are multiple branches each with small number of memory
+                # reads, but they converge to a user.
+                result = maybe_apply_channels_last_stride_order(result, n)
+                result.realize_hint()
+
+            # Realize if a Pointwise has too much stuff to be inlined.
+            # As this may cause RecursionError during Inductor's evaluation.
+            if isinstance(result, TensorBox) and isinstance(result.data, StorageBox):
+                curr = result.data.data
+                if isinstance(curr, Pointwise):
+                    # Use inner fn as a rough proxy. Good enough.
+                    if curr.has_large_inner_fn(threshold=100):
+                        result.realize()
+
+        assign_origin_node(result, n)
+        self.register_users_of(result)
+
+        new_unbacked_defs = OrderedSet[sympy.Symbol]()
+        for buf in self.buffers[buffer_watermark:]:
+            new_unbacked_defs |= buf.get_unbacked_symbol_defs()
+        for op in self.operations[operation_watermark:]:
+            new_unbacked_defs |= op.get_unbacked_symbol_defs()
+
+        shape_env = V.graph.sizevars.shape_env
+
+        # An input can be unbacked symint i.e.: when mark_unbacked is used.
+        # in that case add it to new_unbacked_defs.
+        if (
+            n.op == "placeholder"
+            and isinstance(result, sympy.Symbol)
+            and shape_env.is_unbacked_symint(result)
+        ):
+            new_unbacked_defs.add(result)
+
+        def format_new_defs() -> str:
+            r = [
+                f"unbacked_symbol_defs={buf.get_unbacked_symbol_defs()} in:\n{buf}\n"
+                for buf in self.buffers[buffer_watermark:]
+            ]
+            r.extend(
+                f"unbacked_symbol_defs={op.get_unbacked_symbol_defs()} in:\n{op}\n"
+                for op in self.operations[operation_watermark:]
+            )
+            return "***\n".join(r)
+
+        # We do not skip unbacked symints that are input for backward see the note below.
+        if V.graph.is_backward and n.op == "placeholder":
+            return result
+
+        # Note [Backwards runtime asserts]
+        # Backwards poses an interesting problem for deferred runtime
+        # asserts.  In the easy case, we may solely close over data
+        # dependent sized tensors, and there are no binding sites for
+        # unbacked SymInts.  In this case, we can just drop all the
+        # runtime asserts on the floor: no non-placeholder bindings, no
+        # problem.
+        #
+        # However, it is *possible* for a fresh runtime assert to show up
+        # between forwards and backwards.  Right now, the freezing process
+        # that happens when we lower forwards means that we will freeze
+        # runtime asserts, and then the moment the backwards lowering
+        # process attempts to add a new deferred runtime assert, we will
+        # fail.  Let's say you remove that assert.  Now when we get here,
+        # we need to make sure we actually emit these asserts (because we
+        # can't emit them in forwards, we already compiled it).  So we
+        # have to do something here.  But we don't want to reemit ALL
+        # deferred runtime asserts, we only want to emit the NEW ones.
+        # Therefore needing some sort of stratification in the ShapeEnv.
+        # This is all doable, it just hasn't been done yet.
+
+        unbacked_bindings = resolve_unbacked_bindings(
+            V.graph.sizevars.shape_env, n.meta.get("unbacked_bindings", {})
+        )
+        if unbacked_bindings is None:
+            raise AssertionError("resolve_unbacked_bindings returned None")
+        # When we do lowering, it is possible we reallocate unbacked SymInts.
+        # So we need to line up the unbacked SymInts when performing the test
+        # here
+        #
+        # In principle, we could permit lowering to introduce MORE unbacked
+        # SymInts: as long as all the old unbacked ones are accounted for,
+        # it's fine for inductor to introduce extra calls to item()/unbacked()
+        # whatever.  This actually happens in practice when an unbacked SymInt
+        # gets memoized away; naively, when Inductor reprocesses a kernel, it
+        # doesn't know that the memo still applies, and ends up allocating a
+        # new symbol.  However, this is generally a bad thing: we may still
+        # end up needing to test equalities on the symbols, and a fresh
+        # symbol is likely to hit lots of GuardOnDataDependent errors that
+        # we already know facts for.
+        renamed_unbacked_bindings = OrderedSet(
+            # unbacked_renamings is not declared on every ShapeEnv path
+            # pyrefly: ignore[missing-attribute]
+            V.fake_mode.shape_env.unbacked_renamings.get(s, s)
+            for s in unbacked_bindings
+        )
+
+        if not (new_unbacked_defs >= renamed_unbacked_bindings):
+            raise AssertionError(
+                f"failed {new_unbacked_defs} >= {renamed_unbacked_bindings} (inductor >= fx)\n"
+                f"fx node is: {n.format_node()}\n"
+                f"new operations are:\n\n{format_new_defs()}"
+            )
+        self.create_deferred_runtime_asserts(n, new_unbacked_defs)
+        return result
+
+    def create_deferred_runtime_asserts(
+        self, n: torch.fx.Node, new_unbacked_defs: OrderedSet[sympy.Symbol]
+    ) -> None:
+        if config.do_not_emit_runtime_assertions:
+            return
+        # [NOTE] Codegen runtime asserts in Inductor
+        #
+        # We need to generate runtime asserts directly in Inductor instead
+        # of just reusing the asserts from input graphs because we reuse the
+        # same ShapeEnv as before. In particular, on subsequent graph passes,
+        # we would immediately turn all of these assertions into noops,
+        # because when we evaluated their expressions, we would see that
+        # because we had a deferred runtime assert in the ShapeEnv, we
+        # know "oh, of course this expression is True" already.
+        # One example is below:
+        #
+        # class Model(torch.nn.Module):
+        #     def forward(self, a, b, c):
+        #         nz = torch.nonzero(a)
+        #         ones = a.new_ones([nz.size(0), b.size(0)])
+        #         torch._check(ones.size(0) >= 1)
+        #         equals = torch.add(ones, c)
+        #         return equals
+        # torch._dynamo.mark_dynamic(c, 0)
+        # When we reuse the ShapeEnv in Inductor lowering, the check that checks
+        # a and nonzero have the same shape would be evaluated to True after we resolve
+        # unbacked bindings using the ShapeEnv.
+        # See test_unbacked_equals_input_size_runtime_assertion in test_aot_inductor.
+        #
+        #
+        # In addition to the Inductor generated runtime asserts, we also
+        # need the runtime asserts from the input graph, because some derived
+        # runtime asserts on backed symints are not generated in Inductor. One example is
+        # this: `y = x.reshape(100, -1).clone()`. x.shape[0] needs to be a multiple of 100.
+        # See test_aoti_runtime_asserts_backed_symint in test_aot_inductor.
+
+        def make_assert(expr: SympyBoolean, msg: str) -> None:
+            assert_op = ir.AssertScalar(expr, msg)
+            self.register_buffer(assert_op, set_name=True)
+            self.register_operation(assert_op)
+
+        if (
+            full_aoti_runtime_assert()
+            and n.target is torch.ops.aten._assert_scalar.default
+            and self.aot_mode
+        ):
+            node_args, _ = self.fetch_args_kwargs_from_env(n)
+            if node_args[0] != True:  # noqa: E712
+                make_assert(node_args[0], f"{node_args[0]} to be True")
+        else:
+            # bound_unbacked_symbols tracks the symbols that are created so far,
+            # we use it to make sure that runtime assertions are added after all
+            # symbols used in them are defined.
+            self.bound_unbacked_symbols |= new_unbacked_defs
+
+            shape_env = V.graph.sizevars.shape_env
+
+            # Emit code for runtime asserts that can be inserted at this point.
+            for i0 in new_unbacked_defs:
+                ras = self.ras_by_symbol.pop(i0, [])
+                # NB: size-like not needed, we won't retrace
+                vr = shape_env.var_to_range[i0]
+                if not shape_env._default_unspecified_value_range().issubset(vr):
+
+                    def is_convertible(s: Expr) -> bool:
+                        if s in (int_oo, -int_oo):
+                            return False
+                        try:
+                            int(s)
+                            return True
+                        except TypeError:
+                            return False
+
+                    if is_convertible(vr.lower):
+                        make_assert(i0 >= vr.lower, f"{i0} >= {vr.lower}")
+                    if is_convertible(vr.upper):
+                        make_assert(i0 <= vr.upper, f"{i0} <= {vr.upper}")
+
+                for ra in ras:
+                    fvs = free_unbacked_symbols(ra.expr)
+                    missing = fvs - self.bound_unbacked_symbols
+                    if missing:
+                        i1 = min(missing, key=str)
+                        self.ras_by_symbol.setdefault(i1, []).append(ra)
+                    else:
+                        make_assert(ra.expr, f"{ra.expr}")
+
+    def validate_can_generate_cpp_wrapper(self) -> None:
+        if config.disable_cpp_codegen:
+            raise CppWrapperCodegenError("C++ codegen is disabled")
+
+        if sys.platform not in ("linux", "darwin", "win32"):
+            raise CppWrapperCodegenError(f"Unsupported platform {sys.platform}")
+
+        graph_module = cast(torch.fx.GraphModule, self.module)
+        if any(
+            "mempool" in node.meta.get("custom", {})
+            for node in graph_module.graph.nodes
+        ):
+            raise CppWrapperCodegenError(
+                "torch.cuda.use_mem_pool is not supported with C++ wrapper codegen"
+            )
+
+    def init_wrapper_code(
+        self,
+        is_subgraph: bool = False,
+        subgraph_name: str | None = None,
+        parent_wrapper_code: PythonWrapperCodegen | None = None,
+        partition_signatures: GraphPartitionSignature | None = None,
+    ) -> None:
+        device_types = self.device_types.copy()
+        device_types.discard("cpu")
+        device_types.discard("meta")
+        # TODO(Eikan): Only support mixing cpu and other device now.
+        if len(device_types) > 1:
+            raise AssertionError(
+                "Does not support mixing {}".format("+".join(device_types))
+            )
+        only_cpu = len(device_types) == 0
+        self.device_type = "cpu" if only_cpu else device_types.pop()
+
+        if self.cpp_wrapper:
+            self.validate_can_generate_cpp_wrapper()
+
+        self.device_ops = get_device_op_overrides(self.device_type)
+        wrapper_code_gen_cls = get_wrapper_codegen_for_device(
+            self.device_type, self.cpp_wrapper, self.fx_wrapper
+        )
+        if wrapper_code_gen_cls is None:
+            raise AssertionError(f"Device {self.device_type} not supported")
+        self.wrapper_code = wrapper_code_gen_cls.create(
+            is_subgraph,
+            subgraph_name,
+            parent_wrapper_code,
+            partition_signatures,
+        )
+
+        if self.const_module:
+            self.wrapper_code._names_iter = self.const_module.wrapper_code._names_iter
+
+    def extract_autotune_inputs(
+        self, example_inputs: list[int | float | torch.Tensor]
+    ) -> None:
+        import copy
+
+        cloned_gm = copy.deepcopy(self.orig_gm)
+        example_inputs = copy.deepcopy(example_inputs)
+        triton_nodes = []
+        for node in cloned_gm.graph.nodes:
+            if (
+                node.op == "call_function"
+                and node.target is torch.ops.higher_order.triton_kernel_wrapper_mutation
+            ):
+                triton_nodes.append(node)
+
+        # Store grid related nodes
+        grid_inputs: list[torch.fx.Node] = []
+        visited_grids: dict[torch.fx.Node, int] = {}
+        # Store kwargs related nodes
+        triton_inputs: dict[str, Any] = {}
+        kwargs_inputs: list[torch.fx.Node] = []
+        visited_kwargs: dict[Any, int] = {}
+        for node in triton_nodes:
+            # first check whether we have fx node in grid settings.
+            for grid in node.kwargs["grid"]:
+                for val in grid:
+                    if val in visited_grids:
+                        continue
+
+                    if isinstance(val, torch.fx.Node):
+                        visited_grids[val] = len(grid_inputs)
+                        grid_inputs.append(val)
+
+            kwargs = node.kwargs["kwargs"]
+            # identify which args might be mutated, those should be cloned.
+            mutated = torch._higher_order_ops.triton_kernel_wrap.get_mutated_tensors(
+                node.kwargs["kernel_idx"],
+                node.kwargs["constant_args_idx"],
+                {
+                    k: v.meta["val"] if isinstance(v, torch.fx.Node) else v
+                    for k, v in kwargs.items()
+                },
+                node.kwargs["tma_descriptor_metadata"],
+            )
+
+            new_kwargs: dict[str, int] = {}
+            with cloned_gm.graph.inserting_before(node):
+                for k, v in kwargs.items():
+                    if k in mutated:
+                        new_node = cloned_gm.graph.call_function(torch.clone, args=(v,))
+                        new_kwargs[k] = len(kwargs_inputs)
+                        kwargs_inputs.append(new_node)
+                        continue
+
+                    if v in visited_kwargs:
+                        new_kwargs[k] = visited_kwargs[v]
+                        continue
+                    visited_kwargs[v] = len(kwargs_inputs)
+                    kwargs_inputs.append(v)
+                    new_kwargs[k] = visited_kwargs[v]
+            triton_inputs[node.name] = new_kwargs
+
+        new_outputs = kwargs_inputs + grid_inputs
+        for node in cloned_gm.graph.nodes:
+            if node.op == "output":
+                node.args = (tuple(new_outputs),)
+                break
+
+        cloned_gm.recompile()
+        runner = torch.fx.Interpreter(cloned_gm)
+        returned_outputs = runner.run(example_inputs)
+        # Extract and store the grid for autotuning
+        if len(grid_inputs) > 0:
+            grid_outputs = returned_outputs[len(kwargs_inputs) :]
+            self.autotuning_grids = {}
+            for node in triton_nodes:
+                dynamic_grid = False
+                new_grids: list[tuple[Any]] = []
+                for grid in node.kwargs["grid"]:
+                    new_grid = []
+                    for val in grid:
+                        if not isinstance(val, torch.fx.Node):
+                            new_grid.append(val)
+                            continue
+                        dynamic_grid = True
+                        new_grid.append(grid_outputs[visited_grids[val]])
+                    # pyrefly: ignore [bad-argument-type]
+                    new_grids.append(tuple(new_grid))
+
+                if dynamic_grid:
+                    self.autotuning_grids[node.name] = new_grids
+        # Store the kwargs input for autotuning
+        self.autotuning_inputs = returned_outputs[: len(kwargs_inputs)]
+        self.autotuning_mapping = triton_inputs
+
+    def codegen_with_cpp_wrapper(
+        self,
+    ) -> tuple[ValueWithLineMap, ValueWithLineMap]:
+        """
+        For GPU, Triton kernels are autotuned and stored as cubin files.
+
+        For CPU with user-defined Triton kernels, AOTI also needs the
+        same two-pass compile when `autotune_at_compile_time` is off,
+        since `CpuTritonKernelCache` is otherwise only populated by the
+        autotune block (see `DeferredCpuTritonCallWrapper` in
+        `cpp_wrapper_cpu.py`).
+        """
+        self.validate_can_generate_cpp_wrapper()
+        has_gpu = any(device in self.device_types for device in ["cuda", "xpu"])
+        # CPU + user-defined Triton + AOTI + autotune block disabled is the
+        # only CPU configuration that needs the two-pass dance: the autotune
+        # block normally populates CpuTritonKernelCache, but here it doesn't run.
+        needs_cpu_triton_two_pass = (
+            "cpu" in self.device_types
+            and self.aot_mode
+            and not config.triton.autotune_at_compile_time
+            and any(
+                isinstance(op, ir.UserDefinedTritonKernel) for op in self.operations
+            )
+        )
+        if has_gpu or needs_cpu_triton_two_pass:
+
+            def extract_real_inputs() -> list[int | float | torch.Tensor]:
+                def materialize(
+                    x: torch.SymInt | torch.SymFloat | torch.Tensor,
+                ) -> int | float | torch.Tensor:
+                    if x is None:
+                        # pyrefly: ignore [bad-return]
+                        return None
+                    elif isinstance(x, (torch.SymInt, torch.SymFloat)):
+                        # Need concrete value to run dynamic shapes and tune the result
+                        return not_none(x.hint)
+                    elif is_fake_tensor(x):
+                        return defake(x)
+                    else:
+                        if not isinstance(x, torch.Tensor):
+                            raise AssertionError(
+                                "Unknown type when creating real inputs" + str(type(x))
+                            )
+                        return x
+
+                tracing_context = torch._guards.TracingContext.try_get()
+                if tracing_context is not None and not isinstance(
+                    V.real_inputs, NullHandler
+                ):
+                    if tracing_context.output_strides:
+                        tracing_context.output_strides.clear()
+
+                    params_flat = [
+                        param
+                        for param in tracing_context.params_flat  # type: ignore[union-attr]
+                        if param is not None
+                    ]
+                    real_inputs = [
+                        # pyrefly: ignore[bad-argument-type]
+                        materialize(x)
+                        for x in itertools.chain(params_flat, V.real_inputs)
+                    ]
+                else:
+                    # In the backward pass, V.real_inputs is not OrderedSet.
+                    # Generating random inputs based on self.example_inputs sometimes can be problematic,
+                    # e.g. illegal memory access. A comprehensive fix is to autotune in a separate process.
+                    real_inputs = [
+                        materialize(x)  # type:ignore[arg-type]
+                        for x in (
+                            self.example_inputs  # type:ignore[union-attr]
+                            if isinstance(V.real_inputs, NullHandler)
+                            else V.real_inputs
+                        )
+                    ]
+
+                if self.mutated_inputs:
+                    from .compile_fx import clone_preserve_strides
+
+                    mutated_input_idxs = [
+                        idx
+                        for idx, name in enumerate(self.graph_inputs)
+                        if name in self.mutated_inputs
+                        and isinstance(real_inputs[idx], torch.Tensor)
+                    ]
+                    for idx in mutated_input_idxs:
+                        # clone mutated Tensor inputs to avoid mutating them in
+                        # the first pass of the CPP wrapper-based compilation, as
+                        # this will lead to a side effect on the example inputs:
+                        # e.g. if torch.compile(f)(x) if called on input-mutating
+                        # f, the inputs x will be mutated twice in the process:
+                        # once here, and again when running the compiled model;
+                        # this will also lead to a numerically incorrect output
+                        mutated_inp = real_inputs[idx]
+                        if not isinstance(mutated_inp, torch.Tensor):
+                            raise AssertionError(
+                                f"Expected torch.Tensor for mutated input, got {type(mutated_inp)}"
+                            )
+                        real_inputs[idx] = clone_preserve_strides(mutated_inp)
+                        del mutated_inp
+                return real_inputs
+
+            if config.triton.autotune_at_compile_time:
+                # If autotune_at_compile_time is True, we can do the codegen in one-pass
+                # We will construct the autotuning values if user defined kernel exists.
+                if config.triton.autotune_with_sample_inputs:
+                    user_defined_kernels = False
+                    for op in self.operations:
+                        if isinstance(op, ir.UserDefinedTritonKernel):
+                            user_defined_kernels = True
+                            break
+                    if user_defined_kernels:
+                        real_inputs = extract_real_inputs()
+                        self.extract_autotune_inputs(real_inputs)
+                        save_triton_kernel_perf_artifact(self)
+                return self.codegen()
+            else:
+                if not self.aot_mode:
+                    # cpp_wrapper JIT does not require two passes
+                    return self.codegen()
+
+                # AOTI with lazy compile: single codegen pass producing
+                # two separate C++ files — JIT (for autotuning) and AOTI
+                # (for packaging) — via DualIndentedBuffer.
+                # wrapper_code is the JIT variant; the AOTI variant is
+                # populated into wrapper_codegen._aot_output.
+                from .codegen.cpp_wrapper_gpu import (
+                    CppWrapperGpu,
+                    generate_aoti_kernel_config_header,
+                )
+
+                wrapper_code, kernel_code = self.codegen()
+                if not isinstance(self.wrapper_code, CppWrapperGpu):
+                    raise AssertionError(
+                        f"expected CppWrapperGpu, got {type(self.wrapper_code)}"
+                    )
+                lazy_kernel_names = list(self.wrapper_code._lazy_kernel_names)
+                if lazy_kernel_names:
+                    try:
+                        self._run_jit_variant_for_autotune(
+                            wrapper_code,
+                            kernel_code,
+                            extract_real_inputs,
+                            lazy_kernel_names,
+                        )
+                    except Exception as exc:
+                        raise RuntimeError(
+                            "When autotune_at_compile_time is False, AOTInductor generates "
+                            "both JIT code and AOT code. The JIT code failed to run."
+                        ) from exc
+
+                # Prepend config header with kernel compile results
+                # to the AOTI source for packaging.
+                config_header = generate_aoti_kernel_config_header(lazy_kernel_names)
+                aot_output: str | None = self.wrapper_code._aot_output
+                if aot_output is None:
+                    raise RuntimeError(
+                        "When autotune_at_compile_time is False, AOTInductor generates "
+                        "both JIT code and AOT code. The AOT code should not be None."
+                    )
+                aoti_wrapper = ValueWithLineMap(
+                    config_header + "\n" + aot_output,
+                    wrapper_code.line_map,
+                )
+
+                return aoti_wrapper, kernel_code
+        else:
+            # cpu
+            return self.codegen()
+
+    @staticmethod
+    def _python_source_literal(name: str, source: str | None) -> str:
+        if source is None:
+            return f"{name} = None\n"
+        if source == "":
+            return f"{name} = ''\n"
+        if '"""' in source:
+            return f"{name} = {source!r}\n"
+        return f'{name} = (\nr"""\n{source}"""\n)\n'
+
+    @staticmethod
+    def _tensor_repro_expr(tensor: torch.Tensor) -> str:
+        return (
+            f"_make_strided_tensor({tuple(tensor.size())!r}, "
+            f"{tuple(tensor.stride())!r}, {tensor.storage_offset()!r}, "
+            f"{tensor.dtype}, {str(tensor.device)!r})"
+        )
+
+    @classmethod
+    def _log_jit_variant_for_autotune_repro(
+        cls,
+        *,
+        cpp_source: str,
+        kernel_source: str | None,
+        device_type: str,
+        num_outputs: int,
+        kernel_names: list[str],
+        input_exprs: list[str],
+    ) -> None:
+        from .codecache import output_code_log, PyCodeCache
+
+        if not (
+            output_code_log.isEnabledFor(logging.DEBUG)
+            or output_code_log.isEnabledFor(logging.INFO)
+        ):
+            return
+
+        input_lines = "".join(f"        {expr},\n" for expr in input_exprs)
+        log_name = "JIT wrapper code for AOT lazy autotuning"
+        source = (
+            textwrap.dedent(
+                """
+            import torch
+            from torch._inductor import config
+            from torch._inductor.codecache import (
+                CppWrapperCodeCache,
+                CudaKernelParamCache,
+                get_cpp_wrapper_cubin_path_name,
+            )
+
+            {cpp_wrapper_src}
+            {kernel_src}
+            kernel_names = {kernel_names!r}
+
+
+            def _make_strided_tensor(size, stride, storage_offset, dtype, device):
+                if 0 in size:
+                    storage_size = storage_offset + 1
+                else:
+                    storage_size = storage_offset + 1 + sum(
+                        (dim - 1) * stride_dim
+                        for dim, stride_dim in zip(size, stride)
+                    )
+                base = torch.zeros((storage_size,), dtype=dtype, device=device)
+                return torch.as_strided(base, size, stride, storage_offset)
+
+
+            def make_inputs():
+                return [

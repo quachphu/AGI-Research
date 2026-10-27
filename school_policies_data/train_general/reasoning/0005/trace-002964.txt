@@ -1,0 +1,628 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Gates and Jackie, the cats, came up with the rules for a card game played by two people. The rules are as follows.
+
+First, shuffle the cards with the numbers 1 to 18 and deal 9 to each player. Both players issue one card at the same time and get a score based on the value. The player who issues the higher value card adds the sum of the higher value and the lower value to his score. At that time, the player who issued the card with the smaller value cannot get the score. Also, once a card is put into play, it cannot be used again. The player with the highest score after using all the cards wins.
+
+Gates and Jackie decided to randomly pick and play cards from each other. Find the odds that Gates and Jackie will win when the first card dealt is given.
+
+Notes on Submission
+
+Multiple datasets are given in the above format. The first line of input data gives the number of datasets. Create a program that outputs the output for each data set in order in the above format.
+
+
+
+Input
+
+Each of Gates and Jackie's hand consists of nine integers. Both players' hands are different integers from 1 to 18. The first line of input is given nine integers representing Gates'hand, and the second line is given nine integers representing Jackie's hand. There is a single space between integers.
+
+Output
+
+Output the probability that Gates and Jackie will win, separated by a space, up to 5 digits after the decimal point. Errors within 10-5 are acceptable, but values ​​less than 0 or greater than 1 must not be output.
+
+Example
+
+Input
+
+2
+1 3 5 7 9 11 13 15 17
+2 4 6 8 10 12 14 16 18
+1 5 7 9 11 13 15 17 18
+2 3 4 6 8 10 12 14 16
+
+
+Output
+
+0.30891 0.69109
+0.92747 0.07253
+</user>
+<bot>
+<think>
+Okay, I need to solve this problem where I have to calculate the probabilities that Gates and Jackie win their card game based on the initial hands they are dealt. Let's see. 
+
+The problem says that both players play their cards in a random order. Each time, they pick a card from their remaining ones uniformly at random. For each possible sequence of plays, we have to simulate the game and see who gets the higher score. Then, compute the probability of each player winning by considering all possible permutations of their card plays.
+
+Hmm, the key here is that each player independently plays their cards in a random order. So, for each of the 9 rounds, each player has some remaining cards, and they pick one uniformly. But since the order is determined at the start (but we don't know the order), the total number of possible game paths is (9!)^2. Because each player can permute their 9 cards in any order, and all combinations are possible. However, 9! squared is around (3.6e5)^2 = 1e11, which is way too big to compute directly. So we can't simulate all possibilities. We need a smarter way.
+
+Wait, but wait. The problem says "randomly pick and play cards from each other". So each time, for each round, both players choose a remaining card at random. So the order in which they play is determined by random selection each round. Wait, maybe that's a different way. For example, in each round, each player has a set of remaining cards. They select one uniformly at random from their own remaining cards, and play it. Then those cards are removed. So the way the cards are played is not a fixed permutation, but rather a sequence of choices where each choice is uniform among the remaining cards at each step.
+
+In that case, the total possible game paths are not (9!)^2, but rather for each step, the possible choices are (remaining cards for Gates) * (remaining for Jackie). But even this approach leads to 9! * 9! possibilities, which is the same as before. So brute-force is impossible here.
+
+So we need a way to compute the probabilities efficiently. Let's think about dynamic programming. Since each round, the state depends on the remaining cards of both players. The state can be represented as a tuple of the remaining cards for Gates and Jackie. For each state, we can compute the probability of reaching that state and the expected outcome (current scores) leading from that state. Then, for each possible play of cards in the current state, we compute the transitions to new states and accumulate the probabilities.
+
+But the problem is that the state space is enormous. Each player's remaining cards can be subsets of their original 9 cards, and the remaining counts can vary. For example, after k rounds, each has 9 - k cards left. So the state after k rounds would be a pair of subsets of size 9 - k for each player. But even for k=0 (initial state), each player has 9 cards. The number of possible states for each player's remaining cards is C(9, 9 - k) = 1 when k=0, but as k increases, the subsets vary. But the total number of possible states is 2^9 * 2^9 for all possible subsets, which is 2^18 = 262,144. But considering that each player starts with exactly 9 cards and uses one each round, the actual possible subsets for each player after k rounds are those of size 9 - k. So for each step k (from 0 to 9), the possible subsets for each player are combinations of size 9 -k. The total number of possible states per step k would be (9 choose k) for Gates and (9 choose k) for Jackie. So for all steps, the total possible states would be sum_{k=0 to 9} [ (9 choose k) ]^2. Let's compute that:
+
+For each k (number of cards used), the number of subsets for each player is (9 choose (9 -k)) = (9 choose k). So for each k, the number of possible pairs is (9 choose k)^2. Summing from k=0 to 9:
+
+Sum = sum_{k=0 to 9} (C(9,k))^2. But sum_{k} (C(n,k))^2 = C(2n, n). So when n=9, sum is C(18,9) = 48620. So total states across all k would be 48620. That's manageable. So maybe a memoization approach with dynamic programming is feasible here.
+
+The idea is to model the state as (gates_remaining, jackie_remaining), but since the order in which the cards are played is not important (only the remaining cards matter), we can represent the state using frozensets or tuples sorted to avoid duplicates. Wait, but for each player, the remaining cards are a set, but the order in which they are played next doesn't depend on their order in the remaining set, since each time a card is selected uniformly at random. So the state can be represented by the multiset of remaining cards for each player. So for each state, we can compute the possible transitions by considering all possible choices of gates' next card and jackie's next card. For each pair of possible choices (g_card and j_card), we compute the probability of that pair (since each is chosen uniformly from their remaining cards) and update the scores accordingly, then proceed to the next state.
+
+So, the steps are:
+
+1. For each possible state (G_remaining, J_remaining), compute the possible next states and their probabilities.
+
+2. For each state, track the current scores of Gates and Jackie.
+
+But wait, the state also depends on the current scores. Because different paths to the same remaining cards but different scores would lead to different outcomes. Oh, right! So the state must include the current scores. Because two different paths can reach the same remaining cards but have different scores, leading to different final results.
+
+Hmm, that complicates things. Because now the state is not just the remaining cards, but also the current scores. And the scores can vary from 0 up to the sum of all possible points. Let's think about the maximum possible score. Each round, the sum of the two cards is added to the winner's score. The total sum of all cards is 1+2+...+18 = 171. So the maximum possible score for a player is 171. So the scores can range up to 171. But since each round contributes a sum of the two cards (since the higher card's player gets sum of both), the total sum is 171 for both players combined. So if one player has S, the other has 171 - S.
+
+So for the state, the remaining cards and the current scores must be part of the state. But this makes the state space explode. Because the remaining cards can be many possibilities and the scores can vary from 0 to 171. For example, if the remaining cards are 9 - k cards each (k steps done), then for each possible remaining set pair, and each possible pair of scores (g_score, j_score), the state is unique. The number of possible scores is (171 + 1) possible values for each, but since the sum is fixed as 171, knowing one gives the other. So perhaps we can track only one of the scores. For example, track the difference or just the Gates' score, since Jackie's is 171 - Gates'.
+
+But even then, the number of possible states becomes:
+
+Number of possible remaining cards pairs (G_remaining, J_remaining) multiplied by the possible Gates' scores. The problem is that the number of possible Gates' scores can be up to 171, which is manageable, but multiplied by the remaining cards states (48,620 possible pairs) gives 48,620 * 172 ≈ 8.3 million. Which might be manageable with memoization and DP, but it's a bit tight. But perhaps for each step, the scores can be tracked incrementally. Let's see.
+
+Alternatively, since each round contributes some points to one of the players, perhaps the transitions can be handled by accumulating the probabilities for each state (remaining cards and current scores). So the DP approach would be:
+
+Initialize the DP with the initial state: all cards remaining for both players, scores 0 and 0. The probability of this state is 1.
+
+For each step (round) from 1 to 9:
+
+For each possible state (G_remaining, J_remaining, g_score, j_score) in the current DP:
+
+- For each possible card g in G_remaining:
+
+   - For each possible card j in J_remaining:
+
+      - Compute the probability of choosing this pair: (1/len(G_remaining)) * (1/len(J_remaining)) multiplied by the probability of the current state.
+
+      - Determine who wins this round: if g > j, Gates gets (g + j) points. Else, Jackie gets (g + j).
+
+      - Update the new scores: new_g = g_score + (g + j) if Gates wins, else new_j = j_score + (g + j). Note that the other's score remains the same.
+
+      - Remove g from G_remaining and j from J_remaining to form the new remaining sets.
+
+      - Add this new state (G_remaining - {g}, J_remaining - {j}, new_g, new_j) to the next DP step, accumulating the probabilities.
+
+At each step, the DP transitions from the current states to the next states based on all possible card plays. After 9 steps, all cards are used. Then, for each final state (scores G and J), we check if G > J for Gates' win, J > G for Jackie's win, else a draw (but the problem says output the probabilities of each winning, so draws are not considered as a win for either). 
+
+But the problem is that for 9 steps, each step involves processing a lot of states, but the number might be manageable with memoization and using dictionaries or something efficient.
+
+But how to represent the remaining cards efficiently? Since each player's cards are a subset, perhaps we can represent them as bitmask integers. Since the original cards are 1-18, but each player has 9 unique cards. For example, for Gates, his initial hand is a set of 9 numbers, each from 1-18. But to represent his remaining cards as a bitmask, we can map each of his 9 cards to a bit in a 9-bit integer. So for example, his initial hand could be represented as a 9-bit mask with all bits set. Then, when a card is played, the corresponding bit is cleared. Similarly for Jackie's hand.
+
+But the problem is that the actual values of the cards matter because the outcome of each round depends on their numerical values. So the bitmask approach for the remaining cards would work if we can track which actual cards are remaining. But since each player's initial hand is given, perhaps for each player, the remaining cards can be represented as a frozenset (immutable) of their remaining card values. However, using frozensets in the DP state could be memory-intensive. Alternatively, we can map the remaining cards for each player to an index, but that would require precomputing all possible combinations for each player's initial hand, which might not be feasible.
+
+Alternatively, during the DP process, for each player's remaining cards, we can represent them as a sorted tuple. For example, the remaining cards for Gates are stored as a tuple sorted in ascending order. Similarly for Jackie. Since the order in which the remaining cards are stored doesn't matter (since each is chosen uniformly at random), the tuple can be sorted to avoid duplicate states. For example, if two different states have the same remaining cards for both players but in different orders, they are considered the same state. So using a sorted tuple for each player's remaining cards allows us to treat them as the same state, thus reducing the state space.
+
+Wait, but the actual values of the remaining cards are important because when they are played, their values determine the points. So the state must track exactly which cards are left for each player. But the way they are stored (sorted tuples) is just for efficient hashing and comparison.
+
+So the plan is:
+
+- For each player's initial hand, represent their remaining cards as a sorted tuple. For example, Gates' initial hand is sorted and stored as a tuple.
+
+- For each step, the state is:
+
+   (g_remaining, j_remaining, g_score, j_score)
+
+   where g_remaining is a sorted tuple of Gates' remaining cards, j_remaining is a sorted tuple of Jackie's remaining cards, and the scores are integers.
+
+- The transitions are:
+
+   For each possible pair (g_card in g_remaining, j_card in j_remaining), compute the probability of choosing this pair (1 / len(g_remaining) * 1 / len(j_remaining)), then compute the new scores, remove the cards, and proceed to the next state.
+
+So the initial state is:
+
+g_remaining = sorted(gates_initial_hand) as a tuple
+
+j_remaining = sorted(jackie_initial_hand) as a tuple
+
+scores are 0 and 0.
+
+Each step, the DP is a dictionary that maps states (tuples of remaining cards and scores) to their probabilities.
+
+But even with this, the number of states could be very large. Let's think about the possible scores. At each step, the sum of the scores increases by (g_card + j_card). The initial sum is 0, and after 9 steps, the sum is 171. For each step, the possible sum increments can vary. But the sum of the two players' scores is fixed for each step. For example, after the first step, the sum is g_card + j_card, and after the ninth step, it's 171. So for each state, the sum of the two scores is equal to the sum of all the played cards up to that step. But each step's sum is determined by the sum of the two cards played in that round.
+
+Wait, no. Each round, the sum of the two cards is added to the winner's score. So the sum of the two players' scores is equal to the sum of all the cards played so far. Since each round's sum is added to one of the players, the total sum after k rounds is the sum of all pairs of cards played in those k rounds. However, once all 9 rounds are played, the sum of the two players' scores is the sum of all 18 cards (1 to 18) which is 171. So in the final state, their scores sum to 171.
+
+So, for a given state after k rounds, the sum of the scores is equal to the sum of the 2k cards played so far. So each state's sum is not fixed, but depends on the specific cards played. However, when transitioning, each possible pair (g_card, j_card) contributes (g_card + j_card) to the winner's score, so the sum of the two scores increases by (g_card + j_card) each step.
+
+So, in the DP, the sum of the two scores in a state after k steps is equal to the sum of the 2k cards that have been played so far. But since each possible pair of cards can be played, the sum can vary between different states even after the same number of steps.
+
+This complicates the state representation. However, since the problem requires us to track the individual scores (to determine the winner at the end), the state must include the scores for each player.
+
+But with 9 steps and each step adding up to say, 35 (if two high cards are played), the possible scores can be up to 171. So for each player, the possible scores can be up to 171. So the number of possible score pairs is 171 * 171, but since their sum can vary, the actual number is higher. However, in practice, the sum for a state after k steps is the sum of the first k pairs of cards played, which can vary. 
+
+But considering that the possible combinations of scores are many, this approach might not be feasible. However, given that the maximum possible sum after all steps is 171, and that the problem requires probabilities up to 5 decimal places, perhaps we can use memoization with floating-point numbers and track the probabilities with sufficient precision.
+
+But even so, the state space is going to be huge. Let's do a rough estimate. Suppose for each step, the state is (g_remaining, j_remaining, g_score, j_score). The number of possible g_remaining and j_remaining after k steps is (9 choose (9 -k))^2. For each such pair, the possible scores can vary. For example, after k=0 steps, there's one state. After k=1 step, each player has 8 cards left. The number of possible remaining pairs is (9 choose 1)^2 = 81. For each of these, the possible scores can be (g_score, j_score) where one of them is (g1 + j1), the other is 0. So for each of the 81 remaining pairs, there's two possible score pairs (depending on which card was higher in the first step). Wait, no: For each pair of cards played in the first step, either Gates or Jackie wins. So for the first step, for each possible pair (g_card, j_card), the score is added to the winner. So, for the first step, the possible scores are (g_score, j_score) where either g_score is (g_card + j_card) and j_score is 0, or vice versa. So for each possible pair of remaining cards (after step 1), the possible scores could be multiple values. 
+
+This suggests that even for small steps, the number of states can be large. So the total number of states across all steps could be in the millions. However, given that each step reduces the number of remaining cards, perhaps the DP approach is manageable with memoization and efficient state representation.
+
+So the steps to code this would be:
+
+1. Read the input: the number of test cases, then for each test case, read Gates' hand and Jackie's hand.
+
+2. For each test case:
+
+   a. Represent the initial state: Gates has all his cards (sorted tuple), Jackie has all hers (sorted tuple), scores 0 and 0.
+
+   b. Initialize a dictionary (or a memoization structure) to track the current probabilities of each state. Start with the initial state having probability 1.
+
+   c. For each of the 9 rounds (since there are 9 cards each), process all current states and transition them to the next states.
+
+   d. For each state in the current step:
+
+      i. For each possible card g in Gates' remaining cards:
+
+         For each possible card j in Jackie's remaining cards:
+
+             Compute the probability of selecting this pair: (1 / len(g_remaining)) * (1 / len(j_remaining)).
+
+             Multiply by the probability of the current state to get the contribution.
+
+             Determine the winner of the round. If g > j, add (g + j) to Gates' score. Else, add to Jackie's.
+
+             Update the remaining cards by removing g and j.
+
+             Create a new state with the updated remaining cards and new scores.
+
+             Add this contribution to the probability of the new state in the next step's DP.
+
+   e. After processing all transitions for the current step, replace the current DP with the next step's DP.
+
+3. After all 9 steps, process the final states (where all cards are used). For each state in the final DP, check if Gates' score > Jackie's (add the probability to Gates' total), if Jackie's is higher (add to hers), and if equal, split or ignore.
+
+4. Output the probabilities for Gates and Jackie, each with 5 decimal places.
+
+But this approach requires handling the DP transitions efficiently. Let's think about data structures. For each step, we can use a dictionary (like a defaultdict) that maps the state (g_remaining_tuple, j_remaining_tuple, g_score, j_score) to a probability. For each state in the current step, we process all possible card pairs and update the next step's dictionary.
+
+But even with this, the number of states could be high. For example, in the first step, Gates has 9 cards, Jackie has 9. So for the initial state, each possible pair (g, j) leads to 9*9=81 possible transitions. But for each of these, the next state's remaining cards are Gates' cards minus g and Jackie's minus j, which are represented as tuples. The scores are either (g + j, 0) if g > j, or (0, g + j) if j > g. Wait, no: the initial state has g_remaining as a sorted tuple (say, sorted in ascending order), and when we remove a card, we create a new sorted tuple. For example, if Gates' remaining cards are (1,3,5) and he plays 3, the new remaining is (1,5), which is sorted.
+
+Wait, but the initial state's remaining cards are a sorted tuple, so when we remove a card, we can create the new remaining cards as a new sorted tuple. So for a given state's remaining cards, when a card is removed, the new remaining cards are the sorted tuple of the original minus that card. So perhaps it's better to pre-sort the initial remaining cards and then when removing a card, create a new tuple that is sorted again. Alternatively, since the remaining cards are stored as sorted tuples, removing a card can be done by creating a new tuple without that element, but maintaining the order. However, generating the new tuple after removing a card can be done by list comprehensions. For example, if the remaining is a tuple (1,3,5,7), and the card 3 is played, the new remaining is (1,5,7), which can be generated by list comprehensions.
+
+But for efficiency, perhaps we can use a sorted list and for a given element, find its index and remove it. But for tuples, which are immutable, we need to create a new tuple each time.
+
+But given that the number of states is manageable, this approach might work.
+
+Now, the problem is that for each state, when processing transitions, we need to iterate through all possible pairs of cards in the remaining sets for both players. For example, if Gates has 9 remaining cards and Jackie has 9, there are 9*9 =81 possible pairs. But as the steps proceed, the number of possible pairs reduces. For example, step 1: 9*9=81. Step 2: 8*8=64, etc. But even for each state, the number of possible pairs is (len(g_remaining) * len(j_remaining)).
+
+So for the first step, each state (there's one initial state) has 9*9=81 transitions. Each transition contributes a probability of (1/9 * 1/9) * 1 (initial probability) to the next state. So for each (g_card, j_card) pair, the probability is 1/(9*9) = 1/81. For each such pair, compute the new remaining cards and new scores.
+
+But the problem is that after step 1, there are 81 possible states (each possible pair (g, j) leads to a state where Gates has 8 cards (original minus g), Jackie has 8 (original minus j), and the scores are (g + j, 0) if g>j, else (0, g + j). So for each of the 81 possible (g, j) pairs, we have a new state.
+
+But many of these pairs may lead to the same state. For example, if two different pairs (g1, j1) and (g2, j2) result in the same remaining cards (for example, if Gates had [1,2,3,4,5,6,7,8,9], and plays 3 and 5, but in different orders, but the remaining is the same set), but in this case, the remaining cards are represented as a sorted tuple, so the order of removal doesn't matter. Wait, no: if Gates plays 3 and then 5 in two different transitions, but in each case, the remaining cards after removing 3 and 5 would be the same as a sorted tuple. So in the case where two different pairs (g, j) lead to the same remaining sets and same scores, their probabilities are merged.
+
+So the state's remaining cards are represented as sorted tuples, so any pair that removes the same elements (regardless of order) will have the same remaining cards. So the DP will naturally merge states that have the same remaining cards and same scores.
+
+So, in the first step, even though there are 81 possible transitions, many of them may result in the same state (same remaining cards and same scores). For example, if two different pairs (g, j) result in the same remaining cards and same score increments, they will be merged. So the actual number of states after step 1 could be less than 81.
+
+But this depends on the initial hands. For example, in the sample input:
+
+First test case:
+
+Gates: 1 3 5 7 9 11 13 15 17
+
+Jackie: 2 4 6 8 10 12 14 16 18
+
+In this case, every card of Gates is odd and lower than the corresponding even card in Jackie. So when they play any pair, Jackie's card is higher. So all transitions in the first step would result in Jackie getting the points. So after step 1, all possible states would have:
+
+Gates remaining: 8 cards (original minus one of the 9 cards)
+
+Jackie remaining: 8 cards (original minus one of the 9 cards)
+
+scores: Gates 0, Jackie (g + j). But since in this case, j is always higher than g (because all of Jackie's cards are even and larger than the odd ones of Gates), each pair (g, j) would contribute (g + j) to Jackie's score. So for each possible pair, the new state's score is (0, g + j). But the remaining cards depend on which g and j were played. 
+
+But in this case, there are 9*9=81 possible pairs, each leading to a different remaining cards state (since each pair removes one unique card from each). So after step 1, there are 81 states, each with different remaining cards and different scores. But since the remaining cards are sorted tuples, each of these states is unique. So the DP state count increases rapidly.
+
+But this is just the first step. For the next steps, each of these 81 states would generate (8*8) transitions each, leading to 81 * 64 = 5184 states. But again, some may merge if they result in the same remaining cards and same scores.
+
+But this is unmanageable. For 9 steps, even if the number of states is 1e5, it's possible, but the computational time would be high. However, given that the problem constraints probably have small input cases (like the sample input with 2 test cases), and given that Python can handle this with memoization and efficient code, perhaps it's feasible.
+
+But how to implement this efficiently?
+
+Alternative approach: memoization with the remaining cards as tuples and the scores. We can use memoization with a dictionary where the keys are tuples (g_remaining, j_remaining, g_score, j_score), and the values are the probabilities. For each step, we generate a new dictionary from the previous one.
+
+But in Python, tuples can be used as keys, so this is feasible. So, for each state, we process all possible pairs of cards (g, j) in the current remaining sets, compute the new state, and accumulate the probabilities.
+
+The steps in code would look something like this:
+
+For each test case:
+
+   Read Gates' and Jackie's hands.
+
+   Initialize the initial state:
+
+      gates_remaining = tuple(sorted(gates_hand))
+
+      jackie_remaining = tuple(sorted(jackie_hand))
+
+      current_dp = { (gates_remaining, jackie_remaining, 0, 0): 1.0 }
+
+   for step in 0 to 8:
+
+      next_dp = defaultdict(float)
+
+      for state in current_dp:
+
+          g_rem, j_rem, g_sc, j_sc = state
+
+          prob = current_dp[state]
+
+          # Iterate over all possible g in g_rem and j in j_rem
+
+          for g in g_rem:
+
+              for j in j_rem:
+
+                  # Compute new scores
+
+                  if g > j:
+
+                      new_g_sc = g_sc + (g + j)
+
+                      new_j_sc = j_sc
+
+                  else:
+
+                      new_g_sc = g_sc
+
+                      new_j_sc = j_sc + (g + j)
+
+                  # Compute new remaining cards
+
+                  new_g_rem = list(g_rem)
+
+                  new_g_rem.remove(g)
+
+                  new_g_rem = tuple(sorted(new_g_rem))
+
+                  new_j_rem = list(j_rem)
+
+                  new_j_rem.remove(j)
+
+                  new_j_rem = tuple(sorted(new_j_rem))
+
+                  # Compute the transition probability
+
+                  transition_prob = prob * (1.0 / len(g_rem)) * (1.0 / len(j_rem))
+
+                  # Update the next_dp
+
+                  next_dp[(new_g_rem, new_j_rem, new_g_sc, new_j_sc)] += transition_prob
+
+      # Replace current_dp with next_dp
+
+      current_dp = next_dp
+
+   # After all steps, sum the probabilities where Gates' score > Jackie's and vice versa.
+
+   gates_prob = 0.0
+
+   jackie_prob = 0.0
+
+   for state in current_dp:
+
+       g_rem, j_rem, g_sc, j_sc = state
+
+       if g_sc > j_sc:
+
+           gates_prob += current_dp[state]
+
+       elif j_sc > g_sc:
+
+           jackie_prob += current_dp[state]
+
+   # Output the probabilities rounded to 5 decimal places.
+
+   print("{0:.5f} {1:.5f}".format(gates_prob, jackie_prob))
+
+But in Python, using tuples and dictionaries for the states is feasible. However, the nested loops over all possible cards in each remaining set could be slow for large state spaces.
+
+But considering that for each state, the number of possible transitions is (len(g_rem) * len(j_rem)), and for step 9 (the final step), len(g_rem) and len(j_rem) are 0. So the loop runs 9 times (steps 0 to 8, since after 8 steps, the next step is 9, but the code may have steps 0 to 8 inclusive, leading to 9 steps total). Wait, no: for 9 rounds, each step is a round. The initial state is before any rounds. So for 9 rounds, we need to loop 9 times. So in the code, the loop should be for step in range(9):, which loops 9 times.
+
+Yes, because for each step, we process the current DP and generate the next DP. So for 9 rounds, after processing 9 steps, all cards are used.
+
+So the code's loop is correct.
+
+But the problem is that for each state, looping through all possible pairs of cards in the remaining sets can be time-consuming. For example, in the first step, each state has 9*9=81 possibilities. If there are 1 state, it's 81. For the next step, each of those 81 states may generate 8*8=64 possibilities each, leading to 81*64=5184 states. For step 3, 7*7=49 possibilities per state. So the number of states grows exponentially. But after a few steps, it's possible that the number of states becomes unmanageable.
+
+But the sample input seems to work, but for the worst case, this code would take O( (9! *9! ) ) steps, which is impossible.
+
+But wait, the code's time complexity is not O(9!^2), but more like O( sum_{k=0 to 8} (number of states at step k) * ( (9 -k) * (9 -k) ) ) )
+
+So for each state at step k, we process (9 -k) * (9 -k) possible transitions. The number of states at each step is determined by how many unique states are possible given the previous steps.
+
+But this is still likely to be computationally infeasible for large test cases, but perhaps manageable for the problem constraints. Let's see the sample input:
+
+Sample Input 2 test cases. Let's compute for the first test case.
+
+Gates: all odds, Jackie: all evens. Every round, Jackie's card is higher. So in each round, the sum is added to Jackie's score. So after 9 rounds, the sum of all pairs is sum( (1+2), (3+4), ..., (17+18) ) = sum(3,7,11,15,19,23,27,31,35) = 3+7=10, +11=21, +15=36, +19=55, +23=78, +27=105, +31=136, +35=171. So sum is 171, all added to Jackie's score. So Jackie's score is 171, Gates' is 0. So the probability for Jackie is 1.0.
+
+But sample output says 0.30891 and 0.69109. Wait, this doesn't align. Wait, perhaps I made a mistake. Wait the sample input's first test case is:
+
+Gates' hand: 1 3 5 7 9 11 13 15 17
+
+Jackie's hand: 2 4 6 8 10 12 14 16 18
+
+So every card of Jackie's is higher than every card of Gates'. So in every possible pairing, Jackie's card is higher, so she wins all rounds. So her total score would be the sum of all cards (1+2 +3+4 + ... +17+18) = sum from 1 to 18 is 171. So Jackie's score is 171, Gates' is 0. So the probability that Jackie wins is 1.0, Gates' is 0.0. But the sample output shows 0.30891 and 0.69109, which is contradictory. 
+
+Wait, no, that's impossible. So there must be a misunderstanding. Wait, the problem statement says that both players issue one card at the same time, and the player with the higher card adds the sum of both to their score. So each round, the sum of the two cards is added to the winner's score. So for example, if Gates plays 1 and Jackie plays 2, Jackie's score increases by 3. Then, those cards are discarded.
+
+But in the first test case, all of Gates' cards are lower than Jackie's. So in every possible pair (Gates plays any card, Jackie plays any card), the sum is added to Jackie's score.
+
+But the order in which the cards are played is random. So the sum of all cards (1+2 +3+4 + ... +17+18) is 171. So regardless of the order in which the cards are played, the sum is always 171, and Jackie gets all of it. So the probability that Jackie wins is 1.0, and Gates' is 0.0. But the sample output for the first test case is 0.30891 0.69109. That's a contradiction.
+
+Wait, this suggests that my understanding of the problem is incorrect. Let's re-read the problem statement.
+
+The problem says:
+
+Each player has 9 cards. Both players issue one card at the same time. The higher value card's player adds the sum of both cards to his score. The lower card's player cannot get any points. Once used, the card cannot be used again. 
+
+Wait, but the players don't play the cards in a fixed order. Each round, they choose a card from their remaining cards at random. So in each round, the players choose a card uniformly at random from their remaining cards. So for example, in the first test case, Gates' cards are all lower than Jackie's. So in any round, the card played by Gates is less than the card played by Jackie. So every round, Jackie gets the sum. So the final score is 171 for Jackie, 0 for Gates. So the output should be 0.0 1.0. But the sample output is 0.30891 0.69109. So why is this?
+
+Ah, this indicates that there's a misunderstanding. Let me look at the sample input and output again.
+
+Sample Input:
+
+2
+
+1 3 5 7 9 11 13 15 17
+
+2 4 6 8 10 12 14 16 18
+
+Sample Output:
+
+0.30891 0.69109
+
+Wait, this suggests that in the first test case, Jackie's probability is about 69%, which is not 100%. So my previous reasoning is wrong. So there's a mistake in my understanding of the problem.
+
+Ah! Wait, maybe the problem is that the players play the cards in a random order, but the selection of cards is not independent each round. For example, each player's order of cards is a permutation. So all possible permutations of their remaining cards are possible. But the way they choose cards each round is not by randomly selecting from remaining cards each time, but instead, each player picks a permutation of their cards and plays them in that order. So the order of play is a fixed permutation chosen uniformly at random at the start. Then, the game proceeds by rounds where each player plays the next card in their permutation.
+
+In this case, the outcome of the game depends on the permutation of both players. For example, Gates could have a permutation where he plays his lowest cards first, and Jackie plays her highest first. This would lead to Gates' cards being low and Jackie's high in each round. But if their permutations are such that in some rounds, Gates' card is higher than Jackie's, then he gets points.
+
+But wait, in the first test case, all of Gates' cards are lower than all of Jackie's. So regardless of the permutations, each round will have Gates' card < Jackie's. So Jackie will win every round. So the sample output is wrong. But according to the sample, the first test case's output is 0.30891 0.69109. So there's a mistake in my understanding.
+
+Alternatively, maybe the problem statement is such that the players choose a card from their hand uniformly at random each round. So each round, they pick a remaining card uniformly at random. So the order of play is not fixed permutations but rather each card is chosen randomly each round. However, in this case, the outcome is still that each time, Jackie's card is higher than Gates'. So why the sample output shows Gates having a chance to win?
+
+Wait, the first test case's Gates' cards are 1,3,5,7,9,11,13,15,17. Jackie's are 2,4,6,8,10,12,14,16,18.
+
+So all of Jackie's cards are even, and all are higher than the previous odd numbers. For example, 2>1,4>3,6>5, etc. So in any possible pairing, Jackie's card is higher. So each round, Jackie's card is higher. So the sample output's first line must be 0.0 1.0, but it's not. So my reasoning is wrong, and there's a mistake in the problem understanding.
+
+Wait, perhaps the problem statement is not that the players' hands are different integers from 1 to 18. But looking back:
+
+Input:
+
+Each of Gates and Jackie's hand consists of nine integers. Both players' hands are different integers from 1 to 18. So the two players' hands are disjoint. So for example, in the first test case, Gates' cards are the odds 1,3,...,17 and Jackie's are evens 2,4,...,18. So all of Jackie's cards are higher than all of Gates'. So every possible pairing, Jackie's card is higher. So why in the sample output, Gates has a 30% chance to win?
+
+This suggests that there's a misunderstanding in how the game is played. Let's re-read the problem statement.
+
+Problem statement says:
+
+The player who issues the higher value card adds the sum of the higher value and the lower value to his score. At that time, the player who issued the card with the smaller value cannot get the score.
+
+Wait, maybe the higher value is the only one added, not the sum. Wait, no, the problem says "adds the sum of the higher value and the lower value to his score". So if Gates plays 1 and Jackie plays 2, Jackie adds 1+2=3 to her score.
+
+So in this case, in the first test case, all of Jackie's cards are higher. So she would always win every round, leading to her total score being 171 and Gates' 0. So why the sample output shows 0.30891 and 0.69109? 
+
+This suggests that there's a mistake in the problem statement, or in the sample input. Or perhaps there's a misunderstanding of the problem. Let's look at the sample input and output again.
+
+Sample Input:
+
+The first test case:
+
+Gates has 1 3 5 7 9 11 13 15 17.
+
+Jackie has 2 4 6 8 10 12 14 16 18.
+
+Sample Output:
+
+0.30891 0.69109.
+
+This implies that in some scenarios, Gates can win. But how?
+
+Wait, perhaps the cards are not pairwise higher. Let's see: Gates' highest card is 17. Jackie's lowest card is 2. So in any round where Gates plays 17 and Jackie plays 2, Gates' card is higher, so he gets 17+2=19 points. But in the first test case, Gates' cards are all odd, Jackie's all even. So for example, 17 (Gates) vs 18 (Jackie): 17 <18, so Jackie gets 35 points. But if Gates plays 17 against 2, then 17>2, so Gates gets 19 points.
+
+Ah! So in the first test case, it's possible for Gates to play a high card (like 17) against Jackie's low card (like 2) in some round. But how? Because the way they play their cards is random. So in some rounds, Gates could have a higher card than Jackie's.
+
+For example, if in round 1, Gates plays 17 and Jackie plays 2, then Gates' card is higher. But in other rounds, if Gates plays 1 and Jackie plays 18, then Jackie's card is higher.
+
+So the initial understanding was incorrect. The problem is not that all of Jackie's cards are higher than Gates'. Instead, in the first test case, each of Jackie's cards is higher than the corresponding Gates' card (like 2>1,4>3, etc.), but when Gates plays a higher card against a lower card from Jackie, he can win that round.
+
+Ah! So for example, Gates has 17 in his hand. Jackie has 2. If these two cards are played in the same round, then Gates' card is higher, and he gets 19 points.
+
+So the initial mistake was assuming that all of Jackie's cards are higher than all of Gates', but that's not the case. In the first test case, Jackie's cards include 2,4,6, etc., which are lower than some of Gates' higher cards (like 17).
+
+So the key is that the players' cards are not ordered such that every card from one player is higher than the other. Instead, their cards are mixed. So for example, in the first test case, the cards are:
+
+Gates: 1,3,5,7,9,11,13,15,17.
+
+Jackie: 2,4,6,8,10,12,14,16,18.
+
+So the highest card is 18 (Jackie), but Gates' 17 is higher than Jackie's 2,4,6,8, etc.
+
+So during the game, if in a round, Gates plays 17 and Jackie plays 2, he wins that round.
+
+Thus, the outcome depends on the order in which the cards are played. So the initial approach of simulating all possible pairs with DP is correct.
+
+This explains the sample output. Now, the code needs to model this correctly.
+
+So the code needs to handle the case where, in each round, the players randomly select a card from their remaining cards. For each possible pair (g_card, j_card), compute the outcome and accumulate the probabilities.
+
+So the code I outlined earlier is correct.
+
+Now, the challenge is to implement this code efficiently.
+
+But in Python, for the first test case, the number of states after each step may grow rapidly, but perhaps manageable. 
+
+But for the first test case, the code will correctly calculate the probabilities, leading to the sample output.
+
+Now, the code should be written with the following steps:
+
+- Read the number of test cases.
+
+- For each test case:
+
+   - Read Gates' hand and Jackie's hand.
+
+   - Initialize the current_dp as a dictionary with the initial state.
+
+   - Iterate for 9 steps:
+
+      - For each state in current_dp:
+
+         - Iterate over all possible pairs of cards in Gates' and Jackie's remaining cards.
+
+         - Compute the new state and transition probabilities.
+
+         - Update next_dp with these probabilities.
+
+      - current_dp becomes next_dp.
+
+   - After 9 steps, sum the probabilities where Gates' score is higher than Jackie's and vice versa.
+
+   - Output the probabilities with 5 decimal digits.
+
+Now, the code needs to handle the remaining cards as sorted tuples to avoid duplicate states. For example, if two different pairs of cards are removed, but the remaining sets are the same, the state should be merged.
+
+But in Python, tuples are hashable and can be used as keys in dictionaries. So, for example, if a Gates' remaining cards are (1,3,5) and he removes 3, the new remaining is (1,5), which is sorted. Similarly, if another transition removes 5 from (1,3,5), leading to (1,3), but that's a different state.
+
+Thus, the code correctly represents the remaining cards as sorted tuples, and the state transitions are handled correctly.
+
+But the code's performance might be an issue. For example, the first test case's initial state will generate 9*9=81 possible transitions. Each of those states will generate 8*8=64 transitions each, leading to 81*64=5184 states, but many of them might merge into the same state. However, since the remaining cards are different each time (each pair removes one card from each player's hand), it's unlikely that the remaining cards are the same, except in cases where different pairs lead to the same remaining sets.
+
+But given that the problem's sample input runs in a reasonable time, and assuming that the code is optimized, it's possible to pass.
+
+So the code can be written as follows.
+
+Now, let's test it against the sample input.
+
+Sample Input:
+
+2
+
+1 3 5 7 9 11 13 15 17
+
+2 4 6 8 10 12 14 16 18
+
+1 5 7 9 11 13 15 17 18
+
+2 3 4 6 8 10 12 14 16
+
+Sample Output:
+
+0.30891 0.69109
+
+0.92747 0.07253
+
+For the first test case:
+
+Gates' cards: 1,3,5,7,9,11,13,15,17.
+
+Jackie's: 2,4,6,8,10,12,14,16,18.
+
+The code will simulate all possible pairings of card plays. The probability that Gates wins is 0.30891.
+
+But how?
+
+Well, during the game, some rounds will have Gates playing higher cards than Jackie. For example, if Gates plays 17 and Jackie plays 2, he wins. But the probability of this happening depends on the order of play.
+
+The code should correctly calculate the probabilities based on all possible sequences of card plays.
+
+But the code's approach of tracking remaining cards and scores is correct.
+
+Thus, the code should be implemented as described.
+</think>
+To solve this problem, we need to calculate the probabilities that Gates and Jackie will win a card game based on their initial hands. The game involves both players playing cards in a random order, with the higher card winning the sum of both cards' values. The solution involves simulating all possible game outcomes using dynamic programming to efficiently track the probabilities of each state.
+
+### Approach
+1. **Problem Analysis**: Each player starts with 9 unique cards. Each round, both players randomly select a card from their remaining cards. The player with the higher card value wins the sum of both cards' values. The goal is to determine the probability of each player winning after all cards are played.
+
+2. **Dynamic Programming (DP) Approach**: Use a dictionary to track the current probabilities of each game state. A state is defined by the remaining cards of both players and their current scores. For each round, transitions to new states are computed by considering all possible card pairs that can be played, updating the scores and remaining cards accordingly.
+
+3. **State Representation**: Each state is represented by tuples of remaining cards (sorted for consistency) and the current scores. This ensures that states with the same remaining cards and scores are merged, reducing redundant calculations.
+
+4. **Transition Probabilities**: For each state, compute the probability of transitioning to a new state by considering all possible card pairs. The probability of each transition is determined by the uniform random selection of cards from each player's remaining cards.
+
+5. **Final Calculation**: After all rounds, sum the probabilities of all states where Gates' score is higher than Jackie's and vice versa to determine the winning probabilities.
+
+### Solution Code
+```python
+import sys
+from collections import defaultdict
+
+def main():
+    input = sys.stdin.read().split()
+    idx = 0
+    T = int(input[idx])
+    idx += 1
+    for _ in range(T):
+        gates_hand = list(map(int, input[idx:idx+9]))
+        idx +=9
+        jackie_hand = list(map(int, input[idx:idx+9]))
+        idx +=9
+        
+        gates_initial = tuple(sorted(gates_hand))
+        jackie_initial = tuple(sorted(jackie_hand))
+        
+        current_dp = defaultdict(float)
+        current_dp[(gates_initial, jackie_initial, 0, 0)] = 1.0
+        
+        for _ in range(9):
+            next_dp = defaultdict(float)
+            for state, prob in current_dp.items():
+                g_rem, j_rem, g_sc, j_sc = state
+                g_len = len(g_rem)
+                j_len = len(j_rem)
+                for g in g_rem:
+                    new_g_rem = list(g_rem)
+                    new_g_rem.remove(g)
+                    new_g_rem_tuple = tuple(sorted(new_g_rem))
+                    for j in j_rem:
+                        if g > j:
+                            new_g = g_sc + g + j
+                            new_j = j_sc
+                        else:
+                            new_g = g_sc
+                            new_j = j_sc + g + j
+                        new_j_rem = list(j_rem)
+                        new_j_rem.remove(j)
+                        new_j_rem_tuple = tuple(sorted(new_j_rem))
+                        trans_prob = prob * (1.0 / g_len) * (1.0 / j_len)
+                        next_dp[(new_g_rem_tuple, new_j_rem_tuple, new_g, new_j)] += trans_prob
+            current_dp = next_dp
+        
+        gates_win = 0.0
+        jackie_win = 0.0
+        for state, prob in current_dp.items():
+            g_sc = state[2]
+            j_sc = state[3]
+            if g_sc > j_sc:
+                gates_win += prob
+            elif j_sc > g_sc:
+                jackie_win += prob
+        
+        print("{0:.5f} {1:.5f}".format(gates_win, jackie_win))
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+- **Reading Input**: The input is read and parsed into the initial hands for Gates and Jackie.
+- **Initial State Setup**: The initial state is set with both players having all their cards and scores starting at 0.
+- **Dynamic Programming Transitions**: For each round, all possible transitions from the current states are computed, updating the remaining cards and scores based on the cards played.
+- **Probability Calculation**: After all rounds, the probabilities of Gates and Jackie winning are calculated by summing the probabilities of their respective winning states.
+
+This approach efficiently handles the large state space by merging equivalent states and leveraging dynamic programming to track probabilities incrementally, ensuring accurate results within feasible computational limits.
+</bot>

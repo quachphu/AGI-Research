@@ -1,0 +1,1309 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Polycarp is a regular customer at the restaurant "Ber Patio". He likes having lunches there.
+
+"Ber Patio" has special discount program for regular customers. A customer can collect bonuses and partially cover expenses in the restaurant.
+
+Let's assume a customer currently has b bonuses and she has to pay r burles for a lunch. In this case the customer can use bonuses (1 bonus = 1 burle) to reduce the payment. She can cover at most half of the payment using bonuses. However, 1 bonus will be added to the customer's bonus balance per each 10 burles she paid.
+
+Formally:
+
+  1. a customer can choose any number x of bonuses to use (<image>)), 
+  2. the customer's bonus balance is reduced by x, 
+  3. the customer pays r - x burles, 
+  4. the customer's bonus balance is increased by ⌊(r - x) / 10⌋ (i.e. integer division rounded down is used). 
+
+
+
+Initially, there are b bonuses on Polycarp's account. Polycarp is going to have a lunch in "Ber Patio" for the next n days. He estimated the values a1, a2, ..., an, where ai is the number of burles in a receipt for the i-th day. The sum over all receipts doesn't exceed 105 burles.
+
+Write a program to find the minimum number of burles Polycarp has to spend and an optimal strategy to use bonuses.
+
+Input
+
+The first line contains two integer numbers n and b (1 ≤ n ≤ 5000, 0 ≤ b ≤ 105) — number of days and initial number of bonuses Polycarp has.
+
+The second line contains the integer sequence a1, a2, ..., an (1 ≤ ai ≤ 1000), where ai is the amount of burles in the i-th day's receipt.
+
+It is guaranteed that the sum of all receipts does not exceed 105 burles.
+
+Output
+
+On the first line, print the expected minimal number of burles to pay for all n receipts.
+
+On the second line, print the sequence of integer numbers b1, b2, ..., bn, where bi is the number of bonuses to use on the i-th day. If there are multiple solutions, print any of them.
+
+Examples
+
+Input
+
+3 21
+12 75 52
+
+
+Output
+
+110
+2 5 22 
+
+
+Input
+
+3 39
+58 64 33
+
+
+Output
+
+107
+28 4 16
+</user>
+<bot>
+<think>
+Okay, let's tackle this problem. Hmm, the goal is to find the minimum total burles Polycarp has to pay over n days, given that he can use his bonuses optimally each day. And also, we need to output the sequence of bonuses used each day. 
+
+First, let's understand the problem step by step. Each day, when he pays for the receipt ai, he can choose to use x bonuses. The constraints on x are that x can't be more than the current bonuses he has, and x can't exceed half of ai. Because the maximum he can use is the minimum of his current bonuses and floor(ai / 2), right? Wait, no. Wait, the problem says: the customer can cover at most half of the payment using bonuses. So x has to be <= min(current bonuses, ai / 2). But wait, the payment is ai, so x can be up to the floor of ai/2. Wait, no. Wait, the problem says "at most half of the payment". So if ai is 12, then half is 6, so x can be up to 6. So even if he has more bonuses, like 21, he can only use 6 in that case. So for each day, x is constrained by x <= min(b_current, ai // 2). Wait, wait, no. Let me recheck. The first condition is that x can be any number such that x <= min(b, ai // 2). Wait, no. Wait, the problem says "she can cover at most half of the payment using bonuses". So x must satisfy x ≤ floor(ai / 2). And also, x can't exceed the current bonuses. So x can be at most the minimum of the current bonuses and floor(ai / 2). So for each day, the possible x is between 0 and that minimum. 
+
+But the choice of x affects the future bonuses, which in turn affects how much he can save in subsequent days. So this is a dynamic programming problem where the state depends on the current day and the current number of bonuses. 
+
+The main challenge is to model the state transitions correctly. Let's think about how to model this. For each day i, and possible bonus count b, we can track the minimum total cost paid up to day i with bonus count b. Then, for each day, we can decide how much x to use (from 0 up to min(b, ai // 2)), and compute the next state's bonus count.
+
+The state transitions would be:
+
+At day i, with current bonus count b_prev, after choosing x:
+
+- The cost paid is (ai - x)
+- The new bonus count is (b_prev - x) + floor( (ai - x) / 10 )
+
+So the DP[i][b_prev] would track the minimal total cost up to day i when we have b_prev bonuses. Then, for each possible state, we can transition to the next day's possible bonus counts.
+
+The initial state is DP[0][initial_b] = 0 (total cost 0 after 0 days, initial bonus b).
+
+Then, for each day from 1 to n, and for each possible bonus count in the previous day's state, we compute the possible x values and update the DP accordingly.
+
+The problem is the size of the DP table. Let's calculate. The maximum possible bonus after all days can't be more than initial_b + sum of (ai) // 10, because each time you pay (ai -x), you get floor((ai -x)/10) bonuses. But sum of ai can be up to 1e5, so the maximum possible bonus is 1e5 /10 = 1e4, plus initial b up to 1e5. Wait, initial b can be up to 1e5. So the possible bonus counts can be up to 1e5 + 1e4 = 1.1e5. But even that is manageable for n up to 5000. Wait, no. For n=5000 days and each day having possible bonus counts up to 1.1e5, the DP table would be 5000 * 1.1e5 entries. Which is 5.5e8 entries. That's way too big. That's impossible with standard approaches. So this approach may not be feasible.
+
+Hmm, that's a problem. So we need a way to optimize this.
+
+Wait, but maybe the bonuses can't be too large. Let's see: each day, the bonuses are increased by floor( (ai - x)/10 ), but x can't be more than ai. So (ai -x) is between 0 and ai. So the maximum possible increase per day is floor(ai /10). So over all days, the maximum possible bonuses added is sum (ai //10) for all days. Since sum of ai is up to 1e5, the maximum sum of ai//10 is up to 1e4. So initial b can be up to 1e5, so the maximum possible bonus after any day is 1e5 + 1e4 = 1.1e5. So that's the upper limit. So for each day, the possible bonus counts can be up to 1.1e5. But even with 5000 days, that's 5000 * 1e5 = 5e8 entries. That's way too big for memory and computation time.
+
+So we need a better approach. Let's think of another way. Since each day's decision affects the next state, but perhaps there's a way to model this with a dynamic programming approach that's manageable.
+
+Alternatively, maybe we can find that for each day, the optimal x is either the maximum possible (as much as possible) or some other specific value. But I'm not sure. Let's think.
+
+Wait, the problem requires that we minimize the total cost. The total cost is sum over all (ai - xi). So to minimize this sum, we need to maximize the sum of xi. However, the xi's are constrained by how much bonus we have and how much we can use each day. So perhaps the optimal strategy is to use as much bonus as possible each day, but that's not necessarily the case because using more now might lead to more bonuses added later, which could allow even more usage in the future.
+
+For example, using less bonus now might result in higher bonuses later, leading to more usage. So this is a trade-off. So the optimal approach might involve saving some bonuses now to get a higher return later.
+
+But how can we model this? It seems like a dynamic programming problem where each state depends on the current day and the current number of bonuses. But the DP approach is computationally heavy. So we need to find a way to optimize this.
+
+Let's think about the DP approach again, but see if we can manage the states more efficiently.
+
+Each state is (day, current_bonus) -> (minimal cost up to day).
+
+The transitions are: for day i, for each possible current_bonus, and possible x (from 0 to min(current_bonus, ai // 2)), compute the next bonus as (current_bonus - x) + floor( (ai -x)/10 ). Then, the cost increases by (ai - x). 
+
+The key is to track for each day and bonus count, the minimal cost.
+
+But even with n=5000 and possible bonuses up to 1.1e5, the DP table is too big. So perhaps we can note that for each day, the possible bonus counts can be stored in a dictionary, which only keeps track of the possible bonus counts that are reachable. This way, for each day, the number of states might be manageable, especially since sum of ai is up to 1e5. Let's think: each day, for each possible bonus in the previous day, and possible x, the new bonus is calculated. But even so, if for each day, the possible bonus counts are in the order of 1e5, then 5000 * 1e5 = 5e8 operations. That's way too slow.
+
+So perhaps there's a greedy approach here. But how?
+
+Alternatively, perhaps the optimal strategy is to use as much as possible each day, but wait. Let's see. Suppose that using more x now gives a higher bonus in the future, but using more x now might deplete the bonus. For example, using x=5 today gives more bonus than x=0. Because (ai -x) is larger, so the floor((ai -x)/10) is higher. So perhaps using x as small as possible (to get more bonus) would be better. Wait, but that's the opposite. Wait, the bonus added is floor( (ai -x) /10 ), so if x is smaller, (ai -x) is larger, so the bonus added is larger. So using less x now gives more bonus for the future. But using more x now gives a higher immediate cost reduction. So there's a trade-off between immediate saving and future bonus accumulation.
+
+So perhaps in some cases, it's better to save some bonuses now to have a higher bonus accumulation, which allows more savings in the future.
+
+But how do we model this? For example, if a future day's a_i is very high, then having more bonuses to spend on that day could save more than what's lost by not using some x now.
+
+This seems complex. But perhaps for each day, the optimal x is either the maximum possible (min(current_bonus, a_i//2)) or the minimum possible (0), but I don't think that's necessarily the case. So maybe a greedy approach isn't feasible.
+
+Alternative idea: since the bonus is additive and only depends on the current a_i and x chosen, perhaps the optimal x is the maximum possible for each day. But let's test this against the examples.
+
+Looking at the first example:
+
+Input:
+3 21
+12 75 52
+
+Output:
+110
+2 5 22 
+
+So the initial bonuses are 21.
+
+First day, a_i is 12. The maximum x is min(21, 6) = 6. But the output uses x=2. So in the first day, they didn't use the maximum possible. So the optimal strategy here is to use less than the maximum. So this suggests that the greedy approach of using maximum possible each day isn't optimal. Hence, a dynamic programming approach is necessary.
+
+So back to the DP idea. Let's try to model it. We need to track the minimal total cost for each possible bonus count after each day.
+
+The key is to model the DP[i][b] as the minimal total cost up to day i, with b bonuses remaining. Then, for each day i+1, and each possible state (i, b_prev), we can compute all possible x values (from 0 to min(b_prev, a_i//2)), and then calculate the new bonus and accumulate the cost.
+
+But again, the problem is the size. Let's see for the first example. Let's think of the transitions.
+
+But perhaps the bonus can't be too large. Let's think: each day, when you use x, the new bonus is (b_prev -x) + floor( (a_i -x)/10 ). The (a_i -x) is the amount paid. So the maximum possible new bonus is (b_prev -x) + (a_i -x)/10. But x can be up to min(b_prev, a_i//2). So for example, if a_i is 1000, and x is 500, then (a_i -x) is 500, so floor(500/10)=50. So the new bonus is (b_prev -500) +50. So if b_prev was 1000, new bonus is 550. So the new bonus can be as high as 1000-500+50=550.
+
+But in general, for a_i up to 1000, the maximum possible addition is 1000/10=100 per day. So over 5000 days, the maximum possible bonus is 5000*100=5e5. But initial b can be up to 1e5, so total possible bonus could be up to 1e5 +5e5=6e5. So the DP state space is 5000 * 6e5 = 3e9. That's impossible.
+
+So the DP approach with state (day, bonus) is not feasible. So what can we do?
+
+Alternative idea: notice that for each day, the possible x can be any value between 0 and min(b_prev, a_i//2). However, maybe for each day, the optimal x is the maximum possible, but this contradicts the first example. So perhaps the optimal x is the maximum possible given that using it now gives a better or equal overall cost.
+
+Alternatively, perhaps the optimal x is the maximum possible for the current day, but considering the future. But how?
+
+Alternatively, maybe the optimal x is the minimum of (current bonus, a_i//2), but again, the first example shows that this isn't the case.
+
+Hmm. Let's think of the first example:
+
+First day's a_i is 12. max x is 6. But they used 2. So by using 2, they left 19 bonuses (21-2=19), and paid 10, which gives 10/10=1 bonus added. So total bonus after first day is 19+1=20.
+
+Second day a_i is 75. max x is min(20, 37) =20. But they used 5. So why? Because maybe using 5 allows for more bonuses in the next steps. Let's see.
+
+After paying 75-5=70, the bonus added is 7. So the new bonus is 20-5 +7=22.
+
+Third day a_i is 52. max x is min(22,26) =22. So they use 22, paying 30, which adds 3. So total cost is 10 +70 +30 =110.
+
+But if in the first day, they used x=6 (max possible), let's see:
+
+First day: x=6. Pay 12-6=6. Bonus added 0 (6/10 is 0). So bonus becomes 21-6=15. 
+
+Second day: a_i=75. Max x can be min(15,37) =15. So pay 75-15=60. Bonus added 6. New bonus:15-15+6=6.
+
+Third day: a_i=52. Max x is min(6,26) =6. Pay 52-6=46. Bonus added 4 (46/10=4.6 →4). New bonus:6-6+4=4.
+
+Total cost:6 +60 +46=112. Which is worse than 110. So in this case, using less x in the first day gives a better total. So the optimal approach here requires not using the maximum possible in the first day.
+
+Hence, this shows that the greedy approach of using maximum possible each day is not optimal. Therefore, we need to model the problem with dynamic programming.
+
+But with the constraints of n=5e3 and possible bonus up to 1e5, how can we handle the DP?
+
+Alternative approach: note that the maximum possible sum of x is sum (a_i//2), but the total cost is sum (a_i -x) which is sum a_i - sum x. So to minimize the total cost, we need to maximize sum x, but under the constraints of the bonus system.
+
+But even so, how to model this?
+
+Alternatively, since the sum of a_i is up to 1e5, and n is 5e3, perhaps we can model the problem using a DP that tracks the maximum possible sum of x (since sum x is sum a_i - total cost + sum a_i). Wait, no. Let me rephrase: total cost is sum (a_i -x_i) = sum a_i - sum x_i. So to minimize the total cost, we need to maximize sum x_i. So the problem is equivalent to finding the maximum possible sum of x_i, given the constraints.
+
+So we can model this as trying to maximize the sum of x_i, which is equivalent. So perhaps it's easier to model the DP with sum x as the value to maximize.
+
+But again, the state would be the current day and the current bonus, and for each state, track the maximum sum of x up to that day with that bonus.
+
+This is similar to the previous approach, but now the value is the sum of x. The transitions would be similar. For each day i and bonus b_prev, the maximum sum x is the maximum over possible x in [0, min(b_prev, a_i//2)] of (current_sum + x) plus the maximum sum from the next days with new bonus (b_prev -x + floor((a_i -x)/10)).
+
+But again, the state is (i, b_prev), which is 5e3 * 1e5 = 5e8 possible states. Not feasible.
+
+So perhaps there's a way to reduce the state space. Let's think: for each day, the possible bonus can be represented in a way that allows transitions without tracking all possible values.
+
+Wait, but I don't see an obvious way. Let's think of another angle. For each day, after processing, the bonus is updated as:
+
+b_next = b_prev - x + floor( (a_i -x)/10 )
+
+So x is chosen in [0, min(b_prev, a_i//2)].
+
+The question is: for each day and possible b_prev, what x choice gives the maximum sum of x's up to that day, plus the maximum possible x's for the remaining days.
+
+But this is again the same problem as before.
+
+Alternative Idea: The problem is similar to the knapsack problem. Each day, you have a choice of x, which gives you some gain (x) and modifies the capacity (bonus) for future choices. The goal is to select x's for each day such that the total gain is maximized.
+
+In the knapsack problem, the state is the remaining capacity. Here, the state is the current bonus. But since the bonus can be up to 1e5, this approach is not feasible for large n.
+
+But perhaps the key is that the bonus can't be too large in practice. For example, even if the initial bonus is 1e5, after some days of using x, the bonus may decrease. However, the bonus can also increase. But with each x being up to a_i//2, and a_i up to 1e3, perhaps the bonus doesn't grow exponentially but rather in a controlled manner.
+
+But even with that, for 5000 days, the possible bonus values can still be large.
+
+Another Idea: Let's precompute the maximum possible x for each day, but also track the minimum required bonuses for each day. Wait, maybe not.
+
+Alternative approach: Since each x is at most a_i//2, and the sum of all a_i is up to 1e5, the maximum possible x sum is up to 5e4 (since sum a_i//2 is up to 1e5/2=5e4). So the sum x can be up to 5e4. But how does this help? Not sure.
+
+Wait, but sum x is what we need to maximize. So perhaps the DP can track the sum x and the current bonus. For each day, and possible sum x and current bonus, track whether this state is achievable. But this again may not be feasible, since the sum x can be up to 5e4 and the current bonus can be up to 1e5.
+
+Alternative Idea: Let's model the DP as follows: for each day i and possible current bonus b, track the maximum possible sum of x_1...x_i. Then, for each day, we can iterate through all possible b_prev and x to compute the next state.
+
+But again, with the state size being 5e3 * 1e5, it's not feasible.
+
+Alternative Idea: Let's note that the bonus after day i is determined by the previous bonus and x chosen. However, the bonus is influenced by the (a_i -x) term divided by 10. So perhaps the x can be chosen such that the (a_i -x) is as large as possible, but also allows the next days to have higher x. But this is vague.
+
+Alternative Idea: Let's consider that the bonus added after each day is floor( (a_i -x)/10 ), which is equivalent to (a_i -x) // 10. So for each day, using x as a_i - (something) can maximize the bonus added. For example, if we can choose x such that (a_i -x) is as large as possible, but x is as large as possible. Wait, but x can't exceed min(b_prev, a_i//2). So for example, if a_i is 75, and current bonus is 20. The maximum x is 20 (since 75//2=37). So x can be up to 20. If x is 5, then (75-5) =70 →70//10=7. So the bonus added is 7. So new bonus is 20-5+7=22. If x was 20, then (75-20) =55 →5.5 →5. new bonus is 20-20+5=5. So in the first case, using less x gives more bonus for the next day.
+
+But the sum x for the current day is lower (5 vs 20) but may allow higher x in the next days. So this trade-off is the crux of the problem.
+
+But how to model this in a DP that's manageable.
+
+Another Idea: Since the sum of a_i is up to 1e5, perhaps we can model the DP in terms of the possible bonus values, but for each day, we can track only the reachable bonus values and the maximum sum x for each of those. This way, for each day, the number of bonus states is manageable.
+
+For example, for the first day, the possible x can be from 0 to min(b_prev, a_i//2). So for each x, the new bonus is (b_prev -x) + (a_i -x)//10. The sum x increases by x. So for each possible x, we can track the new bonus and the sum x.
+
+Then, for the next day, we process each possible bonus and sum x from the previous day's states, and again track the new possible bonus and sum x.
+
+This approach uses a dynamic programming table that, for each day, keeps a dictionary of possible bonus values to the maximum sum x achievable up to that day with that bonus.
+
+This way, for each day, the number of possible bonus values is not too large. Let's see:
+
+For day 1, the possible new bonuses could be up to (initial_b) + (a_1 -x)/10. But since x can't exceed a_1//2, (a_1 -x) is at least a_1 - (a_1//2). For a_1=12, x can be up to 6. Then (a_1 -x) can be 6. So floor(6/10) is 0. So new bonus is (initial_b -x). For x=6, new bonus is 21-6=15. For x=0, new bonus is 21 + 12//10=21 +1=22. So possible bonuses after day 1 could range from 15 (if x=6) to 22 (if x=0). So for each day, the possible bonuses are a small range. But this depends on the a_i's and the x choices.
+
+But for some days, the a_i could be large. For example, a_i=1000. Then (a_i -x) can be up to 1000, so adding up to 100 new bonuses. But even so, for each day, the possible new bonuses are a range of a few hundred. 
+
+So, for each day, the number of possible bonus values is O( (max bonus per day) ). If each day's processing adds a small number of possible bonus values (like a few hundred), then for 5000 days, this could be manageable.
+
+This is a common approach in dynamic programming problems where the state space is large but only a few states are reachable. So for each day, we can represent the possible states (current bonus, max sum x) as a dictionary, and for each possible state, process the possible x choices for the next day.
+
+So here's the plan:
+
+- Initialize a DP dictionary for day 0, which contains the initial bonus and sum x=0.
+
+- For each day from 1 to n:
+
+   - For each possible state (b_prev, sum_x_prev) in the previous day's DP:
+
+      - Compute the possible x values for the current day's a_i. x can be from 0 to min(b_prev, a_i//2).
+
+      - For each x in this range:
+
+         - Compute new_b = b_prev - x + (a_i -x) //10
+
+         - new_sum_x = sum_x_prev + x
+
+         - Update the current day's DP: if new_b is not present, or if new_sum_x is greater than the existing entry for new_b, then update it.
+
+   - After processing all x for all previous states, the current day's DP will have the maximum sum_x for each possible new_b.
+
+- After processing all days, the final answer is the maximum sum_x in the DP for day n's states, and the sum of a_i minus this sum_x is the minimal total cost.
+
+But how to track the path (the x's chosen each day) to reconstruct the solution?
+
+Ah, right, the problem also requires to output the sequence of x's. So the DP needs to track not only the current bonus and sum_x, but also the path taken to reach this state. However, storing the path for each state is infeasible due to memory constraints. So we need to track for each state (day, b_prev) the x choices that led to it. 
+
+This complicates things. Because we need to reconstruct the sequence of x's. So for each state in the DP, we need to track the previous x choices. But this is not feasible for large states.
+
+Alternative Idea: Track the optimal x for each state (b_prev, day), and then backtrack from the final state to reconstruct the sequence.
+
+But how to do that:
+
+- For each state (day, b_prev), we can track the best x that leads to it, and the previous bonus. Then, during backtracking, we can step back day by day, using the stored x and previous bonus.
+
+This requires that for each state (day, b_prev), we store the x value that was chosen and the previous bonus. So during the DP processing, for each state, we keep track of the best x and the previous state.
+
+But this increases the memory usage, but perhaps manageable if the number of states per day is small.
+
+So the plan is:
+
+- The DP for each day is a dictionary where the key is the current bonus, and the value is a tuple (max_sum_x, previous_b, x_used). 
+
+So for each day i, and bonus b, we store the maximum sum_x achievable up to day i with bonus b, and the previous bonus (day i-1's bonus) and the x used on day i.
+
+Once all days are processed, the maximum sum_x in the last day's DP is the answer. Then, we backtrack from that state to reconstruct the x's.
+
+So, let's outline the steps:
+
+1. Read n, initial_b, and a list.
+
+2. Initialize the DP for day 0: { initial_b: (sum_x=0, prev_b= -1 (or None), x_used= -1) }
+
+3. For each day from 1 to n:
+
+   a. current a_i is a[day-1]
+
+   b. create a new DP dictionary for this day.
+
+   c. for each (b_prev, (sum_x_prev, prev_prev_b, prev_x)) in the previous day's DP:
+
+      i. compute the maximum possible x for this day: max_x = min(b_prev, a_i // 2)
+
+      ii. for x in 0 ... max_x:
+
+          - new_sum_x = sum_x_prev + x
+
+          - new_b = b_prev - x + (a_i - x) //10
+
+          - if new_b is already in the current day's DP:
+
+              if new_sum_x > existing_sum_x, update with new_sum_x and record x and prev_b.
+
+          - else:
+
+              add new_b to current day's DP with sum_x, prev_b = b_prev, x_used =x.
+
+   d. After processing all x's for all previous states, the current day's DP is updated.
+
+4. After processing all days, find the state in the last day's DP with the maximum sum_x. 
+
+5. Backtrack from that state to get the sequence of x's.
+
+But how to handle the backtracking. For example, the last day's DP has a state (b_n, sum_x_max). Then, the x_used for that day is stored, and the previous bonus is b_{n-1}. Then, look into day n-1's DP for b_{n-1} to find the x_used for day n-1, and so on until day 1.
+
+But for each day, when we process the x choices, we need to track for each new_b what x was used and what the previous_b was. 
+
+But storing this for each state in the DP is necessary for backtracking.
+
+But even with this, the question is whether the DP can be handled efficiently.
+
+Now, let's think about how to implement this. For each day, the DP is a dictionary mapping bonus to (sum_x, prev_b, x_used). For each possible bonus in the previous day's DP, we iterate through possible x's and update the current day's DP.
+
+But even with this, the number of possible states per day could be manageable. For example, if each day adds 100 new states, then for 5000 days, that's 5e5 states. Which is manageable.
+
+Testing this approach on the first example:
+
+Day 0: DP is {21: (0, None, -1)}.
+
+Day 1: a_i=12. For b_prev=21, max_x=6 (min(21,6)). So x ranges from 0 to 6.
+
+For each x in 0..6:
+
+new_b = 21 -x + (12 -x)//10.
+
+sum_x = x.
+
+For example:
+
+x=0: new_b =21 + (12)/10=21+1=22. sum_x=0.
+
+x=2: new_b=21-2=19 + (10)/10=1 →20. sum_x=2.
+
+x=6: new_b=21-6=15 + (6)/10=0 →15. sum_x=6.
+
+So in the day 1's DP, the entries are:
+
+22: (0, 21, 0)
+
+20: (2, 21, 2)
+
+15: (6, 21, 6)
+
+Now, for each of these, the maximum sum_x is 6 (from x=6). But the next day's a_i is 75. So for each possible state in day1, we process x for day2.
+
+For example, take day1's state with b_prev=15 (sum_x_prev=6). For a_i=75, max_x is min(15, 37) =15. So x can be 0 to15.
+
+But if x=15:
+
+new_b=15-15=0 + (75-15=60)/10=6 →6. sum_x=6+15=21.
+
+But other x's may lead to higher sum_x in the next day.
+
+But in the sample input, the optimal path uses x=5 for day2. Let's see how:
+
+In day1, the state after x=2 is bonus=20 (sum_x=2).
+
+Day2's a_i=75. max_x is min(20,37) →20. x can be up to20. For x=5:
+
+new_b=20-5=15 + (70)/10=7 →15+7=22. sum_x=2+5=7.
+
+Then, in day3, a_i=52. max_x= min(22,26)=22. x=22. sum_x=7+22=29. total cost is sum a_i (12+75+52=139) - 29=110.
+
+So during the DP processing, when day3's state is reached with sum_x=29 (which is the maximum possible), the backtracking will trace back to day2's x=5, day1's x=2.
+
+But how does the DP track these states?
+
+So in day2, the possible states include bonus=22 (from x=5, sum_x=7). 
+
+When processing day3, a_i=52. For bonus=22:
+
+max_x = min(22, 52//2)=26 →22. x can be 0 to22.
+
+If x=22 is chosen:
+
+new_b=22-22=0 + (30)/10=3 →3. sum_x=7+22=29.
+
+So this state (sum_x=29, bonus=3) is part of day3's DP. Then, since this is the last day, the maximum sum_x is 29. 
+
+So when backtracking, we look at day3's state with sum_x=29. The x_used is 22, and the previous bonus is 22 (from day2). Then, look into day2's DP for bonus=22. Which would have been generated from x=5 in day2. Then, look into day1's DP for the previous bonus of 20, which was generated from x=2.
+
+So the backtracking correctly reconstructs the sequence 2,5,22.
+
+This shows that the approach is correct.
+
+Now, the next step is to implement this in code, using dictionaries for each day's DP states, and tracking the x_used and previous bonus to allow backtracking.
+
+But implementing this efficiently is challenging. Let's outline the steps in code:
+
+We can represent each day's DP as a dictionary. For example, for day i, dp[i] is a dictionary where keys are bonus values, and the values are tuples of (max_sum_x, previous_b, x_used).
+
+We can start by initializing the DP for day 0:
+
+dp = [{} for _ in range(n+1)]
+dp[0][initial_b] = (0, None, None)
+
+Then, for each day from 1 to n:
+
+current_a = a[i-1]
+current_dp = {}
+prev_dp = dp[i-1]
+
+for prev_b in prev_dp:
+    sum_x_prev, _, _ = prev_dp[prev_b]
+    max_x = min(prev_b, current_a // 2)
+    for x in range(0, max_x +1):
+        new_sum_x = sum_x_prev + x
+        new_b = prev_b - x + (current_a - x) //10
+        if new_b in current_dp:
+            if new_sum_x > current_dp[new_b][0]:
+                current_dp[new_b] = (new_sum_x, prev_b, x)
+        else:
+            current_dp[new_b] = (new_sum_x, prev_b, x)
+dp[i] = current_dp
+
+Wait, but this approach would loop x from 0 to max_x, which can be up to 1e3/2=500 for each a_i=1e3, and for each previous state. So for each previous state, the number of x's is up to 500. For 5e3 days, this could be expensive.
+
+But perhaps with optimizations:
+
+For example, for each previous state (prev_b, sum_x_prev), the maximum possible x is min(prev_b, current_a//2). So for each such x, compute new_b and new_sum_x. Then, for current_dp, if new_b is already present, compare the sum_x and update only if the new sum_x is larger. 
+
+But this approach is O(n * average_states_per_day * average_x_per_state). For 5e3 days and 1e3 states per day, and 500 x per state, this would be 5e3 * 1e3 * 500 = 2.5e9 operations. Which is way too slow.
+
+So this approach may not be feasible for the given constraints. 
+
+Alternative Idea: Find that for each previous state, the best x to choose is the one that maximizes the new_sum_x plus the maximum possible sum_x for the remaining days. But this is circular.
+
+Alternative Idea: For each previous state (prev_b), compute the x that gives the maximum new_sum_x. But that would be x = min(prev_b, current_a//2). But in the first example, that's not the case. So this approach isn't correct.
+
+But perhaps in some cases, using x as the maximum possible gives the best new_sum_x. But how to know when.
+
+Alternatively, for each previous state, compute the best x (the one that gives the highest new_sum_x). But this is equivalent to choosing the maximum possible x for each state. Because new_sum_x is sum_x_prev +x. So for each previous state, the maximum x possible gives the highest possible new_sum_x. 
+
+Wait, yes! Because for a given previous state, sum_x_prev is fixed. So adding x to it, the maximum possible x for that state will give the maximum new_sum_x. So for each previous state, the best x is the maximum possible x (min(prev_b, current_a//2)), because that gives the largest possible contribution to the sum_x.
+
+But this contradicts the first example, where using x=2 is better than x=6. But how?
+
+Ah, because even though using x=6 gives a higher sum_x_prev (6), but the new_b after day 1 becomes 15. Then, in day 2, the max x is min(15, 75//2)=15. So sum_x becomes 6 +15=21. Then, new_b is 0 + (75-15=60)/10=6. Then, in day3, the max x is min(6,52//2)=26. So x=6, sum_x=21+6=27. So total sum is 27. 
+
+But the sample's sum_x is 29. So why is that?
+
+Because in the sample's path, the sum_x is 2+5+22=29. So even though using maximum x each day gives a lower sum, because the choice of x in day1 allows for higher x in later days. 
+
+So the problem is that choosing the maximum x each day can lead to lower sum_x in the future. So the previous approach of choosing the maximum x for each state is not optimal.
+
+Thus, this approach would not work.
+
+So the initial Idea of considering all possible x's for each state is necessary. But how to make this feasible.
+
+Alternative Idea: Note that the maximum possible x for a day is min(b_prev, a_i//2). But for a given day, the optimal x could be in the higher end of the possible range. So perhaps we can iterate x from high to low and break early if the new_sum_x is not improving. But I'm not sure.
+
+Alternatively, for each previous state, instead of iterating all possible x's, find the optimal x in O(1) time. But how?
+
+Another Idea: For each possible previous state (b_prev), the optimal x is the maximum possible x that allows the new_b to be as high as possible. Because higher new_b allows for more x's in future days.
+
+So the optimal x is the one that maximizes new_sum_x + future_x. But this is again recursive.
+
+But this seems like a dead end.
+
+Alternative Idea: Since the sum of all a_i is up to 1e5, and n is up to 5e3, perhaps we can use memoization and pruning to reduce the number of states. For example, for each day, if two states have the same bonus and one has a sum_x lower than the other, we can prune the state with lower sum_x. 
+
+This way, for each day and bonus, we keep only the state with the maximum sum_x. Because if two states have the same bonus, but different sum_x, the one with higher sum_x is better, and the other can be discarded.
+
+This is a standard optimization in dynamic programming. 
+
+So, for each day's DP, when adding a new state (new_b, new_sum_x), if new_b is already present and the existing sum_x is >= new_sum_x, then we skip adding this state. Otherwise, we add or update it.
+
+This way, for each day and new_b, we only keep the maximum sum_x for that new_b. This reduces the number of states, as for each new_b, we have at most one state.
+
+So in code:
+
+For each day i, and for each possible previous state (b_prev, sum_x_prev):
+
+   max_x = min(b_prev, a_i //2)
+
+   for x in 0 to max_x:
+
+       new_b = b_prev -x + (a_i -x)//10
+
+       new_sum_x = sum_x_prev +x
+
+       if new_b is not in current_dp or new_sum_x > current_dp[new_b][0]:
+
+           current_dp[new_b] = (new_sum_x, prev_b, x)
+
+But even this, the number of x's per state is still up to max_x, which could be up to 500 for each a_i=1e3.
+
+But with the pruning, the number of states per day is reduced. For example, if two different x's for the same previous state lead to the same new_b, we only keep the one with higher sum_x.
+
+This pruning can significantly reduce the number of states per day.
+
+So in practice, this approach might be feasible. Let's try to implement this.
+
+Another optimization is to process the x's in reverse order (from max_x down to 0) for each previous state. Because higher x contributes more to sum_x. So for a new_b generated by x=5 and x=4, but new_sum_x for x=5 is higher, we can process x=5 first and then skip x=4 if new_b is already present.
+
+But I'm not sure. However, processing x in descending order might allow us to break early once a new_b is already present, as further x's would have lower sum_x. For example:
+
+If for x=5, new_b is 10 and sum_x is 5.
+
+Then for x=4, new_b could be 10 as well, but sum_x is 4. Since the new_sum_x is lower than the existing entry for new_b=10, we can skip processing x=4.
+
+So by processing x in descending order, once we've processed x=5 and added new_b=10, we can break early when x=4 and new_b=10 is already present. 
+
+But this is only possible if new_b is the same for x=4 and x=5. But in reality, new_b depends on x. So for example:
+
+x=5: new_b = prev_b -5 + (a_i -5)//10.
+
+x=4: new_b = prev_b -4 + (a_i -4)//10.
+
+These may not be the same. So this optimization may not help.
+
+But in any case, processing x in descending order might help to find higher sum_x earlier and skip some entries.
+
+So the steps are:
+
+For each previous state (b_prev, sum_x_prev):
+
+   max_x = min(b_prev, a_i //2)
+
+   for x in max_x downto 0:
+
+       compute new_b and new_sum_x
+
+       if new_b not in current_dp or new_sum_x > current_dp[new_b][0]:
+
+           add to current_dp[new_b]
+
+But even this, it's not clear if this will reduce the number of operations.
+
+But given the time constraints, this is the way to proceed.
+
+Now, let's proceed to write the code.
+
+The code outline is:
+
+Read n and b.
+
+Read the list a.
+
+Initialize dp as a list of dictionaries. dp[0] is {b: (0, None, None)}.
+
+For each day i from 1 to n:
+
+    current_a = a[i-1]
+
+    current_dp = {}
+
+    prev_dp = dp[i-1]
+
+    for prev_b in prev_dp:
+
+        sum_x_prev, _, _ = prev_dp[prev_b]
+
+        max_x = min(prev_b, current_a // 2)
+
+        for x in range(max_x, -1, -1):
+
+            new_b = prev_b - x + (current_a - x) // 10
+
+            new_sum_x = sum_x_prev + x
+
+            if new_b in current_dp:
+
+                if new_sum_x > current_dp[new_b][0]:
+
+                    current_dp[new_b] = (new_sum_x, prev_b, x)
+
+            else:
+
+                current_dp[new_b] = (new_sum_x, prev_b, x)
+
+    dp.append(current_dp)
+
+After processing all days, find the maximum sum_x in dp[n]'s values. The minimal cost is sum(a) - max_sum_x.
+
+Then, backtrack the x's:
+
+Start from the state in dp[n] with max_sum_x.
+
+Then, for each day from n downto 1:
+
+    current_x = x_used for this state.
+
+    push to the front of the result list.
+
+    prev_b = the previous_b stored in the state.
+
+    find the state in dp[i-1] with bonus=prev_b.
+
+Repeat until all days are processed.
+
+But how to implement backtracking:
+
+For example, after processing all days, we look into dp[n] to find the state with the maximum sum_x. Then, we follow the previous_b and x_used to track back each day.
+
+Code steps:
+
+max_sum_x = -1
+
+best_b = None
+
+for b in dp[n]:
+
+    current_sum, _, _ = dp[n][b]
+
+    if current_sum > max_sum_x:
+
+        max_sum_x = current_sum
+
+        best_b = b
+
+Then, initialize the x_list as empty.
+
+current_day = n
+
+current_b = best_b
+
+while current_day >0:
+
+    current_state = dp[current_day][current_b]
+
+    x_used = current_state[2]
+
+    x_list.append(x_used)
+
+    prev_b = current_state[1]
+
+    current_b = prev_b
+
+    current_day -=1
+
+Finally, reverse the x_list to get the order from day 1 to n.
+
+This will give the sequence of x's.
+
+But the problem requires that the x's are in the order of the days.
+
+Now, let's test this code on the first example.
+
+Sample Input 1:
+
+3 21
+
+12 75 52
+
+Day 0: {21: (0, None, None)}
+
+Day 1 (a=12):
+
+prev_b=21.
+
+max_x = min(21, 6) =6.
+
+x ranges from 6 downto 0.
+
+For x=6:
+
+new_b=21-6=15 + (12-6)/10=0 →15.
+
+sum_x=0+6=6.
+
+current_dp[15] = (6,21,6)
+
+x=5:
+
+new_b=21-5=16 + (7)/10=0 →16.
+
+sum_x=5 →5 <6, so if 16 is added with sum_x=5.
+
+But current_dp for day1 will have entries for new_b=15 (6), 16 (5), ... and so on for x=5,4, etc. But the maximum sum_x for each new_b is tracked.
+
+For x=2:
+
+new_b=21-2=19 + (12-2)/10=1 →19+1=20.
+
+sum_x=2. So if current_dp[20] is not present, add it.
+
+Similarly, x=0:
+
+new_b=21 + (12)/10=22. sum_x=0.
+
+So after processing all x's, day1's DP will have various new_b entries, each with their maximum sum_x.
+
+Then, when processing day2 (a=75):
+
+For each new_b in day1's DP.
+
+Take the entry for new_b=20 (sum_x=2). Processing x from min(20,37) =20 downto 0.
+
+For x=5:
+
+new_b=20-5=15 + (75-5=70)/10=7 →15+7=22. sum_x=2+5=7.
+
+Add to day2's DP as 22: (7, 20,5).
+
+For x=20:
+
+new_b=20-20=0 + (75-20=55)/10=5 →5. sum_x=2+20=22.
+
+Add to day2's DP as 5: (22, 20,20).
+
+So in day2's DP, the entry for new_b=22 (sum_x=7) and new_b=5 (sum_x=22).
+
+When processing day3 (a=52), for the new_b=5 state:
+
+max_x= min(5, 26) →5.
+
+x can be up to 5.
+
+For x=5:
+
+new_b=5-5=0 + (52-5=47)/10=4 →4. sum_x=22+5=27.
+
+For new_b=4, sum_x=27.
+
+But in the sample, the optimal path is to use new_b=22 in day2. So day3's a=52, new_b=22:
+
+max_x= min(22,26) →22.
+
+x=22:
+
+new_b=22-22=0 + (52-22=30)/10=3 →3. sum_x=7+22=29.
+
+This is the maximum sum_x.
+
+So in day3's DP, the entry for new_b=3 is (29, 22,22).
+
+So during backtracking:
+
+max_sum_x is 29, best_b=3.
+
+current_day=3.
+
+x_used=22. prev_b=22.
+
+current_day=2: look into day2's DP for b=22.
+
+In day2's DP, new_b=22 has sum_x=7, prev_b=20, x_used=5.
+
+So x_list becomes [22,5].
+
+current_day=1: look into day1's DP for b=20.
+
+In day1's DP, new_b=20 has sum_x=2, prev_b=21, x_used=2.
+
+x_list becomes [22,5,2].
+
+Reverse to get [2,5,22], which matches the sample.
+
+So the code works for the first sample.
+
+Now, let's think about the code's efficiency. For each day, the number of states in the DP is manageable due to pruning.
+
+Now, let's proceed to write the code.
+
+But in Python, using dictionaries for each day's DP is feasible. For each day, we can represent the current_dp as a dictionary.
+
+The code would look like this:
+
+n, b = map(int, input().split())
+a = list(map(int, input().split()))
+total_a = sum(a)
+
+dp = [{} for _ in range(n+1)]
+dp[0][b] = (0, None, None)  # sum_x, prev_b, x_used
+
+for i in range(1, n+1):
+    current_a = a[i-1]
+    current_dp = {}
+    prev_dp = dp[i-1]
+    for prev_b in prev_dp:
+        sum_x_prev, _, _ = prev_dp[prev_b]
+        max_x = min(prev_b, current_a // 2)
+        for x in range(max_x, -1, -1):
+            new_b = prev_b - x + (current_a - x) // 10
+            new_sum_x = sum_x_prev + x
+            # Update current_dp for new_b
+            if new_b in current_dp:
+                if new_sum_x > current_dp[new_b][0]:
+                    current_dp[new_b] = (new_sum_x, prev_b, x)
+            else:
+                current_dp[new_b] = (new_sum_x, prev_b, x)
+    dp[i] = current_dp
+
+# Find the maximum sum_x in the last day's DP
+max_sum_x = -1
+best_b = None
+for bonus in dp[n]:
+    current_sum = dp[n][bonus][0]
+    if current_sum > max_sum_x:
+        max_sum_x = current_sum
+        best_b = bonus
+
+# Backtrack to find the x_used for each day
+x_list = []
+current_b = best_b
+current_day = n
+while current_day > 0:
+    if current_b not in dp[current_day]:
+        # This should not happen if the code is correct
+        break
+    sum_x, prev_b, x_used = dp[current_day][current_b]
+    x_list.append(x_used)
+    current_b = prev_b
+    current_day -= 1
+
+x_list.reverse()
+
+print(total_a - max_sum_x)
+print(' '.join(map(str, x_list)))
+
+But there's a problem here. In some cases, the last day's DP may be empty. For example, if the initial bonus is zero, and the first day's a_i is 1. Then, the max_x is zero. But code should handle it.
+
+Testing this code on the first sample:
+
+The output is 110 and 2 5 22, which is correct.
+
+For the second sample:
+
+Input:
+3 39
+58 64 33
+
+The code should output 107 and 28 4 16.
+
+Let's see:
+
+Sum of a is 58+64+33=155.
+
+The minimal cost is 107, so sum_x is 155-107=48. So x's sum to 48.
+
+The x's are 28+4+16=48.
+
+Let's see how the code would track this.
+
+Day 0: bonus=39.
+
+Day1: a=58.
+
+max_x = min(39, 58//2=29) →29.
+
+x can be from 29 downto 0.
+
+For x=28:
+
+new_b =39-28=11 + (58-28=30)/10=3 →14.
+
+sum_x_prev=0 +28=28.
+
+current_dp[14] = (28, 39, 28).
+
+For x=29:
+
+new_b=39-29=10 + (29) →29/10=2 →12. sum_x=29.
+
+current_dp[12] = (29,39,29).
+
+But sum_x=29 is higher than any x=28. So in day1's DP, the best sum_x is 29 (at new_b=12).
+
+Day2: a=64.
+
+current_a=64.
+
+prev_b=12.
+
+max_x= min(12,64//2=32) →12.
+
+x ranges from 12 downto 0.
+
+For x=4:
+
+new_b=12-4=8 + (64-4=60)/10=6 →14. sum_x=29+4=33.
+
+For x=12:
+
+new_b=12-12=0 + (64-12=52)/10=5 →5. sum_x=29+12=41.
+
+So in day2's DP, new_b=5 has sum_x=41.
+
+But perhaps there's another path. For example, in day1, maybe another x leads to a higher sum_x.
+
+But according to the sample, x=28 is used in day1, leading to new_b=14.
+
+So perhaps the code's initial approach may miss that. But why?
+
+Because in day1, when processing x=28, the new_b is 14 with sum_x=28. But there's another x=29 which gives new_b=12 with sum_x=29. So the code would choose the higher sum_x (29) and thus new_b=12.
+
+But according to the sample's x sequence, day1's x is 28, which has sum_x=28. Which is lower than 29. So why does the code's approach not find the optimal solution?
+
+This suggests that the code's approach is incorrect. This would mean that the code works for the first sample but not for the second.
+
+But why is that?
+
+In the second sample, the optimal sum_x is 48. Which is higher than the code's approach of 29+12+0=41. But according to the sample's output, the sum_x is 28+4+16=48. Which is higher.
+
+So the code's approach is not capturing that path. This indicates a problem with the code's logic.
+
+This suggests that the code's approach of choosing the maximum x for each state is not correct. Because using x=28 in day1, even though it gives a lower sum_x (28), leads to a higher sum_x in later days.
+
+So the code's approach of greedily choosing the maximum x for each state is not sufficient.
+
+This indicates that the code is incorrect.
+
+This is a problem. So what's the solution?
+
+The crux is that the code's approach of processing x in descending order and keeping only the best sum_x for each new_b is not sufficient, because higher x may lead to lower new_b, which in turn allows fewer x in future days, leading to lower overall sum_x.
+
+So the code's approach is myopic, only considering the current day's maximum x, but not the impact on future days.
+
+Thus, the code is incorrect.
+
+This indicates that the problem requires a different approach, which is not feasible with the current DP due to time constraints.
+
+But how to handle this? It seems that the only correct approach is to model all possible x's for each state, but this is computationally expensive.
+
+Alternative Idea: Can we model the problem using memoization and a priority queue to prioritize states with higher sum_x, thus processing more promising states first and pruning others? But this is unclear.
+
+Alternatively, perhaps the problem can be modeled using a BFS approach, where each state is (current_day, current_bonus, sum_x), and we process states in order of sum_x (maximum first). This way, when a state (day, bonus) is visited with a higher sum_x than any previously recorded, it's processed, and other states with the same day and bonus but lower sum_x are ignored.
+
+This is similar to BFS with pruning and prioritizing states with higher sum_x.
+
+This approach would allow us to process the most promising states first and ignore others. Let's see how this can be implemented.
+
+The BFS approach would use a priority queue where the priority is the sum_x (processed in descending order). For each state (day, bonus), we track the maximum sum_x achievable up to that day and bonus. If a new state arrives with the same day and bonus but lower sum_x, it is discarded.
+
+This way, we can process the states in order of their sum_x, ensuring that we find the maximum possible sum_x.
+
+Here's how this can be implemented:
+
+- Use a list of dictionaries, where for each day, we track the maximum sum_x for each bonus.
+
+- Use a priority queue (max-heap) that stores tuples of (sum_x, day, bonus).
+
+- Start by adding the initial state (sum_x=0, day=0, bonus=initial_b) to the heap.
+
+- While the heap is not empty:
+
+   - Extract the state with the maximum sum_x.
+
+   - If this state's day is n, update the global max_sum_x and break.
+
+   - Otherwise, process the next day.
+
+   - For the current day i, and bonus b_prev, compute all possible x for day i+1.
+
+   - For each x in 0 to min(b_prev, a_i//2):
+
+       - new_b = b_prev -x + (a_i -x) //10
+
+       - new_sum_x = sum_x_prev +x
+
+       - If for day i+1, new_b is not present in the dictionary, or new_sum_x is greater than the existing value:
+
+           - Update the dictionary for day i+1.
+
+           - Add the new state to the heap.
+
+This way, the priority queue processes states in order of their sum_x, ensuring that we process the most promising paths first. For each day and bonus, we only keep the maximum sum_x, so once a state is processed for (day, bonus), any later state with lower sum_x can be ignored.
+
+This approach is more efficient because it prioritizes higher sum_x states and prunes others.
+
+But in Python, implementing a priority queue with max-heap can be done using heapq, but since heapq is a min-heap, we can store the negative sum_x.
+
+Let's outline the code:
+
+import heapq
+
+n, initial_b = map(int, input().split())
+a = list(map(int, input().split()))
+total_a = sum(a)
+
+# For each day, track the maximum sum_x for each bonus
+dp = [{} for _ in range(n+1)]
+dp[0][initial_b] = (0, None, None)  # sum_x, previous_b, x_used
+
+heap = []
+heapq.heappush(heap, (-0, 0, initial_b))  # negative sum_x for min-heap to act as max-heap
+
+max_sum_x = 0
+best_state = None
+
+while heap:
+    current_neg_sum, day, bonus = heapq.heappop(heap)
+    current_sum = -current_neg_sum
+
+    if day == n:
+        if current_sum > max_sum_x:
+            max_sum_x = current_sum
+            best_state = (bonus, current_sum)
+        continue
+
+    # If we have already processed a better state for this day and bonus, skip
+    if bonus not in dp[day] or dp[day][bonus][0] > current_sum:
+        continue
+
+    # Process the next day
+    next_day = day + 1
+    current_a = a[day]
+    max_x = min(bonus, current_a // 2)
+    for x in range(max_x, -1, -1):
+        new_b = bonus - x + (current_a - x) // 10
+        new_sum_x = current_sum + x
+        # Check if this new state is better than existing states for next_day and new_b
+        if new_b in dp[next_day]:
+            if dp[next_day][new_b][0] >= new_sum_x:
+                continue
+        # Update the state for next_day
+        dp[next_day][new_b] = (new_sum_x, bonus, x)
+        heapq.heappush(heap, (-new_sum_x, next_day, new_b))
+
+# Find the best state in the last day
+max_sum_x = -1
+best_b = None
+for bonus in dp[n]:
+    current_sum, _, _ = dp[n][bonus]
+    if current_sum > max_sum_x:
+        max_sum_x = current_sum
+        best_b = bonus
+
+# Backtrack to find x_used
+x_list = []
+current_b = best_b
+current_day = n
+while current_day > 0:
+    if current_b not in dp[current_day]:
+        break
+    sum_x, prev_b, x_used = dp[current_day][current_b]
+    x_list.append(x_used)
+    current_b = prev_b
+    current_day -= 1
+
+x_list.reverse()
+
+print(total_a - max_sum_x)
+print(' '.join(map(str, x_list)))
+
+But this code may still have issues. For example, in the second sample, the code may not find the optimal path.
+
+Let's debug the second sample:
+
+Sample Input 2:
+
+3 39
+
+58 64 33
+
+The sample output is 107, which implies sum_x = 58+64+33 - 107 = 155-107=48. The x sequence is 28,4,16 → sum 48.
+
+Let's see how the code would process this:
+
+Day 0: bonus=39. sum_x=0.
+
+Processing day 0:
+
+Push (0, 0, 39) into the heap.
+
+Day 0 is processed, next day is 1 (a=58).
+
+max_x = min(39,58//2=29) →29.
+
+Process x from 29 down to 0.
+
+For x=29:
+
+new_b=39-29=10 + (58-29=29)/10=2 →12. sum_x=29.
+
+Add to day1's DP and push (-29, 1,12).
+
+For x=28:
+
+new_b=39-28=11 + (30)/10=3 →14. sum_x=28.
+
+Day1's DP for 14 is sum_x=28.
+
+But since x=29 gives higher sum_x, the code processes x=29 first.
+
+When processing day1's state (sum_x=29, bonus=12), next day is 2 (a=64).
+
+max_x= min(12,64//2=32) →12.
+
+x ranges from 12 downto 0.
+
+For x=12:
+
+new_b=12-12=0 + (64-12=52)/10=5 →5. sum_x=29+12=41.
+
+Add to day2's DP and push (-41, 2,5).
+
+For x=4:
+
+new_b=12-4=8 + (60)/10=6 →14. sum_x=29+4=33.
+
+But sum_x=33 is less than 41, so when processed, this state would be added to day2's DP if it's better than existing entries.
+
+But if day2's DP already has a state for new_b=14 with sum_x=33, and later a state with new_b=5 and sum_x=41 is added, the code would prioritize processing the sum_x=41 first.
+
+When processing day2's state (sum_x=41, bonus=5):
+
+next day is 3 (a=33).
+
+max_x= min(5, 33//2=16) →5.
+
+x can be up to 5.
+
+For x=5:
+
+new_b=5-5=0 + (33-5=28)/10=2 →2. sum_x=41+5=46.
+
+Add to day3's DP.
+
+When day3 is processed, sum_x=46 is compared to the current max (46). But the sample's sum_x is 48. So this path does not reach the optimal sum.
+
+So where's the optimal path?
+
+In the optimal path, day1's x is 28. sum_x=28. new_b=14.
+
+Day2's x=4. sum_x=28+4=32. new_b=14-4=10 + (64-4=60)/10=6 →10+6=16.
+
+Day3's x=16: min(16,33//2=16) →16. new_b=16-16=0 + (33-16=17)/10=1 →1. sum_x=32+16=48.
+
+So in this case, the code's approach would not find this path because it prioritizes the higher x in day1 (x=29) which leads to sum_x=29, but the path with x=28 in day1 (sum_x=28) is not processed until later. However, the code's priority queue processes states with higher sum_x first, so the x=29 path is processed first, and the x=28 path's state (sum_x=28, bonus=14) is added to the queue but with a lower priority. 
+
+When the code processes day1's x=28 path, it's possible that by the time it gets to it, day2's states have already been processed with higher sum_x's, but in reality, the code will process all possible paths, even if they are processed later.
+
+But the code's priority queue will process the state (sum_x=28, day=1, bonus=14) after processing the sum_x=29 path. When this state is processed, it will generate day2's states, including x=4 (sum_x=32, new_b=16).
+
+Then, in day2, the state (sum_x=32, bonus=16) can process x=16 (33//2=16.5 →16) in day3. For x=16:
+
+new_b=16-16=0 + (33-16=17)/10=1. sum_x=32+16=48.
+
+This state is added to day3's DP with sum_x=48, which is higher than the previous sum_x=46. 
+
+So when the code processes day3's states, it will find this sum_x=48 and update the best state.
+
+But for this to happen, the code must process the state (day=2, bonus=16, sum_x=32) and generate x=16 for day3.
+
+So the code's approach can find this path, but it depends on the order of processing the states.
+
+But how?
+
+Let's see:
+
+In day1, both x=29 (sum_x=29, bonus=12) and x=28 (sum_x=28, bonus=14) are added to the queue.
+
+The code processes x=29 first (higher sum_x). Then, after processing all possibilities from that path, it processes x=28.
+
+When processing day1's x=28 path, the code generates day2's states.
+
+For example, in day2, when processing x=4 for day2's a=64:
+
+sum_x=28+4=32, new_b=14-4=10 + (64-4=60)/10=6 →10+6=16. So new_b=16.
+
+This state is added to day2's DP.
+
+When the code processes this state (sum_x=32, day=2, bonus=16), it will process x=16 for day3's a=33.
+
+max_x= min(16,33//2=16) →16.
+
+x=16: new_b=0 + (33-16=17)/10=1 →1. sum_x=32+16=48.
+
+This is added to day3's DP.
+
+When the code processes day3, it will find this sum_x=48, which is the maximum. 
+
+So the code will correctly find this path, even though the initial path (x=29) is processed first.
+
+Thus, the code should handle this correctly.
+
+The key is that even though the initial path has a higher sum_x, the code still processes other paths with lower sum_x which may lead to higher overall sum_x in the end.
+
+But in practice, this approach may be feasible, although the time complexity depends on the number of states processed.
+
+Now, let's see if the code can handle the second sample correctly.
+
+For the second sample:
+
+The code would process day0's state and generate day1's states. 
+
+Then, in day1, the code processes x=29 (sum_x=29) and x=28 (sum_x=28). 
+
+After processing x=29, the code generates day2's states with x=12 (sum_x=41).
+
+Then, when processing x=28 in day1, the code generates day2's states with x=4 (sum_x=32) and other x's.
+
+In day2, for the state (sum_x=32, bonus=16), the code processes x=16 in day3's a=33, leading to sum_x=48.
+
+Thus, the code should find this path and output the correct x sequence.
+
+Thus, the code should work correctly for both samples.
+
+Now, the code uses a priority queue to process states in order of sum_x, ensuring that higher sum_x paths are processed first, but also allowing lower sum_x paths to be processed later if they can lead to higher sum_x in the future.
+
+This approach should correctly find the optimal sum_x and the corresponding x sequence.
+
+Thus, this code should solve the problem correctly.
+</think>
+To solve this problem, we need to determine the minimum number of burles Polycarp has to spend over n days while optimally using his bonuses. The solution involves dynamic programming (DP) with a priority queue to efficiently explore the optimal use of bonuses each day.
+
+### Approach
+1. **Dynamic Programming (DP) with Priority Queue**: We use a priority queue to process states in order of the maximum sum of bonuses used (sum_x), ensuring that we explore the most promising paths first.
+2. **State Tracking**: For each day, we track the maximum sum of bonuses used (sum_x) for each possible bonus balance. This helps in efficiently pruning less optimal states.
+3. **Backtracking**: After processing all days, we backtrack from the optimal state found to reconstruct the sequence of bonuses used each day.
+
+### Solution Code
+```python
+import heapq
+
+n, initial_b = map(int, input().split())
+a = list(map(int, input().split()))
+total_a = sum(a)
+
+# For each day, track the maximum sum_x for each bonus
+dp = [{} for _ in range(n+1)]
+dp[0][initial_b] = (0, None, None)  # sum_x, previous_b, x_used
+
+heap = []
+heapq.heappush(heap, (-0, 0, initial_b))  # negative sum_x for min-heap to act as max-heap
+
+max_sum_x = 0
+best_state = None
+
+while heap:
+    current_neg_sum, day, bonus = heapq.heappop(heap)
+    current_sum = -current_neg_sum
+
+    if day == n:
+        if current_sum > max_sum_x:
+            max_sum_x = current_sum
+            best_state = (bonus, current_sum)
+        continue
+
+    # If we have already processed a better state for this day and bonus, skip
+    if bonus not in dp[day] or dp[day][bonus][0] > current_sum:
+        continue
+
+    # Process the next day
+    next_day = day + 1
+    current_a = a[day]
+    max_x = min(bonus, current_a // 2)
+    for x in range(max_x, -1, -1):
+        new_b = bonus - x + (current_a - x) // 10
+        new_sum_x = current_sum + x
+        # Check if this new state is better than existing states for next_day and new_b
+        if new_b in dp[next_day]:
+            if dp[next_day][new_b][0] >= new_sum_x:
+                continue
+        # Update the state for next_day
+        dp[next_day][new_b] = (new_sum_x, bonus, x)
+        heapq.heappush(heap, (-new_sum_x, next_day, new_b))
+
+# Find the best state in the last day
+max_sum_x = -1
+best_b = None
+for bonus in dp[n]:
+    current_sum, _, _ = dp[n][bonus]
+    if current_sum > max_sum_x:
+        max_sum_x = current_sum
+        best_b = bonus
+
+# Backtrack to find x_used
+x_list = []
+current_b = best_b
+current_day = n
+while current_day > 0:
+    if current_b not in dp[current_day]:
+        break
+    sum_x, prev_b, x_used = dp[current_day][current_b]
+    x_list.append(x_used)
+    current_b = prev_b
+    current_day -= 1
+
+x_list.reverse()
+
+print(total_a - max_sum_x)
+print(' '.join(map(str, x_list)))
+```
+
+### Explanation
+1. **Dynamic Programming with Priority Queue**: We use a max-heap (implemented as a min-heap with negative values) to prioritize states with higher sums of used bonuses (sum_x). This ensures we explore the most promising paths first.
+2. **State Updates**: For each day, we compute all possible bonus uses (x) and update the DP state for the next day. We only keep the maximum sum_x for each bonus balance to avoid redundant states.
+3. **Backtracking**: After determining the optimal sum of bonuses used, we backtrack from the final state to reconstruct the sequence of bonuses used each day, ensuring we output the correct sequence.
+
+This approach efficiently explores the optimal paths while keeping the state space manageable, ensuring we find the minimum burles spent and the optimal bonus usage sequence.
+</bot>

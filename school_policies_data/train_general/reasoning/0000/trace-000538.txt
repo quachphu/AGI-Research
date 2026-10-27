@@ -1,0 +1,865 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Dima's got a staircase that consists of n stairs. The first stair is at height a1, the second one is at a2, the last one is at an (1 ≤ a1 ≤ a2 ≤ ... ≤ an). 
+
+Dima decided to play with the staircase, so he is throwing rectangular boxes at the staircase from above. The i-th box has width wi and height hi. Dima throws each box vertically down on the first wi stairs of the staircase, that is, the box covers stairs with numbers 1, 2, ..., wi. Each thrown box flies vertically down until at least one of the two following events happen:
+
+  * the bottom of the box touches the top of a stair; 
+  * the bottom of the box touches the top of a box, thrown earlier. 
+
+
+
+We only consider touching of the horizontal sides of stairs and boxes, at that touching with the corners isn't taken into consideration. Specifically, that implies that a box with width wi cannot touch the stair number wi + 1.
+
+You are given the description of the staircase and the sequence in which Dima threw the boxes at it. For each box, determine how high the bottom of the box after landing will be. Consider a box to fall after the previous one lands.
+
+Input
+
+The first line contains integer n (1 ≤ n ≤ 105) — the number of stairs in the staircase. The second line contains a non-decreasing sequence, consisting of n integers, a1, a2, ..., an (1 ≤ ai ≤ 109; ai ≤ ai + 1).
+
+The next line contains integer m (1 ≤ m ≤ 105) — the number of boxes. Each of the following m lines contains a pair of integers wi, hi (1 ≤ wi ≤ n; 1 ≤ hi ≤ 109) — the size of the i-th thrown box.
+
+The numbers in the lines are separated by spaces.
+
+Output
+
+Print m integers — for each box the height, where the bottom of the box will be after landing. Print the answers for the boxes in the order, in which the boxes are given in the input.
+
+Please, do not use the %lld specifier to read or write 64-bit integers in C++. It is preferred to use the cin, cout streams or the %I64d specifier.
+
+Examples
+
+Input
+
+5
+1 2 3 6 6
+4
+1 1
+3 1
+1 1
+4 3
+
+
+Output
+
+1
+3
+4
+6
+
+
+Input
+
+3
+1 2 3
+2
+1 1
+3 1
+
+
+Output
+
+1
+3
+
+
+Input
+
+1
+1
+5
+1 2
+1 10
+1 10
+1 10
+1 10
+
+
+Output
+
+1
+3
+13
+23
+33
+
+Note
+
+The first sample are shown on the picture.
+
+<image>
+</user>
+<bot>
+<think>
+Okay, let's tackle this problem. Hmm, the problem is about boxes being thrown onto stairs, and each box lands on the first wi stairs. The box's bottom will land either on the stairs or on top of previous boxes. For each box, we need to find the height of its bottom after landing.
+
+So, the key here is to track the current maximum height for each stair segment. Because when a new box comes with width wi, it covers stairs 1 to wi. The bottom of this box will sit on the maximum height among the first wi stairs (either the stair's height or the top of previous boxes in those positions). Then, after placing the box, the heights of the first wi stairs are all updated to the bottom of the box plus its height (since the box covers those stairs, any future boxes covering this area will be on top of this box).
+
+Wait, but maintaining the height for each stair individually might be expensive if we do it naively. Because for each box, we have to update up to wi stairs. If m is 1e5 and each wi is 1e5, that's O(m*wi) operations, which is 1e10 and way too slow.
+
+So, we need a data structure that can efficiently track the maximum in the range [1, wi] and then update the first wi elements to a new value. But the problem is that each box's placement affects a prefix of the stairs. Because the box covers 1 to wi, after it's placed, all those stairs (and boxes) up to wi now have their top at (current max height + hi). So any subsequent boxes that cover a prefix up to some wj (where wj <= wi) will have their bottom at the new height. But if a subsequent box has wj greater than wi, then the max would be the maximum between the new heights up to wi and the original heights from wi+1 to wj.
+
+Wait, but the boxes are placed such that each box's bottom is the maximum of the existing heights in the first wi positions. Then, after placing, the heights for the first wi positions are all set to (max_height + hi). Because the box is placed on top of them, so those positions' new height is the bottom of the box plus its height, which becomes the new top for those stairs.
+
+So the process is:
+
+For each box i:
+
+1. Find the maximum height in the first wi stairs. Let's call this current_max.
+
+2. The bottom of the box will be at current_max.
+
+3. The new height for all stairs 1..wi becomes current_max + hi.
+
+4. For the next boxes, when they check their wi, they will consider the updated heights.
+
+The challenge is efficiently computing the maximum in the prefix and updating the prefix to a new value.
+
+But how to do this efficiently. Since each update is a range update that affects a prefix, and each query is a prefix maximum.
+
+So the operations we need are:
+
+- Query the maximum of the first k elements.
+
+- Update the first k elements to a new value (if that new value is higher than their current value? No, no. Wait, when we place a box, the new height for the first wi stairs is the current_max + hi. So after placing the box, all the first wi stairs are now at this new height. So for example, if the previous maximum in the first wi was 5, and hi is 3, then the new height for all those positions is 8. So any subsequent queries for a range that includes any of these positions will consider 8.
+
+So the data structure needs to handle:
+
+- Range updates that set a prefix [1..k] to a certain value, but only if this value is higher than the existing ones. Wait no. Because when you place a box, the new height for the first wi is exactly current_max + hi. So regardless of the previous values in 1..wi, they are all set to this new value. So the update is a range assignment (set all elements in 1..wi to the new value), but only if the new value is higher than the existing ones? No, no. Because even if some positions in 1..wi were higher than current_max (but how?), because current_max is the maximum of those positions. So after the box is placed, all positions 1..wi are set to current_max + hi, which is higher than current_max, which was the maximum. So all those positions will now have the same value.
+
+So the update is to set the first wi elements to the new value (current_max + hi). And since current_max is the maximum in those positions, this new value is higher than all of them, so we can safely set the entire prefix to this new value.
+
+So the data structure needs to support two operations:
+
+1. Find the maximum in the prefix [1..w].
+
+2. Set the prefix [1..w] to a new value (which is higher than any previous in that range).
+
+Hmm, how to model this efficiently. Let's think of the current state of the stairs as a series of intervals where each interval is a range [1..k] with a certain height. Because each update is setting a prefix [1..w] to a new value. So after several updates, the maximum for any prefix query would be the maximum of all the intervals that cover the prefix up to w.
+
+Wait, for example:
+
+Suppose the first update is setting [1..5] to 10. Then, the next update is setting [1..3] to 15. Wait, but the previous value for [1..5] was 10, but the new update [1..3] is 15. So after this, the intervals would be:
+
+1-3: 15, 4-5: 10.
+
+If another query is made for [1..4], the maximum is 15 (from 1-3) and 10 (4) → maximum is 15.
+
+So, perhaps the data structure can track a set of intervals with certain values. But how to manage this.
+
+Alternatively, think of the current state as a list of intervals, each with a start and end, and a height. But this might be complicated to manage.
+
+Wait, another approach: the maximum possible height of the stairs after several boxes is a non-decreasing sequence. Because each box is placed on a prefix, and the new height is the current_max of the prefix plus the box's height, which is higher than the previous maximum. So when you set the prefix [1..w] to this new value, which is higher than before, the heights for the first w stairs are now this new value. So the entire array is a non-decreasing sequence? Wait, let's see.
+
+Initially, the stairs are a1 <= a2 <= ... <= an. Then, when you place a box covering w stairs, the new height for those w stairs is current_max + hi, which is higher than the previous maximum (which was a1, a2, ..., aw). Since a1 <= a2 <= ... <= aw, their maximum is aw. Then the new height is aw + hi, which is higher than aw. So the first w stairs are now all at this new height. But the w+1 stairs and beyond are still at their original a values. So the new array would be [new_h, new_h, ..., new_h (w times), a_{w+1}, ...]. Since new_h >= aw >= a_{w+1} (since original a was non-decreasing), but a_{w+1} could be greater than new_h if, for example, the original a had a higher value. Wait, but the original a is non-decreasing. So when you update the first w stairs, the new_h is equal to the maximum of a1..aw (which is aw) plus hi, which is >= aw. Then, the next stairs (w+1) are a_{w+1} >= aw. So new_h could be less than a_{w+1} if hi is zero, but in the problem statement, hi >=1. Wait, no. The problem statement says hi can be 1e9, but in the problem, the a array is non-decreasing. Let's see.
+
+Original a is a1 <= a2 <= ... <= an. So the maximum of the first w stairs is aw. Then, new_h = aw + hi. Since hi is at least 1, new_h is aw +1 or higher. So new_h is definitely greater than aw, which is the previous maximum. However, a_{w+1} (if exists) is >= aw. So new_h could be less than a_{w+1}? For example, if a is [1,2,3,6,6], and w is 3. The maximum of first 3 is 3, hi is 1 → new_h is 4. Then, the fourth stair is 6, which is higher than 4. So after the update, the first 3 stairs are 4, fourth is 6. So the array becomes [4,4,4,6,6], which is non-decreasing. Because 4 <=4 <=4 <=6 <=6. So that's correct. But if the next box has w=4, then the maximum of first 4 is 6 (since the fourth is 6), then new_h is 6+hi. So in that case, the array remains non-decreasing.
+
+Wait, so the key insight here is that after each box is placed, the array of heights remains non-decreasing. Because when we update the first w stairs to a new value, that value is the previous maximum of those stairs plus hi, which is higher than any previous value in the first w. But since the original array was non-decreasing, and any previous updates are such that the new_h is higher than the previous maximum (so for example, if we had a previous update to [1..k], that new_h was the maximum of that range at that time, which would be the a_k plus some hi, but that's getting complicated). Wait, perhaps after each update, the array remains non-decreasing. Let's try to see.
+
+Suppose after some updates, the array is non-decreasing. Then, when we place a new box with wi and hi. The current_max is the maximum in the first wi elements, which is the last element in the first wi (since the array is non-decreasing). So current_max is the value at position wi. Then, new_h = current_max + hi. We then set the first wi elements to new_h. Now, the first wi elements are all new_h, and the elements after wi are the same as before. Since the array was non-decreasing, the element at wi+1 (if exists) is >= the element at wi (which was current_max). So after the update, the element at wi is new_h, and the next element is a_{wi+1} (or possibly some updated value from a previous update). But how does this affect the non-decreasing property?
+
+Wait, after setting the first wi elements to new_h (which is current_max + hi, and current_max was the value at wi, which was >= all previous elements in 1..wi. So new_h is current_max + hi >= current_max. Then, the next element (if exists) is at wi+1. The new array's elements from 1..wi are new_h. The element at wi+1 is the same as before. Since the original array was non-decreasing, a_{wi} <= a_{wi+1}. But after the update, new_h could be higher or lower than a_{wi+1}?
+
+For example, in the first sample input:
+
+Original a is [1, 2, 3,6,6]. After the first box (1,1), the current_max is 1. So new_h is 1+1=2. So the first 1 element is 2. Now the array is [2, 2, 3,6,6]. Then, the second box is (3,1). current_max is max of first 3 elements, which is 3 (since the third element is 3). So new_h is 3+1=4. So the first 3 elements become 4. Now array is [4,4,4,6,6]. Next box is (1,1). current_max is 4. new_h is 5. So first element becomes 5. array is [5,4,4,6,6]. Wait, that's not non-decreasing. Wait, this would be a problem. Oh no! Wait, but according to the sample input, the third box (1,1) gives output 4. Wait, let's look at the sample.
+
+Sample input 1:
+
+5
+
+1 2 3 6 6
+
+4 boxes:
+
+1 1 → output 1 (bottom is 1, new_h is 1+1=2. So first stair is 2. Then next boxes:
+
+3 1 → current_max is max(2,2,3) =3. So output is 3. new_h is 3+1=4. So first 3 stairs are 4. So array is [4,4,4,6,6].
+
+Third box: 1 1. current_max is 4 (first 1 stairs are 4). So output is 4. new_h is 4+1=5. So first 1 stair is 5. Now array is [5,4,4,6,6]. Wait, this is not non-decreasing. 5 >4, which breaks the non-decreasing order. So this is a problem.
+
+But how is that possible? Because according to the problem statement, the initial a is non-decreasing, but the boxes can cause the array to not be non-decreasing. But in that case, the next boxes could have their current_max as the maximum in the prefix. For example, if after the third box, the array is [5,4,4,6,6], then the maximum of the first 3 stairs is 5 (since 5 is in the first stair). So when the next box (4th) is processed: width 4, hi=3. The first 4 stairs are 5,4,4,6. The maximum of these is 6. So bottom is 6. new_h is 6+3=9. So set first 4 stairs to 9. Now the array becomes [9,9,9,9,6]. Wait, that's not non-decreasing either. But according to the sample output, the fourth output is 6, which is the current_max (max of first 4 stairs is 6, which is the fourth stair's value). So in that case, the new_h is 6+3=9, and the array after would be [9,9,9,9,6]. Which is decreasing from 9 to 6, which is not non-decreasing.
+
+But how is this possible? Because the initial a was non-decreasing, but after boxes are placed, the array can have arbitrary values. So the initial approach of assuming that the array remains non-decreasing is incorrect. So the problem is, the array can have varying values, and the current_max for a prefix [1..wi] is not necessarily the last element of the prefix. So this complicates things.
+
+Hmm, so the initial idea that the array is non-decreasing is not correct. Therefore, the data structure must handle arbitrary arrays where each update sets a prefix to a new value (which is the current_max of that prefix plus hi). But the new_h is the current_max + hi, which is higher than the previous maximum. However, when setting the prefix to new_h, since the new_h is higher than the previous maximum (so the previous elements in the prefix were <= current_max), the new_h is higher than all elements in the prefix. So after the update, all elements in the prefix are new_h, which is higher than their previous values. So the prefix after the update is all new_h. So for example, if we have a prefix [1..wi] where the maximum was m, then after the update, all elements in 1..wi are set to m + hi, which is higher than m. So the entire prefix is now m + hi. So the new array after each update is such that the prefix [1..wi] is all the same value (m + hi), and the elements after wi are as before.
+
+So the data structure needs to track for each position, the current height, but the updates are to set a prefix to a new value. Since each such update makes the prefix a single value (higher than all elements in the prefix before the update), the array can be represented in terms of intervals where each interval has a certain value, and these intervals are non-overlapping and ordered.
+
+For example, after some updates, the array could look like:
+
+[5,5,5,9,9,6,7, ...]
+
+Wait, but that's possible. However, in that case, the maximum of a prefix [1..6] would be 9 (from the fourth and fifth positions). But how to track these intervals efficiently.
+
+An efficient way to manage this is to track the current maximum prefix for any possible w. Since each update is to a prefix, and sets it to a value higher than any previous in that prefix, the maximum for any prefix [1..w] is the maximum of the latest update that covers w (if any) and the original a array.
+
+Wait, maybe the key is that each update is a prefix [1..k] and sets it to a certain value. So the updates can be maintained in a list, sorted by k in decreasing order. For example, the latest update with the largest k (so covering the longest prefix) would override all previous updates for smaller k.
+
+Wait, for example:
+
+If we have an update to [1..5] to value 10, then another update to [1..3] to value 15. Then, for any query on [1..3], the maximum is 15. For [1..4], the maximum is 10 (since the first update covered 1..5). Wait, no. Because the second update only covers up to 3. So the first 3 are 15, and 4 is 10.
+
+So the maximum for a query [1..4] would be max(15, 10) = 15? No, the first 3 are 15, and 4 is 10. So the max is 15. Wait, no. The first three elements are 15, but the fourth is 10. So in the array, the first three are 15, fourth is 10. So the maximum of [1..4] is 15.
+
+But in this case, how would the data structure track that.
+
+Alternatively, when processing a query for [1..w], the maximum is the maximum of all the updates that cover ranges up to at least w, and the original a array's elements beyond the last update's range.
+
+Wait, maybe not. Let's think:
+
+Each update is a prefix [1..k] set to a value. The updates are processed in order. So the latest update that covers [1..k], where k >= w, would set all elements up to k to a certain value. But if there's a later update with a smaller k (but covers [1..k1] where k1 < w), then for the positions 1..k1, the value is that later update's value, and positions k1+1 to w are covered by earlier updates with larger k (if any) or the original a array.
+
+This seems complicated. So perhaps the way to model this is that each update is of the form (k, v), which means that the first k elements are set to v, but only if this v is higher than the previous value of those elements. But wait, the new value is always higher than the previous maximum, so the updates are such that when you set [1..k] to v, v is higher than the previous maximum of that prefix, which is the maximum of the previous values in [1..k]. So setting [1..k] to v (which is higher than all elements in the prefix) makes all elements in [1..k] equal to v. So each update effectively replaces any previous updates that cover any part of [1..k]. For example, if there was a previous update (k_prev, v_prev), and then a new update (k_new, v_new), where k_new < k_prev. Then, the new update's [1..k_new] are set to v_new. But the parts from k_new+1 to k_prev were set to v_prev by the previous update, and remain so.
+
+But how to track the maximum for a given w.
+
+Alternative approach: track the current maximum for each possible w. Since each update is a prefix [1..k], and sets the first k elements to v (which is higher than their previous maximum), then the maximum for any w is the maximum between:
+
+- The maximum of all updates with k >= w (their v is the value for the prefix up to k, which includes w. So the value of such updates is v, but only the latest such update with the largest k <= w? Not sure.)
+
+Wait, this is getting complicated. Let's think differently.
+
+Suppose we have a variable current_max that represents the maximum height of the first k elements after some updates. Each time a new box is thrown with width wi and height hi:
+
+1. Find the current maximum in the first wi stairs. Let's call this m.
+
+2. The bottom of the box is m.
+
+3. The new height of the first wi stairs is m + hi.
+
+So, for future queries, any position up to wi will be at least m + hi.
+
+But how do we track this efficiently.
+
+Another idea: The maximum height for any prefix [1..w] is the maximum of all the updates that cover w (i.e., updates where their k >=w) and the original a array for positions beyond the largest k in the updates.
+
+So, for example, suppose the largest update is k_max, with value v_max. Then for any w <=k_max, the maximum is v_max. For w >k_max, the maximum is the maximum between v_max and the original a array from k_max+1 to w.
+
+Wait, this makes sense. Because the largest update (with k_max) sets all elements up to k_max to v_max. So any w <=k_max will have their entire prefix up to w as v_max. So the maximum is v_max. For w>k_max, the maximum is the maximum of v_max (since the first k_max elements are v_max) and the maximum of a[k_max+1 ... w]. Because the elements from k_max+1 to w are still at their original a values.
+
+So, if we track the largest k_max and the corresponding v_max, then for any query wi:
+
+- if wi <=k_max: the maximum is v_max.
+
+- else: the maximum is max(v_max, the maximum of a[k_max+1 ... wi]).
+
+In addition, there might be other updates with smaller k. But no, because the largest update (k_max) would have covered all smaller k's. For example, if there was an update with k_prev (k_prev <k_max) and v_prev, but then a later update with k_max (k_max>k_prev) and v_max. Since v_max is higher than the previous maximum of the first k_max elements, which includes the first k_prev elements (which were set to v_prev). So after the later update, all elements up to k_max are set to v_max, which is higher than v_prev. So the previous updates with smaller k are irrelevant because the largest update (k_max) overrides them.
+
+So the maximum in the first wi stairs is either:
+
+- v_max (if wi <=k_max).
+
+- or max(v_max, the maximum of a[k_max+1 ... wi]).
+
+So the key variables to track are:
+
+- current_max_value: the value of the largest update (v_max).
+
+- current_max_k: the k of the largest update (k_max).
+
+Then, for any query wi:
+
+if wi <= current_max_k → maximum is current_max_value.
+
+else → maximum is max(current_max_value, the maximum of a from current_max_k+1 to wi).
+
+But how to compute the maximum of a from current_max_k+1 to wi efficiently.
+
+The original a array is non-decreasing. So a is sorted in non-decreasing order. So the maximum of a from l to r is a[r], since the array is non-decreasing.
+
+So, if we need the maximum of a from l to r (where l <= r), it's simply a[r].
+
+So this simplifies things.
+
+So, putting it all together:
+
+We track current_max_value and current_max_k, which is the largest update so far (k_max is the largest, and current_max_value is the value of that update).
+
+For each box (wi, hi):
+
+1. Compute the current_max in the first wi stairs:
+
+   a. If wi <= current_max_k → current_max = current_max_value.
+
+   b. Else → current_max = max(current_max_value, a[wi-1]) (since a is 0-based or 1-based? The problem statement uses 1-based indexing for the stairs. So if current_max_k is 0 (initially, no updates), then for wi steps, the max is a[wi-1] (if 0-based) or a[wi] (1-based).
+
+Wait, in the problem statement, the first stair is a1, the second a2, etc. So the stairs are 1-based. So the original a array is 1-based. So the original a array is given as a_1, a_2, ..., a_n. So when current_max_k is 0 (no updates yet), the maximum for a wi is the maximum of a_1 to a_wi. Since a is non-decreasing, this is a_wi. So the max is a_wi.
+
+So the code needs to handle the a array as 1-based.
+
+So, for the case where wi > current_max_k:
+
+current_max = max(current_max_value, a[wi])
+
+So, after calculating current_max, which is the maximum between the current_max_value and a[wi] (if wi exceeds current_max_k), then the new update is to set the first wi stairs to current_max + hi.
+
+So after processing this box, the new current_max_k is the maximum between the existing current_max_k and wi. Because if the new update's wi is larger than previous current_max_k, then the new current_max_k is wi. And the new current_max_value is current_max + hi.
+
+Wait, yes. Because when we update the first wi stairs to current_max + hi, which is higher than all previous values in those stairs. So any future query for wi <= current_max_k (which is now max(current_max_k, wi)) will have their maximum as current_max_value.
+
+So the steps for each box are:
+
+1. Determine the current_max for the first wi stairs.
+
+   a. If current_max_k >= wi → current_max is current_max_value.
+
+   b. Else → current_max is max(current_max_value, a[wi]).
+
+2. The bottom of the box is current_max.
+
+3. The new current_max_value becomes current_max + hi.
+
+4. The new current_max_k is max(current_max_k, wi).
+
+This seems to handle all cases.
+
+Let's test this with the first sample input.
+
+Sample input 1:
+
+n=5
+
+a = [1,2,3,6,6] (1-based)
+
+m=4
+
+Boxes:
+
+1 1 → wi=1, hi=1.
+
+Processing:
+
+current_max_k is 0 (initial state).
+
+wi=1 > current_max_k (0) → current_max = max(0, a[1] =1) → 1.
+
+bottom is 1.
+
+new current_max_value = 1 +1=2.
+
+new current_max_k = max(0,1) →1.
+
+So output is 1.
+
+Second box: 3 1.
+
+wi=3.
+
+current_max_k is 1. wi=3>1 → current_max = max(2, a[3] =3) →3.
+
+bottom is 3.
+
+new current_max_value =3+1=4.
+
+new current_max_k = max(1,3)=3.
+
+Output is3.
+
+Third box:1 1.
+
+wi=1 <= current_max_k (3) → current_max is current_max_value (4).
+
+bottom is4.
+
+new current_max_value =4+1=5.
+
+new current_max_k = max(3,1) →3 (no change).
+
+Output is4.
+
+Fourth box:4 3.
+
+wi=4> current_max_k (3) → current_max = max(5, a[4] =6) →6.
+
+bottom is6.
+
+new current_max_value =6+3=9.
+
+new current_max_k = max(3,4)=4.
+
+Output is6.
+
+Which matches the sample outputs.
+
+Another sample:
+
+Sample input 3:
+
+1
+
+1
+
+5 boxes:
+
+1 2 →1 10 → etc.
+
+Original a is [1]. current_max_k=0, current_max_value=0.
+
+First box: wi=1. Since 1>0, current_max = max(0, a[1]=1) →1. new value is 1+2=3. current_max_k becomes 1. output is1.
+
+Second box: wi=1. current_max_k is1 >=1. current_max is3. new value is3+10=13. current_max_k remains1. output 3.
+
+Third box: same as second. current_max is13. new is13+10=23. output13.
+
+Fourth: same → output23. Fifth: output33.
+
+Which matches the sample.
+
+So this approach works.
+
+So the code can be written as:
+
+We need to track current_max_value and current_max_k. Initially, current_max_k is0, current_max_value is0 (or some other initial value? Wait, initially, current_max_k is0, which means no updates. So for the first box, the current_max is the max between current_max_value (0) and a[wi], which is a[wi]. But when current_max_k is0, the current_max_value is0, but for wi, the original a array's maximum in the first wi stairs is a[wi], because the array is non-decreasing.
+
+So yes.
+
+So the code steps:
+
+Read n.
+
+Read a as a list (1-based, a[1], a[2], ..., a[n]).
+
+Read m.
+
+Read each of the m boxes (wi, hi).
+
+For each box:
+
+   if wi <= current_max_k:
+
+       current_max = current_max_value
+
+   else:
+
+       current_max = max(current_max_value, a[wi])
+
+   output current_max.
+
+   new_value = current_max + hi
+
+   if new_value > current_max_value:
+
+       current_max_value = new_value
+
+       current_max_k = max(current_max_k, wi)
+
+Wait, no. Because when we process the box, the new current_max_value is current_max + hi, which is the value that the first wi stairs are set to. So regardless of whether wi is larger than current_max_k, the new current_max_k is the maximum between the previous current_max_k and wi.
+
+Wait, no. Because when you set the first wi stairs to new_value, the current_max_k becomes the maximum of the previous current_max_k and wi. Because if wi is larger, then the new update covers more stairs. If wi is smaller, then the new update only covers up to wi, but the previous current_max_k was larger, so the new current_max_k remains as the previous.
+
+So the code should:
+
+current_max_k = max(current_max_k, wi)
+
+current_max_value = new_value (since new_value is current_max + hi, which is higher than previous current_max_value (if any) because current_max is at least the previous current_max_value (in case wi <= current_max_k), or it's the max of previous current_max_value and a[wi], which may be higher than previous current_max_value.
+
+But how does this hold?
+
+Let's see.
+
+Case 1: wi <= current_max_k.
+
+current_max is current_max_value.
+
+new_value = current_max + hi = current_max_value + hi.
+
+So current_max_value becomes new_value, which is higher than previous current_max_value.
+
+But since current_max_k is >= wi, the new current_max_k is max(current_max_k, wi) → remains current_max_k.
+
+But the new current_max_value is higher than before. So any future query with wi <= current_max_k will have current_max_value (the new value).
+
+But the new update is to set the first wi stairs to new_value, but the current_max_k is larger than wi. So the previous current_max_k's value (which was a larger k) has its value updated. But according to the logic, this is allowed only if the new_value is higher than the previous current_max_value.
+
+Wait, this is a problem. For example:
+
+current_max_k is 5, current_max_value is 10.
+
+Now a box comes with wi=3, hi=5.
+
+current_max is 10 (since wi=3 <=5).
+
+new_value = 15.
+
+So current_max_value becomes 15, current_max_k remains 5.
+
+So for any future query with wi <=5, the current_max is 15 (since current_max_value is 15). But this implies that all first 5 stairs are now 15, but according to the previous logic, the update to wi=3 would have set the first 3 stairs to 15. But the current_max_k is 5, which was set by an earlier update to 5, which set the first 5 stairs to 10. But now, after the new update, the current_max_value is 15, current_max_k is 5. So according to the logic, any future query with wi <=5 will have current_max as 15. But the first 3 stairs are 15, and 4-5 are 10. So the maximum of the first 5 stairs is 15 (from the first 3 stairs). But according to the data structure's logic, the current_max_value is 15, which would imply that all first 5 stairs are 15, which is not the case.
+
+So this is a problem.
+
+The logic is flawed.
+
+The problem arises when the new update is for a wi that is smaller than the current current_max_k. In that case, according to the code's logic, the current_max_value is set to new_value (current_max + hi), and current_max_k is set to max(current_max_k, wi) (which is current_max_k).
+
+But the new_value is current_max_value + hi. The current_max_value was the value of the previous current_max_k's update. So the new_value is higher than the previous current_max_value. But the current_max_k remains the same. So the code's logic would treat all stairs up to current_max_k as being set to new_value. But in reality, the new update only affects the first wi stairs, leaving the stairs from wi+1 to current_max_k at their previous values (which were current_max_value). So the maximum of the first current_max_k stairs is the maximum between new_value (for the first wi stairs) and current_max_value (for wi+1 to current_max_k). But since new_value is higher than current_max_value, the maximum is new_value. So when wi < current_max_k, the new update sets first wi stairs to new_value, and the rest (wi+1 to current_max_k) remain at current_max_value. So the maximum of the first current_max_k stairs is new_value (since new_value is current_max_value + hi, which is higher than current_max_value).
+
+But how to model this in the data structure.
+
+This suggests that the current_max_value should be the maximum of all updates, not just the latest. So for example, when you have multiple overlapping updates, the current_max_value is the maximum of all the values of the updates.
+
+But how to track that.
+
+Alternatively, when you process an update with wi and new_value, if wi is less than current_max_k, then the new_value must be higher than the previous current_max_value (since current_max is current_max_value, new_value = current_max + hi). So in this case, the new_value is higher than the previous current_max_value. So the maximum of the first current_max_k stairs is new_value (since the first wi stairs are new_value, and the rest are current_max_value, which is less than new_value).
+
+So in this case, the new current_max_value is new_value (higher than previous), and the current_max_k remains the same. So any future query up to current_max_k will take current_max_value (which is new_value), which is correct.
+
+So the code's logic is correct.
+
+Let's see the example:
+
+current_max_k is5, current_max_value is10.
+
+process box wi=3, hi=5.
+
+current_max is 10.
+
+new_value = 15.
+
+current_max_value becomes15.
+
+current_max_k remains5.
+
+Now, any query to wi=5:
+
+current_max is15 (since wi <=5). But in reality, the first 3 stairs are 15, 4-5 are 10. So the maximum is15. So the code's logic is correct.
+
+Another example:
+
+current_max_k is5, current_max_value is10.
+
+process box wi=3, hi=0 (but according to problem statement hi is >=1, so this can't happen).
+
+But suppose hi=0, then new_value is 10. So new_value is not higher than current_max_value. But according to the problem statement, hi is >=1, so new_value is always higher than current_max.
+
+So in code, the new_value is always current_max + hi, which is higher than current_max (since hi >=1 and current_max is >=0).
+
+So for any update, the new_value is higher than current_max.
+
+So when wi <= current_max_k:
+
+current_max is current_max_value.
+
+new_value = current_max + hi > current_max_value.
+
+so the new current_max_value is new_value, which is higher than the previous.
+
+current_max_k remains the same.
+
+So when a query for any w <= current_max_k is made, the current_max_value is new_value (higher than the previous), which is the maximum of the first w stairs.
+
+Because the first wi stairs are set to new_value (higher than previous), and the rest up to current_max_k are previous current_max_value (which is now replaced by the new current_max_value).
+
+Wait, no. Because when we set the first wi stairs to new_value (which is higher than previous current_max_value), and the rest of the stairs (wi+1 to current_max_k) are still at previous current_max_value, which is lower than new_value.
+
+So the maximum of the first current_max_k stairs is new_value (since new_value > previous current_max_value). So even though the update was only to the first wi stairs, the new current_max_value is new_value, which is higher than the previous. So any query for w <= current_max_k will use this new_value as the maximum. Which is correct because new_value is the maximum in the first w stairs.
+
+So the code's logic holds.
+
+So in code:
+
+We can track current_max_value and current_max_k.
+
+For each box:
+
+   if wi <= current_max_k:
+
+       current_max = current_max_value
+
+   else:
+
+       current_max = max(current_max_value, a[wi])
+
+   output current_max.
+
+   new_value = current_max + hi
+
+   current_max_value = new_value
+
+   current_max_k = max(current_max_k, wi)
+
+Because when wi is larger than current_max_k, the new current_max_k is wi, and the new_value is max(current_max_value, a[wi]) + hi. This new_value is higher than current_max_value (since a[wi] is >= a[current_max_k] (since a is non-decreasing, and current_max_k was previous maximum). So the new_value is higher.
+
+If wi is <= current_max_k, then new_value is current_max_value + hi, which is higher than current_max_value. So current_max_value becomes new_value, and current_max_k remains the same. But this new_value is the maximum of the first wi stairs, and the rest up to current_max_k are at previous current_max_value (which is less than new_value). So the new current_max_value is the maximum of the entire first current_max_k stairs. So for any query up to current_max_k, the current_max_value is the correct maximum.
+
+Therefore, the code works.
+
+So the code can be written as follows:
+
+Read n.
+
+Read the array a as 1-based (so a[0] can be ignored, and a[1..n]).
+
+Read m.
+
+Initialize current_max_value = 0.
+
+current_max_k = 0.
+
+For each of m boxes:
+
+   wi, hi = map(int, input().split())
+
+   if wi <= current_max_k:
+
+       current_max = current_max_value
+
+   else:
+
+       current_max = max(current_max_value, a[wi])
+
+   print(current_max)
+
+   new_value = current_max + hi
+
+   current_max_value = new_value
+
+   current_max_k = max(current_max_k, wi)
+
+Wait, but the code above for the case when wi > current_max_k uses a[wi]. But a is 1-based, so for example, if current_max_k is 3, and wi is 4, then we need to get a[4], which is correct.
+
+Yes.
+
+Let's test this code with the first sample:
+
+Sample 1:
+
+n=5
+
+a = [1,2,3,6,6]
+
+m=4.
+
+current_max_value=0, current_max_k=0.
+
+Box 1: wi=1, hi=1.
+
+wi >0 → current_max = max(0, a[1] =1) →1. Output 1.
+
+new_value = 2. current_max_value=2, current_max_k=1.
+
+Box2: wi=3, hi=1.
+
+wi=3>1 → current_max = max(2, a[3]=3 →3. Output3.
+
+new_value=4. current_max_k=3.
+
+Box3: wi=1. current_max_k=3 >=1 → current_max=4. Output4. new_value=5. current_max_k=3.
+
+Box4: wi=4>3. current_max = max(5, a[4]=6 →6. Output6. new_value=9. current_max_k=4.
+
+Outputs are 1,3,4,6 → correct.
+
+Sample 3:
+
+n=1
+
+a[1] =1.
+
+current_max_value=0, current_max_k=0.
+
+Box1: wi=1>0 → current_max = max(0, a[1]=1 →1. output 1.
+
+new_value=3. current_max_k=1.
+
+Box2: wi=1 → current_max is3. output3. new_value=13. current_max_k=1.
+
+Box3: output13. new_value 23.
+
+Yes.
+
+So this code works.
+
+Now, for the case where current_max_k is 5 (current_max_value=10), and a box comes with wi=3 and hi=5.
+
+current_max is10 (since wi=3<=5). new_value=15. current_max_value=15, current_max_k=5.
+
+Next box: wi=5. current_max=15. Output15. new_value=15 + hi.
+
+So correct.
+
+Thus, the code seems to handle all cases.
+
+So the code can be written in Python as follows. Note that the a array is 1-based. So when reading the input, we need to pad the array with a dummy at index 0.
+
+So, in Python:
+
+n = int(input())
+
+a = list(map(int, input().split()))
+
+# make a 1-based list
+
+a = [0] + a  # a[1], a[2], ... a[n]
+
+m = int(input())
+
+current_max_value = 0
+
+current_max_k = 0
+
+for _ in range(m):
+
+    w, h = map(int, input().split())
+
+    if w <= current_max_k:
+
+        current_max = current_max_value
+
+    else:
+
+        current_max = max(current_max_value, a[w])
+
+    print(current_max)
+
+    new_value = current_max + h
+
+    current_max_value = new_value
+
+    current_max_k = max(current_max_k, w)
+
+This should work.
+
+Testing this code with the sample inputs should give correct results.
+
+The third sample input:
+
+Input:
+
+1
+
+1
+
+5
+
+1 2
+
+1 10
+
+1 10
+
+1 10
+
+1 10
+
+Processing:
+
+a = [0,1]
+
+current_max_value=0, current_max_k=0.
+
+First box: w=1.
+
+w>0 → current_max = max(0, a[1]=1 →1. Output1.
+
+new_value=3. current_max_value=3, current_max_k=1.
+
+Second box: w=1 <=1 → current_max=3. Output3.
+
+new_value=13. current_max_value=13, current_max_k=1.
+
+Third box: output13. new_value=23.
+
+Fourth: output23. new_value=33.
+
+Fifth: output33. new_value=43.
+
+But according to the sample output, the outputs are 1,3,13,23,33. Wait, the sample output is:
+
+1
+
+3
+
+13
+
+23
+
+33
+
+But according to the code, after fifth box:
+
+The fifth box is the fifth iteration.
+
+Iterations:
+
+1: output1 → new_value=3.
+
+2: output3 → new_value=13.
+
+3: output13 → new_value=23.
+
+4: output23 → new_value=33.
+
+5: output33 → new_value=43.
+
+So sample output is correct.
+
+So the code works.
+
+Another sample:
+
+Sample input 2:
+
+3
+
+1 2 3
+
+2
+
+1 1 → output1.
+
+3 1 → output3.
+
+Code:
+
+n=3, a = [0,1,2,3].
+
+current_max_value=0.
+
+current_max_k=0.
+
+First box: w=1>0. current_max = max(0, a[1]=1 →1. Output1. new_value=2. current_max_k=1.
+
+Second box: w=3>1. current_max = max(2, a[3]=3 →3. Output3. new_value=4. current_max_k=3.
+
+So output is1 and3. Correct.
+
+Thus, the code works.
+</think>
+To solve this problem, we need to determine the height at which each box lands on the staircase. The boxes are thrown sequentially, and each box covers a certain width of the staircase. The landing height of each box depends on the maximum height encountered in the covered width, either from the staircase itself or previous boxes.
+
+### Approach
+1. **Track Maximum Height Efficiently**: Instead of updating each stair's height individually, we track the maximum height using two variables: `current_max_value` and `current_max_k`. The `current_max_value` represents the highest height encountered so far, and `current_max_k` represents the farthest stair covered by this height.
+2. **Determine Landing Height**: For each box, if the width of the box is within the range covered by `current_max_k`, the maximum height is `current_max_value`. Otherwise, we consider the maximum height between `current_max_value` and the stair's height at the given width (since the staircase is non-decreasing).
+3. **Update State**: After determining the landing height, update `current_max_value` to the new height (landing height + box height) and adjust `current_max_k` to cover the new width if necessary.
+
+### Solution Code
+```python
+n = int(input())
+a = list(map(int, input().split()))
+a = [0] + a  # Convert to 1-based indexing
+m = int(input())
+
+current_max_value = 0
+current_max_k = 0
+
+for _ in range(m):
+    w, h = map(int, input().split())
+    if w <= current_max_k:
+        current_max = current_max_value
+    else:
+        current_max = max(current_max_value, a[w])
+    print(current_max)
+    new_value = current_max + h
+    current_max_value = new_value
+    current_max_k = max(current_max_k, w)
+```
+
+### Explanation
+- **Reading Input**: The input is read and adjusted for 1-based indexing to simplify the logic.
+- **Tracking Maximum Values**: The variables `current_max_value` and `current_max_k` keep track of the highest height encountered and the farthest stair it covers.
+- **Processing Each Box**: For each box, determine the maximum height in the covered width. If the width is within the previously covered range, use the tracked maximum. Otherwise, consider the staircase's height at that width.
+- **Updating State**: After processing each box, update the tracked maximum values to reflect the new height and coverage.
+
+This approach efficiently handles up to 100,000 boxes and stairs, ensuring optimal performance by avoiding repeated updates to individual stairs.
+</bot>

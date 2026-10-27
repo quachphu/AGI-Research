@@ -1,0 +1,1597 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.You are given a directed graph with n nodes and m edges, with all edges having a certain weight. 
+
+There might be multiple edges and self loops, and the graph can also be disconnected. 
+
+You need to choose a path (possibly passing through same vertices multiple times) in the graph such that the weights of the edges are in strictly increasing order, and these edges come in the order of input. Among all such paths, you need to find the the path that has the maximum possible number of edges, and report this value.
+
+Please note that the edges picked don't have to be consecutive in the input.
+
+Input
+
+The first line contains two integers n and m (1 ≤ n ≤ 100000,1 ≤ m ≤ 100000) — the number of vertices and edges in the graph, respectively. 
+
+m lines follows. 
+
+The i-th of these lines contains three space separated integers ai, bi and wi (1 ≤ ai, bi ≤ n, 0 ≤ wi ≤ 100000), denoting an edge from vertex ai to vertex bi having weight wi
+
+Output
+
+Print one integer in a single line — the maximum number of edges in the path.
+
+Examples
+
+Input
+
+3 3
+3 1 3
+1 2 1
+2 3 2
+
+
+Output
+
+2
+
+Input
+
+5 5
+1 3 2
+3 2 3
+3 4 5
+5 4 0
+4 5 8
+
+
+Output
+
+3
+
+Note
+
+The answer for the first sample input is 2: <image>. Note that you cannot traverse <image> because edge <image> appears earlier in the input than the other two edges and hence cannot be picked/traversed after either of the other two edges.
+
+In the second sample, it's optimal to pick 1-st, 3-rd and 5-th edges to get the optimal answer: <image>.
+</user>
+<bot>
+<think>
+Okay, let's see. The problem is about finding the maximum number of edges in a path where the edge weights are strictly increasing, and the edges must be chosen in the order they appear in the input. Oh right, the order of the input is important here. So even if a later edge has a higher weight, you can't pick it before an earlier edge. Wait, no. Wait, the edges can be chosen in any order as long as their positions in the input are in increasing order. Like, if the input has edge 1, then edge 2, then edge 3, you can pick edge 1 and 3, because 1 comes before 3. So the selected edges must be in the order of their input indices. And their weights must be strictly increasing. So for each edge, when we consider adding it to the path, we need to look at all previous edges that come before it in the input order, have a lower weight, and see which gives the longest path up to that edge.
+
+Hmm. So this sounds like a dynamic programming problem. For each edge i, we can track the maximum length of a path ending with that edge. Then, the answer is the maximum value among all edges.
+
+So how do we compute this? For each edge i (in the order they are given), we need to find the maximum dp[j] where j is an edge that comes before i (j < i), and the weight of j is less than the weight of i. Then, dp[i] = max(dp[j] + 1, 1). Because the edge i can form a path by itself (length 1) or append to a previous path.
+
+But the problem is that m can be up to 1e5. So a naive approach where for each edge, we check all previous edges would be O(m^2), which is way too slow.
+
+So we need a more efficient way to compute this. Let's think: the key is that for each edge, we need to find the maximum dp[j] among all edges j with j < i and w[j] < w[i].
+
+This is similar to the Longest Increasing Subsequence (LIS) problem, but with a twist. In the standard LIS, the DP approach can be optimized with a binary search approach leading to O(n log n) time. But here, the edges can have weights that are not necessarily in any order. Also, for each edge, the weight can be the same as others, but since we need strictly increasing, we have to have w[j] < w[i].
+
+Wait, but even in the standard LIS approach, you can handle this by looking for the largest element smaller than the current in the 'tails' array. So maybe we can adapt that approach here.
+
+But the problem is that each edge's weight is part of the sequence, but the DP[i] depends on all previous edges with smaller weights. So for each edge i, we need to query the maximum DP value for all edges with weight less than w[i], and then set dp[i] to that maximum +1. Then, the answer is the maximum of all dp[i].
+
+The challenge is efficiently querying the maximum DP value where the weight is less than w[i]. Also, since the edges are processed in order, and the weights can be in any order, how can we efficiently track the maximum DP for each possible weight?
+
+Hmm. Let's think of the problem in terms of a data structure that can, for a given weight w, find the maximum DP value among all edges with weight < w. Then, when processing edge i with weight w_i, we can query this data structure for the maximum DP value where weight is less than w_i. The maximum plus 1 will be the dp[i]. Then, we need to update the data structure to include the current edge's weight and its dp value.
+
+But how to represent this data structure. Since weights can be up to 1e5, but we can compress them. Let's collect all the unique weights and sort them, assign a rank. Then, we can use a Binary Indexed Tree (Fenwick Tree) or a Segment Tree to track the maximum DP up to a certain weight.
+
+Wait, but in this problem, the edges are processed in the order of their input. So when we process edge i, all edges j < i have been processed. So for the current edge's weight w_i, we need the maximum DP[j] where w_j < w_i. So if we can maintain a structure that allows us to query the maximum DP value for all weights less than w_i, that's exactly what we need.
+
+A Fenwick Tree (or BIT) can help here. But BITs are typically used for prefix sums. However, in this case, we need to track the maximum value up to a certain index (weight). So perhaps a Fenwick Tree that tracks the maximum instead of the sum. Let me recall: a Fenwick Tree for maximum can be built where each node stores the maximum value in its range, and when querying up to index k, it returns the maximum value in the range [1..k]. Updating is done by propagating the maximum up the tree.
+
+Yes, that's possible. So here's the plan:
+
+1. Preprocess the weights to compress them. Since weights can be up to 1e5, but we can have duplicates, we can sort the unique weights and assign a rank. For example, if the weights are [3, 1, 2], the sorted unique list is [1, 2, 3], so 1→1, 2→2, 3→3. Wait, but since we need strictly less than, we have to ensure that after compression, the order is preserved. So any compression must map the original weights to their ranks in a way that preserves the order.
+
+2. For each edge i in the input order:
+   a. Find the maximum DP[j] where w_j < w_i. Let's call this max_prev.
+   b. dp[i] = max_prev + 1 (if max_prev is not zero, otherwise 1)
+   c. Update the data structure to include the current weight's rank with dp[i]. But here's a catch: for the current weight w_i, we need to ensure that if there's another entry with the same weight, we can't use it for future edges (since their weight is not less than w_i). So when we add dp[i] to the data structure, we need to store the maximum DP value for each possible weight. For example, if there are multiple edges with weight w, the data structure for weight w should track the maximum DP among all edges with that weight.
+
+So the steps would be:
+
+- Compress the weights to their ranks, ordered in increasing order. Let's collect all the weights, sort them, assign a unique rank. For example, for the list of weights [3, 1, 2], sorted is [1,2,3], so rank 1 for 1, rank 2 for 2, rank 3 for 3. So when querying for a weight w_i, we find the largest rank that is less than the rank of w_i.
+
+Wait, but the ranks are assigned in the order of sorted weights. So the actual value of the rank is such that for any two original weights a and b, a < b implies rank(a) < rank(b). So the ranks are ordered the same as the original weights.
+
+But when there are duplicate weights, they will have the same rank. So for example, if the weights are [1, 2, 2, 3], sorted is [1,2,2,3], and the unique sorted list is [1,2,3], so their ranks would be 1,2,3. So any weight of 2 would have rank 2.
+
+But when querying for the maximum DP value where w_j < w_i, since w_i's rank is r_i, we need to find the maximum DP among all edges j where their rank is less than r_i. But since in the data structure, each entry is based on the rank, we can query up to r_i -1.
+
+But also, for edges with the same weight as others, when they are added to the data structure, they should be considered as part of their rank. So for example, if an edge has weight w_i with rank r, when we add it to the data structure, we check the current maximum DP for rank r. If the new dp[i] is larger than the existing maximum for that rank, we update it. So the data structure needs to track for each rank the maximum DP value.
+
+So the Fenwick Tree (or Segment Tree) would store, for each rank, the maximum DP value of edges with that rank. Then, when processing edge i:
+
+1. Get the rank of w_i, r_i.
+
+2. Query the Fenwick Tree for the maximum value in the range [1, r_i -1]. Let this be max_prev.
+
+3. dp[i] = max_prev + 1 (if max_prev is not found, then 1).
+
+4. Then, we need to update the Fenwick Tree at rank r_i. But since there might be other edges with the same rank (same weight), we should only update if the current dp[i] is larger than the existing maximum at that rank. Because for future edges, when they query, they need the maximum DP value for all ranks less than theirs. So for example, if two edges have the same weight, their rank is the same, and the maximum DP for that rank is the maximum of their individual dp values.
+
+So the Fenwick Tree would need to track, for each rank, the maximum DP value of any edge with that rank. So when adding a new edge, we check what's the current maximum at rank r_i. If the new dp[i] is larger than that, we update the Fenwick Tree at r_i with the new value. Otherwise, we leave it as is.
+
+This way, when querying for a certain rank, we get the maximum possible DP for all ranks up to that point.
+
+So the steps to implement:
+
+1. Collect all the weights from the edges.
+
+2. Sort them and assign ranks. This requires creating a sorted list of unique weights, then mapping each weight to its rank. For example, using the bisect module.
+
+3. Process each edge in the order they are given. For each edge i:
+
+   a. Find the rank r_i of w_i.
+
+   b. Query the Fenwick Tree for the maximum in the range 1 to r_i -1.
+
+   c. dp[i] = max_prev + 1.
+
+   d. Check if the current dp[i] is greater than the current maximum stored in the Fenwick Tree for rank r_i. If yes, update the Fenwick Tree at rank r_i with dp[i].
+
+4. The answer is the maximum dp[i] across all edges.
+
+Now, the key is to implement the Fenwick Tree that can handle range maximum queries and point updates.
+
+Let's think about the Fenwick Tree structure. Normally, Fenwick Trees are used for sum queries, but here we need maximum. The structure for a max Fenwick Tree is similar, but during the update and query steps, we take the maximum instead of summing.
+
+For the Fenwick Tree:
+
+- The tree is initialized with all zeros or negative infinity, since we need to track the maximum.
+
+- For a point update at index i, we set the value at i to be the maximum between the current value and the new value. Then, we propagate upwards.
+
+- For a range query up to index i, we collect the maximum from the relevant nodes.
+
+So the Fenwick Tree for maximum can be implemented with the following operations:
+
+- update(i, value): updates the tree such that the value at i is the maximum between the existing value and the given value.
+
+- query(i): returns the maximum value in the tree from index 1 to i.
+
+So for each edge, when we process it, we first query the Fenwick Tree up to r_i -1 to get the maximum previous DP value. Then, compute dp[i]. Then, we check if the current dp[i] is larger than the existing value at r_i in the Fenwick Tree. If it is, we perform an update.
+
+This approach should be O(m log k), where k is the number of unique weights, since each edge's processing involves a query and possibly an update, each taking O(log k) time. Since m is up to 1e5 and k can be up to 1e5 (if all weights are unique), this should be feasible.
+
+Now, let's test this approach against the sample input.
+
+First sample:
+
+Input:
+
+3 3
+
+3 1 3
+
+1 2 1
+
+2 3 2
+
+So edges in order:
+
+Edge 0: 3->1, weight 3
+
+Edge 1: 1->2, weight 1
+
+Edge 2: 2->3, weight 2
+
+Processing edges in order:
+
+Edge 0: weight 3. Let's assume ranks are assigned as 1 for 1, 2 for 2, 3 for 3.
+
+r_i for edge 0 is 3.
+
+Query Fenwick Tree for 3-1=2. Initially, the Fenwick Tree is empty (all zeros). So max_prev is 0. dp[0] = 1.
+
+Update Fenwick Tree at 3 with 1. The Fenwick Tree's value at 3 is now 1.
+
+Edge 1: weight 1. r_i is 1.
+
+Query up to 0, which is 0. So dp[1] = 1.
+
+Check if Fenwick Tree at 1 has a value less than 1. It does (initially 0). So update it to 1.
+
+Edge 2: weight 2. r_i is 2.
+
+Query up to 1. The maximum is 1 (from edge 1's weight 1). So dp[2] = 2.
+
+Check Fenwick Tree at 2: current value is 0. So update to 2.
+
+The maximum dp is 2, which matches the sample output.
+
+Second sample:
+
+Input:
+
+5 5
+
+1 3 2
+
+3 2 3
+
+3 4 5
+
+5 4 0
+
+4 5 8
+
+Edges in order:
+
+Edge 0: 1->3, w=2
+
+Edge 1: 3->2, w=3
+
+Edge 2: 3->4, w=5
+
+Edge 3:5->4, w=0
+
+Edge4:4->5, w=8
+
+Weights sorted: 0,2,3,5,8. So ranks are:
+
+0 →1, 2→2, 3→3,5→4,8→5.
+
+Processing edge 0 (w=2, rank 2):
+
+Query up to 1 (since 2-1=1). The Fenwick Tree is empty, so max_prev=0. dp[0]=1. Update Fenwick Tree at 2 to max(0,1) →1.
+
+Edge1 (w=3, rank3). Query up to 2. The maximum in Fenwick Tree for 2 is 1. So dp[1] = 2. Update Fenwick Tree at3 to max(0,2) →2.
+
+Edge2 (w=5, rank4). Query up to 3. The maximum is 2 (from rank3). dp[2] =3. Update rank4 to 3.
+
+Edge3 (w=0, rank1). Query up to 0, which is 0. dp[3]=1. Check Fenwick Tree at rank1: current value is 0. Update to 1.
+
+Edge4 (w=8, rank5). Query up to4. The Fenwick Tree has rank4's value 3. So dp[4]=4. Update rank5 to 4.
+
+The maximum dp is 4? Wait but the sample output is 3. Wait, what's wrong here?
+
+Wait sample input 2's expected output is 3. Hmm, according to this approach, edge4's dp would be 3 (from edge2's 5, then edge4's 8). So how does the code get to 3?
+
+Wait wait, maybe I messed up the order of edges. Let's recheck.
+
+Sample input 2:
+
+Edges:
+
+1 3 2 → edge0, w=2
+
+3 2 3 → edge1, w=3
+
+3 4 5 → edge2, w=5
+
+5 4 0 → edge3, w=0
+
+4 5 8 → edge4, w=8
+
+So the optimal path is edges 0, 2,4 → weights 2,5,8. So the length is 3. But according to the code's approach, when processing edge4 (w=8, rank5):
+
+The query up to rank5-1=4. The maximum in the Fenwick Tree for ranks 1-4 would be the maximum of all ranks up to 4.
+
+Let's track the Fenwick Tree's state after each edge:
+
+After edge0 (w=2, rank2): tree[2] =1.
+
+After edge1 (w=3, rank3): tree[3] =2.
+
+After edge2 (w=5, rank4): tree[4] =3.
+
+After edge3 (w=0, rank1): tree[1] =1.
+
+So when processing edge4 (w=8, rank5):
+
+Query up to 4. The maximum in ranks 1-4 is 3 (from rank4). So dp[4] =3+1=4. Then, update rank5 to 4. So the maximum dp is 4. But the sample expects 3. So there's a contradiction here. What's wrong?
+
+Wait the sample's explanation says to pick edges 1st, 3rd, 5th (edge0 is first, edge2 is third, edge4 is fifth). Wait, in the sample input's edges:
+
+Edge indices start from 0?
+
+Wait sample input 2:
+
+The edges are:
+
+1st (input line 1): edge0 (index 0)
+
+2nd: edge1 (index1)
+
+3rd: edge2 (index2)
+
+4th: edge3 (index3)
+
+5th: edge4 (index4)
+
+So the code's approach would compute for edge4 (index4) a dp of 3 (since edge2's dp is 3?), leading to 3+1=4. But the sample's answer is 3.
+
+Hmm, this suggests that there's a mistake in the logic. What's wrong?
+
+Wait the problem statement says that the edges must be chosen in the order of input. So when you select edges, their indices must be in strictly increasing order. So in the sample input 2, the edges selected are 0, 2, 4. Their indices are 0,2,4, which are in order. So their weights are 2,5,8, which are increasing. So the path length is 3. But according to the code's approach, edge4's dp is 4. So why is this discrepancy?
+
+Ah, I see the problem. The code's approach allows the edges to form a path where the edges can be connected in the graph, but the problem requires the path to be a valid path in the graph, i.e., the end of one edge must be the start of the next edge.
+
+Oh right! Oh right! That's the part I completely forgot. The problem says to choose a path in the graph. So the edges must form a path where each edge's start node is the end node of the previous edge in the path. So the edges have to form a connected path in the graph. Oh my god, that's a crucial part of the problem that I overlooked. The code's approach as described earlier doesn't take into account the nodes of the edges, only the weights and the input order. So the code is incorrect because it doesn't check whether the edges can form a valid path in the graph.
+
+Oh no, that's a big mistake. So the problem requires that the edges form a path in the graph. So when selecting edges e1, e2, ..., ek, it's required that the end node of e1 is the start node of e2, and so on.
+
+This complicates the problem significantly. Because the dynamic programming approach must track not only the maximum length up to a certain weight but also the ending node of the path.
+
+So for each edge, the DP state needs to track the maximum number of edges in a path ending with that edge. But to build this, when considering adding edge i to a previous path ending with edge j, we need to ensure that the end node of j is the start node of i.
+
+So the dynamic programming approach should be:
+
+dp[i] = 1 (if no previous edge j exists such that j < i, w[j] < w[i], and the end node of j is the start node of i) OR the maximum dp[j] +1 among all j <i where w[j] <w[i] and end node of j is the start node of i.
+
+This adds a new condition: the adjacency in the graph.
+
+So the problem becomes more complex. Because now, for each edge i (a_i → b_i), when we process it, we need to find all edges j that come before it (j < i), have w[j] < w[i], and the end node of j (b_j) is equal to a_i. Then, among those j, take the maximum dp[j], add 1 to get dp[i].
+
+So the dynamic programming approach is now:
+
+dp[i] = 1 + max{ dp[j] | j <i, w[j] <w[i], and b_j == a_i }
+
+If no such j exists, dp[i] is 1.
+
+Then, the answer is the maximum dp[i] over all edges.
+
+But the problem is how to efficiently compute this for m=1e5 edges.
+
+The naive approach is O(m^2), which is impossible.
+
+So we need a way to, for each edge i (a_i, b_i, w_i), find the maximum dp[j] among all edges j with j <i, w_j <w_i, and b_j =a_i.
+
+This requires grouping edges by their end node (b_j), and for each node, track the maximum dp[j] for edges ending at that node with weight <w_i. Then, when processing edge i, we look at the node a_i (the start node of edge i), and find all edges ending at a_i (i.e., edges j where b_j = a_i), which have w_j < w_i, and find the maximum dp[j].
+
+So for each node u, we need a data structure that can, given a query weight w, return the maximum dp[j] for edges j ending at u with w_j <w.
+
+Then, when processing edge i (a_i, b_i, w_i), we look up the data structure for node a_i, query the maximum dp[j] where w_j <w_i. Then, dp[i] = max_result + 1. Then, we need to insert into the data structure for node b_i, with weight w_i and dp[i].
+
+This approach can work, but the question is how to manage the data structures for each node efficiently.
+
+Each data structure for a node u can be a structure that allows us to query the maximum dp[j] where the weight is less than a given w. Since weights can be up to 1e5, but we can compress them.
+
+So here's the plan:
+
+1. Compress all the edge weights into ranks. Since weights can be up to 1e5, collect all unique weights, sort them, assign a rank. Let's call the compressed rank of a weight as r(w).
+
+2. For each node u in the graph, maintain a Fenwick Tree (or Segment Tree) that tracks, for each possible weight rank, the maximum dp[j] of edges ending at u with that weight. The Fenwick Tree for node u allows us to query the maximum dp[j] for weights <w_i (i.e., ranks < r(w_i)).
+
+3. For each edge i in the input order:
+
+   a. The start node is a_i. We need to query the Fenwick Tree for node a_i to find the maximum dp[j] where the weight is less than w_i.
+
+   b. dp[i] = max_result +1. If there's no such j, dp[i] is 1.
+
+   c. Then, we need to update the Fenwick Tree for node b_i (the end node of edge i) by inserting the current w_i and dp[i]. For this, we find the rank of w_i, and update the Fenwick Tree for b_i at that rank with the maximum between the existing value and dp[i].
+
+This way, each edge's processing involves querying the Fenwick Tree of a_i and updating the Fenwick Tree of b_i. 
+
+The key is that each node's Fenwick Tree is dynamically updated as edges are processed, and for each edge i, the query is made against the current state of a_i's Fenwick Tree (which contains all edges j <i ending at a_i with weights <w_i).
+
+Now, considering the constraints:
+
+- n can be up to 1e5. So maintaining a Fenwick Tree for each node (1e5) would be possible, but each Fenwick Tree's size is the number of unique weights. But if the unique weights are up to 1e5, then each Fenwick Tree would require O(1e5) space, leading to O(1e10) space in total. That's impossible.
+
+Wait, no. Because the number of nodes is 1e5, but each Fenwick Tree for a node would have size equal to the number of unique ranks (say k). So if k is 1e5, then each Fenwick Tree is O(k) space, leading to 1e5 * 1e5 = 1e10 space, which is way too big. This is not feasible.
+
+So we need a different approach. The problem is that maintaining a Fenwick Tree per node is not feasible due to memory constraints.
+
+Alternative idea: since the edges are processed in order, and each edge's start and end nodes are part of the graph, perhaps we can track for each node the maximum dp[j] possible for edges ending at that node with weight less than w_i. But how?
+
+Let me think differently. For each edge i (a_i, b_i, w_i), the maximum number of edges in a path ending at i is 1 plus the maximum dp[j] where j is an edge ending at a_i with weight <w_i and j <i.
+
+So for each node u, we need to track the best possible dp[j] for edges ending at u with varying weights, and for a given query weight w_i, find the maximum dp[j] where the weight of j is less than w_i.
+
+This is similar to the LIS problem, but per node. So for each node u, we can maintain a list of the best dp[j] values for various weights. The list is kept sorted in increasing order of weights. For each query for a weight w, we can perform a binary search to find the largest weight less than w, and retrieve the maximum dp[j] up to that weight.
+
+But maintaining this per node is tricky. However, perhaps we can use a binary search approach where for each node u, we have a list sorted by weight, and for each weight in the list, we track the maximum dp[j] for that node up to that weight.
+
+Alternatively, for each node u, maintain a list of pairs (weight, max_dp) sorted by weight. And for each new edge i, when we need to query the maximum dp for a_i's node with weight < w_i, we can perform a binary search on the list for a_i's node to find the largest weight less than w_i, and get the corresponding max_dp. Then, we update the list for b_i's node by inserting (w_i, new_dp), ensuring that the list remains sorted and that for any existing entries with weight >= new_dp's weight, we update them if necessary to maintain the maximum.
+
+But this approach might have O(m log k) time complexity, where k is the number of unique weights per node, which could be manageable.
+
+Alternatively, for each node u, we can maintain a dynamic maximum structure that allows for querying the maximum dp[j] where weight is less than a given value. For this, we can use a balanced binary search tree (like a Treap or a TreeSet in Java) that is ordered by weight. Each node in the tree also tracks the maximum dp in its subtree. This way, when querying for a weight less than w, we can split the tree into elements <w and >=w, and the maximum in the left part is the answer.
+
+But implementing such a data structure from scratch in Python is challenging, especially with the time constraints. Python's standard library doesn't have a built-in TreeSet with these capabilities. However, we can use the bisect module to manage a sorted list and track the maximum dp for each weight interval.
+
+Another approach is for each node u, maintain a list sorted by weight. For each entry in the list, track the maximum dp up to that weight. For example, the list for node u could be a list of tuples (weight, current_max), sorted by weight. When a new edge i with weight w and dp d is added to node u's list, we find the position where w would be inserted. Then, for all previous entries with weight <=w, the current_max is updated if d is larger than the existing max. Wait, but this might not be efficient. Alternatively, for each node, maintain a list sorted by weight, and for each weight, track the maximum dp up to that weight. For example, the list could be maintained in a way that each entry (w, max_so_far) where max_so_far is the maximum dp for all edges ending at u with weight <=w. Then, when a new edge is added with weight w and dp d, the max_so_far can be updated for all entries with weight >=w. But this would be O(n) per insertion, which is not feasible.
+
+Alternatively, we can keep the list sorted, and for each new insertion, we find the first entry with weight >=w. All entries after that can have their max_so_far updated if d is larger. However, this is still O(n) in the worst case.
+
+Alternatively, the list can be maintained in a way that for any weight, the maximum dp up to that weight can be found. For example, the list can be a list of (weight, max_dp), sorted by weight, where each entry's max_dp is the maximum of all entries with weight <= current weight. This way, when a new edge with weight w and dp d is added:
+
+- If there is an entry with weight w, we update its max_dp to be the maximum of the existing value and d.
+
+- Otherwise, we insert a new entry for w with max_dp d.
+
+- Then, we need to check if there are any entries with weight >w and max_dp less than d. Those entries can be updated to have max_dp as d, but this would require traversing the list from the insertion point onwards, which is O(n) in the worst case.
+
+This is not feasible for m=1e5 edges.
+
+So, going back to the original idea of using Fenwick Trees per node but compressed the weights globally.
+
+The problem with the previous approach was that maintaining a Fenwick Tree per node is not feasible in terms of memory. But perhaps we can compress the weights once globally, then for each node, the Fenwick Tree only requires O(k) memory, where k is the number of unique weights. But even then, with 1e5 nodes and 1e5 unique weights, that's 1e10 memory, which is impossible.
+
+Alternative Idea: Since the weights are up to 1e5 and m is up to 1e5, we can compress all the weights first. Let's collect all the unique weights from all edges, sort them, and assign a rank. Then, each node's Fenwick Tree can be represented with a size equal to the number of unique ranks. But even this, for 1e5 nodes and 1e5 ranks, would require 1e10 memory. Which is not feasible.
+
+So this approach is not viable.
+
+Alternative Idea: Instead of per-node Fenwick Trees, can we find a way to group the data in a way that allows efficient queries?
+
+For example, when processing edge i (a_i, b_i, w_i), the maximum dp[j] for edges ending at a_i with weight <w_i can be found by tracking for each node u and each possible weight w, the maximum dp[j] where j ends at u and has weight w.
+
+But how to query this efficiently.
+
+Another approach: For each edge i, the maximum dp[i] is 1 plus the maximum value among all edges j where j <i, w_j <w_i, and b_j =a_i. So for each edge i, we need to find the maximum dp[j] among edges ending at a_i with weight <w_i.
+
+So the key is to track for each node u, the maximum dp[j] for edges ending at u with weight less than a given value.
+
+This can be represented as a dictionary, where for each node u, we have a sorted list of (w, dp), and for each query, we can perform a binary search to find the largest w less than the target and retrieve the maximum dp up to that w.
+
+But maintaining a sorted list per node, and for each insertion, adding the new (w, dp) in the correct position, and maintaining a structure that allows for maximum queries up to a certain w.
+
+To do this efficiently, we can use a list per node u, sorted by w. And for each entry in the list, we also track the maximum dp up to that w. So for example, the list can be something like:
+
+[
+ (w1, max1),
+ (w2, max2),
+ ...
+]
+
+where max1 is the maximum dp for all edges ending at u with weight <=w1, max2 is the maximum dp for all edges ending at u with weight <=w2, etc.
+
+When a new edge comes in with weight w and dp d, we need to insert it into the sorted list and update the max values.
+
+Let's see:
+
+For example, the list is initially empty. We add (w=2, d=1). The list becomes [(2, 1)].
+
+Next, we add (w=3, d=2). Inserted after 2. The list becomes [(2, 1), (3, 2)].
+
+If we add (w=1, d=3), inserted at the beginning: [(1,3), (2,3), (3,3)]. Because the max up to 1 is 3, up to 2 is max(3, 1) →3, up to 3 is max(3, 2) →3.
+
+When querying for a weight less than w, say w=2.5, we find the largest entry with w <2.5, which is 2. The max up to 2 is 3. So the query returns 3.
+
+This way, each insertion maintains the list sorted and each entry's max is the maximum dp up to that weight.
+
+But how to efficiently maintain this structure.
+
+When inserting a new (w, d) into the list:
+
+1. Find the position where w would be inserted (using bisect).
+
+2. The new entry's max is d.
+
+3. For all entries before the insertion position, their max may need to be updated to the maximum of their previous max and d.
+
+But this would require O(n) time in the worst case, which is not feasible for large m.
+
+Alternatively, the max for each entry is the maximum between its own dp and the previous entries. But this would require that for each new entry, the max up to that entry is the maximum of all previous maxes and the new d. But this is not the case. For example, if we have entries (1,3), (2,1), then the max up to 2 is 3. If we add a new entry (3,2), the max up to 3 is 3. So the new entry's max would be 3, not 2.
+
+So the max up to a certain weight is the maximum of all entries up to and including that weight.
+
+So the entries should be stored in a way that allows us to query the maximum up to a certain weight efficiently. One possible way is to maintain a list sorted by weight, and for each entry, keep track of the maximum dp up to that point. Then, for any query, we can binary search for the largest weight <=w, and the corresponding maximum is the answer.
+
+But inserting new entries would require updating the max of subsequent entries. This is not feasible.
+
+So here's another Idea: For each node u, maintain a list of tuples (w, current_max), sorted by w. The current_max for each entry is the maximum dp for all edges ending at u with weight <=w. When inserting a new edge with weight w and dp d, we first find all entries with weight <=w. The maximum of those entries' current_max and d is the new current_max for entries with weight >=w.
+
+But this seems complicated.
+
+Alternative Idea inspired by the "LIS in O(n log n)" approach:
+
+For each node u, maintain a list of pairs (weight, max_dp), where the list is sorted by weight in increasing order. Additionally, the max_dp for each weight is the maximum possible dp for any edge ending at u with weight <= current weight. The list is kept such that for each new weight added, if there's already a weight with >= current max_dp, then there's no need to add it.
+
+For example, suppose for node u, the list is [(w1, m1), (w2, m2), ...], sorted by w. When a new (w, d) is considered, we find the first entry where w_i >=w. If the max_dp of the previous entries is less than d, then inserting this new entry with w and d is useful, but we also need to remove any subsequent entries where their max_dp is <=d, as they are now obsolete.
+
+This is similar to how the LIS algorithm works, maintaining a list of the smallest possible tail values for various lengths. In this case, for each node u, we track the best (smallest weight and highest max_dp) entries.
+
+But I'm not sure how to apply this here.
+
+Alternatively, for each node u, we can track the best (highest) max_dp for each possible weight. For example, for node u, when adding an edge with weight w and dp d, we can check if there's already a higher or equal max_dp for some weight <=w. If so, this new edge's d may not be useful. If not, we add it to the list.
+
+But how to efficiently query this.
+
+Alternatively, for each node u, the maximum possible dp for edges ending at u with weight <w can be found by finding the maximum dp among all entries in u's list with weight <w.
+
+If the list is sorted by weight, we can binary search to find the largest weight less than w, and then query the maximum dp up to that index. To do this efficiently, we can maintain a prefix maximum array.
+
+So for example, for node u's list sorted by weight, we have a prefix maximum array. When a new entry is added, we update the prefix maximum array. Then, when querying for a weight less than w, we binary search to find the insertion point, and then the prefix maximum up to that point is the answer.
+
+This approach requires maintaining a sorted list and a prefix maximum array for each node.
+
+Let's think through this:
+
+- For each node u:
+
+   - A list of weights sorted in increasing order.
+
+   - A prefix_max array, where prefix_max[i] is the maximum dp of the first i elements in the weights list.
+
+When processing edge i (a_i, b_i, w_i):
+
+   - Query node a_i's list for the largest weight less than w_i. This can be found using bisect.bisect_left.
+
+   - The index found is pos. The maximum dp is prefix_max[pos].
+
+   - dp[i] = prefix_max[pos] + 1 (or 1 if pos is 0 and no elements are found).
+
+   - Then, we need to insert (w_i, dp[i]) into node b_i's list. To do this:
+
+      a. Find the insertion point using bisect.
+
+      b. Insert (w_i, dp[i]) into the list.
+
+      c. Update the prefix_max array by taking the maximum between the previous elements and the new dp[i].
+
+But maintaining a prefix_max array is O(n) for each insertion, which is not feasible for m=1e5.
+
+Alternative Idea: Since the list is sorted, the prefix_max array can be replaced with a binary indexed tree or segment tree. For example, the list can be indexed in sorted order, and a Fenwick Tree can track the maximum dp up to each index. Then, inserting a new element would require adding it to the Fenwick Tree, but the indexes must be determined based on the sorted order.
+
+Wait, but the list is dynamic. So inserting elements into a sorted list may shift indexes. So Fenwick Trees are not suitable for dynamic lists.
+
+Another Idea: For each node u, maintain a list of weights sorted in increasing order. Along with this, maintain a Fenwick Tree where the indexes correspond to the positions in the sorted list. But when a new weight is inserted into the list, the indexes of the subsequent elements change. This makes Fenwick Trees and Segment Trees unsuitable for dynamic insertion.
+
+Thus, this approach is not feasible.
+
+Alternative Idea: Use a balanced binary search tree to manage the list of weights for each node. Each node in the tree has a weight and tracks the maximum dp in its subtree. For example, using a treap or a splay tree where each node's left and right children have their maximum dp values. When querying for the maximum dp where weight <w, we can traverse the tree, comparing with w, and collect the maximum dp from the relevant subtrees.
+
+But implementing such a data structure from scratch in Python is challenging. However, there might be a way to use the bisect module to manage a sorted list and track the maximum dp using separate structures.
+
+Alternatively, we can use a list for each node u, which is kept sorted by weight. For each weight in the list, we track the maximum dp up to that weight. When a new edge with weight w and dp d is added to node u's list:
+
+1. Use bisect to find the position where w should be inserted.
+
+2. Check if there's already an entry in the list with weight w. If so, update its maximum dp to the max of the existing value and d. Otherwise, insert a new entry.
+
+3. Then, for all entries after the inserted position, if their weight is >=w, we need to check if their max dp is less than d. If so, we need to update them. But this is not efficient.
+
+Alternatively, since the list is sorted by weight, once we insert the new weight w, any existing entries with weight >=w will have their max dp potentially affected if the new d is higher than the existing max.
+
+But this seems like it's not manageable in Python for large m.
+
+This is a tricky problem. Let's look for similar problems or known algorithms.
+
+Upon some research, this problem resembles the Longest Path in a DAG with certain constraints. However, the edges can be processed in any order, but the path must respect the input order of the edges.
+
+Alternatively, since the edges are processed in order, and the path must be formed by a subset of edges in their input order with strictly increasing weights and forming a valid path in the graph, perhaps we can model this as a dynamic programming problem where each state is a node and the maximum path length to that node with a certain weight.
+
+For example, for each node u and a weight w, we track the maximum number of edges that can reach u with the last edge's weight being w. Then, for each edge i (a_i, b_i, w_i), the maximum length for b_i with weight w_i is 1 plus the maximum length for a_i with any weight <w_i.
+
+But how to efficiently track the maximum for a_i with any weight <w_i.
+
+This leads us to track for each node u, the maximum path length for any weight <w_i. So for each node u, we need to maintain a data structure that allows querying the maximum path length for weights <w_i.
+
+This brings us back to the earlier idea, but now the data structure is per node.
+
+So for each node u, we can maintain a Fenwick Tree that tracks the maximum path length for each possible weight. Then, when processing edge i (a_i, b_i, w_i):
+
+1. Query the Fenwick Tree for node a_i to find the maximum path length for weights less than w_i. Let this be max_prev.
+
+2. dp[i] = max_prev + 1.
+
+3. Update the Fenwick Tree for node b_i by inserting the weight w_i with the new dp[i] value. This requires comparing with existing entries and keeping the maximum.
+
+But again, the problem is the memory required for storing a Fenwick Tree per node. For n=1e5 and m=1e5, this is not feasible.
+
+Alternative Idea: Since the Fenwick Tree per node is sparse (most nodes have zero or few edges), we can use a dictionary to track only the non-zero entries. But implementing a dynamic Fenwick Tree with a dictionary is possible but challenging.
+
+Another Idea: Since all edges are processed in order, and each edge is processed once, perhaps we can process each edge and update the data structures in a way that doesn't require per-node Fenwick Trees.
+
+Let's think about each edge. For edge i, the maximum possible dp[i] is 1 plus the maximum dp[j] among edges j that end at a_i (start node of i) and have weight <w_i.
+
+So, for each edge i, we need to find the maximum dp[j] where j is any edge ending at a_i with weight <w_i.
+
+This can be represented as for each node u, we track the maximum dp[j] for each possible weight w. But again, this requires a way to query the maximum dp[j] for w < current weight.
+
+So for each node u, we can maintain a list of pairs (w, max_dp), sorted by w. For example, when querying for w_i, we perform a binary search to find the largest w in the list that is less than w_i, and get the corresponding max_dp.
+
+But how to efficiently update the list for node b_i after processing edge i. For example, after computing dp[i], we need to add this to the list of b_i's edges. But when adding (w_i, dp[i]) to b_i's list, we need to maintain the list sorted and also track the maximum dp for each possible weight.
+
+To optimize this, perhaps for each node u's list, we can keep it sorted by w, and also maintain a structure that allows us to query the maximum dp[j] for any w < target. For this, the list can be maintained in sorted order, and for each entry, track the maximum dp[j] for all entries up to that point. This way, when we perform a binary search to find the largest w < target, we can also retrieve the maximum dp up to that point.
+
+For example, the list for node u can be a list of tuples (w, max_up_to_this_w), sorted by w. The max_up_to_this_w is the maximum of all entries in the list up to and including this w.
+
+When inserting a new (w, d):
+
+1. Use bisect to find the position to insert the new w.
+
+2. The new max_up_to_this_w is the maximum between the current d and the max_up_to_this_w of the previous entry.
+
+3. However, if there are entries after the insertion point with w >=w_new, their max_up_to_this_w may need to be updated if the new d is larger than their current max_up_to_this_w. For example, if inserting a new entry with w=3 and d=5, and there's an existing entry with w=4 and max_up_to_this_w=4, then the max_up_to_this_w for w=4 should be updated to 5.
+
+But this is not feasible to do for large lists. Therefore, this approach would not be efficient.
+
+Thus, this brings us back to the initial problem: how to efficiently track for each node the maximum dp for weights less than a given value.
+
+Another Idea inspired by the fact that the edges are processed in order: since edges are processed in input order, and the path must consist of edges in that order, the paths are formed by selecting edges in increasing order of indices, with strictly increasing weights and forming a valid path.
+
+Thus, the dynamic programming state can be defined as follows:
+
+For each edge i, dp[i] is the maximum number of edges in a path ending with i.
+
+To compute dp[i], we need to look at all edges j <i where w_j <w_i and the end node of j is the start node of i. Then, dp[i] = max(dp[j] + 1) over all such j, or 1 if no such j exists.
+
+The problem is to compute this efficiently.
+
+An alternative approach is to pre-process for each node u, the best possible dp[j] for edges ending at u with varying weights. For example, for each node u, we can maintain a dictionary where the keys are weights, and the values are the maximum dp[j] for edges ending at u with that weight. Then, for each edge i, we query all weights less than w_i in u's dictionary and take the maximum value.
+
+But querying all weights less than w_i is expensive unless the keys are sorted. So for each node u, we can maintain a sorted list of weights and a corresponding list of maximum dp values. This way, when querying for weights less than w_i, we can binary search to find the largest weight less than w_i and get the corresponding maximum dp.
+
+Let's formalize this:
+
+For each node u, we maintain a sorted list of weights, sorted in increasing order. For each weight in this list, we also track the maximum dp value for any edge ending at u with a weight <= this weight. This can be stored in a separate list, say max_dp.
+
+When processing edge i (a_i, b_i, w_i):
+
+1. Find the largest weight w in a_i's sorted list that is less than w_i. This can be done using bisect.bisect_left.
+
+2. The maximum dp for a_i's edges with weight <w_i is the maximum of all max_dp entries up to the found index. To track this efficiently, the max_dp list can be maintained as a prefix maximum array. For example, max_dp[i] is the maximum of the max_dp list up to index i.
+
+But maintaining a prefix maximum array requires updating all entries after inserting a new element, which is O(n) time.
+
+Alternatively, we can use a binary indexed tree (Fenwick Tree) or segment tree for each node's sorted list of weights to track the maximum dp up to each weight.
+
+But again, this requires dynamically updating the data structure, which is challenging.
+
+Another Idea: Since the edges are processed in order, for each node u, when we process an edge that starts at u, we can query the current maximum dp for weights <w_i. To do this efficiently, we can for each node u maintain a list of weights in sorted order, and track the maximum dp for each possible weight. For example, the list is sorted, and each entry is a (w, max_dp) pair. When querying for the maximum dp where w <w_i, we find the largest w in the list less than w_i and take the corresponding max_dp.
+
+To maintain this list:
+
+- For each new edge ending at node u with weight w and dp d, we need to insert (w, d) into the list.
+
+- If there is already an entry with weight w, we update the max_dp to be the maximum of the existing value and d.
+
+- The list is kept sorted by w in increasing order.
+
+- Additionally, for each entry in the list, we can track the maximum dp up to that entry. This can be stored as a prefix maximum.
+
+For example:
+
+Sorted list of weights: [w1, w2, w3]
+
+Prefix maximum: [m1, max(m1, m2), max(m1, m2, m3)]
+
+When inserting a new weight w4:
+
+- Insert into the sorted list.
+
+- Recompute the prefix maximum array from the insertion point onward.
+
+But this is O(n) time, which is not feasible for large m.
+
+Thus, this approach is not feasible.
+
+Another Idea: For each node u, track the best possible dp value for any weight less than or equal to a certain value. This can be stored as a sorted list of tuples (w, best_dp), where best_dp is the maximum dp for any edge ending at u with weight <=w. The list is sorted by w in increasing order. For a new edge ending at u with weight w and dp d:
+
+- Find the position to insert w in the list.
+
+- The best_dp for w is the maximum of d and the best_dp of the previous entry (if any).
+
+- If the new best_dp is higher than all subsequent entries, those entries can be updated or removed.
+
+For example:
+
+Suppose the current list is [(w1, 3), (w2, 4), (w3, 2)].
+
+We add a new edge with w=w4 and d=5. Insert into the list sorted by w. Then, the best_dp for w4 is max(5, previous best_dp). If w4 is between w2 and w3, the new entry would be (w4, max(5, 4) =5). Then, the entry for w3 would have best_dp max(5, 2) =5. So we can replace the entries after w4 with the new best_dp if it's higher.
+
+This way, the list can be maintained in a way that allows for O(1) queries, but the insertion may require traversing and updating entries after the insertion point. However, this can be optimized by only keeping entries where the best_dp is strictly increasing. This way, once a new entry's best_dp is higher than the previous, all subsequent entries can be removed if their best_dp is not higher.
+
+For example:
+
+If the list is [(1, 3), (2, 4), (3, 5)], and a new entry (2.5, 6) is added:
+
+- Insert between 2 and 3.
+
+- The best_dp for 2.5 is max(6,4) =6.
+
+- Now, any entry after 2.5 with best_dp <=6 can be removed.
+
+So the list becomes [(1,3), (2,4), (2.5,6)]. Entries after 2.5 are removed.
+
+This way, the list remains sorted and contains only entries where best_dp is strictly increasing. This allows for efficient querying and insertion.
+
+Let's formalize this approach:
+
+For each node u:
+
+- Maintain a list of tuples (w, best_dp), sorted by w in increasing order.
+
+- The list is maintained such that best_dp is strictly increasing.
+
+When inserting a new (w_new, d_new):
+
+1. Find the position to insert w_new using bisect.
+
+2. Compute the previous best_dp: if there are entries before the insertion position, the previous best_dp is the best_dp of the last entry before w_new. Otherwise, it's 0.
+
+3. new_best = max(d_new, previous_best_dp)
+
+4. Now, check if the new_best is greater than or equal to the best_dp of the next entry in the list (if any). If so, those entries can be removed.
+
+5. Insert (w_new, new_best) into the list, and remove any subsequent entries with best_dp <= new_best.
+
+This way, the list remains sorted and compact, and queries can be done efficiently.
+
+For example, when querying for the best_dp for weights <w_i:
+
+- Find the largest w in the list less than w_i.
+
+- The best_dp for that w is the answer.
+
+If no such w exists, the best_dp is 0.
+
+This approach ensures that the list for each node is as small as possible, and queries can be done in O(log k) time, where k is the number of entries in the list.
+
+This seems promising. Let's see how this would work for the first sample:
+
+Sample 1:
+
+Edges:
+
+0: 3->1, w=3, d=1.
+
+Processing edge0:
+
+For node3, we add (3, 1). The list for node3 is empty. So previous_best is 0. new_best = max(1, 0) =1. Insert (3,1).
+
+Now, when processing edge1: 1->2, w=1, d=1.
+
+The start node is 1. For node1, the list is empty. So previous_best is 0. d_new=1. So new_best is 1. Insert (1,1) into node2's list.
+
+Processing edge2: 2->3, w=2, d=2.
+
+The start node is 2. For node2, the list is empty. So previous_best is 0. new_best =2. Insert into node3's list.
+
+But node3's list has (3,1). Now, inserting (2,2):
+
+- Insertion position is 0 (since 2 <3).
+
+- previous_best is 0.
+
+- new_best =max(2,0)=2.
+
+- The next entry is (3,1). Since 2 >1, we remove (3,1).
+
+So node3's list becomes [(2,2)].
+
+So when querying for edge4 in sample2, this would correctly track.
+
+But let's see how this works for sample2:
+
+Sample2:
+
+Edges:
+
+0:1->3, w=2, d=1.
+
+1:3->2, w=3, d=2.
+
+2:3->4, w=5, d=3.
+
+3:5->4, w=0, d=1.
+
+4:4->5, w=8, d=4.
+
+Processing edge0:
+
+a_i =1, which is node1's list. Initially empty. So max_prev=0. d=1.
+
+Insert into node3's list: (2,1). previous_best is 0. new_best=1. List for node3 is [(2,1)].
+
+edge1:3->2, w=3.
+
+a_i =3. Query node3's list for w <3. The list has (2,1). So max_prev=1. d=2.
+
+Insert into node2's list: (3,2). previous_best is 0. new_best=2.
+
+edge2:3->4, w=5.
+
+a_i=3. node3's list has (2,1). So query for w <5. The largest w is 2. max_prev=1. d=3+1=3.
+
+Insert into node4's list: (5,3). previous_best=0. new_best=3.
+
+edge3:5->4, w=0.
+
+a_i=5. node5's list is empty. max_prev=0. d=1.
+
+Insert into node4's list: (0,1). The list for node4 is [(0,1), (5,3)]. But new_best is max(1, 0)=1. Inserting (0,1) at position 0. previous_best is 0. new_best=1. The next entry is (5,3). 1 <3, so no removal. List is [(0,1), (5,3)].
+
+edge4:4->5, w=8.
+
+a_i=4. Query node4's list for w <8. The list has entries up to 5. The largest w less than 8 is 5. So max_prev=3. d=3+1=4.
+
+Insert into node5's list: (8,4). previous_best is 0. new_best=4.
+
+So the maximum dp is 4, but the sample expects 3. So there's a problem here. What's wrong?
+
+According to this approach, the sample's answer would be 4. But the sample expects 3. So the code is incorrect. What's the issue?
+
+Ah, because the path must form a valid sequence of edges in the graph. In the sample input 2, the edges chosen according to the code's approach would be edges0 (1-3, w=2), edge2 (3-4, w=5), edge4 (4-5, w=8). This forms a valid path of length 3. But according to the code's approach, edge4's dp is 3+1=4. But that's impossible, because the edges chosen are three in number. So the code's approach is counting the number of edges in the path as 3, but the dp[i] is 4. That's a contradiction.
+
+Wait, no. The dp[i] for edge4 is 4, which would imply that there's a path of 4 edges. So where's the mistake in the code's logic?
+
+Ah, I see. The code's approach assumes that the path can be formed by any sequence of edges in input order, but in reality, the edges must form a valid path in the graph. So the code's approach is incorrect because it allows adding edges that do not form a valid path.
+
+This brings us back to the original problem: the code's approach tracks the maximum number of edges, but does not consider whether the edges form a valid path in the graph. 
+
+So in the sample input 2, the code's approach would track that edge4 has a dp of 4, but there is no valid path of 4 edges. This indicates that the code's logic is wrong.
+
+Thus, the initial approach was incorrect because it didn't take into account the requirement that the edges form a valid path in the graph, where the end of one edge is the start of the next.
+
+This is a critical mistake. Therefore, the correct approach must consider both the weight constraints and the adjacency of the edges.
+
+But how to model this correctly?
+
+Let me re-express the problem.
+
+The problem requires finding the longest sequence of edges e_1, e_2, ..., e_k such that:
+
+- e_1 is before e_2 in the input, which is before e_3, etc.
+
+- w(e_1) < w(e_2) < ... < w(e_k).
+
+- The end node of e_i is the start node of e_{i+1} for all i <k.
+
+The goal is to find the maximum k.
+
+So this is similar to the longest path problem in a directed graph, where the edges are processed in order and have strictly increasing weights.
+
+But the standard approach for longest paths in DAGs (topological sorting) is not applicable here, as the graph may have cycles, and the edges are processed in their input order.
+
+The correct dynamic programming approach must track, for each node u and weight w, the maximum length of a path ending at u with the last edge's weight w.
+
+Then, for each edge i (a_i -> b_i, w_i), the maximum length of a path ending at i is 1 plus the maximum length of a path ending at a_i with weight <w_i.
+
+So the DP recurrence is:
+
+dp[i] = 1 + max{ dp[j] | j is an edge with end node a_i and w_j <w_i }
+
+The maximum dp[i] over all edges is the answer.
+
+To compute this efficiently, for each node u, we need to track the maximum dp[j] for edges ending at u with weight <w_i. This requires for each node u a data structure that can, given a query weight w_i, return the maximum dp[j] where w_j <w_i.
+
+The challenge is to manage these data structures efficiently.
+
+The correct approach is:
+
+- For each node u, maintain a data structure that tracks the maximum dp value for edges ending at u with weight <w_i.
+
+- When processing edge i (a_i, b_i, w_i):
+
+   1. Query the data structure for node a_i to find the maximum dp value where weight <w_i. Let this be max_prev.
+
+   2. dp[i] = max_prev + 1.
+
+   3. Update the data structure for node b_i by inserting the new dp[i] with weight w_i. If there's already a dp value for weight w_i, keep the maximum.
+
+The data structure per node u must allow for efficient maximum queries and updates.
+
+But how to implement this in Python, considering the time and memory constraints.
+
+The solution is to use a binary indexed tree (Fenwick Tree) per node, but this is not feasible due to memory constraints. Thus, the alternative is to use a dictionary per node to track the maximum dp for each weight and use binary search on a sorted list of weights for each node.
+
+Let's proceed with this approach.
+
+For each node u:
+
+- We maintain a sorted list of unique weights of edges ending at u.
+
+- For each weight in this list, we track the maximum dp value for any edge ending at u with that weight.
+
+- When querying for the maximum dp for weights <w, we can binary search the sorted list to find the largest weight less than w and retrieve the corresponding max dp.
+
+- When inserting a new weight w and dp value, we first check if w is already in the list. If so, we update the max dp for w to be the maximum of the existing value and the new dp. If not, we insert w into the list and update the max dp.
+
+This approach would require O(log k) time per query and insertion, where k is the number of unique weights per node.
+
+Here's how this can be implemented:
+
+1. Preprocess all edges to collect the unique weights and sort them to assign ranks. This step is optional but can help with the binary search.
+
+2. For each node u, maintain a list 'weights' sorted in increasing order, and a corresponding 'max_dps' list where max_dps[i] is the maximum dp for edges ending at u with weight <= weights[i].
+
+Wait, no. The 'max_dps' should track the maximum dp for edges ending at u with weight == weights[i].
+
+For each node u:
+
+- sorted_weights: a list of unique weights of edges ending at u, sorted in increasing order.
+
+- max_dp: a dictionary where key is a weight and value is the maximum dp for edges ending at u with that weight.
+
+- For querying, we can use a binary search on sorted_weights to find the largest weight less than w_i. Then, look up the corresponding max_dp in the dictionary.
+
+But for the binary search, we need to check the sorted list of unique weights, and for each of them, we can find the maximum dp up to that weight.
+
+Wait, no. For the query, we need the maximum dp of all edges ending at u with weight <w_i. This is equivalent to finding all weights in sorted_weights that are less than w_i and taking the maximum max_dp for those weights.
+
+But if the list of sorted_weights is in increasing order, we can binary search to find the largest weight less than w_i. However, this approach only gives us the maximum for that particular weight, not for all weights less than w_i. So we need a way to track the maximum dp for all weights up to a certain value.
+
+Thus, the data structure for each node u needs to allow querying the maximum dp for all weights <w_i.
+
+This is where a Fenwick Tree or a Segment Tree would be useful. But again, the memory constraints are an issue.
+
+Alternatively, for each node u, we can maintain a list of tuples (w, max_dp), sorted by w, and for each new query, we can binary search to find the largest w < query_w and track the maximum dp up to that w. To do this efficiently, we can maintain a list of (w, max_so_far), where max_so_far is the maximum dp for all weights <= w.
+
+For example:
+
+sorted_list = [(w1, m1), (w2, m2), ...], sorted by w in increasing order.
+
+m1 is the maximum dp for weights <=w1.
+
+m2 is the maximum of m1 and the max_dp for w2.
+
+Thus, when querying for w_i, we find the largest w <=w_i, and the corresponding m is the answer.
+
+This can be achieved with a binary search.
+
+When inserting a new weight w and dp d:
+
+1. Find the position to insert w in the sorted_list.
+
+2. Compute the new m as max(d, the previous m if there are entries before the insertion point).
+
+3. Insert (w, m) into the sorted_list.
+
+4. If there are entries after the insertion point with m <= new_m, we can replace them with entries that have m as the new maximum. This is because the new_m is the maximum up to w, and any entry after w that has a smaller or equal m can be updated to new_m, since their max_so_far would be the maximum up to their weight.
+
+But this process may require merging or updating multiple entries, which can be time-consuming.
+
+Alternatively, the sorted_list can be maintained in a way that m is non-decreasing. This is possible because when inserting a new entry with w and m_new, if m_new is larger than the previous entries, then for any subsequent entries, their m will be at least m_new. Thus, we can prune any entries with w >= w_new and m <=m_new.
+
+For example:
+
+sorted_list is [(w1, 1), (w3, 3)].
+
+Inserting (w2, 2):
+
+- Inserted between w1 and w3.
+
+- m_new is max(2, 1) =2.
+
+- The entry after w2 is w3 with m=3. Since 2 <3, no pruning.
+
+sorted_list becomes [(w1,1), (w2,2), (w3,3)].
+
+Another example:
+
+sorted_list is [(w1, 1), (w3, 2)].
+
+Inserting (w2, 3):
+
+- Insert between w1 and w3.
+
+- m_new = max(3, 1) =3.
+
+- The entry after w2 is w3 with m=2. Since 3 >2, we prune the w3 entry.
+
+sorted_list becomes [(w1,1), (w2,3)].
+
+This way, the list remains sorted and the m values are non-decreasing. Thus, when querying for the maximum m for weights <w, we can find the largest w_i <w and get the corresponding m, which is the maximum up to that weight.
+
+This approach allows us to maintain the list in a way that each entry's m is the maximum up to that weight, and the list is sorted by w. Insertion involves:
+
+1. Binary search to find the insertion position.
+
+2. Compute the new m as max(d, previous_m).
+
+3. Prune any entries after the insertion position with w >= new_w and m <= new_m.
+
+4. Add the new entry and any necessary pruned entries.
+
+This approach can be efficient as long as the pruned entries are removed, keeping the list size manageable.
+
+So, for each node u, we maintain a list of tuples (w, m), sorted by w in increasing order. m is the maximum dp for weights <=w.
+
+Insertion steps:
+
+a. Find the insertion position using bisect.
+
+b. previous_m = 0 if insertion position is 0, else the m of the entry before the insertion position.
+
+c. new_m = max(d, previous_m)
+
+d. Now, check if there are entries after the insertion position with w >=w_new and m <= new_m. If so, they can be removed.
+
+e. Add (w_new, new_m) to the list.
+
+f. Also, check if the previous entry has m >= new_m. If so, the new entry can be skipped because it won't affect future queries. For example, if the previous entry has w_prev <w_new and m_prev >= new_m, then any query for w >=w_prev will already use m_prev, which is >= new_m. So adding the new entry is redundant.
+
+Thus, steps e and f can be optimized to avoid adding redundant entries.
+
+But this is getting complicated.
+
+Let's try to model this with code.
+
+For each node u:
+
+sorted_list = []
+
+max_dp = 0
+
+When inserting a new (w, d):
+
+   # Find the insertion position
+   pos = bisect.bisect_left(sorted_list, (w, 0))  # 0 is a dummy value.
+
+   # Compute previous_max
+   previous_max = 0
+   if pos > 0:
+       previous_max = sorted_list[pos-1][1]
+
+   new_m = max(d, previous_max)
+
+   # Check if new_m is not better than previous_max
+   if pos > 0 and new_m <= sorted_list[pos-1][1]:
+       # No need to insert, since previous_max is already better.
+       return
+
+   # Prune entries after pos that have w >=w and m <= new_m
+   while pos < len(sorted_list) and sorted_list[pos][0] >=w and sorted_list[pos][1] <= new_m:
+       del sorted_list[pos]
+
+   # Insert the new entry
+   sorted_list.insert(pos, (w, new_m))
+
+This way, the list is kept sorted, and each entry's m is the maximum up to that weight. Queries can be performed by finding the largest w < target_w and taking the m from that entry.
+
+Let's test this approach with sample2.
+
+Sample2:
+
+Edge0: 1->3, w=2, d=1.
+
+Processing edge0:
+
+a_i=1.
+
+node1's sorted_list is empty. previous_max=0. new_m =max(1,0)=1.
+
+Insert (2,1) into node3's sorted_list.
+
+Node3's sorted_list: [(2,1)].
+
+Edge1:3->2, w=3, d=2.
+
+a_i=3. Query node3's sorted_list for w <3.
+
+sorted_list is [(2,1)]. The largest w <3 is 2. previous_max=1.
+
+d=1+1=2.
+
+Insert into node2's sorted_list:
+
+w=3, d=2.
+
+node2's sorted_list is empty. previous_max=0. new_m=2. Insert (3,2).
+
+Edge2:3->4, w=5, d=3.
+
+a_i=3. Query node3's sorted_list for w <5. sorted_list is [(2,1)].
+
+previous_max=1. d=1+1=2 → wait no. The d for this edge is previous_max +1 =1+1=2. But according to the code's logic, d would be 2.
+
+Wait, no. The new edge's dp[i] is previous_max +1. previous_max is 1. So dp[i] is 2.
+
+But according to the code's approach, inserting into node4's sorted_list:
+
+w=5, d=2.
+
+previous_max=0. new_m= max(2,0) =2.
+
+Insert (5,2).
+
+Edge3:5->4, w=0, d=1.
+
+a_i=5. node5's sorted_list is empty. previous_max=0. d=1.
+
+Insert into node4's sorted_list:
+
+w=0, d=1.
+
+previous_max=0. new_m= max(1,0) =1.
+
+Check if inserting (0,1). The existing entries in node4's sorted_list are [(5,2)].
+
+Insert at position 0.
+
+Check if any entries after pos=0 have w >=0 and m <=1. The entry is (5,2). 2>1, so no pruning. Insert (0,1) into node4's sorted_list. Now node4's list is [(0,1), (5,2)].
+
+Edge4:4->5, w=8, d=?
+
+a_i=4. Query node4's sorted_list for w <8. The largest w <8 is5. m=2. So d=2+1=3.
+
+Insert into node5's sorted_list:
+
+w=8, d=3.
+
+node5's sorted_list is empty. previous_max=0. new_m=3.
+
+Insert (8,3).
+
+So the maximum dp is3, which matches the sample's expected output.
+
+But according to this approach, edge4's dp is3, which is correct. So this approach seems to work.
+
+Thus, the correct approach is to track for each node u a sorted list of (w, m) pairs, where m is the maximum dp for edges ending at u with weight <=w. When inserting a new edge, we update the list by inserting the new weight and maintaining the list in a way that m is non-decreasing.
+
+The code in Python would need to:
+
+- For each node u, maintain a list of tuples (w, m), sorted by w.
+
+- For each edge i, process it as follows:
+
+   a. Query the start node's list to find the maximum m for w <w_i.
+
+   b. Compute dp_i = previous_max +1.
+
+   c. Insert into the end node's list the new weight w_i and dp_i.
+
+The insertion step involves the steps described earlier to maintain the list.
+
+Now, implementing this in Python.
+
+Here's how the code can be structured:
+
+Read n and m.
+
+Read the m edges into a list.
+
+Compress the weights (optional, but can help with comparison).
+
+For each node u, maintain a sorted list.
+
+Initialize a dictionary, say 'nodes', where each key is a node number, and the value is the sorted list.
+
+max_length = 0
+
+for each edge in edges:
+
+    a_i, b_i, w_i = edge
+
+    # Query a_i's list for the maximum m where w <w_i
+
+    current_list = nodes.get(a_i, [])
+
+    # Use bisect to find the largest w <w_i
+
+    # The list is sorted by w, so we can use bisect.bisect_left
+
+    pos = bisect.bisect_left(current_list, (w_i, 0))  # find the first w >=w_i
+
+    if pos ==0:
+
+        previous_max =0
+
+    else:
+
+        previous_max = current_list[pos-1][1]
+
+    current_dp = previous_max +1
+
+    max_length = max(max_length, current_dp)
+
+    # Now, insert into b_i's list
+
+    target_list = nodes.get(b_i, [])
+
+    # Perform the insertion steps:
+
+    # Find the position to insert w_i
+
+    insert_pos = bisect.bisect_left(target_list, (w_i, 0))
+
+    # compute previous_max for target_list up to insert_pos
+
+    prev_max =0
+
+    if insert_pos >0:
+
+        prev_max = target_list[insert_pos-1][1]
+
+    new_m = max(current_dp, prev_max)
+
+    # Check if new_m is not better than prev_max
+
+    if insert_pos >0 and new_m <= target_list[insert_pos-1][1]:
+
+        # no need to insert
+
+        continue
+
+    # Prune entries after insert_pos with w >=w_i and m <= new_m
+
+    while insert_pos < len(target_list):
+
+        current_w, current_m = target_list[insert_pos]
+
+        if current_w >=w_i and current_m <= new_m:
+
+            del target_list[insert_pos]
+
+        else:
+
+            break
+
+    # Now, check if the new_m is greater than the previous_max
+
+    # and insert if necessary
+
+    # Check if the new entry's new_m is not redundant
+
+    # Insert the new entry
+
+    target_list.insert(insert_pos, (w_i, new_m))
+
+    nodes[b_i] = target_list
+
+print(max_length)
+
+This code should correctly track the maximum path length.
+
+Testing this code with sample input 2:
+
+Edge4's processing:
+
+a_i=4. target_list for node4 is [(0,1), (5,2)]. Query for w <8.
+
+The largest w is5, m=2. current_dp=3.
+
+Insert into node5's list. node5's list is empty.
+
+insert_pos =0.
+
+prev_max=0. new_m =3.
+
+No pruning. Insert (8,3). So node5's list is [(8,3)].
+
+max_length is3.
+
+Thus, the sample input 2 outputs3.
+
+Sample input1:
+
+After processing edge0 (3->1, w=3):
+
+node3's list is [(3,1)].
+
+edge1 (1->2, w=1):
+
+a_i=1's list is empty. previous_max=0. current_dp=1.
+
+Insert into node2's list. node2's list becomes [(1,1)].
+
+edge2 (2->3, w=2):
+
+a_i=2's list is [(1,1)].
+
+Query for w <2. previous_max=1. current_dp=2.
+
+Insert into node3's list.
+
+node3's list is [(3,1)].
+
+insert_pos for w=2 is0.
+
+prev_max=0. new_m=2.
+
+Prune any entries after 0 with w >=2 and m <=2. The existing entry is (3,1), which has w=3 >=2 and m=1 <=2. So delete it.
+
+Insert (2,2) into node3's list.
+
+Thus, node3's list becomes [(2,2)].
+
+max_length is2.
+
+So the code outputs2 for sample1.
+
+Thus, the code works for both samples.
+
+Now, implementing this in Python.
+
+But there's a problem with using bisect on a list of tuples. The bisect module in Python requires that the list be sorted according to the natural ordering of the elements. When comparing tuples, it compares the first element, then the second, etc. So, the code uses a list of (w, m) tuples, sorted by w. When we do bisect.bisect_left on the list with (w_i, 0), it finds the first tuple where the first element is >=w_i.
+
+This is correct.
+
+Now, the code can be written as follows:
+
+import bisect
+
+n, m = map(int, input().split())
+
+edges = []
+for _ in range(m):
+    a, b, w = map(int, input().split())
+    edges.append( (a-1, b-1, w) )
+
+from collections import defaultdict
+
+nodes = defaultdict(list)
+
+max_length = 0
+
+for a, b, w in edges:
+    current_list = nodes.get(a, [])
+    # Find the largest w < current w
+    pos = bisect.bisect_left(current_list, (w, 0))  # find first >=w
+    prev_max = 0
+    if pos > 0:
+        prev_max = current_list[pos-1][1]
+    current_dp = prev_max + 1
+    if current_dp > max_length:
+        max_length = current_dp
+    
+    # Insert into b's list
+    target_list = nodes.get(b, [])
+    insert_pos = bisect.bisect_left(target_list, (w, 0))
+    
+    prev_m = 0
+    if insert_pos > 0:
+        prev_m = target_list[insert_pos-1][1]
+    new_m = max(current_dp, prev_m)
+    
+    # Check if new_m is redundant
+    if insert_pos > 0 and new_m <= target_list[insert_pos-1][1]:
+        continue
+    
+    # Prune entries after insert_pos with w >= current w and m <= new_m
+    while insert_pos < len(target_list):
+        current_w, current_m = target_list[insert_pos]
+        if current_w >= w and current_m <= new_m:
+            del target_list[insert_pos]
+        else:
+            break
+    
+    # Insert new entry
+    target_list.insert(insert_pos, (w, new_m))
+    nodes[b] = target_list
+
+print(max_length)
+
+This code should handle both sample inputs correctly.
+
+Let's test sample input 2:
+
+After processing edge4 (4->5, w=8):
+
+The target_list for node5 is empty.
+
+insert_pos is 0.
+
+prev_m is 0.
+
+new_m =3.
+
+Insert (8,3) into node5's list.
+
+The max_length is3.
+
+Thus, the output is3.
+
+Sample input1's max_length is2.
+
+Thus, the code works.
+
+Now, let's handle possible edge cases.
+
+For example, edges with the same weight but different nodes.
+
+Edge0: 1->2, w=2.
+
+Edge1: 2->3, w=2.
+
+These edges have the same weight. Since the weights must be strictly increasing, they cannot be part of the same path. So the maximum path is1.
+
+The code should output1.
+
+Testing this:
+
+n=3, m=2.
+
+Edges:
+
+1 2 2
+
+2 3 2
+
+The code will process edge0:
+
+a=0 (assuming nodes are 0-based), target_list for node0 is empty. prev_max=0. current_dp=1. insert into node1's list: (2,1).
+
+Processing edge1: a=1, w=2.
+
+Query node1's list: [(2,1)]. pos= bisect_left for (2,0) →0. prev_max=0. current_dp=1. insert into node2's list: (2,1).
+
+max_length remains1.
+
+Thus, output is1.
+
+Another test case: edges with increasing weights but not forming a valid path.
+
+Sample input:
+
+3 3
+
+1 2 1
+
+3 2 2
+
+2 3 3
+
+Edges are:
+
+0:1->2, w=1.
+
+1:3->2, w=2.
+
+2:2->3, w=3.
+
+Possible paths:
+
+edge0 -> edge2: valid (1<3), forming path 1->2->3. length 2.
+
+edge1 -> edge2: invalid (1 is edge1's end is 2, edge2's start is 2. So yes. edge1's w=2 < edge2's w=3. So path edge1 (3->2) and edge2 (2->3). That's a path of length 2.
+
+But according to the code, when processing edge1:
+
+a=3-1=2, node2's list is empty. current_dp=1. insert into node2's list (2,1).
+
+When processing edge2:
+
+a=2-1=1 (edge2 is start at node1, which is 2-1=1? Wait, the input for edge2 is 2 3 3. So a=2-1=1, b=3-1=2.
+
+So for edge2:
+
+a_i=1, target_list for node1 is empty. prev_max=0. current_dp=1.
+
+Insert into node2's list: (3,1).
+
+Then, the max_length is1.
+
+Wait, no.
+
+Wait, edge0 is 1->2, w=1. Processed as a=0 (since input is 1-based). After processing edge0:
+
+nodes[0] is the list for node0 (start node is 0), which is empty. So when processing edge0, a_i is 0.
+
+Wait, the code subtracts 1 from a and b:
+
+edges.append( (a-1, b-1, w) )
+
+So for edge0: a=1-1=0, b=2-1=1.
+
+So after processing edge0:
+
+nodes[0] is empty (no, a_i is 0, target_list for a_i=0 is nodes.get(0, []), which is empty.
+
+current_dp is 0+1=1.
+
+Insert into b=1's list: (1, 1).
+
+Edge1: 3->2 becomes a=3-1=2, b=2-1=1. Processed:
+
+a_i=2, nodes.get(2) is empty. current_dp=0+1=1.
+
+Insert into node1's list: (2,1). The existing list for node1 is [(1,1)]. So when inserting w=2:
+
+insert_pos = bisect.bisect_left( [(1,1)], (2,0) ) →1.
+
+prev_m = [(1,1)][0][1] =1.
+
+new_m = max(1,1) =1.
+
+Since new_m is equal to prev_m, the insertion is skipped.
+
+So node1's list remains [(1,1)].
+
+Edge2: 2->3 becomes a=2-1=1, b=3-1=2.
+
+a_i=1. nodes.get(1) is [(1,1)].
+
+Querying for w=3:
+
+bisect.bisect_left([(1,1)], (3,0)) →1. pos=1. previous_max=1. current_dp=2.
+
+Insert into node2's list:
+
+insert_pos = bisect.bisect_left([], (3,0)) →0.
+
+prev_m=0. new_m=2.
+
+Insert (3,2) into node2's list.
+
+max_length is2.
+
+Thus, the code outputs2, which is correct.
+
+Thus, the code handles this case correctly.
+
+Thus, the code should be correct.
+</think>
+To solve this problem, we need to find the longest path in a directed graph where the edge weights are strictly increasing and the edges are chosen in the order they appear in the input. The path must be valid, meaning each edge must start at the end node of the previous edge.
+
+### Approach
+1. **Dynamic Programming (DP) with Binary Search**: We use a dynamic programming approach where each entry `dp[i]` represents the maximum number of edges in a valid path ending with the i-th edge. To efficiently compute this, we maintain for each node a list of tuples sorted by weight. Each tuple contains a weight and the maximum path length (DP value) for paths ending at that node with that weight.
+2. **Sorted List Maintenance**: For each node, we maintain a sorted list of weights and their corresponding maximum DP values. This allows us to quickly find the maximum DP value for weights less than a given value using binary search.
+3. **Efficient Insertions and Queries**: When inserting a new edge into the list of a node, we ensure the list remains sorted and only keeps necessary entries by pruning redundant values. This helps maintain efficient query times.
+
+### Solution Code
+```python
+import bisect
+
+def main():
+    import sys
+    input = sys.stdin.read
+    data = input().split()
+    idx = 0
+    n = int(data[idx])
+    idx += 1
+    m = int(data[idx])
+    idx += 1
+
+    edges = []
+    for _ in range(m):
+        a = int(data[idx]) - 1
+        idx += 1
+        b = int(data[idx]) - 1
+        idx += 1
+        w = int(data[idx])
+        idx += 1
+        edges.append((a, b, w))
+
+    from collections import defaultdict
+    nodes = defaultdict(list)
+    max_length = 0
+
+    for a, b, w in edges:
+        # Query the start node's list for max dp with weight < current w
+        current_list = nodes.get(a, [])
+        pos = bisect.bisect_left(current_list, (w, 0))  # Find first >= w
+        prev_max = 0
+        if pos > 0:
+            prev_max = current_list[pos - 1][1]
+        current_dp = prev_max + 1
+        if current_dp > max_length:
+            max_length = current_dp
+
+        # Insert into the end node's list
+        target_list = nodes.get(b, [])
+        insert_pos = bisect.bisect_left(target_list, (w, 0))
+
+        # Calculate the previous_max for the insert position
+        prev_m = 0
+        if insert_pos > 0:
+            prev_m = target_list[insert_pos - 1][1]
+        new_m = max(current_dp, prev_m)
+
+        # Skip if new_m is not better than the previous entry
+        if insert_pos > 0 and new_m <= target_list[insert_pos - 1][1]:
+            continue
+
+        # Prune entries that are dominated by the new entry
+        while insert_pos < len(target_list):
+            current_w, current_m = target_list[insert_pos]
+            if current_w >= w and current_m <= new_m:
+                del target_list[insert_pos]
+            else:
+                break
+
+        # Insert the new entry
+        target_list.insert(insert_pos, (w, new_m))
+        nodes[b] = target_list
+
+    print(max_length)
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Reading Input**: The input is read and parsed into a list of edges, converting node indices to 0-based for easier handling.
+2. **Dynamic Programming Setup**: For each edge, we determine the maximum path length ending at the current edge by querying the start node's list of weights.
+3. **Binary Search for Efficiency**: Using binary search, we quickly find the position where the current edge's weight would fit in the sorted list, allowing us to determine the maximum valid path length from previous edges.
+4. **Maintaining Sorted Lists**: Each node's list of weights is maintained in sorted order, and redundant entries are pruned to ensure efficient future queries and insertions.
+
+This approach ensures that we efficiently compute the longest valid path with strictly increasing weights while adhering to the input order, achieving a time complexity of O(m log k) where k is the number of unique weights per node.
+</bot>

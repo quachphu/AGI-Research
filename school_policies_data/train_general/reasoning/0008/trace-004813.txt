@@ -1,0 +1,810 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Yuki made a sugoroku so that everyone can play at the children's association event. In this sugoroku, squares are lined up in a ring, and each square has an integer of 1 or more written on it.
+
+The player chooses a square as a starting point and places his piece. Advance the pieces clockwise by the number written on the square. Advance the pieces clockwise again by the number written on the stopped square. Repeat this, and when the piece stops on the square selected as the starting point, it is "Agari".
+
+In reality, depending on how you choose the squares, it may never be "finished". Yuki is trying to count the number of squares that can reach the "Agari" in this sugoroku.
+
+
+
+
+Create a program that inputs sugoroku information and reports the number of squares that can reach "Agari".
+
+
+
+Input
+
+The input is given in the following format.
+
+
+N
+a1 a2 ... aN
+
+
+The number N (1 ≤ N ≤ 100000) of all the cells contained in the sugoroku is given in the first line. On the second line, the number ai (1 ≤ ai ≤ 109) written in each cell is given in turn clockwise.
+
+Output
+
+The number of squares that can reach "Agari" is output in one line.
+
+Examples
+
+Input
+
+3
+1 1 1
+
+
+Output
+
+3
+
+
+Input
+
+3
+1 1 2
+
+
+Output
+
+2
+
+
+Input
+
+8
+2 3 7 3 3 3 4 4
+
+
+Output
+
+6
+</user>
+<bot>
+<think>
+Okay, let's see. The problem is about finding the number of squares in a sugoroku game that can reach "Agari", which means that when you start at that square and follow the movement rules, you eventually land back on the starting square. So the task is to count all such starting squares.
+
+First, I need to understand the movement rules. So, when you start at a square, you move clockwise by the number written on it. Then you move again by the number on the new square, and so on. The question is, when does this process loop back to the starting square, making it an "Agari".
+
+Hmm. So for a given starting square s, each step you move a_i steps clockwise, where a_i is the value of the current square. Wait, no. Wait, the movement is: when you are on a square, you advance by the number written there. So the next square is (current position + a_i) mod N, considering that the squares are arranged in a ring. Wait, but since the squares are arranged in a ring, perhaps the movement is additive modulo the number of squares. But the exact way to model this needs to be precise.
+
+Wait, the sugoroku is a ring of N squares. Each square is numbered, perhaps from 0 to N-1 or 1 to N. Let's assume 0-based for easier modulo operations. But the problem statement says that the input is given as a1 to aN, which are clockwise. So perhaps the squares are arranged in a circle, and moving clockwise by a certain number of steps. For example, if you are at square i (assuming 1-based), moving by a_i steps clockwise would take you to (i + a_i) mod N. Wait, but since there are N squares, maybe the positions are 0-based. Let's clarify:
+
+Suppose N is 3. Squares are arranged in a circle. If you start at square 0, and a_0 is 1, then moving 1 step brings you to square 1. Then from square 1, which has a_1 as 1, moving again brings you to square 2. Then from square 2 (a_2=1) you move to 0. So starting at 0, after three moves, you're back. So it's "Agari". So in the first example input, all three squares (0,1,2) when started, lead back to themselves after some steps. So the output is 3.
+
+So the problem reduces to finding all starting positions s such that the process of moving from s, adding the a_i each time (mod N) eventually returns to s.
+
+But how do we model this? For each starting position s, we need to simulate the steps and see if we come back to s. But for large N (up to 1e5), simulating each position is O(N^2), which is impossible.
+
+So we need a smarter approach. Let's think about cycles in the movement graph. Each position points to the next position you jump to. So for each position i, the next position is (i + a_i) mod N. Then the movement is a directed graph where each node has exactly one outgoing edge. So each component of this graph is a cycle of trees leading into it. So for a starting position s to reach Agari, s must be part of a cycle. Because once you enter a cycle, you keep going around it. So Agari happens if and only if the cycle includes s, and the cycle's length is such that after some steps, you land back on s.
+
+Wait, but in this setup, each node has exactly one successor. So the entire graph is made up of cycles and trees directed towards the cycles. So the cycles are the strongly connected components where each node is part of the cycle. For example, a cycle of length 1 would mean that the node points to itself. So for a node to be part of a cycle, when you start at it, you will loop through the cycle indefinitely. To return to s, the cycle must include s, and after some number of steps, you end up back at s. So in that case, the starting node s must be in a cycle, and the cycle's length divides the number of steps required to return to s.
+
+Wait, but if s is part of a cycle, then the process will cycle through the nodes in the cycle. So to return to s, the number of steps must be a multiple of the cycle's length. So the cycle must have a certain length such that after some steps, you return to s.
+
+Wait, but in a cycle of length k, the cycle is formed by k nodes where each node points to the next in the cycle, and the last points back to the first. So when you start at any node in the cycle, you will traverse the entire cycle and return to the starting node after exactly k steps. So for any node in the cycle, starting there, you will return after k steps. Thus, all nodes in a cycle can reach Agari if and only if the cycle's nodes form a cycle where each node in the cycle can return to itself. Wait, but in a cycle, once you start, you loop around the cycle. So if the cycle includes the starting node, then after k steps, you are back. So the Agari condition is that the starting node is part of a cycle. Because once you are in the cycle, you'll cycle through all nodes in it, and eventually return to the starting node.
+
+So the problem reduces to finding all nodes that are part of cycles in this directed graph. Because any node that is part of a cycle will return to itself after some steps. Nodes not part of cycles (i.e., in the trees leading into cycles) will never return to the starting node, as their path leads into the cycle but they can't loop back to themselves.
+
+Thus, the solution is to find all nodes that are part of cycles in the movement graph.
+
+So the problem becomes: count the number of nodes in all cycles of the directed graph where each node has an edge to (i + a_i) mod N.
+
+Now, how to find the cycles in this graph efficiently?
+
+Since each node has exactly one outgoing edge, this is a functional graph. The standard approach for functional graphs is to find cycles by using visited flags and tracking visited nodes. For example, using a visited array, and for each unvisited node, follow the path until we hit a node we've seen before. If during this traversal we come back to a node that's already in the current path, we have found a cycle. All nodes in that cycle are part of a cycle, and the rest in the path are trees leading into the cycle.
+
+So the algorithm is:
+
+1. For each node i from 0 to N-1:
+
+   a. If not visited, start traversing from i, keeping track of the path.
+
+   b. Once we encounter a node that's already been visited, check if it's in the current path.
+
+   c. If it is, the cycle starts at that node. All nodes from the first occurrence of this node in the current path form the cycle.
+
+   d. Mark all nodes in the cycle as part of a cycle.
+
+Thus, for all nodes in cycles, count them. The answer is the total count.
+
+But given that N can be up to 1e5, we need an O(N) algorithm.
+
+Yes, because each node is visited exactly once, and each step follows the path once.
+
+So the plan is:
+
+- Initialize a visited array of size N, all False.
+
+- For each node i from 0 to N-1:
+
+   if not visited[i], then:
+
+      create a list 'path' to track the current traversal.
+
+      while current node is not visited:
+
+          mark it as visited.
+
+          add to path.
+
+          next node = (current + a[current]) mod N.
+
+      now, check if next node is in the path.
+
+      if yes, find the index in the path where next node appears. All nodes from that index onwards are part of a cycle.
+
+      add the length of the cycle (path length - index) to the answer.
+
+This way, we can process all nodes efficiently.
+
+Let's see an example.
+
+Take the first sample input:
+
+3
+
+1 1 1
+
+So the movement for each node:
+
+i=0: 0 + 1 mod 3 →1.
+
+i=1: 1+1=2 mod3→2.
+
+i=2: 2+1=3 mod3→0.
+
+So the graph is 0→1→2→0. So all nodes are in a cycle. So the answer is 3.
+
+Another example:
+
+3
+
+1 1 2.
+
+So the movement:
+
+i=0: 0+1=1 →1.
+
+i=1:1+1=2 →2.
+
+i=2:2+2=4 mod3=1.
+
+So the graph is 0→1→2→1.
+
+So here, the cycle is 1→2→1. So nodes 1 and 2 are in a cycle. So the answer is 2.
+
+So when we process node 0: we traverse 0,1,2. But then when moving from 2, next is 1, which is already visited and in the path. So the path is [0,1,2], next node is 1. The index of 1 in the path is 1. So the cycle is 1 and 2 (from index 1 to end of path, which is index 1 and 2). Wait, no. The path is [0,1,2], and next node is 1. So the cycle is 1→2→1. So the cycle starts at index 1 of the path. The cycle includes nodes 1 and 2. So the length is 3-1=2? Wait, the path is [0,1,2], and the next node after 2 is 1. So in the traversal, after processing 2, the next node is 1. But 1 is already in the path. So the cycle starts at the index where 1 is first found in the path (index 1). So the cycle is 1,2,1... So the nodes in the cycle are 1 and 2. Because the path from index 1 onwards is [1,2]. But when we move from 2, we get 1, which is part of the cycle. So the cycle is 1→2→1. So the cycle length is 2. So the code would add 2 nodes (1 and 2) to the answer. Then node 0 is processed, but after processing, the code would check that the next node (1) is in the path. The index is 1. So the cycle is from index 1. So the nodes in the cycle are 1 and 2. So for node 0, the code would check if the next node (1) is in the path. Yes, at index 1. So the cycle is the part of the path from index 1 to the end, which is 1 and 2. So those nodes are marked as part of a cycle (but they were already processed). But in the code, since we process nodes in the order 0,1,2, etc., when we process 0, the code will process 0, mark it as visited. Then process 1, mark as visited, process 2, mark as visited. Then, when we process 0, the code may not even process other nodes because they are already visited. Wait no.
+
+Wait, the code for each unvisited node.
+
+So for the sample input 3 1 1 2:
+
+Nodes 0,1,2.
+
+Processing starts with 0. Since 0 is unvisited, we start a traversal.
+
+path is [0]. Mark 0 as visited.
+
+Next node is (0 + a[0]) mod3 =1.
+
+Check if 1 is visited. Initially, no. So add to path. Mark as visited.
+
+Next node is 1 + a[1] mod3 = 2. 2 is unvisited. Add to path, mark as visited.
+
+Next node is 2 + a[2] mod3. a[2] is 2. 2+2=4 mod3=1. So next node is 1.
+
+Now, 1 is already visited. Check if it's in the path. The path is [0,1,2]. Looking for 1, which is at index 1.
+
+So the cycle starts at index 1. The nodes in the cycle are 1,2. So the code adds 2 to the answer. So during processing node 0, the code finds that the path leads to 1, which is in the path. So the cycle is of length 2 (nodes 1 and 2). So for this traversal, the code adds 2 nodes to the answer.
+
+Then, when processing node 1 (already visited), it's skipped. Similarly for node 2.
+
+So the answer is 2.
+
+So the code seems to work.
+
+Another example: input 8, 2 3 7 3 3 3 4 4.
+
+The output is 6. So 6 of the 8 nodes are in cycles.
+
+So the algorithm needs to correctly identify cycles.
+
+So the approach is:
+
+- For each node, if it's part of a cycle, count it.
+
+Now, the steps in code:
+
+Implement the functional graph and find all cycles.
+
+So code steps:
+
+Read N.
+
+Read the list a as integers.
+
+Compute for each i, the next node as (i + a[i]) % N.
+
+But wait, the a[i] can be up to 1e9, but (i + a[i]) mod N is the next node.
+
+Yes, because each step moves a[i] steps clockwise. For example, if you're at position i (0-based), moving a[i] steps brings you to (i + a[i]) mod N.
+
+So the next node function is next = (i + a[i]) % N.
+
+So the code can precompute this for all nodes.
+
+But in code, for each i, we can compute next_node[i] = (i + a[i]) % N.
+
+Once the next_node array is computed, the problem becomes finding all nodes that are part of cycles in the functional graph.
+
+So the code will need to:
+
+1. Precompute next_node for each i.
+
+2. Find all cycles in the next_node graph.
+
+To find the cycles, the standard approach is:
+
+- Use a visited array.
+
+- For each node not visited, start traversing until a cycle is found.
+
+But since each node has exactly one outgoing edge, the traversal is straightforward.
+
+Let me think of how to code this.
+
+Initialize visited as a boolean array of size N, all False.
+
+Initialize a variable result = 0.
+
+For each i in 0 to N-1:
+
+   if not visited[i]:
+
+      create a list 'path' to track the nodes in the current traversal.
+
+      current = i.
+
+      while True:
+
+          if visited[current]:
+
+              if current in path:
+
+                  # found a cycle. The cycle starts at the first occurrence of current in path.
+
+                  idx = path.index(current)
+
+                  # the length of the cycle is len(path) - idx.
+
+                  result += len(path) - idx.
+
+              break.
+
+          else:
+
+              visited[current] = True
+
+              path.append(current)
+
+              current = next_node[current]
+
+Wait, but this approach is O(N) per traversal, but for N=1e5, this could be O(N^2) in the worst case. Because for each node, the path can be O(N), and the index lookup is O(path length).
+
+For example, in a linked list where each node points to the next (no cycles), the code would process each node as a separate path, and for each node, the index lookup would be O(1). Wait, no. For a linked list without cycles, each path would be a linear chain. So when processing the first node (i=0), the path would be [0,1,2,...,N-1], then next_node[N-1] would point to some node. But if there's no cycle, the code would check if next_node[N-1] is in the path, which it isn't, so nothing is added to result.
+
+Wait, but in a linked list without cycles, the traversal would end when current is N-1, then next_node[N-1] is some node. If that node is not in the path (i.e., not in the list), then the code breaks. So the cycle is not found.
+
+But in this scenario, the code would process each node once. For example, when processing node 0, the path is [0,1,2,...,N-1], and the next node is (N-1 + a[N-1]) mod N. If that's not in the path, then the code breaks. But in this case, all nodes are marked as visited. So when processing the next nodes (like 1, 2, etc.), they are already visited, so the loop skips them.
+
+So the code's time complexity is O(N), because each node is visited exactly once.
+
+Wait, the code for each i in 0..N-1:
+
+   if not visited[i], then start traversing from i, adding nodes to the path until a visited node is found.
+
+Each step in the traversal marks the node as visited, so each node is processed once.
+
+Thus, the total time is O(N), which is acceptable for N=1e5.
+
+However, the step where we check if current is in the path (using path.index(current)) can be O(k) where k is the length of the path. For example, in a chain of length k, the index lookup would take O(k) time, which for N=1e5, would be O(N) for each such chain, leading to O(N^2) time in the worst case.
+
+Ah, right. So this approach is O(N^2) in the worst case, which is not acceptable for N=1e5.
+
+Therefore, we need a way to detect cycles without using path.index(current), which is O(k) time.
+
+Alternative approach:
+
+When traversing a path, we can keep track of the positions in a dictionary or a hash set. But for each traversal, the path is built step by step, and for each step, the current node is added to a set for that traversal.
+
+Wait, but when building the path, for each node in the traversal, we can keep a hash map from node to its index in the path. Then, when current is found in the hash map, we can immediately find the index.
+
+But for each traversal, the hash map is built as we go. So for example, for the path [0,1,2], the hash map would be {0:0, 1:1, 2:2}. Then, when current is 1, which is already in the hash map, we can look it up in O(1) time.
+
+This would reduce the time for checking the index from O(k) to O(1) per traversal.
+
+Yes. So modifying the code:
+
+For each unvisited node i:
+
+   create a dictionary pos, which maps nodes to their positions in the path.
+
+   current = i.
+
+   while current is not visited:
+
+       visited[current] = True
+
+       add current to path.
+
+       pos[current] = len(path) - 1.
+
+       current = next_node[current]
+
+   Now, check if current is in pos:
+
+       if yes:
+
+           the cycle starts at pos[current], and the length is len(path) - pos[current]
+
+           result += len(path) - pos[current]
+
+This way, the index lookup is O(1).
+
+Thus, the time complexity becomes O(N), since each node is processed once, and each step is O(1).
+
+Yes. Because in each traversal, for each node in the path, we add it to the pos dictionary, which is O(1) per node. Then, checking if current is in the pos is O(1). So overall, the code is O(N).
+
+So this is the correct approach.
+
+So the steps in code:
+
+Read N.
+
+Read the array a as list of integers.
+
+Compute next_node[i] = (i + a[i]) % N for each i.
+
+Initialize visited as a list of False, size N.
+
+result = 0
+
+for i in range(N):
+
+    if not visited[i]:
+
+        path = []
+
+        pos = dict()
+
+        current = i
+
+        while True:
+
+            if visited[current]:
+
+                # check if current is in pos
+
+                if current in pos:
+
+                    # cycle found from pos[current] to end of path.
+
+                    cycle_length = len(path) - pos[current]
+
+                    result += cycle_length
+
+                break
+
+            visited[current] = True
+
+            path.append(current)
+
+            pos[current] = len(path) -1
+
+            current = next_node[current]
+
+Thus, this code will process each node exactly once, and for each cycle, find the length and add it to the result.
+
+Testing this code against the examples:
+
+First example:
+
+3
+
+1 1 1.
+
+next_node for each i:
+
+i=0: (0+1) mod3 =1.
+
+i=1: (1+1)=2 mod3=2.
+
+i=2: (2+1)=3 mod3=0.
+
+So next_node is [1,2,0].
+
+Processing i=0:
+
+current is 0 (not visited).
+
+path becomes [0], pos {0:0}.
+
+current becomes 1.
+
+current is not visited. add to path: [0,1], pos {0:0, 1:1}.
+
+current becomes 2. add to path: [0,1,2], pos {0:0, 1:1, 2:2}.
+
+current becomes 0. which is visited.
+
+Check if 0 is in pos (the current path's pos). 0 is in pos (key 0, index 0).
+
+cycle_length is 3 - 0 =3. result becomes 3.
+
+Thus, output is 3.
+
+Which matches the first example.
+
+Second example:
+
+3
+
+1 1 2.
+
+next_node:
+
+i=0:0+1=1 mod3 →1.
+
+i=1:1+1=2 mod3 →2.
+
+i=2:2+2=4 mod3 →1.
+
+So next_node is [1,2,1].
+
+Processing i=0.
+
+current is 0 (unvisited).
+
+path becomes [0], pos {0:0}.
+
+current becomes 1 (unvisited).
+
+path becomes [0,1], pos {0:0,1:1}.
+
+current becomes 2 (unvisited).
+
+path becomes [0,1,2], pos {0:0,1:1,2:2}.
+
+current becomes next_node[2] →1. Which is visited.
+
+Check if 1 is in pos: yes, index 1.
+
+cycle_length is 3-1=2. So add 2 to result.
+
+Thus, result is 2.
+
+Then, when processing i=1, it's already visited. Same for i=2. So total result is 2.
+
+Third example:
+
+8
+
+2 3 7 3 3 3 4 4.
+
+The next_node array would be:
+
+i=0:0+2=2 mod8 →2.
+
+i=1:1+3=4 mod8 →4.
+
+i=2:2+7=9 mod8 →1.
+
+i=3:3+3=6 mod8 →6.
+
+i=4:4+3=7 mod8 →7.
+
+i=5:5+3=8 mod8 →0.
+
+i=6:6+4=10 mod8 →2.
+
+i=7:7+4=11 mod8 →3.
+
+So next_node is [2,4,1,6,7,0,2,3].
+
+Let's process this.
+
+Let's see which nodes form cycles.
+
+For example, let's see what the code does.
+
+Start with i=0.
+
+current is 0 (unvisited). path starts.
+
+path: [0], pos {0:0}.
+
+current becomes next_node[0] =2. Unvisited.
+
+path: [0,2], pos {0:0, 2:1}.
+
+current becomes next_node[2] =1. Unvisited.
+
+path: [0,2,1], pos {0:0, 2:1, 1:2}.
+
+current becomes next_node[1] =4. Unvisited.
+
+path: [0,2,1,4], pos ... {4:3}.
+
+current becomes next_node[4] =7. Unvisited.
+
+path: [0,2,1,4,7], pos {7:4}.
+
+current becomes next_node[7] =3. Unvisited.
+
+path: [0,2,1,4,7,3], pos {3:5}.
+
+current becomes next_node[3] =6. Unvisited.
+
+path: [0,2,1,4,7,3,6], pos {6:6}.
+
+current becomes next_node[6] =2. Now, 2 is already in the path (index 1).
+
+So current is 2, which is in pos (pos[2] is 1).
+
+So cycle_length is 7 (length of path is 7) -1 =6. So result +=6.
+
+So the cycle includes nodes 2,1,4,7,3,6,2. Wait, the path is [0,2,1,4,7,3,6], and current is 2. So when current is 2, which is in the path (index 1), the cycle starts at index 1. So the cycle is path[1:] → [2,1,4,7,3,6]. So the length is 6. So the code adds 6 to the result.
+
+Then, the code proceeds to check other nodes. For example, node 5.
+
+i=5 is unvisited. So start processing.
+
+current=5. next_node[5] is 0.
+
+path starts as [5], pos {5:0}.
+
+current becomes 0, which is visited. Check if 0 is in pos (current path's pos). No. So nothing added.
+
+So no cycle found here.
+
+Next, node 5 is processed, but 0 is already visited and not in the current path.
+
+Thus, nodes 5 and 0 are part of a tree leading to the cycle, but are not part of the cycle.
+
+So the total result is 6, which matches the third example.
+
+Thus, the code works.
+
+So the code is as follows:
+
+Read N.
+
+Read a list.
+
+Compute next_node for each i as (i + a[i]) % N.
+
+Initialize visited as [False] * N.
+
+result =0.
+
+For each i in 0..N-1:
+
+   if not visited[i]:
+
+      path = []
+
+      pos = dict()
+
+      current =i.
+
+      while True:
+
+          if visited[current]:
+
+              if current in pos:
+
+                  cycle_length = len(path) - pos[current]
+
+                  result += cycle_length
+
+              break
+
+          visited[current] = True
+
+          path.append(current)
+
+          pos[current] = len(path)-1
+
+          current = next_node[current]
+
+Finally, print result.
+
+Now, implement this in Python.
+
+But for N up to 1e5, using a list for path and a dictionary for pos is acceptable. However, in Python, the dictionary may be slower for large N, but given that each node is added once, and lookups are O(1), it's manageable.
+
+Testing with sample inputs:
+
+Sample 3:
+
+Input 8.
+
+The code computes 6, which is correct.
+
+So the code should work.
+
+Now, code in Python:
+
+Read N.
+
+Then read the list a.
+
+Compute next_node as [(i + a[i]) % N for i in range(N)].
+
+But wait, in Python, the list a is given as a1 a2 ... aN, which are 1-based. But in the code, the indices are 0-based. So when input is given as a1 a2 ... aN, they correspond to the values for 0-based index in the code.
+
+Wait, the input's a1 is the value for the first square, which in code is index 0.
+
+Yes.
+
+For example, the first sample input:
+
+3
+
+1 1 1.
+
+a[0] is 1, a[1] is 1, a[2] is 1. So next_node for i=0 is (0+1) mod3=1, which matches the example.
+
+So the code is correct.
+
+Thus, the code can be written as:
+
+Read N.
+
+Read list a as list of integers.
+
+Compute next_node[i] = (i + a[i]) % N for each i in 0..N-1.
+
+Then process as per the algorithm.
+
+So the Python code:
+
+n = int(input())
+a = list(map(int, input().split()))
+next_node = [(i + x) % n for i, x in enumerate(a)]
+visited = [False] * n
+result = 0
+
+for i in range(n):
+    if not visited[i]:
+        path = []
+        pos = {}
+        current = i
+        while True:
+            if visited[current]:
+                if current in pos:
+                    cycle_length = len(path) - pos[current]
+                    result += cycle_length
+                break
+            visited[current] = True
+            path.append(current)
+            pos[current] = len(path) - 1
+            current = next_node[current]
+
+print(result)
+
+Wait, but wait, in Python, for large N (1e5), using a list for path and a dictionary for pos is feasible. For 1e5 elements, the dictionary will take O(n) space, which is acceptable.
+
+Testing with the sample inputs:
+
+Sample 1:
+
+Input:
+
+3
+
+1 1 1
+
+next_node becomes:
+
+0+1=1 mod3 →1.
+
+1+1=2 mod3 →2.
+
+2+1=3 mod3 →0.
+
+So next_node is [1,2,0].
+
+Processing i=0:
+
+path is [0], current becomes 1.
+
+path is [0,1], current becomes 2.
+
+path is [0,1,2], current becomes 0.
+
+0 is visited. Check if in pos (yes, index 0). cycle_length 3. result=3.
+
+Sample 2:
+
+3
+
+1 1 2.
+
+next_node:
+
+0+1=1 mod3 →1.
+
+1+1=2 mod3 →2.
+
+2+2=4 mod3 →1.
+
+So next_node is [1,2,1].
+
+Processing i=0:
+
+current is 0.
+
+path [0], pos {0:0} → current becomes 1.
+
+path [0,1], pos {0:0,1:1} → current becomes 2.
+
+path [0,1,2], pos {0:0,1:1,2:2} → current becomes 1 (next_node[2] is 1).
+
+current 1 is visited. Check if in pos → yes, index 1.
+
+cycle_length =3-1=2. result becomes 2.
+
+Thus, the code works.
+
+Sample 3:
+
+Output is 6, which is correct.
+
+Thus, the code should work.
+</think>
+To solve this problem, we need to determine the number of squares in a sugoroku game that can reach "Agari", meaning that starting from a square and following the movement rules eventually leads back to the starting square. 
+
+### Approach
+1. **Understand the Movement**: Each square has a value indicating how many steps to move clockwise. The next position is determined by `(current position + value) % N`, where `N` is the number of squares.
+2. **Graph Representation**: Represent the game as a directed graph where each node (square) points to the next node based on the movement rule.
+3. **Cycle Detection**: In this graph, each node has exactly one outgoing edge. The key insight is that only nodes part of a cycle can return to themselves. Thus, the problem reduces to finding all nodes in cycles.
+4. **Efficient Cycle Detection**: Use a depth-first search (DFS) approach to traverse each node, tracking visited nodes and detecting cycles using a dictionary to map nodes to their positions in the traversal path.
+
+### Solution Code
+```python
+n = int(input())
+a = list(map(int, input().split()))
+next_node = [(i + x) % n for i, x in enumerate(a)]
+visited = [False] * n
+result = 0
+
+for i in range(n):
+    if not visited[i]:
+        path = []
+        pos = {}
+        current = i
+        while True:
+            if visited[current]:
+                if current in pos:
+                    cycle_length = len(path) - pos[current]
+                    result += cycle_length
+                break
+            visited[current] = True
+            path.append(current)
+            pos[current] = len(path) - 1
+            current = next_node[current]
+
+print(result)
+```
+
+### Explanation
+1. **Reading Input**: The input consists of the number of squares `N` and the list of values on each square.
+2. **Next Node Calculation**: Compute the next node for each square using `(current index + value) % N`.
+3. **Cycle Detection**: For each unvisited node, traverse the graph while keeping track of the current path. If a node is revisited and found in the current path, a cycle is detected. The length of the cycle is calculated and added to the result.
+4. **Result Calculation**: The total number of nodes in all detected cycles is the answer, as these nodes can return to themselves (Agari).
+
+This approach efficiently detects cycles in O(N) time complexity, ensuring it handles the upper constraint of N = 100,000 efficiently.
+</bot>

@@ -1,0 +1,644 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.A factory produces thimbles in bulk. Typically, it can produce up to a thimbles a day. However, some of the machinery is defective, so it can currently only produce b thimbles each day. The factory intends to choose a k-day period to do maintenance and construction; it cannot produce any thimbles during this time, but will be restored to its full production of a thimbles per day after the k days are complete.
+
+Initially, no orders are pending. The factory receives updates of the form di, ai, indicating that ai new orders have been placed for the di-th day. Each order requires a single thimble to be produced on precisely the specified day. The factory may opt to fill as many or as few of the orders in a single batch as it likes.
+
+As orders come in, the factory owner would like to know the maximum number of orders he will be able to fill if he starts repairs on a given day pi. Help the owner answer his questions.
+
+Input
+
+The first line contains five integers n, k, a, b, and q (1 ≤ k ≤ n ≤ 200 000, 1 ≤ b < a ≤ 10 000, 1 ≤ q ≤ 200 000) — the number of days, the length of the repair time, the production rates of the factory, and the number of updates, respectively.
+
+The next q lines contain the descriptions of the queries. Each query is of one of the following two forms: 
+
+  * 1 di ai (1 ≤ di ≤ n, 1 ≤ ai ≤ 10 000), representing an update of ai orders on day di, or 
+  * 2 pi (1 ≤ pi ≤ n - k + 1), representing a question: at the moment, how many orders could be filled if the factory decided to commence repairs on day pi? 
+
+
+
+It's guaranteed that the input will contain at least one query of the second type.
+
+Output
+
+For each query of the second type, print a line containing a single integer — the maximum number of orders that the factory can fill over all n days.
+
+Examples
+
+Input
+
+5 2 2 1 8
+1 1 2
+1 5 3
+1 2 1
+2 2
+1 4 2
+1 3 2
+2 1
+2 3
+
+
+Output
+
+3
+6
+4
+
+
+Input
+
+5 4 10 1 6
+1 1 5
+1 5 5
+1 3 2
+1 5 2
+2 1
+2 2
+
+
+Output
+
+7
+1
+
+Note
+
+Consider the first sample.
+
+We produce up to 1 thimble a day currently and will produce up to 2 thimbles a day after repairs. Repairs take 2 days.
+
+For the first question, we are able to fill 1 order on day 1, no orders on days 2 and 3 since we are repairing, no orders on day 4 since no thimbles have been ordered for that day, and 2 orders for day 5 since we are limited to our production capacity, for a total of 3 orders filled.
+
+For the third question, we are able to fill 1 order on day 1, 1 order on day 2, and 2 orders on day 5, for a total of 4 orders.
+</user>
+<bot>
+<think>
+Okay, let's see. I need to solve this problem where a factory is handling orders and has some days when it's under repair. The problem is to answer queries about the maximum number of orders that can be filled if repairs start on a certain day. Hmm.
+
+So, the input has updates adding orders to a specific day, and queries asking for the maximum orders possible if repair starts on day pi. The repair period is k days, during which no production. After repair, the factory produces a thimbles per day instead of the current b.
+
+The key here is to calculate the sum of orders that can be filled before the repair period, during (but none), and after. But how?
+
+Wait, the factory can choose to fill any number of orders from each batch. For each day, the number of orders filled is the minimum between the available orders and the production capacity on that day.
+
+So, for days before the repair (pi to pi +k-1), the production is b, except during repair days. Wait, no. Wait, the repair starts on day pi, and lasts k days. So during days pi, pi+1, ..., pi+k-1, the factory is under repair and can't produce anything. Before that period (days 1 to pi-1), the production is at the current capacity (b). After the repair period (days pi+k onwards), the production is at full capacity a.
+
+So, for each query of type 2, we need to compute:
+
+sum over days before repair (days < pi) of min(orders[day], b) 
+
+plus sum over days after repair (days >= pi +k) of min(orders[day], a)
+
+The repair days (pi to pi+k-1) contribute 0.
+
+So, the problem reduces to efficiently maintaining two prefix sums: one for the sum of min(orders[day], b) up to day x, and another for the sum of min(orders[day], a) from day y onwards.
+
+Wait, but for each query, the before part is days 1 to pi-1, and the after part is days pi +k to n. So, for the before part, we need a prefix sum up to pi-1 using the b-based calculation. For the after part, we need a suffix sum starting at pi +k using the a-based calculation.
+
+Therefore, the idea is to precompute two arrays:
+
+- A prefix sum array for each day i, sum_{d=1 to i} min(orders[d], b)
+- A suffix sum array for each day i, sum_{d=i to n} min(orders[d], a)
+
+Then, for a query pi, the total is:
+
+prefix_sum[pi-1] + suffix_sum[pi +k]
+
+Because days pi to pi+k-1 are during repair and contribute 0.
+
+But how to handle updates efficiently? Because the updates can be up to 2e5 in number, and each query also up to 2e5. So we need a data structure that allows point updates and range queries quickly.
+
+So for the prefix part (sum of min(b, orders[d]) from 1 to x), a Fenwick tree (Binary Indexed Tree) can be used. Similarly for the suffix part (sum of min(a, orders[d]) from x to n), perhaps a Fenwick tree that is built in reverse (so that we can query sum from x to n). Alternatively, since the suffix is a sum from x to n, we can represent it with a prefix sum from n downto x. So, perhaps using another Fenwick Tree where the index is reversed.
+
+Alternatively, we can use two separate Fenwick trees. Let's think:
+
+- The first Fenwick tree (prefix_b) will store min(orders[d], b) for each day d. So, querying the sum from 1 to pi-1 is O(log n) time.
+- The second Fenwick tree (suffix_a) will store min(orders[d], a) for each day d. But to get the sum from pi +k to n, which is the sum from (pi +k) to n, we can have the Fenwick tree store cumulative sums from 1 to d, and then compute sum from 1 to n minus sum from 1 to (pi +k -1). Wait, that's possible.
+
+Wait, if we have a standard Fenwick tree for the a-based values, then the sum from x to n is the total sum (sum up to n) minus the sum up to x-1.
+
+So for suffix_a, the sum from pi +k to n is sum_a_total - prefix_a.query(pi +k -1).
+
+So the steps would be:
+
+1. For each update (1 di ai), we add ai to orders[di]. Then, for the prefix_b tree, the value at di is min(orders[di], b). But when we add ai to di, we need to check if the current orders[di] exceeds b, but since we can have multiple updates, we need to track the current value of orders[di]. So we need an array orders that keeps track of the current number of orders for each day.
+
+But how to compute the value in the Fenwick tree for prefix_b? For each day, the contribution to prefix_b is min(orders[d], b). So whenever orders[d] changes, we need to update the prefix_b tree by the delta between the new min and the old min.
+
+Same for the suffix_a tree. The contribution is min(orders[d], a). So each time orders[d] changes, we need to compute the delta between new and old contribution and update both trees accordingly.
+
+So, the data structures needed are:
+
+- An array orders to track the current number of orders for each day.
+- Two Fenwick trees: one for prefix sums (min with b) and one for suffix sums (min with a).
+
+Wait, but how to handle the min part. For example, if orders[d] is already greater than or equal to b, then adding more ai to di won't change the contribution to prefix_b. So each time an update occurs, for that day, we need to check what the previous contribution was (min(old_orders, b)), then compute the new contribution (min(new_orders, b)), and add the difference (new - old) to the Fenwick tree.
+
+But to track this, we need to know, for each day, what the current contribution is to both trees.
+
+Wait, but perhaps for each day, the contribution to the prefix_b tree is min(orders[d], b), and for the suffix_a tree is min(orders[d], a). So for each update, we need to compute the delta for each of these contributions and update the Fenwick trees accordingly.
+
+So when we process an update of adding ai to day di:
+
+- For the prefix_b tree:
+
+old_contribution_b = min(previous_orders[di], b)
+
+new_orders = previous_orders[di] + ai
+
+new_contribution_b = min(new_orders, b)
+
+delta_b = new_contribution_b - old_contribution_b
+
+update the prefix_b Fenwick tree at index di by delta_b.
+
+- Similarly, for the suffix_a tree:
+
+old_contribution_a = min(previous_orders[di], a)
+
+new_contribution_a = min(new_orders, a)
+
+delta_a = new_contribution_a - old_contribution_a
+
+update the suffix_a Fenwick tree at index di by delta_a.
+
+Then, after the update, we store the new_orders in orders[di].
+
+So the Fenwick trees will track the sum of min(orders[d], b) for the prefix, and min(orders[d], a) for the suffix.
+
+Yes. So this approach will handle updates efficiently, as each update is O(log n) time for both trees.
+
+Then, for a query of type 2 (pi):
+
+- The repair starts on day pi, and lasts k days. So during days pi, pi+1, ..., pi +k-1, no production.
+
+So the days before are 1 to pi-1: sum is prefix_b.query(pi-1).
+
+The days after are pi +k to n: sum is suffix_a.query(pi +k, n).
+
+So sum_total = prefix_b_sum + suffix_a_sum.
+
+But how to compute the suffix_a_sum? The suffix_a Fenwick tree is a sum from 1 to n of min(orders[d], a). So the sum from x to n is sum_total_a - prefix_a_sum(x-1), where sum_total_a is the sum of all min(orders[d], a).
+
+Wait, but the suffix_a Fenwick tree is built such that the prefix up to x gives the sum from 1 to x. So the sum from x to y is query(y) - query(x-1). So the sum from pi +k to n is suffix_a.query(n) - suffix_a.query(pi +k -1).
+
+Yes. So for the suffix_a part, the sum is suffix_a.query_range(pi +k, n) = suffix_a.sum_to(n) - suffix_a.sum_to(pi +k -1).
+
+So putting it all together:
+
+For each query type 2 pi:
+
+sum_before = prefix_b.query(pi -1)
+
+sum_after = suffix_a.query(n) - suffix_a.query(pi +k -1)
+
+result = sum_before + sum_after
+
+Print result.
+
+Now, the question is, how to implement the Fenwick trees.
+
+The Fenwick tree needs to support point updates and prefix sums. So each Fenwick tree is a standard implementation.
+
+So, the steps for the code:
+
+1. Read n, k, a, b, q.
+
+2. Initialize two Fenwick trees, prefix_b_tree and suffix_a_tree, each of size n.
+
+3. Initialize an orders array of size n+1 (since days are 1-based) initialized to 0.
+
+4. For each query:
+
+   a. If it's an update (1 di ai):
+
+      i. current_orders = orders[di]
+
+      ii. new_orders = current_orders + ai
+
+      iii. Compute delta_b: min(new_orders, b) - min(current_orders, b)
+
+      iv. Update prefix_b_tree at di by delta_b.
+
+      v. Compute delta_a: min(new_orders, a) - min(current_orders, a)
+
+      vi. Update suffix_a_tree at di by delta_a.
+
+      vii. Update orders[di] to new_orders.
+
+   b. If it's a query (2 pi):
+
+      i. start_day = pi
+
+      end_repair_day = pi +k -1
+
+      sum_before = prefix_b_tree.query(start_day -1)
+
+      sum_after_start = end_repair_day +1
+
+      sum_after = suffix_a_tree.query(n) - suffix_a_tree.query(sum_after_start -1)
+
+      total = sum_before + sum_after
+
+      print(total)
+
+Now, the Fenwick tree implementation needs to be efficient. Since n can be up to 2e5, and each query/update is O(log n), which is acceptable for 2e5 operations.
+
+Testing with the sample input:
+
+First sample input:
+
+5 2 2 1 8
+
+Queries:
+
+After some updates, the first query is 2 2.
+
+So pi=2. Repair starts on day 2, lasts 2 days (days 2 and 3). So days before are 1. The sum of min(orders[1], b=1). From the updates, after adding 2 orders on day 1, min(2,1) is 1. So sum_before is 1.
+
+After repair: days 4 and 5. Sum after is min(orders[4], a=2) + min(orders[5], a=2). But after the first updates, let's see. Let me look at the first sample step by step.
+
+Wait, the first sample input has these queries:
+
+After the first 3 updates:
+
+- Day 1: 2 orders
+
+- Day 5: 3 orders
+
+- Day 2: 1 order
+
+Then query 2 2 (pi=2). Repair days are 2 and 3. Days before (1) contribute min(2,1) =1. Days after (4,5). For day 4: no orders (sum 0). Day5: min(3,2)=2. So sum_after is 2. Total 1+2=3. Which matches the first output.
+
+So the code would compute sum_before as prefix_b_tree.query(1) which is 1. sum_after_start is 2+2=4. So sum_after is sum from day4 to day5. For day4, the contribution is min(0, 2) (since in the updates before this query, day4 hasn't been updated yet). So in the suffix_a_tree, day4 is 0, contributes 0, day5 is 3: min(3,2) is 2. So sum_after is 2. Total is 1+2=3.
+
+Yes.
+
+Another sample query in the first input is after adding more updates. Let's see.
+
+So, after all the updates in the first sample, when query 2 3 is made (pi=3), repair days are 3 and 4. Days before (1,2). Sum_before is min(2,1) (day1) + min(1+1 (from the third update) which is 2, but b is 1) so min(2,1) =1. So sum_before is 1+1=2. Days after are 5. min(3+2 (from the second sample update?), but wait the initial sample input has:
+
+The first sample input's queries:
+
+After the initial 8 queries, let's see the steps:
+
+The first sample's input lines:
+
+The 8 queries after the first line:
+
+1 1 2 → orders[1] +=2 → now 2.
+
+1 5 3 → orders[5] +=3 →3.
+
+1 2 1 → orders[2] +=1 →1.
+
+2 2 → query pi=2.
+
+Then:
+
+1 4 2 → orders[4] +=2 →2.
+
+1 3 2 → orders[3] +=2 →2.
+
+2 1 → query pi=1.
+
+Then 2 3 → query pi=3.
+
+So for the last query (2 3):
+
+pi=3. Repair days are 3 and 4. So days before are 1-2. Days after are 5.
+
+sum_before = prefix_b_tree.query(2). Let's see:
+
+orders[1] is 2 → min(2,1) =1.
+
+orders[2] is 1 → min(1,1)=1. So sum_before is 2.
+
+sum_after starts at day5: min(3,2) =2 (since a=2). So sum_after is 2. So total is 2+2=4. Which matches the third output.
+
+So the code seems correct.
+
+Now, the Fenwick tree code. Let's code that.
+
+The Fenwick tree in Python can be implemented as follows:
+
+class FenwickTree:
+    def __init__(self, size):
+        self.n = size
+        self.tree = [0]*(self.n +1)
+    
+    def update(self, index, delta):
+        # 1-based index
+        while index <= self.n:
+            self.tree[index] += delta
+            index += index & -index
+    
+    def query(self, index):
+        # sum from 1..index
+        res = 0
+        while index >0:
+            res += self.tree[index]
+            index -= index & -index
+        return res
+
+So, for each query, for the suffix_a, which is the sum of min(orders[d], a) from x to n, it's computed as (suffix_a.query(n) - suffix_a.query(x-1)).
+
+Now, the code steps:
+
+Read n, k, a, b, q.
+
+Initialize orders as [0]*(n+1) (since days are 1-based).
+
+Initialize two Fenwick trees, each of size n.
+
+Then process each query:
+
+For each query line:
+
+split into parts.
+
+If it's type 1:
+
+di = int(parts[1])
+
+ai = int(parts[2])
+
+current_orders = orders[di]
+
+new_orders = current_orders + ai
+
+delta_b = min(new_orders, b) - min(current_orders, b)
+
+prefix_b_tree.update(di, delta_b)
+
+delta_a = min(new_orders, a) - min(current_orders, a)
+
+suffix_a_tree.update(di, delta_a)
+
+orders[di] = new_orders
+
+If it's type 2:
+
+pi = int(parts[1])
+
+start_day = pi
+
+end_repair = pi +k -1
+
+sum_before = prefix_b_tree.query(pi-1)
+
+sum_after_start = end_repair +1
+
+if sum_after_start >n:
+
+    sum_after =0
+
+else:
+
+    sum_after = suffix_a_tree.query(n) - suffix_a_tree.query(sum_after_start-1)
+
+total = sum_before + sum_after
+
+print(total)
+
+Yes.
+
+Wait, but what if sum_after_start exceeds n? For example, if pi +k -1 >=n, then sum_after_start = pi +k, which is greater than n, so sum_after is zero.
+
+So in code:
+
+sum_after_start = pi +k
+
+if sum_after_start >n:
+
+    sum_after =0
+
+else:
+
+    sum_after = suffix_a_tree.query(n) - suffix_a_tree.query(sum_after_start -1)
+
+So, in the code, need to handle that.
+
+Now, considering the sample input 2:
+
+Input:
+
+5 4 10 1 6
+
+1 1 5
+
+1 5 5
+
+1 3 2
+
+1 5 2
+
+2 1
+
+2 2
+
+Outputs:
+
+7 and 1.
+
+Let's see for the first query (pi=1):
+
+Repair days are 1,2,3,4 (k=4). So days before (none). Sum_before is 0.
+
+Days after are 5 (since sum_after_start is 1+4=5). So sum_after is min(5+2=7, 10) →7. So sum_after is 7. Total is 0+7=7.
+
+Which matches the output.
+
+For the second query (pi=2):
+
+Repair days are 2,3,4,5 (k=4). So days before is 1. Sum_before is min(5,1) →1. Days after sum_after_start is 2+4=6>5, so sum_after is 0. Total is 1+0=1.
+
+Yes.
+
+So code works.
+
+Now, the code needs to handle this.
+
+Now, the code in Python:
+
+Implement the Fenwick trees, read the input, process each query.
+
+But for n up to 2e5 and q up to 2e5, in Python it's manageable, but need to read the input efficiently.
+
+So using sys.stdin for reading.
+
+So the code:
+
+import sys
+
+class FenwickTree:
+    def __init__(self, size):
+        self.n = size
+        self.tree = [0]*(self.n +1)
+    
+    def update(self, index, delta):
+        # index is 1-based
+        while index <= self.n:
+            self.tree[index] += delta
+            index += index & -index
+    
+    def query(self, index):
+        # sum from 1 to index (1-based)
+        res = 0
+        while index >0:
+            res += self.tree[index]
+            index -= index & -index
+        return res
+
+def main():
+    import sys
+    input = sys.stdin.read().split()
+    ptr = 0
+    n = int(input[ptr])
+    ptr +=1
+    k = int(input[ptr])
+    ptr +=1
+    a = int(input[ptr])
+    ptr +=1
+    b = int(input[ptr])
+    ptr +=1
+    q = int(input[ptr])
+    ptr +=1
+
+    orders = [0]*(n+2) # days 1..n
+
+    prefix_b_tree = FenwickTree(n)
+    suffix_a_tree = FenwickTree(n)
+
+    for _ in range(q):
+        parts = input[ptr:ptr+3 if input[ptr] == '1' else ptr+2]
+        if input[ptr] == '1':
+            # update
+            di = int(input[ptr+1])
+            ai = int(input[ptr+2])
+            ptr +=3
+            current = orders[di]
+            new_val = current + ai
+            # compute delta for prefix_b (min(new, b) - min(current, b))
+            delta_b = min(new_val, b) - min(current, b)
+            prefix_b_tree.update(di, delta_b)
+            # compute delta for suffix_a (min(new, a) - min(current, a))
+            delta_a = min(new_val, a) - min(current, a)
+            suffix_a_tree.update(di, delta_a)
+            orders[di] = new_val
+        else:
+            # query
+            pi = int(input[ptr+1])
+            ptr +=2
+            start_day = pi
+            end_repair = start_day + k -1
+            sum_before = prefix_b_tree.query(start_day -1)
+            sum_after_start = end_repair +1
+            if sum_after_start >n:
+                sum_after =0
+            else:
+                total_a = suffix_a_tree.query(n)
+                sum_up_to = suffix_a_tree.query(sum_after_start -1)
+                sum_after = total_a - sum_up_to
+            total = sum_before + sum_after
+            print(total)
+
+if __name__ == "__main__":
+    main()
+
+But need to test for edge cases, like when the repair period starts at pi, and sum_after_start is beyond n.
+
+For example, if pi +k exceeds n, then sum_after is zero.
+
+Another test case: pi= n -k +1. Then end_repair is (n -k +1) +k-1 =n. sum_after_start is n+1, which is >n. So sum_after is zero.
+
+Yes.
+
+So this code should work.
+</think>
+To solve this problem, we need to determine the maximum number of orders a factory can fulfill if it starts maintenance on a specific day. The factory's production capacity changes before and after the maintenance period, and we need to efficiently handle updates to orders and queries about the maximum orders that can be fulfilled.
+
+### Approach
+1. **Data Structures**: Use two Fenwick Trees (Binary Indexed Trees) to efficiently compute prefix sums for production capacity before maintenance and suffix sums for production capacity after maintenance.
+2. **Prefix and Suffix Sums**: 
+   - **Prefix Sum**: Track the sum of orders that can be fulfilled with the current production capacity (b) before the maintenance period.
+   - **Suffix Sum**: Track the sum of orders that can be fulfilled with the full production capacity (a) after the maintenance period.
+3. **Handling Updates**: For each update, adjust the values in the Fenwick Trees to reflect the new orders and their impact on the production capacity constraints.
+4. **Query Processing**: For each query, compute the sum of orders that can be fulfilled before and after the maintenance period using the prefix and suffix sums.
+
+### Solution Code
+```python
+import sys
+
+class FenwickTree:
+    def __init__(self, size):
+        self.n = size
+        self.tree = [0] * (self.n + 1)  # 1-based indexing
+
+    def update(self, index, delta):
+        while index <= self.n:
+            self.tree[index] += delta
+            index += index & -index
+
+    def query(self, index):
+        res = 0
+        while index > 0:
+            res += self.tree[index]
+            index -= index & -index
+        return res
+
+def main():
+    input = sys.stdin.read().split()
+    ptr = 0
+    n = int(input[ptr]); ptr += 1
+    k = int(input[ptr]); ptr += 1
+    a = int(input[ptr]); ptr += 1
+    b = int(input[ptr]); ptr += 1
+    q = int(input[ptr]); ptr += 1
+
+    orders = [0] * (n + 2)  # 1-based to n
+
+    prefix_b_tree = FenwickTree(n)
+    suffix_a_tree = FenwickTree(n)
+
+    for _ in range(q):
+        if input[ptr] == '1':
+            # Update query
+            di = int(input[ptr+1])
+            ai = int(input[ptr+2])
+            ptr += 3
+            current = orders[di]
+            new_val = current + ai
+            # Update prefix_b_tree (min with b)
+            delta_b = min(new_val, b) - min(current, b)
+            prefix_b_tree.update(di, delta_b)
+            # Update suffix_a_tree (min with a)
+            delta_a = min(new_val, a) - min(current, a)
+            suffix_a_tree.update(di, delta_a)
+            orders[di] = new_val
+        else:
+            # Query
+            pi = int(input[ptr+1])
+            ptr += 2
+            end_repair = pi + k - 1
+            sum_before = prefix_b_tree.query(pi - 1)
+            sum_after_start = end_repair + 1
+            if sum_after_start > n:
+                sum_after = 0
+            else:
+                total_a = suffix_a_tree.query(n)
+                sum_up_to = suffix_a_tree.query(sum_after_start - 1)
+                sum_after = total_a - sum_up_to
+            total = sum_before + sum_after
+            print(total)
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+- **Fenwick Trees**: These are used to maintain prefix sums for the current production capacity (b) and suffix sums for the full production capacity (a). This allows efficient updates and range queries.
+- **Updates**: When an order update is received, we adjust the contributions of the affected day in both Fenwick Trees to reflect the new order count and its impact on production limits.
+- **Queries**: For each query, we compute the sum of orders that can be fulfilled before the maintenance period using the prefix sum and after the maintenance period using the suffix sum. The days during maintenance are ignored as no production occurs.
+
+This approach ensures that both updates and queries are handled efficiently, making the solution scalable for large input sizes.
+</bot>

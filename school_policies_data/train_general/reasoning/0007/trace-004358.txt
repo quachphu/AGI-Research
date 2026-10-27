@@ -1,0 +1,1899 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.There are N stones, numbered 1, 2, \ldots, N. For each i (1 \leq i \leq N), the height of Stone i is h_i. Here, h_1 < h_2 < \cdots < h_N holds.
+
+There is a frog who is initially on Stone 1. He will repeat the following action some number of times to reach Stone N:
+
+* If the frog is currently on Stone i, jump to one of the following: Stone i + 1, i + 2, \ldots, N. Here, a cost of (h_j - h_i)^2 + C is incurred, where j is the stone to land on.
+
+
+
+Find the minimum possible total cost incurred before the frog reaches Stone N.
+
+Constraints
+
+* All values in input are integers.
+* 2 \leq N \leq 2 \times 10^5
+* 1 \leq C \leq 10^{12}
+* 1 \leq h_1 < h_2 < \cdots < h_N \leq 10^6
+
+Input
+
+Input is given from Standard Input in the following format:
+
+
+N C
+h_1 h_2 \ldots h_N
+
+
+Output
+
+Print the minimum possible total cost incurred.
+
+Examples
+
+Input
+
+5 6
+1 2 3 4 5
+
+
+Output
+
+20
+
+
+Input
+
+2 1000000000000
+500000 1000000
+
+
+Output
+
+1250000000000
+
+
+Input
+
+8 5
+1 3 4 5 10 11 12 13
+
+
+Output
+
+62
+</user>
+<bot>
+<think>
+Okay, I need to solve this problem where a frog jumps from stone 1 to stone N with certain costs, and find the minimum total cost. Let's think about how to approach this.
+
+First, the problem states that each time the frog can jump from stone i to any stone j > i (so i+1, i+2, ..., N). The cost for each jump is (h_j - h_i)^2 + C. We need the sum of these costs to be minimized as the frog moves from 1 to N.
+
+Hmm. The naive approach would be to consider all possible paths, but with N up to 2e5, that's impossible. So we need a dynamic programming approach with some optimizations.
+
+Let's think of dynamic programming here. Let's define dp[i] as the minimum cost to reach stone i. Then, for each i, we need to look back to all j < i and compute dp[j] + (h_i - h_j)^2 + C. Taking the minimum of these would give dp[i]. However, if we do this naively, for each i we check all j < i, that's O(N^2) time, which is way too slow for N=2e5.
+
+So we need a way to compute this efficiently. Maybe using some mathematical optimization, like the Convex Hull Trick (CHT) or other optimizations that work for certain recurrence relations.
+
+Looking at the recurrence relation: dp[i] = min_{j < i} (dp[j] + (h_i - h_j)^2 + C). Let's expand the square term: (h_i - h_j)^2 = h_i^2 - 2 h_i h_j + h_j^2. So the cost can be written as dp[j] + h_i^2 - 2 h_i h_j + h_j^2 + C.
+
+So, the equation becomes dp[i] = h_i^2 + C + min_{j < i} (dp[j] + h_j^2 - 2 h_i h_j). 
+
+This min part can be rewritten as min_{j < i} ( (-2 h_j) * h_i + (dp[j] + h_j^2) ). This looks like the equation of a line: for each j, we have a line with m = -2 h_j and b = dp[j] + h_j^2. Then, for a given h_i, we want the minimum value of these lines evaluated at x = h_i. 
+
+Ah, right! So the problem reduces to, for each i, find the minimum value of a set of linear functions evaluated at x = h_i. This is exactly the scenario where the Convex Hull Trick (CHT) can be applied. The lines are added as we process each stone, and for each new h_i, we query the current set of lines to find the minimum at x = h_i.
+
+But the order of the h_i is important here. Since the stones are given in strictly increasing order (h_1 < h_2 < ... < h_N), h_i is increasing. So when we process stones in order, the x values for the queries are increasing. This is the case where we can use the convex hull trick with a data structure that maintains the lines in a way that allows queries for the minimum in O(1) or O(log n) time, and insertion of new lines efficiently, possibly in O(1) or amortized O(1) time. 
+
+In such a scenario, when the query points are sorted, the lines that become irrelevant can be discarded, leading to a deque-based approach where we can maintain the lines in a way that allows us to keep only the ones that form the lower envelope for future queries.
+
+So the plan is:
+
+1. Initialize the dp array. dp[0] (assuming 0-based or 1-based?) Let's see. The first stone is 1. So for 1-based, dp[1] = 0 (since that's the starting point). Then for i from 2 to N, compute dp[i] based on previous j.
+
+Wait, in the problem statement, the stones are numbered 1 to N. So the starting point is stone 1. So the DP array can be 1-based. So dp[1] = 0. Then for i >=2, we compute dp[i] as the minimum over all j < i of (dp[j] + (h_i - h_j)^2 + C). 
+
+So the recurrence is dp[i] = min_{j < i} (dp[j] + (h_i - h_j)^2 ) + C. Wait, no, the C is part of each jump's cost. So each jump from j to i adds (h_i -h_j)^2 + C to the total cost. So when you jump from j to i, the cost added is (h_i -h_j)^2 + C, and that's the only cost added. So the total cost for reaching i via j is dp[j] + (h_i -h_j)^2 + C.
+
+So the DP recurrence is correct. 
+
+So, the key is to compute for each i, the minimum of (dp[j] + (h_i -h_j)^2 + C) for all j < i.
+
+But expanding the square, as before, gives us the terms that can be transformed into lines. Let's re-express this again:
+
+dp[i] = min_{j < i} [ (dp[j] + C) + (h_i - h_j)^2 ]
+
+Wait, no. Because for each j < i, when the frog jumps from j to i, the cost is (h_i - h_j)^2 + C. So the total cost to reach i via j is dp[j] + (h_i -h_j)^2 + C. So the +C is part of each possible jump. So the recurrence is:
+
+dp[i] = min_{j < i} (dp[j] + (h_i -h_j)^2 ) + C.
+
+Wait, no. Because the C is added for each jump. So when the frog jumps from j to i, the cost is (h_i -h_j)^2 + C. So the total cost to reach i is dp[j] (the cost to reach j) plus (h_i -h_j)^2 + C. So the recurrence is:
+
+dp[i] = min_{j < i} ( dp[j] + (h_i - h_j)^2 + C )
+
+But for each j < i, you can jump from j to i, and that's one option. So the C is part of each term. So in the DP equation, the min is over j < i of (dp[j] + (h_i - h_j)^2 + C).
+
+But then, the C can be factored out as part of the term. So for each j, the contribution is (dp[j] + C) + (h_i - h_j)^2. Wait, no. Because for j to i, the C is added once. So the total cost for the jump from j to i is (h_i - h_j)^2 + C. So the recurrence is:
+
+dp[i] = min_{j < i} ( dp[j] + (h_i - h_j)^2 + C )
+
+But how to model this. Let's see: the C is part of each jump. So for the DP[i], when considering jumping from j, the cost added is (h_i -h_j)^2 + C, which is added to the dp[j] (the cost to reach j). So the term is dp[j] + (h_i - h_j)^2 + C.
+
+But the +C is part of each term in the min. So when expanding, for the lines, we can see:
+
+dp[j] + (h_i - h_j)^2 + C = (h_i^2 - 2 h_i h_j + h_j^2) + dp[j] + C.
+
+So this can be rewritten as h_i^2 + C + (dp[j] + h_j^2 - 2 h_j h_i).
+
+Then, the min over j < i of (dp[j] + h_j^2 - 2 h_j h_i) ) + h_i^2 + C.
+
+So, for each i, the DP[i] is equal to h_i^2 + C plus the minimum over j < i of (dp[j] + h_j^2) - 2 h_j h_i.
+
+So the problem reduces to, for each h_i (which is increasing), compute the minimum of a linear function evaluated at h_i, where each line is of the form y = m_j x + b_j, where m_j = -2 h_j, and b_j = dp[j] + h_j^2.
+
+This is perfect for the convex hull trick. Since h_i is increasing (as given in the problem), the queries are in increasing order. So we can maintain the lines in a way that allows us to add them in order and query efficiently.
+
+The convex hull trick for minimum when lines are added in order of increasing m (since m_j = -2 h_j, and h_j is increasing, m_j is decreasing. So when we add lines in order of j increasing, m_j is decreasing. So the lines are being added in order of decreasing slope.
+
+Wait, the lines are added for j = 1, then j = 2, etc. Since h_j increases, the m_j = -2 h_j is decreasing (since h_j increases, -2 h_j becomes more negative). So each new line has a slope that is smaller (more negative) than the previous ones.
+
+So when adding lines in order of decreasing m (since each new line has m_j less than all previous m_j), which is the case here, the convex hull trick can be applied with a deque that maintains the lines in the order of the lower envelope. Each new line is added to the deque, and we check if adding it allows us to remove some lines from the end of the deque that are no longer part of the lower envelope.
+
+But how does this work when the query points are increasing?
+
+In the convex hull trick, when the query points are sorted in increasing order, and the lines are added in order of decreasing slope (m), then the optimal line for a query x is the one that is added later (since the lines are steeper as you go earlier, but x is increasing). But perhaps the deque can be maintained such that when querying, the front of the deque is the optimal line for the current x, and as x increases, we can check if the next line in the deque becomes better.
+
+Wait, perhaps the standard convex hull trick approach for this scenario (queries in increasing order and lines added in order of decreasing m) is to maintain the lines in the deque such that each new line is added to the front of the deque. Wait, no, perhaps the lines are added to the deque in a way that maintains the order of increasing m. But in our case, since m is decreasing, the lines are added with m_j less than all previous m_j.
+
+Wait, maybe I'm getting confused here. Let's think again.
+
+Each line is represented as y = m_j x + b_j, where m_j is -2h_j. Since h_j is increasing, m_j is decreasing. So the first line (j=1) has m_1 = -2h_1, the next j=2 has m_2 = -2h_2 < m_1, etc.
+
+So when adding lines in order of j increasing, m_j is decreasing.
+
+Now, when the query x is increasing (since h_i is increasing), for each i, the x value h_i is larger than the previous x values.
+
+In this scenario, the convex hull trick can be optimized. The lines that are part of the lower envelope for x in increasing order can be maintained in a deque. Since x increases, once a line is no longer optimal for any future x, it can be popped from the deque.
+
+The algorithm works as follows:
+
+- The deque maintains lines in a way that the optimal line for the current x is at the front.
+
+- When adding a new line, we compare it with the last line in the deque. If the new line intersects the line before the last line at a point x1, and the line before that intersects the last line at x2, then if x1 >= x2, the last line is no longer part of the lower envelope and can be removed. This process repeats until the new line can be added to the deque.
+
+- For queries with x increasing, we check if the front line is still optimal. Since x is increasing, once a line is overtaken by the next line in the deque, it can be popped from the front.
+
+Wait, perhaps the correct approach is:
+
+When the query x is increasing and the lines are added in order of decreasing m, the lower envelope can be maintained with a deque. Each new line is added to the front of the deque, because it has a smaller m. Then, when querying x, we check the front lines to see if they are optimal. But perhaps I'm getting this mixed up.
+
+Alternatively, perhaps the lines are added in a way that the deque holds them in order of increasing m. But in our case, m_j is decreasing, so the deque would have lines in order from highest m_j to lowest. Then, when x increases, the optimal line may change from those with higher m to lower m.
+
+Wait, perhaps the standard approach is as follows:
+
+If the query points x are in increasing order, and the lines are added in order of decreasing m (so m is getting smaller), then the convex hull can be maintained by adding each new line to the front of the deque, and during queries, check if the front line is the best for x. If not, pop it and check the next.
+
+Wait, let me recall the convex hull trick scenarios. There are two main cases:
+
+1. Lines are added in arbitrary order, and queries are arbitrary. Then, you need a data structure that can handle dynamic insertion and querying (like a Li Chao tree).
+
+2. Lines are added in a certain order (e.g., sorted by m), and queries are in a certain order (e.g., x increasing or decreasing). This allows for a more efficient approach with a deque.
+
+In our case, lines are added in order of decreasing m (since m_j = -2h_j, and h increases). The queries are x values (h_i) in increasing order.
+
+In this scenario, the lines are added in order of m decreasing. So each new line has a smaller slope than all previous lines.
+
+In this case, when we add a new line L, it will eventually become the best line for some x >= cross point with the previous best line.
+
+But how to manage the deque.
+
+Alternatively, let's refer to the Convex Hull Trick optimization notes. Here's a possible approach:
+
+For the case where the lines are added in order of decreasing m (so m is going down), and queries are for x in increasing order, the optimal lines are added to the deque such that each new line is added to the front (since it has a smaller m). Then, when a new line is added, we check if it and the line after it (the next in the deque) form a better lower envelope. If the intersection point between the new line and the next line is after the intersection of the next line and the line after that, then the next line can be removed.
+
+Wait, perhaps the standard approach when adding lines with decreasing m and queries in increasing x is as follows:
+
+Each new line is added to the front of the deque. Then, we check if the previous line (now at position 1 in the deque) can be removed because the new line and the line after it (the one that was previously the front) form a lower envelope that makes the previous line irrelevant.
+
+But perhaps I need to think of how the lines interact.
+
+Let me see an example.
+
+Suppose we have lines L1, L2, L3 added in order of m decreasing (so L1 has highest m, then L2, then L3). When adding L3 to the front of the deque, we compare it with L2 (the next line in the deque). The intersection between L3 and L2 is at x = x0. The intersection between L2 and L1 is at x = x1. If x0 >= x1, then L2 is not part of the lower envelope anymore. So we can remove L2. Repeat this process until the new line is added.
+
+Once the deque is properly maintained, when a query comes with x increasing, we check if the front line (the one with the smallest m) is still optimal. Since x is increasing, once the x exceeds the intersection between the front line and the next line, the next line becomes better. So during querying, we can check if the front line's intersection with the next line is <= current x. If so, the front line is no longer optimal and can be popped.
+
+So, in code terms:
+
+When adding a new line L to the deque:
+
+- While the deque has at least two lines (a and b), check if the intersection x between L and a is <= the intersection between a and b. If so, remove a from the deque.
+
+When querying x:
+
+- While the deque has at least two lines (a and b), and the intersection x between a and b is <= current x, then a is no longer optimal for any x >= that intersection, so remove a from the deque. The next line (b) becomes the candidate.
+
+Then, the front line is the optimal one.
+
+So in our case, for each new stone j (processed in order 1 to N-1), we add the line for j (m_j = -2 h_j, b_j = dp[j] + h_j^2). Then, for each i starting from 2, compute the optimal line in the deque for x = h_i, which gives the minimum value. Then, dp[i] is that value plus h_i^2 + C.
+
+The key steps are:
+
+Initialize dp[1] = 0. Then add the line for j=1 to the deque.
+
+For i from 2 to N:
+
+- Query the deque for x = h_i to get the minimum value of (m_j * x + b_j) = min_val.
+
+- dp[i] = min_val + h_i^2 + C.
+
+- Then, add the line for j=i to the deque (since j is processed in order, i increases).
+
+Wait, but j must be < i. So when processing i, we can only have lines from j=1 to j=i-1. So when processing i, after computing dp[i], we add the line for j=i. Because for the next i+1, j can be up to i.
+
+So the steps are correct.
+
+Now, the code needs to manage the deque, adding lines for j=1, then for j=2 after processing i=2, etc.
+
+But in Python, how to implement the convex hull trick efficiently for large N (2e5)? The per-operation time must be O(1) amortized.
+
+But implementing the convex hull trick with a deque requires the lines to be stored in a way that allows efficient adding and removing from both ends. Each line is represented by its m and b, and the deque stores these lines.
+
+But how to compute the intersection x between two lines a and b?
+
+For two lines a: y = m_a x + b_a and b: y = m_b x + b_b, the intersection x is (b_b - b_a) / (m_a - m_b). If m_a == m_b, then the lines are parallel, and one is always better than the other if their m is the same.
+
+But since in our case, each line's m is unique (since h_j is strictly increasing, m_j = -2 h_j is strictly decreasing), so all lines have unique m. So for any two lines, their m's are different.
+
+So the intersection x is well-defined.
+
+But when adding a new line, we need to check if the previous line in the deque (if any) and the new line can form a better lower envelope.
+
+So, code steps:
+
+Initialize a deque. Let's represent each line as a tuple (m, b).
+
+For j in 1 to N:
+
+   if j ==1: dp[1] =0. Then add the line (m= -2*h[0], b= 0 + h[0]^2) to the deque.
+
+Wait, h is given as h_1, h_2, ..., h_N. So in Python, the input will be read as a list, say h = list of h_i. But since Python is 0-based, the stones are 1-based in the problem. So for code, perhaps we can index h as 0-based. So h[0] is the first stone's height, h[1] is the second, etc. So the stone numbers in code are 0-based.
+
+Wait, perhaps not. Let's think.
+
+The input is N C followed by h_1 h_2 ... h_N. So for example, the first sample input is 5 6 1 2 3 4 5. So h_1 is 1, h_5 is5.
+
+In code, the list h would have indexes 0 to 4 (for N=5), but the problem's stone numbers are 1-based. So for code, the stones are 0-based here, perhaps.
+
+But regardless, the code can process h as a list starting from index 0.
+
+But the main point is that for each j, when processing j, we add the line for j to the deque, which is then used for future i's.
+
+So for j from 0 to N-1 (assuming 0-based), when processing j, we compute dp[j], then add its line to the deque.
+
+Wait, but for j=0 (stone 1), the dp[0] is 0. Then, when we process i=1 (stone 2?), perhaps the code's indices are a bit confusing.
+
+Alternatively, perhaps the code is 1-based. Let's think again.
+
+Wait, in the problem statement, the frog starts on stone 1, which is h_1. So for code, perhaps the list h is 1-based. But in Python, it's easier to process 0-based. So when the input is read as a list, it will be h[0], h[1], ..., h[N-1], corresponding to stones 1 to N in the problem.
+
+So for example, the first sample input:
+
+5 6
+
+1 2 3 4 5
+
+In code, N=5, h[0] =1, h[1]=2, ..., h[4]=5. So stones are 0-based in code. The frog starts at stone 0, must reach stone 4.
+
+So the DP array is 0-based. dp[0] =0. For i from 1 to N-1 (stones 1 to 4), compute dp[i].
+
+So the code steps would be:
+
+Read N and C.
+
+Read h as a list of integers (h[0] to h[N-1]).
+
+Initialize dp as a list of size N, with dp[0] =0.
+
+Initialize deque for convex hull lines. The first line is for j=0 (stone 1 in problem), m =-2*h[0], b = dp[0] + h[0]^2.
+
+For each i from 1 to N-1:
+
+   x = h[i]
+
+   while the deque has at least two lines, and the first line in deque is not optimal for x:
+
+       check the first two lines in deque, l1 and l2. Compute the intersection x between l1 and l2. If x <= current x, then l1 is no longer optimal, so pop it from deque.
+
+   current line is the first in deque. Compute min_val = l.m * x + l.b.
+
+   dp[i] = min_val + x^2 + C.
+
+   Now, add the line for j=i (but since j must be < i, this line will be used for future i's). But wait, j is up to i-1. So when processing i, the lines in the deque are for j from 0 to i-1. So after processing i, we add the line for j=i to the deque, which will be used for processing i+1.
+
+So after computing dp[i], we create the line for j=i (m=-2*h[i], b= dp[i] + h[i]^2) and add it to the deque. But before adding, we need to check if the new line can be added to the deque, possibly removing some lines from the end.
+
+So after adding the new line to the deque, we need to check if the last three lines in the deque (the new one, and the two before it) form a convex envelope.
+
+The process is:
+
+Add the new line to the end of the deque. Then, while the deque has at least two lines before the new one, check if the last three lines (the new one, and the two before) need to be adjusted. Wait, no. Wait, when adding a new line to the deque, if the deque is maintained in order of increasing m (since m is decreasing), then the lines are added in the order of j increasing. Wait, but m is -2h[j], which decreases as j increases. So each new line has a lower m than all previous ones. So when adding a new line, it's added to the end of the deque. Wait, no. Because in the convex hull trick, when lines are added in order of decreasing m (so the new line has the smallest m so far), they need to be added to the end of the deque, but perhaps that's not the right approach.
+
+Wait, perhaps I'm getting the order wrong. Let's re-express the process.
+
+Each new line has a smaller m than all previous lines. So when you add a new line L to the deque, you need to check if adding it makes some previous lines redundant.
+
+For example, suppose the deque has lines A, B, C, ordered from front to back, each with m_A > m_B > m_C. Now, adding line D with m_D < m_C. We need to check if C can be removed from the deque because D and B form a better lower envelope.
+
+The check is as follows: while the deque has at least two lines, the last line (say C) is checked against the new line D and the line before last (B). We compute the intersection x between B and C, and between C and D. If the intersection between B and C is after the intersection between C and D, then C is not part of the lower envelope and can be removed.
+
+So, for the new line, we check the last two lines in the deque (if any) and see if the new line and the one before last form a better lower envelope. If so, remove the last line.
+
+So in code, after adding the new line to the deque, we check:
+
+while len(deque) >=2:
+
+   l1 = deque[-2]
+
+   l2 = deque[-1]
+
+   l3 = new_line
+
+   x1 = intersection of l1 and l2
+
+   x2 = intersection of l2 and l3
+
+   if x1 >= x2:
+
+       remove l2 (the last line in deque)
+
+   else:
+
+       break
+
+But wait, the new line is added to the deque first. So when adding the new line, it's appended to the deque, then we check the last three lines (the previous last, the new line, and the one before).
+
+Wait, no. The new line is added to the deque (as the new last element). Then, we check the last two lines (the new line and the previous last), and the one before the previous last.
+
+So the code would be:
+
+after appending the new line to the deque:
+
+while the deque has at least two elements:
+
+   l1 = deque[-2]
+
+   l2 = deque[-1]
+
+   x_intersect_l1_l2 = (l1.b - l2.b) / (l2.m - l1.m)
+
+   if the line l2 is not better than l1 for x >= x_intersect_l1_l2, then we can remove l2.
+
+But how to determine this.
+
+Alternatively, to check if the line l3 (the new line) can replace l2 in the deque, we compare the intersection x of l1 and l2 (x1), and the intersection of l2 and l3 (x2). If x1 >= x2, then l2 is not part of the lower envelope and can be removed.
+
+Wait, here's a more precise approach:
+
+Suppose there are three lines in the deque: A, B, C (added in order). When adding a new line D, we check the last three lines B, C, D. Wait, no. The deque has lines [A, B, C], and we add D to the end, making [A, B, C, D]. Now, we check the last three lines (B, C, D) to see if C can be removed. 
+
+But perhaps the correct approach is to check the last three lines (C, D) and the one before C (B).
+
+Wait, perhaps the correct condition is: after adding D to the deque, check if the line C is redundant. To do this, we compute the intersection x between B and C (x1), and the intersection between C and D (x2). If x1 >= x2, then between x1 and x2, C is not part of the lower envelope. Since x queries are increasing, once x >=x2, D is better than C, but for x >=x1 and <x2, B is better than C. So C is redundant if x1 >=x2, because in that case, C is only better between x where B and D are better. So C can be removed.
+
+Thus, the condition is: while the deque has at least two lines (after adding D), check if the line before last (C) can be removed by comparing its intersection with the line before it (B) and the new line (D). If the intersection between B and C is >= the intersection between C and D, then C can be removed.
+
+So, the code after appending the new line is:
+
+while len(deque) >= 2:
+
+   # get the last three lines: the new line is at -1, the previous at -2, and the one before that at -3.
+
+   # wait, no. After adding the new line, the deque has len >=1 (at least the new line). So to check, we need the deque to have at least two lines.
+
+   # So the last two lines are deque[-2] and deque[-1].
+
+   l1 = deque[-2]
+
+   l2 = deque[-1]
+
+   x_intersect_l1_l2 = (l1.b - l2.b) / (l2.m - l1.m)
+
+   # Now, check if the line l2 can be removed.
+
+   # For the lines l1, l2, and a previous line l0 (if any), but perhaps we don't need to check that here.
+
+   # Wait, in this case, after adding l2 (the new line), we need to check if the previous line l1 can be removed.
+
+   # Or perhaps the code should check the last two lines (l1 and l2) and see if their intersection is before the previous lines.
+
+   Wait, I think this part of the code is the same as the standard convex hull trick when adding lines in order of decreasing m. So when adding a new line, we check against the previous two lines in the deque. So the code would be:
+
+   while len(deque) >= 2:
+
+       # take the last two lines in deque (a and b) and the new line (c)
+
+       a = deque[-2]
+
+       b = deque[-1]
+
+       x_ab = intersection of a and b
+
+       x_bc = intersection of b and new_line
+
+       if x_ab >= x_bc:
+
+           remove b from deque
+
+       else:
+
+           break
+
+   append new_line to deque
+
+But in our case, the new line is added to the deque, so after appending, the code checks the last two lines (the new line and the previous one). But perhaps the code should check the lines before appending the new line. Wait, no. The code should first add the new line to the deque, then check.
+
+Alternatively, the correct process is:
+
+When adding a new line to the deque, we check whether the last three lines (if they exist) form a redundant middle line. So for example, when adding line c, after appending it, the deque is [..., a, b, c]. Then, check if b is redundant because a and c form a lower envelope that makes b irrelevant. This is done by checking if the intersection between a and b is after the intersection between b and c. If so, b can be removed.
+
+So, the code after appending the new line is:
+
+while len(deque) >=2:
+
+   a = deque[-2]
+
+   b = deque[-1]
+
+   x_ab = (a.b - b.b) / (b.m - a.m)
+
+   x_bc = (b.b - new_line.b) / (new_line.m - b.m)
+
+   if x_ab >= x_bc:
+
+       deque.pop()
+
+   else:
+
+       break
+
+So in code, after appending the new line to the deque, we check whether the last two lines (the new line and the previous) form a situation where the previous line (b) can be removed.
+
+But wait, after appending the new line (c), the lines in the deque are [a, b, c]. Then, the code checks the last two lines (b and c). Wait, no. Because after appending, the deque's last element is c. So the code is:
+
+After adding c to the deque, which now has elements [ ... , a, b, c ].
+
+We need to check whether b can be removed, given a and c.
+
+So, compute x_ab: the intersection of a and b.
+
+x_ab = (a.b - b.b) / (b.m - a.m)
+
+x_bc is the intersection of b and c.
+
+x_bc = (b.b - c.b) / (c.m - b.m)
+
+If x_ab >= x_bc, then between x_ab and x_bc, the line b is not part of the lower envelope. Since x is increasing, once x exceeds x_ab, the line a is no longer the best. Then, if x_ab >= x_bc, the line b is never the optimal line for any x, because for x < x_ab, a is better than b. For x >=x_ab, a is not better than b. But if x_bc <x_ab, then after x_ab, c is better than b. So between x_ab and x_bc, b is better than a and c. But if x_ab >= x_bc, then when x reaches x_bc, c is better than b. So in that case, the line b is only optimal between x_ab and x_bc. However, since x is increasing, once x passes x_bc, c is better. So in this scenario, the line b is only optimal between x_ab and x_bc, but since x_ab >= x_bc, that interval is empty. So line b is never optimal, and can be removed.
+
+Thus, the code checks if x_ab >= x_bc, and if so, removes b from the deque.
+
+This process is repeated until there are no two lines left in the deque, or the condition is no longer satisfied.
+
+Now, the code structure is:
+
+Initialize deque with the line for j=0 (i=0 in code).
+
+For i from 1 to N-1:
+
+   x = h[i]
+
+   # Query the deque for x.
+
+   # Remove lines from the front if they are no longer optimal.
+
+   while len(deque) >=2:
+
+       a = deque[0]
+
+       b = deque[1]
+
+       if a.get_value(x) >= b.get_value(x):
+
+           deque.popleft()
+
+       else:
+
+           break
+
+   # The optimal line is deque[0]
+
+   min_val = deque[0].m * x + deque[0].b
+
+   dp[i] = min_val + x**2 + C
+
+   # Now, add the line for j=i to the deque.
+
+   new_m = -2 * h[i]
+
+   new_b = dp[i] + h[i]**2
+
+   # Add to deque, and check if previous lines can be removed.
+
+   while len(deque) >=2:
+
+       a = deque[-2]
+
+       b = deque[-1]
+
+       x_ab = (a.b - b.b) / (b.m - a.m)
+
+       x_bc = (b.b - new_b) / (new_m - b.m)
+
+       if x_ab >= x_bc:
+
+           deque.pop()
+
+       else:
+
+           break
+
+   deque.append( Line(new_m, new_b) )
+
+Thus, the code will process each i in O(1) amortized time, since each line is added and removed once.
+
+Now, the problem is to implement this correctly in Python, considering possible floating-point inaccuracies. However, when dealing with integer coordinates, we can compute the intersections as fractions, but in practice, using floating-point may be sufficient. Alternatively, we can compare the cross products to avoid division, but that's more complex.
+
+But since h_i can be up to 1e6 and C up to 1e12, the calculations can be done in integers, but perhaps using floating points is acceptable.
+
+But in Python, dividing two integers (a.b - b.b) by (b.m - a.m) can result in floating-point numbers, but for the purposes of comparison (x_ab >= x_bc), the actual floating point values can be compared directly.
+
+But there's a potential for precision errors. However, given that the h_i are integers and the m's are integers, the denominators in the divisions would be (new_m - b.m) = (-2h[i] - (-2h_j)), which is -2*(h[i] - h_j). Since h is increasing, h[i] > h_j, so the denominator is negative. But perhaps this is manageable.
+
+Alternatively, cross-multiplying to avoid division:
+
+For two lines a (m1, b1) and b (m2, b2), the intersection x is (b2 - b1)/(m1 - m2).
+
+To compare x_ab and x_bc, we can cross-multiply:
+
+x_ab >= x_bc 
+
+=> (b2 - b1) / (m1 - m2) >= (b3 - b2) / (m2 - m3)
+
+Multiply both sides by (m1 - m2) and (m2 - m3), but since m1 > m2 (since lines are added in decreasing m), m1 -m2 is positive. m2 - m3 is also positive (since m3 < m2). So the inequality is:
+
+(b2 - b1) * (m2 - m3) >= (b3 - b2) * (m1 - m2)
+
+This can be computed using integers, avoiding division.
+
+So for the code, when comparing x_ab and x_bc, instead of using division, cross-multiply to avoid precision errors. This is important because when h_i and h_j are large, the division could lose precision.
+
+So, when checking if x_ab >= x_bc:
+
+We can compute the two cross products:
+
+left = (b.b - a.b) * (new_m - b.m)  # (b2 - b1) * (m3 - m2) → because m3 is new_m, which is m3 = -2h[i], and m2 = -2h_j.
+
+Wait, no. Let me re-express:
+
+In the case where a is deque[-2], b is deque[-1], and c is new_line.
+
+x_ab = (a.b - b.b) / (b.m - a.m) → (b.b - a.b) = (a.b - b.b) is negative. Wait, the formula is (a.b - b.b) / (b.m - a.m) = (a.b - b.b)/( (b.m - a.m) )
+
+But since a is deque[-2], b is deque[-1], and c is new_line.
+
+x_ab is the x where a and b intersect.
+
+x_bc is the x where b and c intersect.
+
+The condition is x_ab >= x_bc.
+
+Which is:
+
+( a.b - b.b ) / ( b.m - a.m ) >= ( b.b - c.b ) / ( c.m - b.m )
+
+Multiply both sides by (b.m - a.m) and (c.m - b.m). However, the denominators' signs need to be considered.
+
+Since m's are in decreasing order:
+
+a.m > b.m > c.m (since each new line has a smaller m than previous). So:
+
+b.m - a.m = -(a.m - b.m) → negative.
+
+c.m - b.m → negative.
+
+So both denominators are negative. When multiplied, the product is positive.
+
+So the inequality:
+
+( a.b - b.b ) * (c.m - b.m ) >= ( b.b - c.b ) * ( b.m - a.m )
+
+Because:
+
+The left side is (a.b - b.b) * (c.m - b.m) → both terms are negative (since a.b - b.b could be anything, but for convex hull, lines are ordered such that the intersections are computed correctly). Wait, perhaps this cross product approach is more reliable.
+
+In any case, using cross multiplication avoids floating point errors.
+
+So in code, for the condition x_ab >= x_bc, we can compute:
+
+left = (a.b - b.b) * (c.m - b.m)
+
+right = (b.b - c.b) * (b.m - a.m)
+
+if left >= right:
+
+   remove b from deque.
+
+So this approach uses integer arithmetic (assuming all m and b are integers) and avoids division.
+
+Thus, in the code, whenever comparing x_ab and x_bc, we can use this cross product approach.
+
+This is especially important in Python where large integers can be handled without overflow.
+
+So, to implement this:
+
+When checking the condition during adding a new line:
+
+a = deque[-2]
+
+b = deque[-1]
+
+c = new_line
+
+left = (a.b - b.b) * (c.m - b.m)
+
+right = (b.b - c.b) * (b.m - a.m)
+
+if left >= right:
+
+   deque.pop()
+
+Repeat until the deque has fewer than two lines or the condition is not met.
+
+Similarly, during querying, when comparing the first two lines in the deque (a and b) for x = h[i], we can compute whether a is better than b at x:
+
+a_val = a.m * x + a.b
+
+b_val = b.m * x + b.b
+
+if a_val >= b_val:
+
+   deque.popleft()
+
+But in this case, since x is an integer (h[i] is an integer), and m and b are integers, the comparison is exact, so using the actual values is fine.
+
+So, putting this together, the code would be:
+
+Read N and C.
+
+Read h as list of integers.
+
+Initialize dp array (with dp[0] = 0).
+
+Initialize deque with the line for j=0: m = -2*h[0], b = dp[0] + h[0]^2.
+
+For i in 1 to N-1:
+
+   x = h[i]
+
+   # Query step:
+
+   while len(deque) >=2:
+
+       a = deque[0]
+
+       b = deque[1]
+
+       if a.m * x + a.b >= b.m * x + b.b:
+
+           deque.popleft()
+
+       else:
+
+           break
+
+   min_val = deque[0].m * x + deque[0].b
+
+   dp_i = min_val + x**2 + C
+
+   # Update dp[i]
+
+   dp.append(dp_i)  # Or use a list initialized with size N.
+
+   # Add the new line for j=i:
+
+   new_m = -2 * x  # since h[i] is x.
+
+   new_b = dp_i + x**2
+
+   # Check while adding:
+
+   while len(deque) >=2:
+
+       a = deque[-2]
+
+       b = deque[-1]
+
+       # Compute cross product terms:
+
+       left = (a.b - b.b) * (new_m - b.m)
+
+       right = (b.b - new_b) * (b.m - a.m)
+
+       if left >= right:
+
+           deque.pop()
+
+       else:
+
+           break
+
+   deque.append( (new_m, new_b) )
+
+Finally, output dp[N-1].
+
+But wait, the initial deque is [ (m0, b0) ].
+
+In code, for Python, we can represent the deque as a collections.deque() of tuples (m, b).
+
+So let's code this.
+
+But for the first sample input:
+
+Sample Input 1:
+
+5 6
+
+1 2 3 4 5
+
+The code should compute dp[4] =20.
+
+Let's walk through the code for this sample.
+
+N=5, C=6.
+
+h = [1,2,3,4,5]
+
+dp[0] =0.
+
+The deque starts with [ (-2*1, 0 + 1^2 ) ] → (-2, 1).
+
+i=1 (h[1] =2):
+
+   x=2.
+
+   deque has one element. No removal from front.
+
+   min_val = (-2)*2 +1 = -4 +1 =-3.
+
+   dp_i = -3 + 4 +6 → 7.
+
+   new_m =-4, new_b =7 +4=11.
+
+   add to deque. Deque becomes [ (-2,1), (-4,11) ].
+
+   Check the last two lines:
+
+   a = (-2,1), b=(-4,11), new_line is (-4,11) → wait, no. Wait, the new line is (new_m, new_b) = (-4, 7 + 2^2=7+4=11). So when adding to deque:
+
+   After appending, deque is [ (-2,1), (-4,11) ].
+
+   Then check len(deque) >=2 → yes.
+
+   a = deque[-2] → (-2,1)
+
+   b = deque[-1] → (-4,11)
+
+   new_line is (-4,11) → but no, the new_line is the line we just added, which is ( -4, 11 ).
+
+   So compute left = (a.b -b.b) * ( new_m -b.m )
+
+   a.b is 1, b.b is11. new_m is -4.
+
+   left = (1 -11) * ( -4 - (-4) ) → ( -10 ) * (0) → 0.
+
+   right = (11 - new_b) * (b.m -a.m )
+
+   new_b is 11, so (11-11)=0. right is 0 * ( -4 - (-2) )= 0 * (-2) =0.
+
+   left >= right → 0 >=0 → yes. So pop b from deque. Deque becomes [ (-2,1) ].
+
+   Then, loop again: len(deque) >=2? No. So append the new line. Deque is [ (-2,1), (-4,11) ] → but after popping, deque is [ (-2,1) ], and the new line is added. Wait, no. The code is:
+
+   After appending the new line (after popping, if needed), then the new line is added to the deque.
+
+   Wait, no. The code first creates new_m and new_b, then appends them to the deque. Then checks whether to pop the previous elements.
+
+   So in this case, after adding new_m and new_b to the deque, the deque is [ (-2,1), (-4,11) ].
+
+   Then, check:
+
+   len(deque) >=2 → yes.
+
+   a is deque[-2] = (-2,1), b is deque[-1] = (-4,11).
+
+   new_line is (-4,11) → but that's the same as b.
+
+   Compute left = (1 -11) * (-4 - (-4)) → (-10) * 0 =0.
+
+   right = (11-11) * (-4 - (-2)) → 0 * (-2) =0.
+
+   So left >= right → yes. Pop b from deque. Deque becomes [ (-2,1) ].
+
+   Then, len(deque) <2, so exit loop. So the new line is added, but then removed. So deque is now [ (-2,1), (-4,11) ] → no, wait. Wait, the code appends the new line first, then checks.
+
+Wait, the code appends the new_line to the deque, then enters the loop where it checks whether to remove lines from the end.
+
+In this case, after appending new_line, the deque is [ (-2,1), (-4,11) ].
+
+The loop checks:
+
+   a = deque[-2] → (-2,1)
+
+   b = deque[-1] → (-4,11)
+
+   new_line is (-4,11) → but how? Because the new_line is already added to the deque as the last element.
+
+Wait, the new_line is the line that is being added. So after appending, the deque contains the new_line at the end.
+
+So in this case:
+
+new_line is (-4, 11).
+
+After appending, deque is [ (-2,1), (-4,11) ].
+
+Now, check len(deque) >=2 → yes.
+
+compute a = deque[-2] → (-2,1), b = deque[-1] → (-4,11).
+
+compute left and right:
+
+left = (a.b - b.b) * (new_line.m - b.m)
+
+Wait, new_line.m is -4, and new_line is the same as b. So new_line.m - b.m is -4 - (-4) =0.
+
+So left = (1-11) * 0 → -10 *0=0.
+
+right = (b.b - new_line.b) * (b.m - a.m) → (11-11) * (-4 - (-2))=0 * (-2)=0.
+
+So left >= right → yes. So pop deque[-1] (b), leaving deque as [ (-2,1) ].
+
+Now, loop again: len(deque) >=2? No. Exit loop. So the new_line is added, then popped. So the deque becomes [ (-2,1) ].
+
+Wait, but this seems wrong. Because after adding new_line (which is (-4,11)), the deque has two lines. The code checks and removes the new_line because the condition is met. So the deque is back to [ (-2,1) ].
+
+But this leaves the deque with only one line. So for the next steps, how does it proceed?
+
+For i=1, after processing, the deque has [ (-2,1), (-4,11) ] → but after the check, it's [ (-2,1) ].
+
+Hmm, this seems like a problem. But perhaps I'm misunderstanding.
+
+Wait, after appending the new_line (j=1's line) to the deque, the code enters the while loop to check whether the last two lines (a and b) can be merged by removing b.
+
+But in this case, after appending the new_line (which is (-4,11)), the deque has two lines: (-2,1) and (-4,11). The code then computes left and right as 0 and 0. So the condition left >= right is true, so b is popped. The deque is left with only (-2,1).
+
+So after adding the new_line, which is (m=-4, b=11), the code determines that it's not necessary to keep it in the deque, so it is removed.
+
+But why is that? Because when the lines are a=(-2,1), b=(-4,11), the intersection between a and b is at x=(1-11)/( -4 - (-2) ) → (-10)/( -2 ) → x=5. The new_line is b, which is the same as the line for j=1. So when x=5, a and b have the same value. For x <5, a is better. For x>5, b is better. But since the queries are x increasing, and h[i] is 2, which is x=2, then a is better. So why was the line for j=1 (b) added and then removed?
+
+Wait, but in the next step, for i=2 (h[2]=3), x=3.
+
+When querying, the deque has [ (-2,1) ] (since the line for j=1 was added and then removed). So the optimal line is (-2,1), which gives m*x +b = (-2)*3 +1 =-6+1 =-5. Then, dp[2] =-5 + 3^2 +6 =-5 +9 +6=10.
+
+Then, add the new line for j=2: m=-6, b=10+9=19. Now, deque is [ (-2,1), (-6,19) ].
+
+Check for removal:
+
+a= (-2,1), b= (-6,19).
+
+compute left = (1-19) * (new_line.m - b.m) → (-18) * (new_line.m is -6, which is new_m. new_line.m is -6. So (new_line.m - b.m) is (-6 - (-6))=0. So left is (-18)*0=0.
+
+right = (19-19) * (b.m -a.m ) → 0 * (-6 - (-2)) →0. So left >= right → yes. Remove b. Deque becomes [ (-2,1) ].
+
+So again, the line for j=2 is added and then removed.
+
+This suggests that all lines after j=0 are being added and then removed, which can't be right. Because the sample output is 20, which suggests that the path is 1→3→5 (stones 1,3,5 in 1-based terms, which are 0,2,4 in code). The cost is (3-1)^2 +6 + (5-3)^2 +6 → (4+6)+(4+6) = 10+10=20.
+
+But according to the code's processing, let's see:
+
+i=0 (stone 1) → dp[0]=0.
+
+i=1 (stone 2):
+
+dp[1] = (a.m * x +a.b) + x^2 + C → a is line j=0: m=-2, b=1.
+
+x=2: -2*2 +1 =-4+1=-3. dp[1] =-3 +4 +6=7.
+
+i=2 (stone 3):
+
+x=3. deque has line j=0. a.m*x +a.b → -6 +1 =-5. dp[2] =-5 +9 +6=10.
+
+i=3 (stone4):
+
+x=4. deque has line j=0. -2*4+1= -8+1=-7. dp[3] =-7+16 +6=15.
+
+i=4 (stone5):
+
+x=5. deque has line j=0. -2*5+1=-10+1=-9. dp[4] =-9+25 +6=22. But sample output is 20. So this is wrong.
+
+Ah! So the code as described is not capturing the correct path. So there's a mistake in the approach.
+
+What's wrong here?
+
+Ah, the problem is that the lines added to the deque are being removed incorrectly.
+
+Because when adding a new line j, the code removes it if it's not part of the lower envelope. But in the sample input, the optimal path is to jump from j=0 to j=2 (cost (3-1)^2 +C =4+6=10), then from j=2 to j=4 (cost (5-3)^2 +C=4+6=10. Total 20.
+
+So for i=2 (code's stone 3, which is j=2), the dp[2] should be 10. Then, when processing i=4, the line for j=2 is needed to get the optimal value.
+
+But according to the code's steps, when adding j=2's line, it's added to the deque but then removed. So the deque contains only the line for j=0, leading to incorrect results.
+
+So why is the line for j=2 being removed?
+
+Let's see:
+
+When j=2's line is added (m=-6, b=10+9=19), the deque becomes [ line0 (m=-2, b=1), line2 (m=-6, b=19) ].
+
+Then, the code checks:
+
+a = line0, b=line2.
+
+compute left and right:
+
+left = (a.b -b.b) * ( new_line.m - b.m )
+
+But new_line is line2, so new_line.m is line2's m, which is -6.
+
+Wait, no. new_line is the line being added, which is j=2's line. So after appending, the deque is [ line0, line2 ].
+
+So a is line0, b is line2.
+
+new_line is line2.
+
+left = (a.b -b.b) * (new_line.m - b.m) → (1-19) * (-6 - (-6)) → (-18)*0 →0.
+
+right = (b.b - new_line.b) * (b.m - a.m) → (19-19) * (-6 - (-2)) →0 * (-4) →0.
+
+So 0 >=0 → True. So line2 is popped. Deque becomes [line0 ].
+
+So the line for j=2 is not in the deque. Thus, when processing i=4 (x=5), the deque has only line0, leading to a calculation that uses line0, which gives:
+
+dp[4] = (-2*5 +1) +25 +6 → (-10+1) +31 →-9+31=22, which is incorrect.
+
+But the correct answer is 20. So the code is not capturing the line for j=2.
+
+So what's wrong with the approach?
+
+Ah, the mistake is in how the lines are added. The code is adding the line for j=i after computing dp[i]. But when processing i, the line for j=i is added to the deque, which will be used for future i's (i+1, etc.). However, the code may be removing the line for j=i, making it unavailable for future use.
+
+In the sample case, the line for j=2 is added but then removed, which is incorrect. Because for i=4 (x=5), the optimal line is j=2's line, which is m=-6, b=19. So evaluating this line at x=5 gives:
+
+-6*5 +19 =-30+19=-11. Then, dp[4] =-11 +25 +6=20.
+
+But the line for j=2 was removed from the deque, so it's not available when processing i=4.
+
+So the code's logic for adding and removing lines is flawed.
+
+This indicates a problem in the convex hull trick implementation. The lines that are necessary for future queries are being removed during the insertion step.
+
+So why is the line for j=2 being removed?
+
+Because when it is added, the code checks if the line before it (j=0's line) and j=2's line form a condition where j=0's line can be removed. Or wait, no. The code checks whether the previous line (j=0's) and j=2's line should cause j=2's line to be removed.
+
+But according to the code's logic:
+
+When adding j=2's line (m=-6, b=19) to the deque, which already has j=0's line (m=-2, b=1), the code checks if j=0's line and j=2's line can be optimized.
+
+Compute x_ab: intersection between j=0 and j=2's line.
+
+x_ab = (1-19)/( -6 - (-2) ) → (-18)/(-4) →4.5.
+
+x_bc: intersection between j=2's line and the new line (but the new line is j=2's line, so this is redundant. So perhaps the code is incorrectly comparing j=2's line with itself.
+
+Wait, no. When adding the new line (j=2's line), the deque is [j=0, j=2]. Then, a is j=0's line, b is j=2's line. The new_line is j=2's line. So the code computes:
+
+left = (a.b -b.b) * (new_line.m - b.m)
+
+= (1-19) * (-6 - (-6)) → (-18)*0 →0.
+
+right = (b.b - new_line.b) * (b.m - a.m )
+
+= (19-19) * (-6 - (-2)) → 0 * (-4) →0.
+
+So 0 >=0 → True. So the code removes j=2's line from the deque. Hence, the deque is left with only j=0's line.
+
+Thus, the line for j=2 is not present when processing i=4.
+
+But why is j=2's line being removed when it's needed for x=5?
+
+The intersection x_ab is 4.5. For x >=4.5, j=2's line is better than j=0's line. So when x=5, j=2's line is better. But the code's deque for i=4's query (x=5) has only j=0's line, so the code uses j=0's line instead of j=2's.
+
+But why is the line for j=2 not in the deque?
+
+Because during the insertion of j=2's line, the code removes it from the deque. So the line is not present when needed.
+
+This suggests that the logic for the convex hull trick is incorrect in this scenario.
+
+Why is this happening?
+
+Because when adding the line for j=2, the code's condition (left >= right) is true, leading to the removal of j=2's line.
+
+But according to the convex hull trick logic, the line j=2's line is added to the deque, and then checked against the previous line (j=0's line). The intersection between j=0 and j=2 is at x=4.5. Since the query x for j=2's line is 3 (i=2), which is less than 4.5, j=0's line is better. But for future queries (like x=5), j=2's line is better.
+
+But the code's condition is removing j=2's line because the intersection x_ab (4.5) is greater than x_bc (which is undefined, since new_line is j=2's line itself).
+
+So the code's condition is flawed in this case.
+
+Ah, I think the mistake is that when adding a new line c, we are comparing the intersection of a and b (the last two lines in the deque) and the intersection of b and c (the new line). But in this case, when c is the new line, the intersection x_bc would be with b and c. But since c is the new line, this is a line with the same m as c. But in this case, the new line is j=2's line, and the line b is j=2's line. So the code is comparing the same line as b and c.
+
+Wait, no. When we add the new line for j=2, after appending, the deque is [j=0, j=2]. The a is j=0's line (deque[-2]), b is j=2's line (deque[-1]). The new_line is j=2's line. So in the code, when comparing a and b, and new_line is c, which is the same as b. So the code is trying to compute the intersection between b and c (which are the same line). But that's impossible, leading to division by zero.
+
+But in the code, when new_line is added, it's appended to the deque. Then, the code checks the last two lines (which are a and b) and the new_line. But in this case, the new_line is the same as b. This is a mistake.
+
+Ah, this is a bug. The code is adding the new_line to the deque, which is the same as the last line. But this leads to comparing a line with itself, which is incorrect.
+
+But why is this happening?
+
+In the code, when processing j=i, we are adding a new line for j=i. But j=i is the current stone, and after processing j=i, it's added to the deque for use in future stones (i+1 and beyond). But when adding the line for j=i, we should check whether the previous lines in the deque (j=0, j=1, ...) can be optimized.
+
+But in the sample case, when j=1's line is added and then removed, the deque is left with j=0's line. Then, when j=2's line is added, the deque becomes [j=0, j=2's line]. Then, the code compares j=0 and j=2's line, and the new_line is j=2's line. So the code is trying to compute the intersection between j=2's line and itself, which is not possible.
+
+Thus, the code's logic is incorrect in this case.
+
+The problem arises because when adding a new_line, the code is comparing the last two lines in the deque (a and b) and the new_line. But since the new_line is the same as b, this leads to incorrect comparisons.
+
+Ah, no. Wait, after appending the new_line to the deque, the deque's elements are [a, b, new_line]. But in this case, the new_line is added to the deque, which makes it the new last element. So the code is checking the last two lines (b and new_line) and the one before (a). Wait, no. The code is checking the last two lines (the new_line and the previous one) and the one before that.
+
+Wait, no. The code is adding the new_line to the deque, making it the new last element. Then, the loop checks whether to remove the previous line (the one before new_line). So the code is checking the last two lines in the deque (a and b) where a is the second to last line and b is the last line (new_line). 
+
+So, in the case where the deque is [j0, j2], the code is comparing j0 and j2's line. But in this case, j2's line is the new_line. The code computes the intersection between j0 and j2's line (x_ab) and the intersection between j2's line and new_line (x_bc). But new_line is j2's line, so this is comparing j2's line with itself, which is impossible.
+
+So the code is comparing the new_line with itself, leading to division by zero in the cross product calculation.
+
+But in this case, the new_line is j2's line, and the code is comparing j0 and j2's line, and then j2's line and new_line. But since new_line is j2's line, the comparison between j2 and new_line is redundant.
+
+Thus, the code's logic for adding lines is flawed. The code should not compare a new_line with itself.
+
+But why is this happening?
+
+Ah, because the code appends the new_line to the deque, and then checks the last two lines (which are the previous line and the new_line). In this case, when adding j2's line to the deque, which already contains j0's line, the code compares j0's line and j2's line. But the new_line is j2's line, so the code is checking j0 and j2's line, then the new_line is j2's line. So the code's logic is correct in this case.
+
+But the problem arises because j2's line is being added, and the code's condition (left >= right) is true, leading to the removal of j2's line from the deque. This is wrong, because j2's line is needed for future queries.
+
+So why is the condition left >= right true in this case?
+
+Because when adding j2's line to the deque, which is [j0's line], the code appends j2's line, making the deque [j0, j2]. Then, the code enters the loop:
+
+while len(deque) >=2:
+
+   a = deque[-2] (j0's line)
+
+   b = deque[-1] (j2's line)
+
+   compute left and right:
+
+   left = (a.b - b.b) * (new_line.m - b.m) → (1-19) * (-6 - (-6)) → (-18)*0=0.
+
+   right = (b.b - new_line.b) * (b.m - a.m) → (19-19) * (-6 - (-2)) →0 * (-4) =0.
+
+   left >= right → yes.
+
+   So deque.pop() (remove j2's line).
+
+   Now, deque becomes [j0's line].
+
+   loop again: len(deque) >=2? No. Exit.
+
+Thus, j2's line is added to the deque but immediately removed, leaving only j0's line.
+
+But this is wrong, as j2's line is needed for future queries where x>4.5.
+
+So the code's logic is incorrect in this case. But why is this happening?
+
+The condition left >= right is comparing the intersection x_ab (between j0 and j2) with x_bc (between j2 and the new_line, which is j2's line). But since the new_line is j2's line, the intersection between j2 and new_line is undefined. So the code's approach to comparing x_ab and x_bc is flawed when the new_line is the same as b.
+
+But in this case, new_line is the same as b (j2's line), so the new_line's m and b are the same as b's. Thus, the code's cross product calculation is zero in both terms, leading to the removal of j2's line.
+
+This indicates that the code's logic for adding lines is incorrect when the new line is added, and the previous line in the deque is the same as the new line. But in reality, the new line is not the same as the previous lines.
+
+So, what is the correct way to handle this?
+
+The problem arises because the new_line's line (j=2) has a slope of -6 and b=19, which is added to the deque. Then, the code computes the intersection between j0's line and j2's line, which is 4.5. This x=4.5 is where j0's line and j2's line intersect. For x <4.5, j0's line is better. For x >=4.5, j2's line is better. 
+
+When adding j2's line to the deque, the code should retain it, because future queries (like x=5) will need it. But the code's condition is removing it because the intersection between j0 and j2's line is 4.5, and the new_line (j2's line) has an intersection with j2's line which is not defined. But the code's cross product calculation is treating this as zero, leading to the condition being true.
+
+This is a mistake in the code's logic for adding new lines. The code should not compare the new_line with itself. 
+
+The root cause is that when adding the new_line (j=2), the code checks the last two lines in the deque (j0 and j2), and computes their intersection and the intersection between j2 and the new_line (which is j2). This leads to an invalid comparison.
+
+The correct approach is to ensure that when adding a new line, the lines before it are checked to see if they can be removed, but the new line is the last in the deque, and is compared with the previous line and the one before that.
+
+But in this case, after adding j2's line, the code checks whether the last two lines (j0 and j2) can be optimized. The intersection between j0 and j2 is 4.5. There is no line after j2, so the code should not remove j2's line, as it is needed for x>=4.5.
+
+But the code's condition is triggering the removal of j2's line, which is incorrect.
+
+Thus, the error is in the code's condition for adding new lines. The cross product approach is not correctly capturing the necessary conditions.
+
+Perhaps the correct condition should be to check whether the previous line (b) is dominated by the new_line (c) and the line before (a). This requires comparing the intersection of a and c with the intersection of a and b.
+
+Alternatively, the code should be modified to avoid comparing the new_line with itself.
+
+But how?
+
+Alternative approach: the code should compute the intersection between a and b (x_ab), and between a and c (x_ac). If x_ab >= x_ac, then the line b is redundant.
+
+So, when adding the new_line (c), compare a and c's intersection with a and b's.
+
+Thus, the condition is:
+
+if the intersection between a and b is >= the intersection between a and c, then line b is redundant.
+
+This makes sense because:
+
+- For x <=x_ab: a is better than b.
+
+- For x_ab <x <x_ac: b is better than a and c.
+
+- For x >=x_ac: c is better than a and b.
+
+But if x_ab >= x_ac, then the interval x_ab <x <x_ac is empty, so line b is never optimal. So line b can be removed.
+
+Thus, the correct condition is:
+
+while len(deque) >=2:
+
+   a = deque[-2]
+
+   b = deque[-1]
+
+   x_ab = intersection of a and b.
+
+   x_ac = intersection of a and c (new_line).
+
+   if x_ab >= x_ac:
+
+       remove b.
+
+   else:
+
+       break.
+
+Thus, the code's condition is incorrect. Instead of comparing x_ab and x_bc, the code should compare x_ab and x_ac.
+
+Ah! This is the mistake. The code was comparing x_ab and x_bc (where x_bc is the intersection between b and c) instead of x_ab and x_ac (intersection between a and c).
+
+So the correct condition is to compare x_ab and x_ac.
+
+Thus, the code's current condition is wrong. This explains why the line for j=2 is being removed incorrectly.
+
+So, in the code, during the adding of new_line, the code should compute x_ab (intersection of a and b) and x_ac (intersection of a and c), then compare x_ab >= x_ac to determine whether to remove b.
+
+But in the current code, the code computes x_bc (intersection of b and c), which is not correct.
+
+This is a crucial mistake.
+
+So, the code should be modified to compute x_ac instead of x_bc.
+
+Let's re-express the code's condition.
+
+When adding a new line c:
+
+   while deque has at least two lines:
+
+       a = deque[-2]
+
+       b = deque[-1]
+
+       x_ab = intersection of a and b.
+
+       x_ac = intersection of a and c.
+
+       if x_ab >= x_ac:
+
+           deque.pop()  # remove b.
+
+       else:
+
+           break.
+
+This way, the code checks whether the line b is redundant after adding c.
+
+Thus, in the sample case:
+
+Adding c (j=2's line) to the deque:
+
+a = j0's line (m=-2, b=1).
+
+b = j2's line (m=-6, b=19).
+
+x_ab = (1-19) / (-6 - (-2)) → (-18)/ (-4) →4.5.
+
+x_ac is the intersection between a and c (which is j2's line). c is the new_line.
+
+x_ac = (1 -19) / (c.m - a.m) → (1-19)/( -6 - (-2) ) → (-18)/ (-4) →4.5.
+
+So x_ab =4.5, x_ac =4.5. Thus, x_ab >=x_ac →4.5 >=4.5 → yes. So line b is removed.
+
+Thus, the code would remove j2's line, which is incorrect. But why?
+
+Because x_ab and x_ac are the same. So the condition is true, leading to the removal of b.
+
+But in reality, a and c have the same intersection as a and b, which is 4.5. So line b is redundant only if the line c is better than b for all x beyond x_ab.
+
+But in this case, line c is better than b for all x, because c's slope is the same as b's slope (since c is the same as b). Wait, no. c is the same as b. So adding c to the deque is redundant and can be removed.
+
+Wait, no. c is the same as b. So the code is adding a duplicate line. But in the code's case, the new_line is for j=2, which is added after processing j=2. But the code is adding a new line for j=2, which has the same m as any previous j=2 lines.
+
+But in reality, each line is added once for each j. So there should be no duplicates.
+
+But in the sample case, the code is adding the line for j=2, which is different from j=0's line.
+
+But the line for j=2 is (m=-6, b=19). So why would the code compare a line with itself?
+
+The mistake is that in the code's current approach, during the adding of a new line, the code compares the previous line (b) with the new line (c), which may be redundant.
+
+But the correct condition is to compare the intersection between a and b and the intersection between a and c. 
+
+Thus, in the sample case, when adding j=2's line (c), the deque has a =j0, b =j2's line.
+
+x_ab =4.5.
+
+x_ac is also 4.5.
+
+So the condition x_ab >=x_ac is true, leading to the removal of b.
+
+But this is incorrect, because after removing b, the deque has only a's line. So for x >=4.5, c's line is better than a's, but c's line is not in the deque.
+
+Thus, the code's logic is incorrect.
+
+But why is this happening?
+
+Because the code's condition is incorrectly checking x_ab >=x_ac, leading to the removal of the line b even though c's line is better for x >=4.5.
+
+But when x >=4.5, c's line (which is b) is better than a's line. So line b is needed for x >=4.5. But the code's condition removes it, leading to incorrect results.
+
+This indicates that the condition is flawed.
+
+Ah, the correct condition should be that if the intersection of a and b is >= the intersection of b and c, then b is redundant.
+
+This is the standard condition for the convex hull trick when adding lines in order of decreasing m (slope).
+
+The correct condition for removing the line b when adding line c is whether the intersection between a and b is >= the intersection between b and c. This ensures that b is not part of the lower envelope for any x.
+
+But in the code, the current condition is comparing the intersection between a and b with the intersection between a and c, which is incorrect.
+
+Thus, the code's condition is wrong. The correct condition is to compare x_ab >= x_bc, not x_ab >= x_ac.
+
+But wait, in the previous example, when adding c (j=2's line), the code should compare x_ab (intersection between a and b) and x_bc (intersection between b and c).
+
+But in the sample case, b is j=2's line, and c is the same as b, so x_bc is undefined.
+
+Thus, there's a deeper issue here. The problem is that the code is adding the line for j=2's line, but during the addition, the code compares the previous line (a) and b, but the new line is c, which is the same as b. This leads to undefined behavior.
+
+But why is the code adding the line for j=2's line again?
+
+Because in the code, after processing i=2, the code adds the line for j=2. But j=2 is the current stone, and the lines in the deque are for j < i. So this is correct.
+
+But in the case where j=2's line is added to the deque, it's possible that it is redundant, but the code's condition is incorrect.
+
+Thus, the root cause is the incorrect condition during the addition of new lines. The code should be comparing the intersection between a and b (x_ab) with the intersection between b and c (x_bc), not between a and c.
+
+Thus, the code's current condition is incorrect, leading to the removal of necessary lines.
+
+So to fix this, the code's condition during the addition of new lines should compare x_ab and x_bc, not x_ab and x_ac.
+
+But how to compute x_bc?
+
+In the code, when adding c, the code should compute x_bc = intersection between b and c.
+
+Thus, in the sample case where j=2's line is added:
+
+a = j0's line (m=-2, b=1).
+
+b = j2's line (m=-6, b=19).
+
+c = j2's line (m=-6, b=19).
+
+x_bc is (19 -19)/( -6 - (-6) ) →0/0, which is undefined. So in this case, since c and b are the same line, x_bc is undefined, but the code's condition is comparing x_ab and x_bc.
+
+Thus, the code's logic is invalid when adding a new line that is the same as the previous line.
+
+But in reality, each line is added once for each j, so this situation should not occur. However, in the sample case, after adding j=1's line (which is removed), and then adding j=2's line, the code is comparing j0's line and j2's line.
+
+So the code should compute x_ab and x_bc, where x_bc is the intersection between j2's line and the new line (which is j2's line again).
+
+But this leads to division by zero.
+
+Thus, the code's condition is incorrect for this case.
+
+The correct approach is to compare the intersection between a and b (x_ab) and the intersection between b and c (x_bc). But when b and c are the same line, x_bc is undefined. But in this case, c is the same as b, so the line b can be removed, as c is better than b for all x (since they have the same m, but different b).
+
+But in reality, c's line is different from b's line. Because in the sample case, when j=2's line is added, it is (m=-6, b=19). But the previous line (if any) would be j=1's line, but that has been removed.
+
+Thus, the code's current condition is incorrect, leading to the removal of necessary lines.
+
+So, to fix this, the code should use the correct condition, which compares x_ab and x_bc, where x_bc is the intersection between b and c.
+
+But in the sample case, when adding j=2's line (c), the deque is [j0's line, j2's line]. a is j0's line, b is j2's line.
+
+x_ab is 4.5.
+
+x_bc is the intersection between b and c, but c is the same as b. So their lines are the same. So in this case, x_bc is undefined, but since their lines are the same, the condition can be handled by checking whether the new line's b is less than or equal to the existing line's b. If so, the existing line can be replaced.
+
+But in this case, since the lines are the same, it doesn't matter, but this situation should not occur.
+
+Thus, the code should be modified to use the correct condition.
+
+The correct code during the addition of a new line should:
+
+   while len(deque) >=2:
+
+       a = deque[-2]
+
+       b = deque[-1]
+
+       x_ab = (a.b - b.b) / (b.m - a.m)
+
+       x_bc = (b.b - new_b) / (new_m - b.m)
+
+       if x_ab >= x_bc:
+
+           deque.pop()
+
+       else:
+
+           break
+
+But in the sample case, when adding j=2's line (new_m=-6, new_b=19), the deque is [a=(-2,1), b=(-6,19)].
+
+x_ab = (1-19)/( -6 - (-2) ) → (-18)/(-4) =4.5.
+
+x_bc = (19-19)/( -6 - (-6) ) →0/0 → division by zero.
+
+This causes the code to crash or behave unexpectedly.
+
+Thus, the code needs to handle the case where the denominator is zero.
+
+In Python, dividing by zero will cause a ZeroDivisionError, so this must be handled.
+
+But how?
+
+In this case, if new_m == b.m, then the lines b and c (new_line) are parallel. So, if their b's are different, they never intersect. So, if new_b < b.b, then c is better than b for all x, so b can be removed. If new_b >= b.b, then c is worse than b for all x, so c can be skipped (not added).
+
+Thus, when new_m == b.m, we can check the b's to decide whether to keep c or not.
+
+Thus, in code, when computing x_bc, if new_m == b.m, then:
+
+   if new_b < b.b: 
+
+       c is better than b for all x, so remove b from deque.
+
+   else:
+
+       c is worse than b for all x, so skip adding c.
+
+But in the case where new_b == b.b, then the lines are the same, so no need to add c.
+
+Thus, in code:
+
+When adding a new line c to the deque:
+
+   while len(deque) >=2:
+
+       a = deque[-2]
+
+       b = deque[-1]
+
+       if new_m == b.m:
+
+           if new_b <= b.b:
+
+               # c is better than or equal to b for all x. Remove b.
+
+               deque.pop()
+
+               continue
+
+           else:
+
+               # c is worse than b for all x. Do not add c.
+
+               break
+
+       # compute x_ab and x_bc as before.
+
+       # ...
+
+Thus, this would handle the case where new_m == b.m.
+
+But in the sample case, when adding j=2's line, b is j=2's line, and new_line is j=2's line, so new_m == b.m and new_b == b.b. So new_b == b.b → the lines are the same. So, c can be skipped (not added), but in code, it is appended to the deque and then popped.
+
+Thus, the code would skip adding c in this case.
+
+But this is incorrect, as the line for j=2's line is needed.
+
+Thus, the code must be modified to handle the case where new_m == b.m.
+
+So, the code should be modified to:
+
+When adding a new line, before comparing x_ab and x_bc, check if the new line's m is equal to the previous line's m. If so, handle accordingly.
+
+So, the code during the adding step becomes:
+
+   new_m = -2 * h[i]
+
+   new_b = dp[i] + h[i]**2
+
+   # Add to deque, and check if previous lines can be removed.
+
+   while len(deque) >=2:
+
+       a = deque[-2]
+
+       b = deque[-1]
+
+       # Check if new_m == b.m:
+
+       if new_m == b.m:
+
+           # new_line is parallel to b.
+
+           if new_b <= b.b:
+
+               # new_line is better than or equal to b for all x. Remove b.
+
+               deque.pop()
+
+           else:
+
+               # new_line is worse than b for all x. No need to add it.
+
+               break  # new_line is not added, so we can break.
+
+       else:
+
+           # compute x_ab and x_bc using cross products.
+
+           # compute left and right.
+
+           left = (a.b - b.b) * (new_m - b.m)
+
+           right = (b.b - new_b) * (b.m - a.m)
+
+           if left >= right:
+
+               deque.pop()
+
+           else:
+
+               break
+
+   # Append new_line to deque only if it is not parallel to the previous line.
+
+   # Or append always, but in the case where new_m == b.m and new_b <= b.b, b has been removed.
+
+   deque.append( (new_m, new_b) )
+
+But this is getting complicated. However, this adjustment is necessary to avoid division by zero and correctly handle parallel lines.
+
+In the sample case, when j=2's line is added, the code will check:
+
+new_m = -6, b.m = -6. So new_m == b.m.
+
+new_b =19, b.b=19. So new_b == b.b. So new_line is the same as b. So no need to add it. But the code appends new_line to the deque, leading to duplicate lines. To avoid this, the code should check if new_line is better than b. If new_b <= b.b, then new_line is better, so b is removed and new_line is added. But in this case, new_b == b.b, so new_line is equivalent to b, so it can be skipped.
+
+Thus, in code:
+
+if new_m == b.m:
+
+   if new_b <= b.b:
+
+       deque.pop()
+
+       # continue processing to see if more lines can be removed.
+
+   else:
+
+       # do not add new_line.
+
+       break
+
+So, in the sample case, after adding j=2's line (new_m=-6, new_b=19), the deque is [j0, j2]. 
+
+When entering the loop:
+
+b is j2's line (m=-6, b=19).
+
+new_line has m=-6, b=19.
+
+So new_m == b.m and new_b == b.b. So new_line is same as b. So the code will not add new_line (break), but since new_line is the same as b, there's no need to add it. So the code skips adding new_line.
+
+Thus, deque remains [j0, j2]. But this is not what happens. Because the code appends new_line to the deque regardless of the condition. So in this case, after appending new_line, the deque is [j0, j2, new_line], which is [j0, j2, j2]. Then, the code enters the loop, checks for new_m == b.m (which is j2's line), and new_line is j2's line again. So new_line's m == b.m, and new_b == b.b. So the code removes b (the j2's line), and continues. The deque becomes [j0, new_line]. Then, check again:
+
+len(deque) >=2: yes.
+
+a = j0's line.
+
+b = new_line (j2's line).
+
+new_line's m is again -6, same as b.m.
+
+new_b == b.b (19). So the code breaks, and the deque is [j0, new_line].
+
+Thus, the line for j=2 is added to the deque.
+
+But this leads to a loop where the code is adding and removing lines.
+
+Thus, the correct approach is to handle parallel lines before performing the cross product comparison.
+
+This requires modifying the code during the addition of new lines to check for parallel lines and handle them appropriately.
+
+In conclusion, the code's current condition for adding new lines is incorrect, leading to the removal of necessary lines. The correct condition should compare x_ab and x_bc (intersection of b and c), not x_ab and x_ac. Additionally, the code must handle parallel lines to avoid division by zero and correctly manage the deque.
+
+The corrected code would compare x_ab and x_bc, and handle parallel lines.
+
+Thus, the final code will be:
+
+Read N and C.
+
+Read h as list of integers.
+
+Initialize dp as list with dp[0] =0.
+
+deque is initialized with [ (-2*h[0], dp[0] + h[0]**2) ].
+
+for i in range(1, N):
+
+   x = h[i]
+
+   # Query step:
+
+   while len(deque) >=2:
+
+       a_m, a_b = deque[0]
+
+       b_m, b_b = deque[1]
+
+       if a_m * x + a_b >= b_m * x + b_b:
+
+           deque.popleft()
+
+       else:
+
+           break
+
+   current_m, current_b = deque[0]
+
+   min_val = current_m * x + current_b
+
+   dp_i = min_val + x**2 + C
+
+   # Add new line for j=i:
+
+   new_m = -2 * h[i]
+
+   new_b = dp_i + h[i]**2
+
+   # Check and add to deque:
+
+   while len(deque) >=2:
+
+       a_m, a_b = deque[-2]
+
+       b_m, b_b = deque[-1]
+
+       # Check if new line is parallel to b_m:
+
+       if new_m == b_m:
+
+           if new_b <= b_b:
+
+               deque.pop()
+
+           else:
+
+               break
+
+       else:
+
+           # Compute cross products to compare x_ab and x_bc.
+
+           # x_ab is intersection of a and b.
+
+           # x_bc is intersection of b and new_line.
+
+           # Using cross multiplication.
+
+           # left = (a_b - b_b) * (new_m - b_m)
+
+           # right = (b_b - new_b) * (b_m - a_m)
+
+           left = (a_b - b_b) * (new_m - b_m)
+
+           right = (b_b - new_b) * (b_m - a_m)
+
+           if left >= right:
+
+               deque.pop()
+
+           else:
+
+               break
+
+   deque.append( (new_m, new_b) )
+
+Thus, in the sample case:
+
+When adding j=2's line, the code compares x_ab and x_bc.
+
+But since new_m is not equal to b_m (b_m is -6, new_m is -6), so new_m == b_m is true.
+
+new_b (19) == b_b (19), so new_b <= b_b is true. So deque.pop() removes the last line (j=2's line), and the loop continues.
+
+Then, the deque is [j0's line]. The code appends the new_line (j=2's line) to deque, which now becomes [j0, j2].
+
+But again, since new_m == b_m (now, b is j0's line?), wait no. After popping, deque is [j0's line]. Then, the code appends j=2's line. The deque is now [j0, j2].
+
+Now, len(deque) >=2 → yes.
+
+Check new_m (j2's m, -6) == b_m (j0's m is -2) → no.
+
+So compute left and right.
+
+a is j0's line (m=-2, b=1), b is j2's line (m=-6, b=19).
+
+new_m is -6, new_b is 19.
+
+left = (1-19) * (-6 - (-6)) → (-18)*0=0.
+
+right = (19-19) * (-6 - (-2)) →0 * (-4)=0.
+
+left >= right → yes. So pop deque's last line (j2's line).
+
+Thus, the deque becomes [j0's line], and the new_line is appended again.
+
+This leads to an infinite loop.
+
+Thus, the code is still not handling the case correctly.
+
+This suggests that the code's logic for comparing new lines is still incorrect.
+
+At this point, it's clear that the code needs a different approach. Perhaps the lines should be added in a way that ensures that the deque maintains the correct lower envelope.
+
+Alternatively, the problem may require a different approach altogether, such as using the Li Chao tree, which can handle dynamic insertion of lines and querying for the minimum in logarithmic time. But for N=2e5, Li Chao tree would be O(N log N), which is acceptable.
+
+But the convex hull trick with the deque is supposed to be O(N) time.
+
+Alternatively, perhaps the initial approach is incorrect and a different DP optimization is needed.
+
+But given time constraints, perhaps the correct approach is to refer to the correct implementation of the convex hull trick for this problem.
+
+After researching, I find that this problem is a classic application of the convex hull trick, where the DP recurrence can be optimized with the correct conditions.
+
+The correct condition for adding lines is to compare the intersection of the new line with the previous line in the deque and the intersection of the previous two lines in the deque.
+
+Thus, the correct code during the addition of new lines is:
+
+When adding a new line c:
+
+   while the deque has at least two lines:
+
+       a = deque[-2]
+
+       b = deque[-1]
+
+       x1 = intersection of a and b.
+
+       x2 = intersection of b and c.
+
+       if x1 >= x2:
+
+           remove b from deque.
+
+       else:
+
+           break.
+
+This ensures that the deque maintains the correct lower envelope.
+
+But in the case where new_line is the same as b, this leads to x2 being undefined.
+
+Thus, the code must handle parallel lines.
+
+In code, this is done by checking if the new line is parallel to the previous line. If the new line is better (has a lower b), then the previous line can be removed.
+
+Thus, the code during addition becomes:
+
+   while len(deque) >=2:
+
+       a = deque[-2]
+
+       b = deque[-1]
+
+       if b.m == new_m:
+
+           if new_b <= b.b:
+
+               deque.pop()
+
+           else:
+
+               break
+
+       else:
+
+           x_ab = (a.b - b.b) / (b.m - a.m)
+
+           x_bc = (b.b - new_b) / (new_m - b.m)
+
+           if x_ab >= x_bc:
+
+               deque.pop()
+
+           else:
+
+               break
+
+Thus, in the sample case, when adding j=2's line (new_m=-6, new_b=19), the deque has j0's line (m=-2, b=1) and j2's line (m=-6, b=19). 
+
+x_ab = (1-19)/( -6 - (-2) ) = (-18)/(-4) =4.5.
+
+x_bc = (19-19)/( -6 - (-6) ) → division by zero.
+
+But since new_m == b.m (-6 == -6), the code checks if new_b <= b.b (19 <=19 → yes). So deque.pop() removes j2's line. The deque becomes [j0's line].
+
+Then, the loop continues. Now, len(deque) is 1, so the loop breaks. The new_line is appended to deque, so the deque is now [j0's line, new_line (m=-6, b=19)].
+
+Thus, after processing j=2, the deque has j0's line and j2's line.
+
+Now, when processing i=4 (x=5):
+
+During querying, the deque is [j0's line, j2's line].
+
+The code checks the front lines:
+
+a is j0's line, b is j2's line.
+
+a's value at x=5: -2*5+1 =-9.
+
+b's value at x=5: -6*5+19 =-30+19= -11.
+
+Since -9 >-11, the code removes j0's line from the deque. Now, the deque is [j2's line].
+
+Thus, min_val =-11. dp[4] =-11 +25 +6=20.
+
+This is correct.
+
+Thus, the code must handle parallel lines by checking if new_line is better than the previous line. This requires modifying the code during the addition of new lines to handle parallel lines.
+
+Thus, the final code should include this handling.
+
+So, the code should be modified to:
+
+When adding a new line:
+
+   while len(deque) >= 2:
+
+       a_m, a_b = deque[-2]
+
+       b_m, b_b = deque[-1]
+
+       new_m = -2*h[i]
+
+       new_b = dp_i + h[i]**2
+
+       if b_m == new_m:
+
+           if new_b <= b_b:
+
+               deque.pop()
+
+           else:
+
+               break
+
+       else:
+
+           # compute x_ab and x_bc using cross products.
+
+           # compute cross products to avoid division.
+
+           left = (a_b - b_b) * (new_m - b_m)
+
+           right = (b_b - new_b) * (b_m - a_m)
+
+           if left >= right:
+
+               deque.pop()
+
+           else:
+
+               break
+
+   deque.append( (new_m, new_b) )
+
+Thus, this code will correctly handle the sample case, allowing j=2's line to remain in the deque after processing j=2, which is needed for i=4.
+
+Thus, the correct code is as follows.
+</think>
+To solve this problem, we need to find the minimum possible total cost for a frog to jump from the first stone to the last stone, where each jump incurs a cost based on the height difference between the stones and a fixed constant. The solution uses dynamic programming (DP) optimized with the Convex Hull Trick (CHT) to efficiently compute the minimum cost.
+
+### Approach
+1. **Dynamic Programming (DP) Setup**: Define `dp[i]` as the minimum cost to reach the i-th stone. The recurrence relation for `dp[i]` is derived from the costs of jumping from any previous stone `j` to `i`.
+
+2. **Convex Hull Trick (CHT)**: The CHT is used to optimize the DP recurrence. The cost function can be transformed into a set of linear functions, and CHT helps maintain these functions in a way that allows efficient querying of the minimum value at each step.
+
+3. **Handling Line Comparisons**: The solution involves maintaining a deque of lines (each representing a cost function from a previous stone) and ensuring that the lines are added and removed in a way that maintains the lower envelope of these lines. This involves checking intersections and handling parallel lines to avoid redundant computations.
+
+### Solution Code
+```python
+import sys
+from collections import deque
+
+def main():
+    input = sys.stdin.read().split()
+    N = int(input[0])
+    C = int(input[1])
+    h = list(map(int, input[2:2+N]))
+    
+    dp = [0] * N
+    dq = deque()
+    m0 = -2 * h[0]
+    b0 = dp[0] + h[0] ** 2
+    dq.append((m0, b0))
+    
+    for i in range(1, N):
+        x = h[i]
+        # Query step
+        while len(dq) >= 2:
+            m1, b1 = dq[0]
+            m2, b2 = dq[1]
+            val1 = m1 * x + b1
+            val2 = m2 * x + b2
+            if val1 >= val2:
+                dq.popleft()
+            else:
+                break
+        best_m, best_b = dq[0]
+        min_val = best_m * x + best_b
+        dp[i] = min_val + x ** 2 + C
+        
+        # Add new line
+        new_m = -2 * h[i]
+        new_b = dp[i] + h[i] ** 2
+        # Check and add to deque
+        while len(dq) >= 2:
+            prev_m, prev_b = dq[-2]
+            curr_m, curr_b = dq[-1]
+            # Check if current and new are parallel
+            if curr_m == new_m:
+                if new_b <= curr_b:
+                    dq.pop()
+                else:
+                    break
+            else:
+                # Compute cross products to avoid division
+                left = (prev_b - curr_b) * (new_m - curr_m)
+                right = (curr_b - new_b) * (curr_m - prev_m)
+                if left >= right:
+                    dq.pop()
+                else:
+                    break
+        dq.append((new_m, new_b))
+    
+    print(dp[-1])
+
+if __name__ == '__main__':
+    main()
+```
+
+### Explanation
+1. **Reading Input**: The input is read and parsed into the number of stones `N`, the constant cost `C`, and the heights of the stones `h`.
+
+2. **Initialization**: The DP array is initialized with `dp[0] = 0` since the frog starts at the first stone. The deque is initialized with the first line representing the cost function from the first stone.
+
+3. **Processing Each Stone**: For each subsequent stone, the minimum cost to reach that stone is computed by querying the deque for the optimal line. This line's value at the current height is used to update the DP array.
+
+4. **Adding New Lines**: After updating the DP value for the current stone, a new line representing the cost function from this stone is added to the deque. The deque is maintained by removing lines that are no longer part of the lower envelope, ensuring efficient future queries.
+
+This approach ensures that each line is processed in constant amortized time, leading to an overall time complexity of O(N), which is efficient for large inputs up to 200,000 stones.
+</bot>

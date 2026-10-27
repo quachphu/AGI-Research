@@ -1,0 +1,647 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.There are N balls in a two-dimensional plane. The i-th ball is at coordinates (x_i, y_i).
+
+We will collect all of these balls, by choosing two integers p and q such that p \neq 0 or q \neq 0 and then repeating the following operation:
+
+* Choose a ball remaining in the plane and collect it. Let (a, b) be the coordinates of this ball. If we collected a ball at coordinates (a - p, b - q) in the previous operation, the cost of this operation is 0. Otherwise, including when this is the first time to do this operation, the cost of this operation is 1.
+
+
+
+Find the minimum total cost required to collect all the balls when we optimally choose p and q.
+
+Constraints
+
+* 1 \leq N \leq 50
+* |x_i|, |y_i| \leq 10^9
+* If i \neq j, x_i \neq x_j or y_i \neq y_j.
+* All values in input are integers.
+
+Input
+
+Input is given from Standard Input in the following format:
+
+
+N
+x_1 y_1
+:
+x_N y_N
+
+
+Output
+
+Print the minimum total cost required to collect all the balls.
+
+Examples
+
+Input
+
+2
+1 1
+2 2
+
+
+Output
+
+1
+
+
+Input
+
+3
+1 4
+4 6
+7 8
+
+
+Output
+
+1
+
+
+Input
+
+4
+1 1
+1 2
+2 1
+2 2
+
+
+Output
+
+2
+</user>
+<bot>
+<think>
+Okay, let's try to figure out this problem. So the problem is about collecting all the balls in a 2D plane with minimal cost. The cost depends on choosing p and q (not both zero) and then collecting the balls in a sequence where consecutive steps use the same (p, q) difference. Each time you collect a ball, if the previous one was collected by moving (p, q) from the current one, then the cost is 0. Otherwise, the cost is 1. We need to find the minimal total cost possible by choosing the best p and q.
+
+Hmm. Let's think about what this means. The cost is essentially the number of times we start a new "chain" of operations. Because each time the step isn't a continuation of the previous (p, q) step, we add 1 to the cost. So the minimal cost would be achieved when we can arrange the balls into as few chains as possible. Because each chain starts with a cost of 1, and the rest are 0. So the total cost is the number of chains.
+
+So, for example, if all the balls can be arranged in a single chain using some (p, q), then the cost is 1. Like in the first example, two points along a line with p=1 and q=1. Then you collect them in order, each step after the first is a continuation, so cost is 1.
+
+So the key is to find the (p, q) that allows the maximum number of balls to be arranged into the same chain, thereby minimizing the number of chains (since each chain contributes 1 to the cost). Wait, no. Wait, the total number of chains is the total cost. Because each chain contributes 1. So if we can arrange all the balls into one chain, then the cost is 1. If we have to split them into two chains, the cost is 2, etc. So the problem reduces to: find (p, q) such that the number of chains (groups where each consecutive element differs by (p, q)) is minimized. Then the minimal cost is that number of chains.
+
+Wait, but how do the chains form? For a given (p, q), each chain is a sequence of points where each point is (p, q) more than the previous. So for example, if the points form a line with step (p, q), then they can be collected in one chain. But if there are points that can't be connected in this way, then you need multiple chains.
+
+Wait, but how do you arrange the points into chains for a given (p, q)? The idea is that each chain is a maximal sequence where each consecutive element in the chain is (p, q) apart. So for example, if you have points arranged in a grid, but the (p, q) is (1, 0), then each row is a separate chain. Because each point in a row is offset by (1,0) from the previous. So if you collect all points in a row in order, each step after the first has 0 cost.
+
+So the problem becomes: for all possible (p, q) pairs (excluding (0,0)), compute the minimal number of chains needed to cover all points when each chain is a sequence of points differing by (p, q). Then, select the (p, q) that gives the smallest number of chains. The answer is that minimal number.
+
+But how do we compute this for all possible (p, q) pairs efficiently?
+
+Given that N can be up to 50, trying all possible (p, q) pairs would be computationally expensive. Because (p, q) can be as large as 1e9, but for the problem, perhaps the possible (p, q) pairs are determined by the differences between the points. Because (p, q) must be the difference between two points. Because otherwise, for (p, q) not being a difference between any two points, the chains would have length 1 for each point, leading to a cost of N. But perhaps the optimal (p, q) is one that's the difference between two points, so that some chains can be longer.
+
+So maybe the approach is to generate all possible (p, q) pairs based on the differences between every pair of points. Then, for each such (p, q), compute the number of chains required, and take the minimal number of chains across all possible (p, q) pairs.
+
+But considering that there are O(N^2) possible (p, q) pairs (since for each pair of points, the difference gives a possible (p, q)), and N is up to 50, that's 50*49=2450 possible pairs. But we also need to consider the negative differences. For example, if (p, q) is (a, b), then (-a, -b) is a different direction, but perhaps the number of chains is the same. Wait, no. Because the chain direction matters. For example, if (p, q) is (1, 1), then a chain could be (1,1) -> (2,2) -> (3,3), etc. But if (p, q) is (-1, -1), then the same points could form a chain in reverse order. However, in that case, the direction of (p, q) affects how the chains are formed. So for each possible (dx, dy) where dx = x_j - x_i and dy = y_j - y_i for some i < j (since all points are unique), we can consider (dx, dy) and (-dx, -dy) as separate candidates. But perhaps they would result in the same number of chains. Let me think. For example, if (p, q) is (a, b), then for each point, we can have a chain starting at that point and adding (a, b) each step. If (p, q) is (-a, -b), then the chains would be in the opposite direction. But the number of chains would be the same, because it's equivalent to reversing the direction.
+
+Wait, no. Let's take two points (0,0) and (1,1). For (p=1, q=1), the chain is 0,0 →1,1. For (p=-1, -1), the chain would be 1,1 →0,0. But in either case, the number of chains is 1. So for each (dx, dy) and (-dx, -dy), the number of chains is the same. So perhaps we can consider all possible (dx, dy) pairs (including their negatives) generated by the differences between any two points, and for each, compute the number of chains. Then, select the minimal chains among all these possibilities. But wait, perhaps (dx, dy) is (0, something). For example, if two points are (0,0) and (0,5), then (dx=0, dy=5). Then, (p=0, dy=5) is allowed (since p and q are not both zero). But (p=0, dy=0) is not allowed.
+
+But according to the problem statement, p and q can't both be zero. So any (dx, dy) except (0,0) is allowed.
+
+So the approach is:
+
+1. Generate all possible (dx, dy) pairs from the differences between any two points. But since for each pair (i, j), dx = x_j - x_i, dy = y_j - y_i. So for all i != j, we can collect these differences. However, some pairs may result in the same (dx, dy). So we can collect the unique (dx, dy) pairs.
+
+But N is up to 50, so the number of pairs is 50 * 49 = 2450. So even if all are unique, 2450 is manageable.
+
+But then, for each (dx, dy) in this set (excluding (0,0)), we compute the minimal number of chains required to cover all points, and the answer is the minimal number of chains across all possible (dx, dy), including the (dx, dy) pairs and their negatives (since for example, (dx, dy) and (-dx, -dy) may give different chain counts).
+
+Wait, no. Let's see: suppose we have points (0,0), (1,1), (2,2). For (dx=1, dy=1), the chains can be ordered as 0,0 →1,1 →2,2 (cost 1). For (dx=-1, -1), the chain would be 2,2 →1,1 →0,0 (cost 1). So same number of chains. So perhaps (dx, dy) and (-dx, -dy) are equivalent. So maybe when we generate the possible (dx, dy) pairs, we can avoid considering both (dx, dy) and (-dx, -dy) since they will give the same number of chains. But how can we confirm this?
+
+Wait, consider a scenario where the points are arranged in a line but not consecutive. For example, points (0,0), (2, 2), (4,4). Then (dx=2, dy=2). For this (dx, dy), the chain would be 0,0 →2,2 →4,4 (cost 1). If we take (dx=-2, -2), then the chain would start from 4,4 and go down, but there's no point at (2, 2) + (-2,-2) → (0,0). So the same chain. So the number of chains would be 1 in both cases. So for any (dx, dy), the number of chains is the same as for (-dx, -dy). So perhaps we can group these pairs and only check one direction, but I'm not sure. Let's take another example. Suppose we have three points: (0,0), (1,0), (0,1). Let's pick (dx=1,0). Then the chains would be: (0,0) and (1,0) can form a chain. (0,1) would form another chain. So total 2 chains. If we pick (dx=-1, 0), then (1,0) can form a chain with (0,0). (0,1) again is a separate chain. So same count. So in this case, (dx, dy) and (-dx, -dy) give the same chain count.
+
+Therefore, for the purpose of finding the minimal chain count, we can consider (dx, dy) and (-dx, -dy) as equivalent. So perhaps we can generate the (dx, dy) pairs and, for each, compute the chain count, but since (dx, dy) and (-dx, -dy) will yield the same chain count, we can process them once. Wait, but how? Because the chain count depends on the direction. For example, if the points are (0,0), (1,0), (2,0), and (3,0), and (dx=1,0), then the chain count is 1. If (dx=-1,0), then the chain is 3→2→1→0. But the chain count is still 1. So in this case, the direction doesn't matter. So the chain count is the same.
+
+So perhaps for any (dx, dy), the number of chains is the same as for (-dx, -dy). Therefore, we can process each direction once, but since they are considered different (dx, dy) pairs, we need to check them all. But perhaps this is unnecessary. However, since in the problem, (dx, dy) is generated from all pairs, including their negatives, but for the chain count, they may have the same effect.
+
+But perhaps it's better to process all possible (dx, dy) pairs (including all possible differences between two points) and also (0, dy) where dy is non-zero, etc. Wait, but (dx, dy) can't be (0,0). So any difference between two distinct points is valid as (dx, dy) as long as it's not (0,0). But since all points are distinct, the difference between any two distinct points must have either dx or dy non-zero.
+
+So the steps are:
+
+1. Generate all possible (dx, dy) pairs from the differences between any two distinct points. Each such pair (dx, dy) is a candidate.
+
+2. For each such (dx, dy), compute the minimal number of chains required to collect all points.
+
+3. The minimal number of chains across all possible (dx, dy) is the answer.
+
+But how to compute the number of chains for a given (dx, dy)?
+
+For each (dx, dy), the chains are formed as follows: each chain is a sequence of points where each consecutive point in the chain is (dx, dy) away from the previous. So for example, if a chain starts at (a, b), the next point is (a + dx, b + dy), then (a + 2dx, b + 2dy), etc. So all points in the chain must lie on a line that starts at some point and steps by (dx, dy).
+
+But how to model this? For each point, we can see if it can be part of a chain. But the chains are formed by grouping points that can be connected via (dx, dy) steps. So each chain is a maximal set of points that can be arranged in a sequence where each next point is the previous plus (dx, dy).
+
+Alternatively, for a given (dx, dy), each chain starts at a point (x, y) such that (x - dx, y - dy) is not present in the set of points. Then, the chain is (x, y), (x + dx, y + dy), (x + 2dx, y + 2dy), etc., as long as those points are present.
+
+The number of chains is the number of such starting points.
+
+So for example, if (dx, dy) is (1,1), and the points are (1,1), (2,2), (3,3), (4,4), then the starting points are (1,1), because (0,0) is not present. So only one chain. Cost is 1.
+
+Another example: points (1,1), (2,2), (3,3), (5,5). For (dx=1,1), the starting points are (1,1) and (5,5). Because (5-1,5-1) = (4,4) is not present. So two chains. Cost is 2.
+
+So the number of chains is the number of points that do not have (x - dx, y - dy) in the set. So for each point (x, y), if (x - dx, y - dy) is not in the points set, then it's a starting point of a chain. The total number of chains is the count of such starting points.
+
+So the approach for a given (dx, dy) is:
+
+- For each point (x, y), check if (x - dx, y - dy) is present in the points set. If not, then this point is a starting point. The number of chains is the number of starting points.
+
+But how to compute this efficiently?
+
+We can first create a set of all the points (as tuples or as a hashable structure) for O(1) lookups.
+
+Then, for each point (x, y), check if (x - dx, y - dy) is in the set. If not, increment the count.
+
+So the steps for a given (dx, dy) are:
+
+count = 0
+
+for each point in points:
+
+    if (point.x - dx, point.y - dy) not in points_set:
+
+        count += 1
+
+return count
+
+This count is the number of chains, which is the cost for this (dx, dy).
+
+So the minimal cost is the minimal count across all possible (dx, dy) pairs.
+
+Additionally, we have to handle the case where (dx, dy) is (0,0), but the problem states that (p, q) can't be (0,0). So all (dx, dy) pairs considered must be non-zero (dx or dy non-zero), which they are since all points are distinct.
+
+So the algorithm is:
+
+1. Read all N points and store them in a set for O(1) lookups.
+
+2. Generate all possible (dx, dy) pairs from the differences between any two distinct points (i.e., for all pairs (i, j) where i < j, compute dx = x_j - x_i, dy = y_j - y_i).
+
+3. For each (dx, dy) in this list (including duplicates if any, but perhaps it's better to collect unique pairs first), compute the number of chains as described.
+
+4. The minimal chains across all these pairs is the answer.
+
+But wait, are there other possible (dx, dy) pairs not generated by the differences between any two points? For example, if all points are colinear in some way, but the step is a multiple of a difference. But that's probably not necessary. Because if we choose a (dx, dy) that is not a difference between any two points, then each chain can have at most one point (since there's no other point that is (dx, dy) away from it). So the number of chains would be N, which is the worst case and thus not optimal. So the minimal possible cost must be achieved by a (dx, dy) that is a difference between two points. Because otherwise, the cost is N, which is worse than any other possible (dx, dy) that allows some chains.
+
+Therefore, it's sufficient to generate all possible (dx, dy) pairs that are differences between any two points, and compute the minimal chains among them. Because any other (dx, dy) not present in the differences would result in a higher cost.
+
+So the steps are as follows:
+
+- Generate all possible (dx, dy) pairs from the differences between any two points.
+
+- For each pair (dx, dy), compute the number of starting points (chains) as the count of points (x, y) where (x - dx, y - dy) is not in the set.
+
+- The minimal count among all these pairs is the answer.
+
+But in the first example, the differences between the two points is (1,1). So for (dx=1, dy=1), the number of chains is 1 (since (1-1, 1-1) = (0,0) not present, so (1,1) is a starting point. (2,2) - (1,1) is (1,1), which is present. So (2,2) is not a starting point. So total chains 1. So the minimal cost is 1, which matches the example.
+
+In the second example, let's see. The input is:
+
+3
+
+1 4
+
+4 6
+
+7 8
+
+The possible differences between pairs:
+
+Between (1,4) and (4,6): dx=3, dy=2.
+
+Between (1,4) and (7,8): dx=6, dy=4.
+
+Between (4,6) and (7,8): dx=3, dy=2.
+
+So possible (dx, dy) candidates are (3,2), (6,4), (3,2). So unique candidates are (3,2), (6,4), and (3,2) again. So perhaps the code would generate all possible pairs, including duplicates, but then process each once. But perhaps it's better to generate unique pairs to avoid redundant computation.
+
+So for each (dx, dy) in the unique set of differences, compute the chains.
+
+For example, (3, 2):
+
+Check each point:
+
+Point (1,4): (1-3,4-2) = (-2, 2) not present. So count +=1.
+
+Point (4,6): (4-3, 6-2) = (1,4) which is present. So not a starting point.
+
+Point (7,8): (7-3,8-2)=4,6 which is present. So not a starting point.
+
+Total chains 1. So cost is 1, which matches the example's output.
+
+Another possible (dx, dy) is (6,4). Let's see:
+
+For (dx=6, dy=4):
+
+Check each point:
+
+(1,4): (1-6,4-4) = (-5, 0) not present → count +=1.
+
+(4,6): (4-6,6-4) = (-2, 2) not present → count +=1.
+
+(7,8): (7-6,8-4) = (1,4) which is present → not counted.
+
+Total chains 2. So cost is 2. Which is higher than 1, so the minimal is 1.
+
+So the correct answer is 1.
+
+The third example's output is 2. Let's see.
+
+Input:
+
+4
+
+1 1
+
+1 2
+
+2 1
+
+2 2
+
+Possible differences between any two points:
+
+For example, between (1,1) and (1,2): dx=0, dy=1.
+
+Between (1,1) and (2,1): dx=1, dy=0.
+
+Between (1,1) and (2,2): dx=1, dy=1.
+
+Similarly for other pairs.
+
+Let's take (dx=1, dy=0) (horizontal steps):
+
+For each point (x, y):
+
+Check (x-1, y). If not present, it's a starting point.
+
+For (1,1): (0,1) not present → count +=1.
+
+For (1,2): (0,2) not present → count +=1.
+
+For (2,1): (1,1) is present → not counted.
+
+For (2,2): (1,2) is present → not counted.
+
+Total chains 2. So cost 2.
+
+Another possible (dx, dy) is (1,1). Let's see:
+
+For each point:
+
+(1,1) → (0,0) not present → count +=1.
+
+(1,2) → (0,1) not present → count +=1.
+
+(2,1) → (1,0) not present → count +=1.
+
+(2,2) → (1,1) present → not counted.
+
+So total chains 3. So cost 3. Which is worse than 2.
+
+Another possible (dx, dy) is (0,1):
+
+Check each point:
+
+(1,1) → (1,0) not present → count +=1.
+
+(1,2) → (1,1) present → no.
+
+(2,1) → (2,0) not present → count +=1.
+
+(2,2) → (2,1) present → no.
+
+Total chains 2.
+
+So (dx=0,1) gives cost 2. Similarly, (dx=1,0) also gives cost 2. So the minimal is 2.
+
+Which matches the example's output.
+
+So the approach seems correct.
+
+Now, how to implement this in Python.
+
+The steps are:
+
+Read N, then read N lines of x, y. Store them as a list of tuples, and also a set for O(1) lookups.
+
+Generate all possible (dx, dy) pairs from the differences between every pair of points. For each i in 0..N-1, for j in 0..N-1, if i != j, compute dx = x[j] - x[i], dy = y[j] - y[i]. Collect all these (dx, dy) pairs, but with possible duplicates. So we can create a set of (dx, dy) pairs to avoid duplicates.
+
+But for N=50, 50*49=2450 pairs. But after deduplication, maybe fewer. But 2450 is manageable.
+
+Once we have all the (dx, dy) pairs (excluding (0,0)), process each.
+
+For each (dx, dy), compute the number of chains.
+
+The minimal chains across all (dx, dy) is the answer.
+
+But wait, what about when there are no pairs (i.e., N=1)? But according to the constraints, N >=1, but in that case, the answer would be 1, as you need to collect the single ball with cost 1. But according to the problem statement, N is >=1. So code must handle N=1.
+
+Wait, according to the problem statement, the first example has N=2. The code must handle N=1.
+
+But in the case of N=1, you have to collect the single ball. The cost is 1. Because the first operation has cost 1, and there are no other balls. So the minimal cost is 1. So in code, when N=1, the output is 1.
+
+But according to the code logic, when N=1, the code will generate no (dx, dy) pairs (since there are no two distinct points). So the code would not process any (dx, dy) pairs. So the code's initial answer is set to some minimal value. So we need to handle this case separately.
+
+So the code steps:
+
+If N == 1: output 1.
+
+Else:
+
+Proceed as before.
+
+So the code must handle N=1.
+
+Now, for the code:
+
+Read N.
+
+points = []
+
+for _ in range(N):
+
+    x, y = map(int, input().split())
+
+    points.append( (x, y) )
+
+if N ==1:
+
+    print(1)
+
+    exit()
+
+Then, generate all possible (dx, dy) pairs.
+
+diff_set = set()
+
+for i in range(N):
+
+    for j in range(N):
+
+        if i != j:
+
+            dx = points[j][0] - points[i][0]
+
+            dy = points[j][1] - points[i][1]
+
+            if dx !=0 or dy !=0:
+
+                diff_set.add( (dx, dy) )
+
+But even when dx and dy are zero, the problem states (p, q) can't be (0,0). But since i != j, and points are distinct, dx or dy must be non-zero. So the code can add (dx, dy) unconditionally.
+
+Then, for each (dx, dy) in diff_set:
+
+Compute the number of starting points.
+
+points_set = set(points)
+
+min_chains = None
+
+for dx, dy in diff_set:
+
+    count =0
+
+    for (x, y) in points:
+
+        if (x - dx, y - dy) not in points_set:
+
+            count +=1
+
+    if min_chains is None or count < min_chains:
+
+        min_chains = count
+
+So the minimal chains is the answer.
+
+But what if the minimal chains is 0? No. Because for each (dx, dy), each point is either a starting point (counted) or not. So the minimal possible is 1 (when all points can be arranged into one chain). For example, N=2, as in the first example. So the code's output is min_chains.
+
+But when N=1, the code returns 1.
+
+So the code is:
+
+Read the input.
+
+If N is 1: output 1.
+
+Else:
+
+Generate all possible (dx, dy) pairs.
+
+For each (dx, dy), compute the number of starting points.
+
+The minimal among these is the answer.
+
+So this should work.
+
+Testing the first sample:
+
+Sample 1:
+
+2
+
+1 1
+
+2 2
+
+The possible (dx, dy) pairs are (1,1) and (-1, -1).
+
+For (1,1):
+
+Check (1,1) → (0,0) not present → count +=1.
+
+(2,2) → (1,1) present → no.
+
+So count is 1.
+
+For (-1, -1):
+
+Check (1,1): (1 +1, 1 +1) → (2,2) present → no.
+
+(2,2): (3,3) not present → count +=1.
+
+So count is 1.
+
+So the minimal is 1.
+
+Sample 2:
+
+3 points.
+
+The code would generate various (dx, dy) pairs, including (3, 2), (6,4), etc. For (3,2), the count is 1, which is the minimal.
+
+Sample 3:
+
+4 points.
+
+The code generates (0,1), (1,0), (0,1), etc. For (1,0), the count is 2.
+
+So the code should output 2.
+
+Thus, the code should work.
+
+Now, let's code this.
+
+But wait, in Python, when checking if (x - dx, y - dy) is in the set, we need to make sure that the tuples are in the same format. So when we create points_set, it's a set of tuples.
+
+So the code:
+
+Read N.
+
+If N == 1: print 1.
+
+Else:
+
+points = [tuple(map(int, input().split())) for _ in range(N)]
+
+points_set = set(points)
+
+diff_set = set()
+
+for i in range(N):
+
+    xi, yi = points[i]
+
+    for j in range(N):
+
+        if i == j:
+
+            continue
+
+        xj, yj = points[j]
+
+        dx = xj - xi
+
+        dy = yj - yi
+
+        diff_set.add( (dx, dy) )
+
+min_chains = None
+
+for dx, dy in diff_set:
+
+    current = 0
+
+    for (x, y) in points:
+
+        if (x - dx, y - dy) not in points_set:
+
+            current +=1
+
+    if min_chains is None or current < min_chains:
+
+        min_chains = current
+
+print(min_chains)
+
+But wait, in the case where all (dx, dy) lead to a higher number of chains than the minimal possible. For example, if there are multiple (dx, dy) pairs, but the minimal chains is 1. But according to the code, this is handled.
+
+But what about the case where there are no (dx, dy) pairs? Only possible when N=1, which is already handled.
+
+Thus, the code should work.
+
+Testing the first example:
+
+Sample 1:
+
+N=2.
+
+points = [(1,1), (2,2)]
+
+diff_set contains (1,1) and (2-1, 2-1) = (1,1), but for i=0 and j=1, dx=1, dy=1. Also, for i=1 and j=0, dx=-1, dy=-1.
+
+So diff_set has (1,1) and (-1,-1).
+
+Processing (1,1):
+
+count = 1.
+
+Processing (-1,-1):
+
+For each point (1,1):
+
+Check (1 - (-1), 1 - (-1)) → (2, 2) which is present. So not counted.
+
+Point (2,2): (2 - (-1), 2 - (-1) → 3,3 not present. So counted. So count is 1.
+
+Thus, min_chains is 1.
+
+Which is correct.
+
+Sample 3:
+
+N=4.
+
+points = [(1,1), (1,2), (2,1), (2,2)]
+
+Processing (dx=1,0):
+
+Check each point:
+
+1,1 → (0,1) not present → count +=1.
+
+1,2 → (0,2) not present → count +=1.
+
+2,1 → (1,1) present → no.
+
+2,2 → (1,2) present → no.
+
+So count is 2.
+
+Thus, this (dx, dy) is one candidate with count 2.
+
+So the code would find that.
+
+Thus, the code is correct.
+</think>
+To solve this problem, we need to determine the minimum total cost required to collect all balls in a 2D plane by optimally choosing two integers p and q (not both zero). The cost is minimized by arranging the balls into the fewest possible chains, where each chain consists of consecutive points differing by (p, q).
+
+### Approach
+1. **Input Handling**: Read the number of balls and their coordinates.
+2. **Special Case for Single Ball**: If there is only one ball, the cost is always 1.
+3. **Generate Differences**: Compute all possible (dx, dy) pairs from the differences between every pair of distinct points.
+4. **Determine Chains**: For each (dx, dy) pair, calculate the number of chains required. A chain starts at a point if the previous point (by subtracting dx and dy) is not present.
+5. **Find Minimum Cost**: Iterate through all (dx, dy) pairs to find the minimum number of chains, which corresponds to the minimum cost.
+
+### Solution Code
+```python
+n = int(input())
+points = [tuple(map(int, input().split())) for _ in range(n)]
+
+if n == 1:
+    print(1)
+    exit()
+
+points_set = set(points)
+diff_set = set()
+
+for i in range(n):
+    x_i, y_i = points[i]
+    for j in range(n):
+        if i != j:
+            x_j, y_j = points[j]
+            dx = x_j - x_i
+            dy = y_j - y_i
+            diff_set.add((dx, dy))
+
+min_chains = None
+
+for dx, dy in diff_set:
+    current = 0
+    for (x, y) in points:
+        if (x - dx, y - dy) not in points_set:
+            current += 1
+    if min_chains is None or current < min_chains:
+        min_chains = current
+
+print(min_chains)
+```
+
+### Explanation
+1. **Input Handling**: The code reads the number of balls and their coordinates, storing them in a list and a set for quick lookups.
+2. **Special Case Handling**: If there's only one ball, the cost is directly output as 1.
+3. **Generate Differences**: For each pair of distinct points, the differences (dx, dy) are computed and stored in a set to avoid duplicates.
+4. **Chain Calculation**: For each (dx, dy) pair, the code checks each point to see if it can start a new chain by verifying if the previous point (x-dx, y-dy) exists in the set of points. The count of such starting points gives the number of chains.
+5. **Find Minimum**: The minimum number of chains across all (dx, dy) pairs is determined and printed as the result.
+
+This approach efficiently explores all possible movement vectors derived from the points themselves, ensuring that the solution is both optimal and correct.
+</bot>

@@ -1,0 +1,649 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.You are given n segments on a coordinate line; each endpoint of every segment has integer coordinates. Some segments can degenerate to points. Segments can intersect with each other, be nested in each other or even coincide.
+
+Your task is the following: for every k ∈ [1..n], calculate the number of points with integer coordinates such that the number of segments that cover these points equals k. A segment with endpoints l_i and r_i covers point x if and only if l_i ≤ x ≤ r_i.
+
+Input
+
+The first line of the input contains one integer n (1 ≤ n ≤ 2 ⋅ 10^5) — the number of segments.
+
+The next n lines contain segments. The i-th line contains a pair of integers l_i, r_i (0 ≤ l_i ≤ r_i ≤ 10^{18}) — the endpoints of the i-th segment.
+
+Output
+
+Print n space separated integers cnt_1, cnt_2, ..., cnt_n, where cnt_i is equal to the number of points such that the number of segments that cover these points equals to i.
+
+Examples
+
+Input
+
+3
+0 3
+1 3
+3 8
+
+
+Output
+
+6 2 1 
+
+
+Input
+
+3
+1 3
+2 4
+5 7
+
+
+Output
+
+5 2 0 
+
+Note
+
+The picture describing the first example:
+
+<image>
+
+Points with coordinates [0, 4, 5, 6, 7, 8] are covered by one segment, points [1, 2] are covered by two segments and point [3] is covered by three segments.
+
+The picture describing the second example:
+
+<image>
+
+Points [1, 4, 5, 6, 7] are covered by one segment, points [2, 3] are covered by two segments and there are no points covered by three segments.
+</user>
+<bot>
+<think>
+Okay, I need to solve this programming problem. Let's read the problem statement carefully.
+
+The problem is about counting the number of integer points covered by exactly k segments for each k from 1 to n. The segments can have very large endpoints, up to 1e18, so we can't process each point individually. We need an efficient algorithm.
+
+Hmm. Let's think about how to model the coverage of the segments. For each segment [l_i, r_i], it contributes to all integer points x where l_i ≤ x ≤ r_i. So for each x, we need to count how many segments include x. Then, for each k, count how many x's have exactly that count.
+
+But with n up to 2e5 and coordinates up to 1e18, iterating through each x is impossible. So we need a smarter way. The usual approach for such interval coverage problems is to track the start and end events of the segments and process them in order.
+
+So, perhaps, the idea is to collect all the events where the coverage count changes. For each segment [l, r], the coverage increases by 1 at l and decreases by 1 after r (since r is included, the end is at r+1). For example, a segment from 1 to 3 covers 1,2,3. The coverage starts at 1, and ends after 3 (i.e., at 4). So the events are +1 at 1 and -1 at 4.
+
+By processing all these events in sorted order, we can track the current coverage count and the intervals where it's active. Then, for each interval where the coverage is c, we can calculate how many integer points are in that interval and accumulate that into the counts.
+
+Wait, right. So here's the plan:
+
+1. For each segment [l, r], create two events: (l, +1) and (r+1, -1). Because the segment covers x from l to r, inclusive. So the end is at r+1 (exclusive).
+
+2. Sort all the events by their coordinate. If two events have the same coordinate, process the start events before the end events. Wait, no. Wait, for events at the same coordinate, the order of processing the +1 and -1 might matter. Let's see: suppose two events at x=5. One is a +1 and another is a -1. Processing the +1 first would mean that at x=5, the coverage increases before decreasing. But since the event for a segment's end is at r+1, perhaps we should process all -1 events before +1 events when coordinates are equal. Wait, no. Let's think. Suppose two segments: one starts at 3 and ends at 5, and another ends at 3 and starts at 3. Wait, maybe not. Let's consider an example where two events are at the same coordinate. For example, a segment ending at x and another starting at x. How to order these?
+
+Wait, the events are sorted by their coordinate. Events at the same coordinate: if a segment starts at x (so +1 event), and another ends at x (so -1 event at x). Then, for x, the start of the new segment should be processed before the end of the previous. Because the segment that starts at x includes x in its coverage, and the segment that ends at x (i.e., starts at some l and ends at x-1, so the event is at x). Wait, maybe not. Let me think: the event for the end of a segment [l, r] is at r+1. So if two events are at x, then the +1 (start) event is for a segment starting at x, and the -1 (end) event is for a segment that ends at x-1. Therefore, when x is processed, the start of a new segment (which covers x) should be processed before the end of the previous segment (which covers up to x-1). Wait, but in that case, the order might not matter. Because the start event at x adds 1, and the end event (for x) subtracts 1. But perhaps for the same coordinate x, the order is such that the start events come before the end events. Because, for example, if two segments start and end at x. Let's take an example:
+
+Segment A: [5, 5], which becomes events (5, +1) and (6, -1).
+
+Segment B: [5, 7], events (5, +1), (8, -1).
+
+So when x=5, both start events are processed. Then, coverage increases by 2. Then, from 5 to 6 (exclusive), the coverage is 2.
+
+If there's another segment that ends at x=5. For example, a segment [3,4], which has events (3, +1), (5, -1).
+
+So when we process x=5, the events would be the start events for the segments starting at 5, and the end event for the segment ending at 4.
+
+In that case, the end event (x=5) comes after the start events (x=5). So when processing x=5, first the start events are processed (adding to the coverage), then the end event (subtracting). But the end event at x=5 corresponds to the end of a segment that was active until x=4 (since r is 4, so the end event is at 5). So the coverage of that segment ends before x=5. Therefore, the end event at x=5 (from the segment [3,4]) should be processed before the start events at x=5. Because when x=5, the coverage from the previous segment has already ended.
+
+Wait, this is getting a bit confusing. Let's clarify:
+
+The events are sorted by their coordinate. For events with the same coordinate, the end events (-1) are processed before the start events (+1). Because the end event at x corresponds to a segment that ends at x-1 (since the end is x, which is the r+1 of the original segment). So, when x is processed, the end events are applied first. Because for the interval [prev_x, x), the coverage changes happen.
+
+Wait, maybe I should think of the events as markers where the coverage changes. So, for a segment [l, r], the coverage starts at l (inclusive) and ends at r+1 (exclusive). So, between l and r+1, the coverage is active. So, when you process events, you have intervals between the event points where the coverage is constant.
+
+The way to model this is by creating a list of all the events (start and end points), sort them, then iterate through them in order. For each interval between two consecutive events, you have a certain coverage count. The number of integer points in that interval is (end_coordinate - start_coordinate) multiplied by the coverage count's duration.
+
+Wait, no. Wait, the events are sorted. Let's say we have events at points x_0, x_1, x_2, etc. Between x_0 and x_1, the coverage is a certain value. The number of integer points here is the number of integers in [x_0, x_1 - 1], which is x_1 - x_0. Because for example, x_0=2, x_1=5: the interval is [2,4], which has 3 integers (2,3,4). So 5-2=3.
+
+So, for each interval between two consecutive event points (prev, curr), the length is curr - prev. Then, during that interval, the coverage is the current count. For each such interval, we can compute how many integer points are covered with the current coverage count.
+
+But then, how do we handle overlapping events?
+
+So here's the approach:
+
+- Collect all the event points: for each segment [l_i, r_i], add (l_i, +1) and (r_i + 1, -1).
+
+- Sort all events. The sorting is done first by the x-coordinate, then by the type of event. For events with the same x, the -1 events come before +1 events. Because, for example, if two events occur at x=5: a -1 (end) and a +1 (start). The end event should be processed first, because the interval before x=5 is up to x=5 (exclusive), and the start event begins at x=5. So processing the end event first ensures that between the previous x and 5, the coverage is adjusted before the start event takes effect.
+
+Wait, maybe not. Let's see: suppose we have events at x=5: one is a +1 (start) and another is a -1 (end). If we process the -1 first, the coverage count decreases by 1, then increases by 1. So the coverage during x=5 (after processing all events) is (current coverage) + (-1 + 1) = same as before. But that's not right. Because the start event (x=5) is for a segment that starts at x=5. So between x=5 and the next event point, the coverage is increased by 1.
+
+Hmm. Maybe the order of events with the same x doesn't matter as long as all events at x are processed before moving to the next x. Because the coverage count is updated, and the interval is from x_prev to x_current, and the count during that interval is the current count after processing all events at x_prev.
+
+Wait, no. Because the events at x_prev are processed, and the coverage count is updated. Then, the interval [x_prev, x_current) is considered. So, perhaps, the order of events at the same x affects the coverage count during the processing of those events. But the coverage during the interval is the count after processing all events at x_prev.
+
+Wait, for example:
+
+Suppose events at x=5: a +1 and a -1. If we process the +1 first, then the coverage increases by 1, then decreases by 1. So the coverage after processing all events at x=5 is (current +1 -1) = current. So the interval after x=5 (until next event) would have coverage current. But perhaps the events should be ordered such that the end events (the -1) are processed before the start events (the +1). Let's see:
+
+Original coverage is C. Events are (5, -1) and (5, +1).
+
+Processing the -1 first: coverage becomes C-1. Then processing the +1: coverage becomes C. So the interval after x=5 is covered as C.
+
+If we process the +1 first: coverage becomes C+1, then subtract 1, resulting in C. So same result. So the order of events with same x doesn't affect the final coverage count. But during the processing of events, the order could affect other events. Wait, but perhaps the order between events at the same x is only important for events that are not of the same x. Or maybe not. Because all events at the same x are processed together, and the coverage is updated, but the interval between x_prev and x is [x_prev, x), which is not including x. So the events at x are processed, and then the next interval is [x, next_x).
+
+Wait, perhaps the order of events at the same x doesn't matter for the coverage during the interval [x, next_x). Because the events are processed at x, and the coverage after processing all events at x is what determines the coverage in the next interval.
+
+But I'm not sure. Let's take an example.
+
+Suppose we have two events at x=5: +1 and -1.
+
+Case 1: process -1 first.
+
+Current coverage before x=5 is C.
+
+At x=5, process -1: C becomes C-1. Then process +1: C becomes C. So coverage after x=5 is C.
+
+Case 2: process +1 first.
+
+Process +1: C becomes C+1. Then process -1: C becomes C. Same result.
+
+So in both cases, the coverage after processing all events at x=5 is the same. So the order of events with same x doesn't affect the coverage count for the next interval.
+
+Therefore, when sorting the events, for events with the same x, the order between +1 and -1 events doesn't matter. So we can sort them by x, and in case of same x, any order is fine.
+
+Wait, but wait. What if there are multiple events at the same x. For example, three events: (5, +1), (5, -1), (5, +1). Suppose we process them in different orders.
+
+Processing -1 first, then +1, then +1:
+
+Initial C is 0.
+
+After -1: -1.
+
+After +1: 0.
+
+After +1: 1.
+
+So coverage after x=5 is 1.
+
+If processed in order +1, +1, -1:
+
+After first +1: 1.
+
+Second +1: 2.
+
+Then -1: 1.
+
+Same result.
+
+So the final coverage is the same regardless of the order. Because addition and subtraction are commutative.
+
+Therefore, for events with same x, the order between them can be arbitrary. Because the sum of the deltas is the same regardless of the order.
+
+So when sorting, all events with same x can be grouped together, and the order within them doesn't affect the final coverage. So, the way to sort the events is by their x-coordinate. So the code can sort the events by x, and in case of tie, the order between +1 and -1 doesn't matter.
+
+But perhaps, to handle the events correctly, we should process the end events before the start events. Let me think.
+
+Suppose there are two events at x=5: (5, -1) and (5, +1). The coverage after x=5 is same as before. But during x=5, if the events are processed in the order +1 then -1, the coverage would have increased and then decreased. But the interval after x=5 is covered by the new coverage.
+
+But in any case, the coverage during the interval [x_prev, x) is determined by the coverage after processing all events at x_prev. Wait, no. Let's think:
+
+The events are sorted in order of x. So the first event is x0, then x1, etc.
+
+Between x_prev and x_current, the coverage is current_coverage.
+
+The way the algorithm works is:
+
+prev_x = None
+
+current_coverage = 0
+
+active_events = sorted list.
+
+for event in sorted_events:
+
+    x, delta = event
+
+    if prev_x is not None and prev_x < x:
+
+        # the interval is [prev_x, x)
+
+        length = x - prev_x
+
+        # during this interval, coverage is current_coverage
+
+        if current_coverage > 0:
+
+            # accumulate to the counts.
+
+            # the number of integer points is (x - prev_x) * ... ?
+
+            # wait, the interval [prev_x, x) includes all integers from prev_x (inclusive) up to x-1 (inclusive).
+
+            # So the count is (x - prev_x) integers.
+
+            cnt = x - prev_x
+
+            # add cnt to the ans[current_coverage] ?
+
+            if current_coverage <= n:
+
+                ans[current_coverage] += cnt
+
+    current_coverage += delta
+
+    prev_x = x
+
+So, during the interval between prev_x and x (the current event's x), the coverage is current_coverage (before applying the current event's delta). Wait, no. Because the events are processed in order. When processing event (x, delta), the interval between the previous event's x and this x is processed first. Then, the delta is applied.
+
+Wait, for example:
+
+prev_x is initialized to None. Then, for each event in the sorted list:
+
+If prev_x is not None and x != prev_x, then the interval [prev_x, x) is considered, with coverage current_coverage. Then, the current event's delta is applied, and prev_x is set to x.
+
+So, the code's logic is:
+
+prev_x starts as None.
+
+For each event (x, delta) in sorted order:
+
+   if prev_x is not None and prev_x < x:
+
+       length = x - prev_x
+
+       ans[current_coverage] += length
+
+   apply delta to current_coverage
+
+   prev_x = x
+
+So the coverage during [prev_x, x) is current_coverage (before applying the delta), and after processing the event, the coverage changes.
+
+Yes. So for example, suppose the events are:
+
+(2, +1), (5, -1).
+
+prev_x is None when processing (2, +1). Since prev_x is None, we skip the interval part. Then, apply the delta (current_coverage becomes 1). prev_x is set to 2.
+
+Next event is (5, -1). prev_x is 2, which is <5. So the interval [2,5) is 3 units long. current_coverage is 1. So ans[1] +=3. Then apply delta (current_coverage becomes 0). prev_x is 5.
+
+So in this case, the coverage from 2 to 5 (exclusive) is 1. The integer points are 2,3,4: 3 points. So ans[1] increases by 3.
+
+So the code is correct.
+
+Now, the problem is how to collect all the events, sort them, process them in order, and track the coverage count and accumulate the counts for each coverage.
+
+Once all events are processed, the ans array will have the counts for each k from 1 to n.
+
+But wait, there's a catch. For example, if two events are at the same x, say x=5, then the code would process the interval between the previous x and 5, then process all events at 5. Since after processing the first event, the code will check if prev_x < x. But if there are multiple events at the same x, then when processing the next event (same x), prev_x is x, so no interval is added.
+
+For example:
+
+events are (5, +1), (5, -1), (5, +1).
+
+prev_x is None. Process the first event (5, +1):
+
+prev_x is None, so no interval. Apply delta (current_coverage becomes 1). prev_x is 5.
+
+Next event (5, -1). prev_x is 5, which is not less than 5. So no interval. Apply delta (current_coverage becomes 0). prev_x remains 5.
+
+Next event (5, +1). prev_x is 5. So no interval. Apply delta (current_coverage becomes 1). prev_x remains 5.
+
+So in this case, no interval is processed. But events at the same x are processed in sequence, and their deltas are applied, but the coverage changes are handled correctly.
+
+Thus, the code correctly groups events at the same x, and processes them after the interval between the previous x and current x.
+
+So this approach should work.
+
+Now, the steps to code this are:
+
+1. Read n.
+
+2. Read n lines of l_i and r_i.
+
+3. For each segment, add two events: (l_i, +1) and (r_i +1, -1).
+
+4. Sort all the events by their x-coordinate. Since the events are stored as tuples (x, delta), sorting them will sort by x first, then by delta. But since for the same x, the order of +1 and -1 doesn't matter (as discussed earlier), this is acceptable.
+
+Wait, in Python, when sorting tuples, (5, 1) comes after (5, -1), since -1 is less than 1. So the sorted list will have events with same x ordered by their delta. So events with delta -1 come before delta +1. Which is correct, because when processing the same x, the end events (delta -1) are processed before the start events (delta +1). Wait, but as we saw earlier, this order doesn't matter. But perhaps in some cases, it could. Let's think:
+
+Suppose two events at x=5: (5, -1) and (5, +1). The code processes the interval between previous x (say 3) and 5. Then applies the -1 and +1. The coverage would decrease by 1, then increase by 1, leading to no net change. So the interval after 5 would have coverage same as before.
+
+If they were processed in the reverse order: +1 then -1. The same net effect.
+
+So the order between same x events does not affect the coverage after processing all events at that x. So the code can sort the events as (x, delta), which in Python will order same x events with delta -1 first.
+
+But since the order doesn't affect the final coverage count, this is acceptable.
+
+So the code can proceed to sort the events as is.
+
+Once sorted, the code processes the events in order, accumulating the counts.
+
+But there's one thing to note: the events could be sorted in any order as long as the x is correct, because same x events' deltas sum up to the same total regardless of order.
+
+Now, code steps:
+
+Collect events.
+
+Sort events.
+
+Initialize current_coverage = 0, prev_x = None.
+
+ans array of size n+1 (since k ranges from 1 to n).
+
+Then, for each (x, delta) in events:
+
+   if prev_x is not None and prev_x < x:
+
+       length = x - prev_x
+
+       if current_coverage >=1 and current_coverage <=n:
+
+           ans[current_coverage] += length
+
+   current_coverage += delta
+
+   prev_x = x
+
+After processing all events, output the ans array from index 1 to n, space-separated.
+
+Wait, but how do we handle the initial and final events?
+
+For example, if there are events at x=0 and x=1e18. The code will process the interval between them, and so on.
+
+But for all possible events, the code will process all intervals correctly.
+
+But what about points beyond the last event? For example, if all events end at some x, and there's a coverage of 0. Then, any points beyond the last event would have coverage 0. But since the problem states that the segments can have endpoints up to 1e18, but the code only processes up to the last event. But since all events are generated from the segments, which have r_i up to 1e18, then the last event could be at r_i +1, which is up to 1e18 +1. But after the last event, there are no points to process, because the coverage is 0.
+
+Thus, the code correctly handles all intervals.
+
+Now, the code must handle large numbers. Since in Python, integers are arbitrary precision, there's no issue.
+
+But what about n up to 2e5? The events will be 2e5 *2 =4e5, which is manageable.
+
+So the code should work.
+
+Now, let's test the first example:
+
+Input 1:
+
+3
+
+0 3
+
+1 3
+
+3 8
+
+The events are:
+
+(0, +1), (4, -1) (from 0-3: r_i+1 is 3+1=4)
+
+(1, +1), (4, -1) (from 1-3: r_i+1=3+1=4)
+
+(3, +1), (9, -1) (from 3-8: r_i+1=8+1=9)
+
+So the events list is:
+
+0:+1, 1:+1, 3:+1, 4:-1, 4:-1,9:-1.
+
+Wait, wait:
+
+Segments:
+
+First: 0-3 → events (0, +1), (4, -1)
+
+Second: 1-3 → events (1, +1), (4, -1)
+
+Third:3-8 → events (3, +1), (9, -1).
+
+So the events are:
+
+sorted by x:
+
+(0, +1), (1, +1), (3, +1), (4, -1), (4, -1), (9, -1).
+
+Processing these events:
+
+prev_x is None.
+
+First event is (0, +1):
+
+prev_x is None, no interval. current_coverage becomes 1. prev_x=0.
+
+Second event is (1, +1):
+
+prev_x=0 <1. So interval [0,1). length 1-0=1. current_coverage is 1. ans[1] +=1.
+
+current_coverage += +1 → 2. prev_x=1.
+
+Third event (3, +1):
+
+prev_x=1 <3. interval [1,3). length 2. current_coverage=2. ans[2] +=2.
+
+current_coverage +=1 →3. prev_x=3.
+
+Fourth event (4, -1):
+
+prev_x=3 <4. interval [3,4). length 1. current_coverage=3. ans[3] +=1.
+
+current_coverage -=1 →2. prev_x=4.
+
+Fifth event (4, -1):
+
+prev_x=4 ==4. no interval. current_coverage -=1 →1. prev_x=4.
+
+Sixth event (9, -1):
+
+prev_x=4 <9. interval [4,9). length 5. current_coverage=1. ans[1] +=5.
+
+current_coverage -=1 →0. prev_x=9.
+
+So ans[1] is 1 (from [0,1)) +5 (from [4,9)) →6.
+
+ans[2] is 2 (from [1,3)).
+
+ans[3] is 1 (from [3,4)).
+
+So the output is 6 2 1, which matches the example.
+
+Great.
+
+Another example: input 3:
+
+3
+
+1 3
+
+2 4
+
+5 7
+
+Segments:
+
+1-3 → events (1, +1), (4, -1)
+
+2-4 → (2, +1), (5, -1)
+
+5-7 → (5, +1), (8, -1).
+
+Sorted events:
+
+(1, +1), (2, +1), (4, -1), (5, -1), (5, +1), (8, -1).
+
+Processing:
+
+prev_x = None.
+
+First event (1, +1):
+
+prev_x is None. current_coverage 1. prev_x=1.
+
+Second event (2, +1):
+
+prev_x 1 <2. interval [1,2). length 1. current_coverage=1 → ans[1] +=1.
+
+current_coverage becomes 2. prev_x=2.
+
+Third event (4, -1):
+
+prev_x=2 <4. interval [2,4). length 2. current_coverage=2 → ans[2] +=2.
+
+current_coverage 1. prev_x=4.
+
+Fourth event (5, -1):
+
+prev_x=4 <5. interval [4,5). length 1. current_coverage=1 → ans[1] +=1.
+
+current_coverage 0. prev_x=5.
+
+Fifth event (5, +1):
+
+prev_x=5. current_coverage 1. prev_x=5.
+
+Sixth event (8, -1):
+
+prev_x=5 <8. interval [5,8). length 3. current_coverage=1 → ans[1] +=3.
+
+current_coverage 0. prev_x=8.
+
+Now, ans[1] is 1 +1 +3 =5.
+
+ans[2] is 2.
+
+ans[3] is 0.
+
+So output is 5 2 0. Which matches the example.
+
+So the code works.
+
+Thus, the approach is correct.
+
+Now, implementing this in Python.
+
+But there's a possible edge case when the same x appears multiple times. For example, if a segment starts and ends at the same x. But the code handles that.
+
+So the code steps:
+
+Read n.
+
+Read n lines, for each line l and r, add (l, +1) and (r+1, -1) to events.
+
+Sort the events.
+
+Initialize current_coverage=0, prev_x=None.
+
+ans array of size n+2 (since k can be up to n).
+
+Loop through each event in sorted events:
+
+   if prev_x is not None and x > prev_x:
+
+       length = x - prev_x
+
+       if 1 <= current_coverage <=n:
+
+           ans[current_coverage] += length
+
+   current_coverage += delta
+
+   prev_x =x
+
+Finally, output ans[1], ans[2], ..., ans[n], separated by spaces.
+
+But wait, the problem statement says that cnt_1 is the number of points covered by exactly 1 segment. So the code correctly adds to ans[current_coverage] the length of the interval, which is the number of integer points in [prev_x, x).
+
+But how?
+
+Yes, because the interval [prev_x, x) has (x - prev_x) integers. For example, prev_x=2, x=5: points 2,3,4 →3 points. 5-2=3.
+
+So the code is correct.
+
+Now, implement this in Python.
+
+But in Python, for handling large numbers, there's no problem.
+
+So code:
+
+Read n.
+
+events = []
+
+for _ in range(n):
+
+    l, r = map(int, input().split())
+
+    events.append((l, 1))
+
+    events.append((r+1, -1))
+
+events.sort()
+
+current_coverage =0
+
+prev_x = None
+
+ans = [0]*(n+2) # since 1-based indexing up to n.
+
+for x, delta in events:
+
+    if prev_x is not None and x > prev_x:
+
+        cnt = x - prev_x
+
+        if 1 <= current_coverage <=n:
+
+            ans[current_coverage] += cnt
+
+    current_coverage += delta
+
+    prev_x =x
+
+print(' '.join(map(str, ans[1:n+1])))
+
+This should work.
+
+Testing the first example:
+
+After processing events as in the example, ans[1] is 6, ans[2] is 2, ans[3] is 1. So the code outputs 6 2 1.
+
+Yes.
+
+Another test case: when a segment is a point. For example, a segment [5,5]. Then events are (5, +1) and (6, -1). The code processes the interval [5,6) which is 1 point (5). current_coverage is 1 during this interval. So ans[1] +=1.
+
+Yes.
+
+Thus, the code should be correct.
+</think>
+To solve this problem, we need to determine the number of integer points covered by exactly k segments for each k from 1 to n. Given the constraints, we need an efficient approach that avoids iterating over each possible integer point.
+
+### Approach
+1. **Event Points**: For each segment [l, r], create two events: a start event at l (increment coverage) and an end event at r+1 (decrement coverage).
+2. **Sort Events**: Sort all events by their coordinate. If two events have the same coordinate, process end events before start events to ensure correct coverage calculation.
+3. **Process Intervals**: Traverse the sorted events to maintain the current coverage count. For each interval between consecutive events, calculate the number of integer points covered and update the count for the respective coverage value.
+
+### Solution Code
+```python
+n = int(input())
+events = []
+for _ in range(n):
+    l, r = map(int, input().split())
+    events.append((l, 1))
+    events.append((r + 1, -1))
+
+events.sort()
+current_coverage = 0
+prev_x = None
+ans = [0] * (n + 2)  # ans[1..n]
+
+for x, delta in events:
+    if prev_x is not None and x > prev_x:
+        length = x - prev_x
+        if 1 <= current_coverage <= n:
+            ans[current_coverage] += length
+    current_coverage += delta
+    prev_x = x
+
+print(' '.join(map(str, ans[1:n+1])))
+```
+
+### Explanation
+1. **Event Points Creation**: For each segment, create two events: one for the start and one for the end. The end event is placed at r+1 to mark the point where the segment stops covering.
+2. **Sorting Events**: Events are sorted primarily by their coordinate. This ensures that we process all changes in coverage in the correct order.
+3. **Interval Processing**: As we process each event, we calculate the number of integer points covered between the previous event's coordinate and the current one. This count is added to the respective coverage value in the result array.
+
+This approach efficiently handles large ranges and ensures we only process necessary intervals, leading to an optimal solution with a time complexity of O(n log n) due to sorting the events.
+</bot>

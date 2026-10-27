@@ -1,0 +1,531 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Fox Ciel saw a large field while she was on a bus. The field was a n × m rectangle divided into 1 × 1 cells. Some cells were wasteland, and other each cell contained crop plants: either carrots or kiwis or grapes. 
+
+After seeing the field carefully, Ciel found that the crop plants of each cell were planted in following procedure:
+
+  * Assume that the rows are numbered 1 to n from top to bottom and the columns are numbered 1 to m from left to right, and a cell in row i and column j is represented as (i, j). 
+  * First, each field is either cultivated or waste. Crop plants will be planted in the cultivated cells in the order of (1, 1) → ... → (1, m) → (2, 1) → ... → (2, m) → ... → (n, 1) → ... → (n, m). Waste cells will be ignored. 
+  * Crop plants (either carrots or kiwis or grapes) will be planted in each cell one after another cyclically. Carrots will be planted in the first cell, then kiwis in the second one, grapes in the third one, carrots in the forth one, kiwis in the fifth one, and so on. 
+
+
+
+The following figure will show you the example of this procedure. Here, a white square represents a cultivated cell, and a black square represents a waste cell.
+
+<image>
+
+Now she is wondering how to determine the crop plants in some certain cells. 
+
+Input
+
+In the first line there are four positive integers n, m, k, t (1 ≤ n ≤ 4·104, 1 ≤ m ≤ 4·104, 1 ≤ k ≤ 103, 1 ≤ t ≤ 103), each of which represents the height of the field, the width of the field, the number of waste cells and the number of queries that ask the kind of crop plants in a certain cell.
+
+Following each k lines contains two integers a, b (1 ≤ a ≤ n, 1 ≤ b ≤ m), which denotes a cell (a, b) is waste. It is guaranteed that the same cell will not appear twice in this section.
+
+Following each t lines contains two integers i, j (1 ≤ i ≤ n, 1 ≤ j ≤ m), which is a query that asks you the kind of crop plants of a cell (i, j).
+
+Output
+
+For each query, if the cell is waste, print Waste. Otherwise, print the name of crop plants in the cell: either Carrots or Kiwis or Grapes.
+
+Examples
+
+Input
+
+4 5 5 6
+4 3
+1 3
+3 3
+2 5
+3 2
+1 3
+1 4
+2 3
+2 4
+1 1
+1 1
+
+
+Output
+
+Waste
+Grapes
+Carrots
+Kiwis
+Carrots
+Carrots
+
+Note
+
+The sample corresponds to the figure in the statement.
+</user>
+<bot>
+<think>
+Okay, let's see. The problem is about determining the crop type in a cell of a grid that has some waste cells. The crops are planted in order Carrots, Kiwis, Grapes, repeating every three cells. But the order skips the waste cells. So for each cultivated cell, we need to find its position in the sequence (ignoring the wastes) and then determine which of the three crops it is.
+
+Hmm. The input gives n and m as the grid dimensions, then k waste cells, and t queries. For each query, we need to check if the cell is waste. If not, compute the correct crop.
+
+The challenge here is efficiently computing the number of non-waste cells before the queried cell in the row-major order. Because for each cell (i,j), its position in the sequence is determined by how many cells before it (in row-major order) are cultivated, excluding the waste cells. Then, the position modulo 3 gives the crop: 0 -> Carrots, 1 -> Kiwis, 2 -> Grapes.
+
+But with n and m up to 4e4 each, and k up to 1e3, we need an efficient way to handle this.
+
+First, for each query cell (i,j), we can compute the order in which it would be planted if there were no waste cells. That's (i-1)*m + (j-1) + 1. Because row 1 starts from 1, so the first cell is (1,1) which is (0*5 +0 +1 =1 for 4x5 grid). Wait, maybe the total number of cells before (i,j) in row-major order (including previous rows) is (i-1)*m + (j-1). Because for row 1, j ranges from 1 to m. So (i-1)*m gives the cells in all previous rows, and (j-1) gives the cells in the current row before j.
+
+So the original position (without considering waste) would be (i-1)*m + j. Wait, no. Let's think: for (1,1), the position is 1. So (i-1)*m + j gives 0*5 +1=1 for (1,1) in 4x5. Then (1,2) is 0*5+2=2. Up to (1,5) which is 0*5+5=5. Then (2,1) is 1*5+1=6. So yes, the original position is (i-1)*m + j. Wait, but the original position is the index if all cells are cultivated. Then, the waste cells are subtracted from this. Because the actual position in the sequence is the original position minus the number of waste cells that come before (in row-major order) the current cell.
+
+But we need to subtract the number of waste cells that are in the same position or before (i,j) in row-major order.
+
+Wait, the initial sequence is (1,1), (1,2), ..., (1,m), (2,1), ..., (n,m). The order of planting skips waste cells. So the actual position of a cell (i,j) is the original position minus the number of waste cells that are before or equal to it in row-major order. Because each waste cell before it would reduce the position by 1. Then, the actual position is (original position) - (number of waste cells <= (i,j) in row-major order). Then, modulo 3 gives the crop.
+
+Wait, no. Let's think again. For example, if a cell is waste, we skip it. So the sequence is all the cultivated cells in order. So for the non-waste cells, their order is the order in which they appear in the original sequence, but skipping any waste cells. So the actual position is the count of cultivated cells that come before (i,j) in row-major order, plus 1 (since the first cell is position 1). Then, modulo 3: (count-1) mod 3. Because:
+
+Position 1: (1-1) mod3=0 → Carrots.
+
+Position 2: 1 mod3=1 → Kiwis.
+
+Position3: 2 mod3=2 → Grapes.
+
+Position4: 3 mod3=0 → Carrots again.
+
+So the formula is: (count_before) mod3 → but wait, count_before is the number of cells before it. So the actual position is count_before + 1 (if the cell itself is cultivated). So for the cell's crop type: (count_before +1 -1) mod3 = count_before mod3.
+
+But how to compute count_before? The original order is row-major. So for a given cell (i,j), all waste cells that are in positions (a,b) where (a-1)*m + b <= (i-1)*m +j. So the number of waste cells in this set.
+
+So for a cell (i,j), the original position is (i-1)*m +j. Then, the number of waste cells up to and including (i,j) is the number of waste cells with (a-1)*m +b <= (i-1)*m +j. If the cell (i,j) is a waste, then we output Waste. Otherwise, the actual position is original_position - number_of_waste_before_or_equal. The crop is determined by (actual_position-1) mod3.
+
+Wait, the actual position is (original_position - number_of_waste_before_or_equal), but if the cell itself is not waste, then the number_of_waste_before_or_equal includes any waste cells up to and including (i,j) (but (i,j) is not waste, since we checked that first). So in that case, the number of waste cells up to (i,j) is the same as the number of waste cells before (i,j) in row-major order. Because if (i,j) is not waste, then the count of waste cells up to (i,j) is the same as the count of waste cells before (i,j) in the row-major order.
+
+Wait, no. Suppose (i,j) is not waste. Then the number of waste cells that are before (i,j) in row-major order is the number of waste cells with (a-1)*m +b < (i-1)*m +j. Because (i,j) is not waste, so the count is the number of waste cells in positions up to (i,j) minus 0 (since the cell itself is not waste). Wait, no: if the cell is not waste, then the count of waste cells up to and including (i,j) is the same as the count of waste cells before (i,j) in row-major order. Because (i,j) is not in the waste list. So the actual position is original_position (which is (i-1)*m +j) minus the number of waste cells that are in positions <= (i,j) in row-major order. Because each such waste cell is skipped. So the actual position is (original_position) - (number of waste cells <= (i,j)).
+
+But since the cell (i,j) is not a waste, the number of waste cells <= (i,j) is the same as the number of waste cells before (i,j) (since (i,j) is not a waste cell). So the actual position is (original_position - number_of_waste_before), where number_of_waste_before is the count of waste cells in positions <= (i-1)*m +j.
+
+Wait, perhaps the correct way is:
+
+The cell (i,j) is not waste. The actual position in the sequence is (number of non-waste cells up to (i,j))). Which is equal to (original_position) - (number of waste cells up to (i,j)).
+
+Because original_position is the total cells up to (i,j), which is (i-1)*m +j. Subtract the number of waste cells in those positions to get the number of non-waste cells (including (i,j)), which is the actual position.
+
+Yes. So for a non-waste cell, its actual position is (original_position) - (number_of_waste_up_to_i_j). Then, (actual_position -1) mod3 gives the index. Because the first cell is position 1 (Carrots), which is (1-1) mod3 =0.
+
+So the steps are:
+
+1. For each query cell (i,j):
+
+a. Check if it's a waste cell. If yes, output Waste.
+
+b. Else, compute original_position = (i-1)*m +j.
+
+c. Find the number of waste cells with (a-1)*m +b <= original_position.
+
+d. actual_position = original_position - number_of_waste_up_to.
+
+e. Then, (actual_position -1) mod3 gives 0,1,2 → Carrots, Kiwis, Grapes.
+
+So the problem reduces to, for a given original_position, how many waste cells have their (a-1)*m +b <= original_position.
+
+Now, the key is to efficiently compute this count for multiple queries.
+
+Since k can be up to 1e3, we can preprocess the waste cells into a list of their original positions (sorted), and for each query, perform a binary search to find how many of them are <= original_position.
+
+Yes. So the plan is:
+
+- Preprocess all waste cells by converting each (a,b) to their original position: (a-1)*m +b.
+
+- Sort this list of positions.
+
+- For a query (i,j), compute pos = (i-1)*m +j.
+
+- Check if pos is in the waste list (using a binary search). If yes, output Waste.
+
+- Else, perform a binary search on the sorted waste list to find the count of elements <= pos. Subtract this count from pos to get actual_position.
+
+- Then, compute (actual_position -1) mod3 to determine the crop.
+
+So the steps for each query are:
+
+1. Compute pos = (i-1)*m +j.
+
+2. Check if (i,j) is a waste cell. How? Since the waste list is stored as positions, but (a,b) may have the same pos as (i,j). So for (i,j) to be a waste cell, pos must be present in the sorted waste list.
+
+Wait, the waste cells are stored as their (a,b) coordinates. So when we process the input, for each waste cell, compute its original position and add to a list. Then, after collecting all, we sort the list. So for a query cell (i,j), compute pos and check if pos is in the sorted list (using binary search). If yes, output Waste. Otherwise, proceed.
+
+Yes. So the steps are:
+
+- Read all k waste cells, convert each to pos = (a-1)*m +b, and collect into a list.
+
+- Sort this list.
+
+For each query:
+
+- Compute pos = (i-1)*m +j.
+
+- Check if pos is in the waste list (binary search). If yes, output Waste.
+
+Else:
+
+- Find the number of waste positions <= pos (using binary search again, bisect_right).
+
+- actual_position = pos - num_waste.
+
+- crop_num = (actual_position -1) %3.
+
+- Output accordingly.
+
+This should work.
+
+Now, how to implement this in Python.
+
+First, read n, m, k, t.
+
+Then read k lines of a, b. For each, compute the position (a-1)*m +b. Collect these into a list. Then sort the list.
+
+Then read t queries, each (i,j). For each:
+
+Compute pos = (i-1)*m +j.
+
+Check if pos is in the waste list. How? Since the list is sorted, use bisect.bisect_left. If the index is found and the element is present, then it's waste.
+
+Alternatively, the bisect module can help. For example:
+
+Using bisect.bisect_left to find the insertion point. If the insertion point is within the list and the element at that index is pos, then it's a waste.
+
+Wait, more precisely:
+
+idx = bisect.bisect_left(waste_positions, pos)
+
+if idx < len(waste_positions) and waste_positions[idx] == pos:
+
+    # it's a waste cell.
+
+else:
+
+    # not a waste.
+
+Yes.
+
+If it's a waste, output Waste.
+
+Else:
+
+compute the number of waste positions <= pos. This is idx (since bisect_left gives the first position where pos can be inserted, which is equal to the number of elements < pos). Wait, no: bisect_left returns the insertion point, which is the index where the element would be inserted to maintain the sorted order. So all elements before idx are <= pos?
+
+No. Wait, bisect_left returns the first position where the element can be inserted. So elements before idx are all <= pos? Or < pos?
+
+Wait, for example, list is [1,3,5], and pos is 3. bisect_left returns 1 (since 3 is found at index 1). So elements before idx (1) are 1 and 3? No, elements before idx are [0..idx-1]. So in this case, elements before idx (1) is [1 (element 0)].
+
+Wait, bisect_left returns the first position where the element can be inserted. So for a list sorted in ascending order, all elements before the index are <= pos.
+
+Wait, no. For example, if the list is [1,3,3,5], and pos is 3. bisect_left returns index 1. So elements before index 1 are 1, which is <=3. Elements from 1 onwards are 3,3,5. So the number of elements <=3 is 3 (the three elements 1,3,3). But bisect_left gives index 1. So how to get the count of elements <= pos.
+
+Ah, right. bisect_right returns the insertion point after any existing entries of pos. So bisect_right returns the index where elements before are <= pos. So the count of elements <= pos is bisect.bisect_right(waste_positions, pos).
+
+Wait, no. Wait, bisect_right returns the insertion point such that all elements before are <= pos. Wait, no. Let's think.
+
+For example, sorted list [1,3,3,5], pos=3.
+
+bisect_left returns 1, bisect_right returns 3.
+
+So the number of elements <=3 is 3 (elements 1,3,3).
+
+So using bisect_right gives the insertion point where all elements before are <= pos. So the number of elements <= pos is the bisect_right result.
+
+Yes. So to find the number of waste cells with position <= pos, we can use bisect.bisect_right(waste_positions, pos).
+
+Therefore, for the query:
+
+If the cell is not waste (checked via bisect_left and checking existence), then the number of waste cells <= pos is given by bisect.bisect_right(waste_positions, pos).
+
+Then actual_position = pos - count_waste.
+
+Then (actual_position -1) %3 gives 0,1,2 → Carrots, Kiwis, Grapes.
+
+So the code outline is:
+
+Read n, m, k, t.
+
+waste = []
+
+for _ in range(k):
+
+    a, b = map(int, input().split())
+
+    pos = (a-1)*m + b
+
+    waste.append(pos)
+
+waste.sort()
+
+for _ in range(t):
+
+    i, j = map(int, input().split())
+
+    pos = (i-1)*m + j
+
+    # Check if in waste
+
+    idx = bisect.bisect_left(waste, pos)
+
+    if idx < len(waste) and waste[idx] == pos:
+
+        print("Waste")
+
+    else:
+
+        count = bisect.bisect_right(waste, pos)
+
+        actual_pos = pos - count
+
+        mod = (actual_pos -1) %3
+
+        if mod ==0:
+
+            print("Carrots")
+
+        elif mod ==1:
+
+            print("Kiwis")
+
+        else:
+
+            print("Grapes")
+
+Wait, but in the code, for the count of waste cells <= pos, we use bisect_right, which gives the insertion point after all elements <= pos. Because bisect_right returns the insertion point where all elements before are <= pos. So the count is bisect_right's return value.
+
+Yes.
+
+But let's test with the sample input.
+
+Sample Input:
+
+4 5 5 6
+
+Waste cells:
+
+4 3 → a=4, b=3 → pos = (4-1)*5 +3 = 3*5+3=15+3=18.
+
+1 3 → (0)*5 +3=3.
+
+3 3 → (2)*5+3=13.
+
+2 5 → (1)*5+5=10.
+
+3 2 → (2)*5+2=12.
+
+So the waste positions are 3,12,13,10,18. Wait, but when sorted, the list would be:
+
+3,10,12,13,18.
+
+Then for the queries:
+
+The first query is (1,3): pos (0*5+3)=3. Check if in the waste list. Yes, so output Waste.
+
+Second query is 1 4 → pos (0*5+4)=4. Not in waste. Then bisect_right in the waste list for 4. The list is [3,10,12,13,18]. bisect_right(4) returns 1 (since 4 is between 3 and 10). So count=1. actual_pos=4-1=3. (3-1)=2. 2 mod3=2 → Grapes. Which matches the sample output.
+
+Third query: 2 3 → pos (1*5 +3)=8. Check waste list. No. bisect_right(8) returns 1 (since 3<8<10). count=1. actual_pos=8-1=7. 7-1=6 → 6 mod3=0 → Carrots.
+
+Sample output is Carrots. Which matches.
+
+Fourth query: 2 4 → pos (1*5+4)=9. count=1 (bisect_right returns 1). actual_pos=9-1=8. (8-1)=7 mod3=1 → Kiwis.
+
+Sample output is Kiwis. Correct.
+
+Fifth query: 1 1 → pos 1. Not waste. count=0 (bisect_right(1) returns 0). actual_pos=1-0=1. (1-1)=0 mod3 → Carrots.
+
+Sample output is Carrots.
+
+Wait the sample output given is:
+
+Waste
+
+Grapes
+
+Carrots
+
+Kiwis
+
+Carrots
+
+Carrots.
+
+Wait the sixth query is again (1,1), which is not waste, so same as fifth query. Output Carrots.
+
+So the code should handle this correctly.
+
+So this approach seems correct.
+
+Now, code considerations.
+
+In Python, we need to import bisect.
+
+But the code needs to read from stdin, process, and output. Also, the code should be a function that takes stdin input and prints the output. Then call the function.
+
+So the code structure would be:
+
+import bisect
+
+def main():
+
+    import sys
+
+    input = sys.stdin.read().split()
+
+    ptr =0
+
+    n = int(input[ptr]); ptr +=1
+
+    m = int(input[ptr]); ptr +=1
+
+    k = int(input[ptr]); ptr +=1
+
+    t = int(input[ptr]); ptr +=1
+
+    waste = []
+
+    for _ in range(k):
+
+        a = int(input[ptr]); ptr +=1
+
+        b = int(input[ptr]); ptr +=1
+
+        pos = (a-1)*m +b
+
+        waste.append(pos)
+
+    waste.sort()
+
+    for _ in range(t):
+
+        i = int(input[ptr]); ptr +=1
+
+        j = int(input[ptr]); ptr +=1
+
+        pos = (i-1)*m +j
+
+        # Check if waste
+
+        idx = bisect.bisect_left(waste, pos)
+
+        if idx < len(waste) and waste[idx] == pos:
+
+            print("Waste")
+
+        else:
+
+            count = bisect.bisect_right(waste, pos)
+
+            actual_pos = pos - count
+
+            mod = (actual_pos -1) %3
+
+            if mod ==0:
+
+                print("Carrots")
+
+            elif mod ==1:
+
+                print("Kiwis")
+
+            else:
+
+                print("Grapes")
+
+if __name__ == '__main__':
+
+    main()
+
+But we need to make sure that the code reads the input correctly. Alternatively, read all input at once and split into tokens. The code above uses sys.stdin.read().split() to read all input into a list of strings, then parse them one by one.
+
+This approach is better for handling large input, especially when n and m are up to 4e4 and t up to 1e3, but the code can handle that.
+
+Testing the sample input:
+
+Sample input has:
+
+4 5 5 6
+
+Then 5 waste lines:
+
+4 3 → pos (3)*5 +3=18
+
+1 3 → 3
+
+3 3 → (2)*5+3=13
+
+2 5 → (1)*5+5=10
+
+3 2 → (2)*5+2=12
+
+So the waste list after sorting is [3,10,12,13,18].
+
+Queries:
+
+1 3 → pos3 → found in waste → output Waste.
+
+1 4 → pos4 → not in waste. bisect_right on [3,10,12,13,18] for 4 returns 1. actual_pos =4-1=3 → (3-1)=2 mod3=2 → Grapes.
+
+Second query's output is Grapes, which matches the sample.
+
+The code should produce the correct output.
+
+Thus, the code should be correct.
+</think>
+To solve this problem, we need to determine the type of crop planted in specific cells of a grid, considering that some cells are wastelands and crops are planted cyclically in the order Carrots, Kiwis, and Grapes. The solution involves efficiently determining the crop type for each query by accounting for the wasteland cells.
+
+### Approach
+1. **Input Reading and Preprocessing**: Read the grid dimensions, number of waste cells, and queries. Convert each waste cell into a position value based on its row-major order in the grid.
+2. **Sort Waste Cells**: Store the positions of waste cells in a sorted list to enable efficient binary search operations.
+3. **Query Processing**: For each query, convert the cell coordinates into a position value. Check if the cell is a waste using binary search. If not, determine its position in the sequence of cultivated cells and use modulo arithmetic to find the crop type.
+
+### Solution Code
+```python
+import bisect
+
+def main():
+    import sys
+    input = sys.stdin.read().split()
+    ptr = 0
+    n = int(input[ptr]); ptr += 1
+    m = int(input[ptr]); ptr += 1
+    k = int(input[ptr]); ptr += 1
+    t = int(input[ptr]); ptr += 1
+
+    waste = []
+    for _ in range(k):
+        a = int(input[ptr]); ptr += 1
+        b = int(input[ptr]); ptr += 1
+        pos = (a - 1) * m + b
+        waste.append(pos)
+    waste.sort()
+
+    for _ in range(t):
+        i = int(input[ptr]); ptr += 1
+        j = int(input[ptr]); ptr += 1
+        pos = (i - 1) * m + j
+
+        # Check if the current cell is a waste
+        idx = bisect.bisect_left(waste, pos)
+        if idx < len(waste) and waste[idx] == pos:
+            print("Waste")
+        else:
+            # Number of waste cells up to pos
+            count = bisect.bisect_right(waste, pos)
+            actual_pos = pos - count
+            mod = (actual_pos - 1) % 3
+            if mod == 0:
+                print("Carrots")
+            elif mod == 1:
+                print("Kiwis")
+            else:
+                print("Grapes")
+
+if __name__ == '__main__':
+    main()
+```
+
+### Explanation
+1. **Input Reading**: The input is read all at once and split into tokens for efficient parsing.
+2. **Waste Cell Conversion**: Each waste cell's position is calculated using row-major order and stored in a list.
+3. **Binary Search for Waste Cells**: The list of waste cell positions is sorted, allowing binary search operations to quickly determine if a cell is waste and to count waste cells up to a given position.
+4. **Crop Determination**: For non-waste cells, the actual position in the sequence of cultivated cells is computed by subtracting the count of waste cells up to that position. The crop type is determined using modulo 3 arithmetic on this position.
+
+This approach efficiently handles the constraints, ensuring quick query responses even for large grid sizes and numerous queries.
+</bot>

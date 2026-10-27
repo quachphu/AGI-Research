@@ -1,0 +1,779 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.In Aizuwakamatsu Village, which is located far north of Aizuwakamatsu City, a bridge called "Yabashi" is the only way to move to the surrounding villages. Despite the large number of passers-by, the bridge is so old that it is almost broken.
+
+<image>
+
+
+
+Yabashi is strong enough to withstand up to 150 [kg]. For example, 80 [kg] people and 50 [kg] people can cross at the same time, but if 90 [kg] people start crossing while 80 [kg] people are crossing, Yabashi will It will break.
+
+If the Ya Bridge is broken, the people of Aizu Komatsu Village will lose the means to move to the surrounding villages. So, as the only programmer in the village, you decided to write a program to determine if the bridge would break based on how you crossed the bridge, in order to protect the lives of the villagers.
+
+Number of passersby crossing the bridge n (1 ≤ n ≤ 100), weight of each passer mi (1 ≤ mi ≤ 100), time to start crossing the bridge ai, time to finish crossing bi (0 ≤ ai, bi <231) If the bridge does not break, output "OK", and if it breaks, output "NG". If the total weight of passers-by on the bridge exceeds 150 [kg], the bridge will be destroyed. Also, at the time of ai, the passersby are on the bridge, but at the time of bi, they are not on the bridge.
+
+
+
+Input
+
+A sequence of multiple datasets is given as input. The end of the input is indicated by a single line of zeros. Each dataset is given in the following format:
+
+
+n
+m1 a1 b1
+m2 a2 b2
+::
+mn an ​​bn
+
+
+The number of datasets does not exceed 1200.
+
+Output
+
+For each input dataset, prints on one line whether the bridge will break or not.
+
+Example
+
+Input
+
+3
+80 0 30
+50 5 25
+90 27 50
+3
+80 0 30
+70 5 25
+71 30 50
+0
+
+
+Output
+
+NG
+OK
+</user>
+<bot>
+<think>
+Okay, I need to solve this programming problem. Let's read the problem carefully.
+
+So the problem is about determining whether a bridge breaks based on the times people are crossing it. The bridge breaks if at any moment the total weight of people on it exceeds 150 kg. Each person has a start time (ai) when they step onto the bridge and an end time (bi) when they leave. The bridge is considered to have their weight during [ai, bi), meaning at time ai, they are on, but at bi, they are off.
+
+The input consists of multiple datasets. Each dataset has n people with their weight and time intervals. For each dataset, we need to output OK or NG based on whether the bridge breaks.
+
+Hmm, so how do I check if at any time the sum of the weights exceeds 150?
+
+First approach: For each dataset, we need to find all overlapping intervals and check the sum of their weights during those overlaps. But the problem is that time can be up to 2^31, which is a very large number. So iterating through each possible time point is impossible. We need a smarter way.
+
+Alternative idea: Collect all the critical time points where the weight on the bridge changes. These are the start and end times of each interval. Between two consecutive critical points, the set of people on the bridge doesn't change. So we can process all these events in sorted order, keep track of the current total weight, and check if it ever exceeds 150.
+
+Yes, that's a common approach for interval-based problems. Let's outline the steps:
+
+1. For each person in the dataset, create two events: a start event (ai, add weight mi) and an end event (bi, subtract weight mi).
+2. Sort all events in chronological order. However, we need to handle the order of events happening at the same time. For example, if two events are at the same time, end events should be processed before start events. Because when someone's end time is the same as another's start time, the person leaving first allows the bridge's capacity to decrease before the next person starts. Otherwise, their weights would be added together even if they don't overlap. Wait, let's think: suppose two intervals [a, b) and [b, c). These two intervals do not overlap. So when processing events at time b, the end event (for the first interval) should be processed before the start event (for the second). That way, their weights don't add up at time b.
+
+So the sorting key should be time, but for events with the same time, end events come before start events.
+
+3. Once the events are sorted, process them in order. Maintain a current total weight. For each event:
+   - If it's a start event, add the weight to current_total.
+   - If it's an end event, subtract the weight from current_total.
+   - After each addition, check if current_total exceeds 150. If yes, return NG for this dataset.
+   - If any step leads to current_total > 150, the answer is NG. Otherwise, after processing all events, answer OK.
+
+Wait, but even during the interval between events, the current_total could be over 150. But since between events, the total doesn't change, processing the events in order and checking after each addition (start event) is sufficient. Because between two events, the sum is fixed. So the maximum possible sum during that interval is the sum after processing all events up to that point. So by checking after each start event, we can catch any sum that exceeds 150 during the interval.
+
+Wait, let's see. For example, consider two people:
+
+Person 1: 100kg, [0, 10)
+Person 2: 100kg, [5, 15)
+
+The events would be:
+0 start (100)
+5 end (100) (ends at 5?), no. Wait, person 2's start is at 5. Wait, events are start and end. So for person 1, events are (0, start, 100), (10, end, 100). For person 2: (5, start, 100), (15, end, 100).
+
+Sorting these events by time. But when time is same, ends come before starts.
+
+Wait, the events would be:
+
+0: start 100 → current = 100. Check: 100 <=150, okay.
+
+5: start 100 → current becomes 200. Now 200>150 → NG. So that's correct.
+
+But between 0 and 5, sum is 100. At 5, when person 2 starts, sum is 200. So the event processing correctly captures this.
+
+Another example: if two people start at the same time, but same time as their end. For example, two people start at time 5 and end at time 10. Their start events are (5, start, m1) and (5, start, m2). Since these are start events, their order would be after end events at the same time. So during sorting, if two events have the same time and one is end and the other is start, the end comes first. But if both are start events, they can be ordered in any way. Because processing both start events in the same time will add both weights, and checking after each addition. So adding both in any order would sum to their total, and during processing, if their total exceeds 150, it's detected.
+
+So the plan is:
+
+For each dataset:
+
+- Collect all events: for each person, create a start event (ai, +mi) and end event (bi, -mi).
+
+- Sort the events by time. When times are equal, end events come before start events. Because ending at time t means they leave before any new starts at the same time.
+
+- Initialize current_weight to 0.
+
+- For each event in sorted order:
+   - If the event is a start, add the weight. Check if current_weight >150. If yes, return NG.
+   - If the event is an end, subtract the weight. No need to check here because the weight is being subtracted. The only time when the sum could have been over is when adding.
+
+Wait, but when subtracting, the sum could have been over before the subtraction. However, since the subtraction is at the end of the interval (bi), the person is not on the bridge at bi. So during [ai, bi), the person is on. So when processing the end event at bi, the weight is subtracted. But during the interval up to bi, their weight was included. So in the sorted events, the end events are processed before any starts at the same time, but after the start events that started earlier.
+
+But in the event processing, the start events add weight and check. The end events subtract. So the checks are done only when adding weight. Because any sum exceeding 150 during the intervals is captured by the check after adding.
+
+Wait, but suppose two people are on the bridge. For example, one starts at 0, ends at 10 (100kg), another starts at 5, ends at 15 (100kg). The events are:
+
+0: start 100 → sum 100 (OK)
+
+5: start 100 → sum 200 (NG detected here)
+
+So correct.
+
+Another scenario: two people start at the same time. Suppose their combined weight is 160. Then, when processing the start events, each addition is checked. So adding the first (80), check 80. Then adding the second (80), check 160 → NG.
+
+But if the events are sorted with starts processed in the same time in any order, it's okay. Because the order of adding (say, 80 then 80) would sum to 160. So the check would happen when adding the second, and trigger NG.
+
+Yes.
+
+So the key is that whenever a start event occurs, we add the weight and check immediately. For end events, we subtract but do not check. Because the sum after subtraction can't have caused the bridge to break (since the person is leaving, which reduces the weight).
+
+Therefore, the approach is:
+
+Sort all events (time, delta), with end events (bi) processed before start events (ai) if they have the same time. But wait, for a start event, the time is ai (start), and for an end event, the time is bi (end). So when two events have the same time, end events (bi) are processed before start events (ai). Wait, no. For example, if a person has start at 5 and end at 10. The start event is (5, +m), end is (10, -m). Another person's start is at 10: their start event is (10, +m). So when processing events at 10, the end event (10, -m) comes before the start event (10, +m). Thus, the first person leaves before the next enters, so their weights are not summed at time 10.
+
+So the sorting key for events is:
+
+- Primary key: the time (t)
+- Secondary key: whether it's an end or start event. End events (bi) come before start events (ai) at the same time.
+
+But how to represent this in code? Each event can be represented as a tuple. For example, for a start event, we can have (t, 1, delta) and for end events (t, 0, delta). Then, when sorted, (t, 0) comes before (t, 1). Because 0 is less than 1.
+
+Wait, for example, the tuple for an end event would have (t, 0, delta), and start (t, 1, delta). Then, when sorted, (t, 0) comes before (t, 1). So yes.
+
+So when building the list of events:
+
+For each person:
+
+- Add a start event (ai, 1, mi)
+- Add an end event (bi, 0, mi)
+
+Wait, no. Wait, the end events should be processed before start events at the same time. So the end events (bi) have a second component that is lower than the start events (ai) at the same time. So for the end events, the tuple would be (t, 0, -mi), and start events (t, 1, +mi). Then, when sorted, events at the same t are ordered with end events (0) before start events (1). So that the end event is processed first.
+
+Wait, but for a start event, the time is ai, and for end event, bi. So when ai and bi are the same, the start and end events are at different times? Not necessarily. Suppose a person starts and ends at the same time. But according to the problem statement, ai can be equal to bi. For example, a person with ai=5 and bi=5. But according to the problem statement, the bridge is considered to have them on at ai, but not at bi. So if a person starts and ends at the same time, they are on the bridge during [5,5) which is an empty interval. So effectively, they are never on the bridge. So perhaps such a case can be ignored. So in our code, we can process such events but they won't contribute to the sum.
+
+But the problem says: "at the time of ai, the passers-by are on the bridge, but at the time of bi, they are not on the bridge." So if ai=bi, the interval is [ai, bi) which is empty, but at time ai, they are on. But since the interval is empty, maybe it's considered that they are never on. But this is a bit confusing. Let's see the problem statement again.
+
+The problem statement says: "at the time of ai, the passersby are on the bridge, but at the time of bi, they are not on the bridge." So for a person with ai=5 and bi=5, their time on the bridge is from ai (5) to bi (5). So during time 5, they are considered on the bridge. But the end time is when they leave. Wait, but the interval is [ai, bi) which is [5,5), which is empty. So they are not on the bridge at all. But the problem says that at ai, they are on. Hmm, perhaps there is a mistake in the problem statement. Or perhaps the interval is [ai, bi], but the problem says that the time of bi, they are not on. So perhaps the correct interval is [ai, bi), which includes ai but excludes bi.
+
+So if ai=bi, the interval is [ai, bi) is empty, so they are not on the bridge. So their start and end events would be at the same time, but since the interval is empty, they are not considered. So perhaps, in code, when ai >= bi, we can ignore that person. But the problem constraints say that for each passerby, ai and bi are given, but there is no constraint that ai < bi. So perhaps in the input, a person could have ai >= bi, which would mean their contribution is zero. So we need to handle that.
+
+But according to the problem statement, "the time to start crossing the bridge ai, time to finish crossing bi (0 ≤ ai, bi < 2^31)". So ai can be equal to or larger than bi. So for example, if ai=5 and bi=3, then their interval is [5,3), which is empty. So such a person's events are (5, start, mi) and (3, end, mi). Then, in the sorted events, the end event is at 3, start at 5. So when processing, the start is after the end. So when the start event is processed, add mi. Then when the end event is processed (earlier in time), subtract mi. That would lead to current_weight being mi (after start) but then subtract mi when processing the end event (which is before the start event in time). Wait, but if the events are sorted by time, then the end event (3) comes before the start event (5). So processing would be:
+
+3: end event (subtract mi). current_weight -= mi → but current_weight was 0, so becomes -mi. Then, at 5, start event (add mi), current_weight becomes 0. So such a person has no effect. Which is correct, because their interval is empty.
+
+So in code, we don't need to check if ai < bi. The event processing will handle it automatically.
+
+So the steps are:
+
+For each dataset:
+
+1. Read n.
+
+2. For each of the next n lines:
+
+   Read mi, ai, bi.
+
+   Add two events: (ai, 1, mi) as a start event, (bi, 0, mi) as an end event.
+
+3. Sort all events. The sorting is done by:
+
+   - First, the time (t) in ascending order.
+
+   - Then, for events with the same t, end events (type 0) come before start events (type 1).
+
+4. Initialize current_weight = 0.
+
+5. Iterate through each event in the sorted list:
+
+   For each event (t, type, delta):
+
+   - If type is 1 (start), add delta to current_weight.
+
+   - If type is 0 (end), subtract delta from current_weight.
+
+   - After adding (start event), check if current_weight > 150. If yes, output NG for this dataset and move to next dataset.
+
+   - Since end events subtract, we don't check after them. Because the bridge's weight can't exceed 150 after a subtraction (unless it was already over before, which would have been caught when the start event was processed).
+
+Wait, but what about a scenario where the subtraction leads to a sum that was over before. For example:
+
+Suppose two people:
+
+Person A: 100kg, [0, 10)
+
+Person B: 100kg, [5, 15)
+
+The events are:
+
+0: start 100 → sum 100 → OK.
+
+5: start 100 → sum 200 → NG detected here.
+
+But if there is a case where during the processing of an end event, the sum could have been over before the subtraction.
+
+Wait, no. Because end events are processed first. So any end events are processed before start events. But after processing an end event, we subtract, but the check is only done after adding in start events.
+
+So the sum can only exceed 150 during a start event, because that's when the weight increases. So during processing, whenever a start event is processed (adding weight), check if the sum exceeds. If any of those checks fail, output NG.
+
+Thus, the algorithm is correct.
+
+Now, code:
+
+We need to read multiple datasets until 0 is input.
+
+Each dataset has n lines.
+
+In Python, we can read lines until a line with 0 is found.
+
+So the code structure would be:
+
+while True:
+
+   read n from input.
+
+   if n == 0: break.
+
+   read n lines of m_i a_i b_i.
+
+   process the dataset.
+
+Now, processing each dataset:
+
+For each line, create two events.
+
+Sort the events.
+
+Initialize current_weight = 0.
+
+Iterate through each event in sorted order.
+
+For each event:
+
+   if event is start (type 1):
+
+       current_weight += delta
+
+       if current_weight > 150:
+
+           print NG and break out of processing.
+
+   else:
+
+       current_weight -= delta
+
+If after all events, no sum exceeded, print OK.
+
+But wait, during the iteration, once a sum exceeds, we can break early and output NG.
+
+Now, how to represent events?
+
+Each event can be a tuple (t, type, delta). So for a start event, the tuple is (ai, 1, mi). For end event, (bi, 0, mi).
+
+Then, sorting these tuples in Python will sort by the first element (t), then the second (type). So tuples (5, 0, 80) and (5, 1, 50) would be ordered (5,0,80) first.
+
+Yes.
+
+So code steps:
+
+Read n.
+
+events = []
+
+for _ in range(n):
+
+    m, a, b = map(int, input().split())
+
+    events.append( (a, 1, m) )
+
+    events.append( (b, 0, m) )
+
+Then, sort the events:
+
+events.sort(key=lambda x: (x[0], x[1]))
+
+Then, process:
+
+current = 0
+
+ok = True
+
+for event in events:
+
+    t, typ, m = event
+
+    if typ == 1:
+
+        current += m
+
+        if current > 150:
+
+            ok = False
+
+            break
+
+    else:
+
+        current -= m
+
+if ok:
+
+    print("OK")
+
+else:
+
+    print("NG")
+
+But wait, what about the order of events with same time and same type?
+
+For example, two end events at same time. Their order doesn't matter, since subtracting one then another doesn't affect the sum. Similarly, two start events at same time. Adding them in any order is the same sum.
+
+Yes.
+
+Testing this code with the sample input:
+
+Sample input:
+
+3
+
+80 0 30
+
+50 5 25
+
+90 27 50
+
+First dataset:
+
+Persons:
+
+1: 80kg, 0-30 → events (0,1,80), (30,0,80)
+
+2:50kg,5-25 → (5,1,50), (25,0,50)
+
+3:90kg,27-50 → (27,1,90), (50,0,90)
+
+So events list is:
+
+(0,1,80)
+
+(30,0,80)
+
+(5,1,50)
+
+(25,0,50)
+
+(27,1,90)
+
+(50,0,90)
+
+When sorted by (t, type):
+
+The list after sorting:
+
+0: (0,1,80) → wait, no. Because for t=0, the event is a start (type 1). Then, events with t=5, 25, 27,30,50.
+
+Wait, let's list all events:
+
+Original events:
+
+(0,1,80)
+
+(30,0,80)
+
+(5,1,50)
+
+(25,0,50)
+
+(27,1,90)
+
+(50,0,90)
+
+So when sorted, the order is:
+
+0 (type 1, start) → no, wait. Wait, the events are:
+
+t=0: type 1 (start)
+
+t=5: type 1 (start)
+
+t=25: type 0 (end)
+
+t=27: type 1 (start)
+
+t=30: type 0 (end)
+
+t=50: type 0 (end)
+
+So when sorted by (t, type), the order is:
+
+0 (t=0, type 1), 5 (t=5, type1), 25 (t=25, type0), 27 (t=27, type1), 30 (t=30, type0), 50 (t=50, type0).
+
+Wait, but type0 comes before type1. So when t is same, type0 events (end) come before type1 (start). So in the first dataset, the first event is (0,1,80). Because t=0, type1. Then, next is (5,1,50) → same type. Then, (25,0,50) → t=25, type0. Then (27,1,90). Then (30,0,80), and (50,0,90).
+
+Wait, no. Wait, when t=0, the event is (0,1,80). Since there's no other events at t=0. So sorted by t, it's first.
+
+Then, the next events are:
+
+t=5, type1 (start).
+
+Then, t=25, type0 (end).
+
+Then, t=27, type1 (start).
+
+Then, t=30, type0 (end).
+
+Then, t=50, type0 (end).
+
+So during processing:
+
+current starts at 0.
+
+Process (0,1,80): current +=80 → 80. Check 80 ≤150 → okay.
+
+Next event (5,1,50): current +=50 → 130. Check 130 → okay.
+
+Next event (25,0,50): subtract 50 → 80.
+
+Next event (27,1,90): add 90 → 170. Now 170 >150 → NG. So the code returns NG for this dataset.
+
+Which matches the sample's first output.
+
+Second dataset:
+
+3
+
+80 0 30
+
+70 5 25
+
+71 30 50
+
+Events:
+
+(0,1,80), (30,0,80)
+
+(5,1,70), (25,0,70)
+
+(30,1,71), (50,0,71)
+
+Sorted events:
+
+t=0, type1 → add 80 (80).
+
+t=5, type1 → add70 → 150. 150 is okay, not exceeding.
+
+t=25, type0 → subtract70 → 80.
+
+t=30, type0 (end of first person) → subtract80 → 0.
+
+t=30, type1 (start of third person) → add71 → 71. Check 71 ≤150 → okay.
+
+t=50, type0 → subtract71 → 0.
+
+So sum never exceeds 150. So output OK.
+
+Which matches the sample.
+
+Thus, the code works.
+
+Now, code in Python:
+
+But in Python, when reading input, need to read all datasets until 0.
+
+But for each dataset, after n=0, we break.
+
+Now, for each dataset, read n lines.
+
+But how to read the input correctly? Because in some cases, the input may have lines split across different ways.
+
+In Python, the code can read lines from stdin using a loop. But for programming competition problems, the standard approach is to read all input at once, split into tokens, and process them.
+
+Alternatively, read line by line.
+
+But for the code to handle multiple datasets, each starting with n, followed by n lines, and ending with 0, the code can be written as:
+
+import sys
+
+def process():
+
+    for line in sys.stdin:
+
+        line = line.strip()
+
+        if not line:
+
+            continue
+
+        n = int(line)
+
+        if n == 0:
+
+            break
+
+        events = []
+
+        for _ in range(n):
+
+            parts = sys.stdin.readline().split()
+
+            m, a, b = map(int, parts)
+
+            events.append( (a, 1, m) )
+
+            events.append( (b, 0, m) )
+
+        events.sort(key=lambda x: (x[0], x[1]))
+
+        current = 0
+
+        ok = True
+
+        for event in events:
+
+            t, typ, m = event
+
+            if typ == 1:
+
+                current += m
+
+                if current > 150:
+
+                    ok = False
+
+                    break
+
+            else:
+
+                current -= m
+
+        print("OK" if ok else "NG")
+
+But wait, in the code, for each dataset, after reading n, we read n lines. But using sys.stdin.readline() inside the loop may lead to reading lines correctly, but sometimes there can be leading/trailing spaces.
+
+Alternatively, using split() and read all tokens.
+
+Another approach is to read all the input at once, split into tokens, and process them.
+
+But for the code, the code must read from stdin, process each dataset, and output the result.
+
+But in the code above, after reading n from a line, for each of the next n lines, read via sys.stdin.readline(). But if there are any empty lines (which the problem may or may not have), this can cause issues.
+
+Alternatively, read the entire input as a list of tokens, then process them.
+
+But perhaps the code above works.
+
+Testing the code with the sample input:
+
+Sample input:
+
+3
+
+80 0 30
+
+50 5 25
+
+90 27 50
+
+3
+
+80 0 30
+
+70 5 25
+
+71 30 50
+
+0
+
+The code would process:
+
+First n=3.
+
+Read 3 lines:
+
+80 0 30 → events (0,1,80), (30,0,80)
+
+50 5 25 → (5,1,50), (25,0,50)
+
+90 27 50 → (27,1,90), (50,0,90)
+
+Then sort and process. The code would output NG.
+
+Second n=3:
+
+Read 3 lines:
+
+80 0 30 → events (0,1,80), (30,0,80)
+
+70 5 25 → (5,1,70), (25,0,70)
+
+71 30 50 → (30,1,71), (50,0,71)
+
+Process events:
+
+sorted order:
+
+0: (0,1,80) → current 80 → ok.
+
+5: (5,1,70) → current 150 → ok.
+
+25: (25,0,70) → subtract → 80.
+
+30: (30,0,80) → subtract → 0.
+
+30: (30,1,71) → add 71 → current 71 → ok.
+
+50: (50,0,71) → subtract → 0.
+
+All ok → output OK.
+
+Third line is 0 → break.
+
+So the code produces the sample output.
+
+Thus, the code seems correct.
+
+But wait, the code uses sys.stdin, but in the code, after reading the first line (n=3), it then reads n lines. But in Python, when using for line in sys.stdin: ... , then each line is read, including the lines after the 3.
+
+But perhaps the code as written has a problem. Because when processing the first dataset, after reading n=3, the code enters a loop for _ in range(n), and for each iteration reads a line via sys.stdin.readline(). But perhaps after the first line (n=3), the next line is "80 0 30", which is read by sys.stdin.readline().
+
+But what happens when the code is called? For example, in the sample input, the lines are:
+
+3
+
+80 0 30
+
+50 5 25
+
+90 27 50
+
+3
+
+80 0 30
+
+70 5 25
+
+71 30 50
+
+0
+
+The code's first loop iteration:
+
+for line in sys.stdin:
+
+    line is '3\n' → n=3.
+
+    then reads 3 lines via sys.stdin.readline().
+
+    Then processes.
+
+But then, the next line in the loop is the next line in sys.stdin, which would be the '3' of the next dataset. So this approach may not read correctly.
+
+Ah, right, because after reading n, the code uses readline() to read the next lines. But the for loop in 'for line in sys.stdin' reads each line, including those that belong to the dataset.
+
+Wait, no. Let's see:
+
+The code starts with for line in sys.stdin:
+
+It reads the first line: '3\n' → n=3.
+
+Then, for _ in range(n), it reads via sys.stdin.readline().
+
+Each readline() reads the next line. So after the initial line (n=3), the next lines are the three lines of the dataset. Then, the next line in the for loop in sys.stdin would be the next line after the dataset, which is '3' again.
+
+But then, when the code processes the '3' as part of the for loop, it would process it as the next n.
+
+But in reality, after reading the first dataset, the code would read the next lines as the next n and so on.
+
+Wait, no. Because after processing the first dataset, the code is back to the loop for line in sys.stdin. So the next line to be read is the line after the three lines of the first dataset.
+
+For example:
+
+Input lines:
+
+Line 1: 3 → read as line in the loop → n=3.
+
+Read 3 lines via readline() → lines 2,3,4.
+
+Then, the code processes the dataset and prints the result.
+
+Then, the loop continues to read line 5: '3' → next dataset.
+
+Read 3 lines (6,7,8).
+
+Process, print.
+
+Then, read line 9: '0' → break.
+
+So that's correct.
+
+But in the code as written, the for loop reads each line in sys.stdin. Then, when the code reads a line (e.g., '3'), it processes the dataset by reading n lines via readline().
+
+But in this approach, after reading the initial '3', the next readline() calls read the lines that are after '3', which are correct.
+
+Yes.
+
+But this may not work if the input is not properly formatted. But according to the problem statement, each dataset is properly formatted.
+
+So the code should work.
+
+Thus, the code is correct.
+</think>
+To solve this problem, we need to determine if a bridge will break based on the weights of people crossing it over time. The bridge can withstand a maximum weight of 150 kg at any given time. The solution involves checking if the total weight of people on the bridge exceeds this limit at any moment.
+
+### Approach
+1. **Event Collection**: For each person, create two events: a start event (when they step onto the bridge) and an end event (when they leave the bridge).
+2. **Event Sorting**: Sort these events by time. If multiple events occur at the same time, process end events before start events to ensure the bridge's weight is updated correctly.
+3. **Weight Tracking**: As we process each event, update the current weight on the bridge. Check if the weight exceeds 150 kg after handling each start event. If it does, the bridge breaks.
+
+### Solution Code
+```python
+import sys
+
+def main():
+    while True:
+        line = sys.stdin.readline()
+        if not line:
+            break
+        n = int(line.strip())
+        if n == 0:
+            break
+        events = []
+        for _ in range(n):
+            parts = sys.stdin.readline().split()
+            m, a, b = map(int, parts)
+            events.append((a, 1, m))  # start event
+            events.append((b, 0, m))  # end event
+        # Sort events: first by time, then end events (0) come before start events (1)
+        events.sort(key=lambda x: (x[0], x[1]))
+        current_weight = 0
+        ok = True
+        for event in events:
+            t, typ, m = event
+            if typ == 1:
+                current_weight += m
+                if current_weight > 150:
+                    ok = False
+                    break
+            else:
+                current_weight -= m
+        print("OK" if ok else "NG")
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Reading Input**: The code reads multiple datasets until encountering a line with 0. Each dataset starts with an integer `n` indicating the number of people.
+2. **Event Creation**: For each person, two events are created: a start event (when they begin crossing) and an end event (when they finish crossing).
+3. **Sorting Events**: Events are sorted by time. If two events occur at the same time, end events are processed before start events to ensure the bridge's weight is correctly updated.
+4. **Processing Events**: The code tracks the current weight on the bridge. When processing a start event, the person's weight is added to the current total. If this total exceeds 150 kg, the bridge breaks. End events reduce the current weight but do not trigger a check as they only reflect someone leaving the bridge.
+
+This approach efficiently processes each event in chronological order, ensuring accurate checks for potential bridge failure while handling up to the maximum input constraints effectively.
+</bot>

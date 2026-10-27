@@ -1,0 +1,619 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Sereja loves number sequences very much. That's why he decided to make himself a new one following a certain algorithm.
+
+Sereja takes a blank piece of paper. Then he starts writing out the sequence in m stages. Each time he either adds a new number to the end of the sequence or takes l first elements of the current sequence and adds them c times to the end. More formally, if we represent the current sequence as a1, a2, ..., an, then after we apply the described operation, the sequence transforms into a1, a2, ..., an[, a1, a2, ..., al] (the block in the square brackets must be repeated c times). 
+
+A day has passed and Sereja has completed the sequence. He wonders what are the values of some of its elements. Help Sereja.
+
+Input
+
+The first line contains integer m (1 ≤ m ≤ 105) — the number of stages to build a sequence. 
+
+Next m lines contain the description of the stages in the order they follow. The first number in the line is a type of stage (1 or 2). Type 1 means adding one number to the end of the sequence, in this case the line contains integer xi (1 ≤ xi ≤ 105) — the number to add. Type 2 means copying a prefix of length li to the end ci times, in this case the line further contains two integers li, ci (1 ≤ li ≤ 105, 1 ≤ ci ≤ 104), li is the length of the prefix, ci is the number of copyings. It is guaranteed that the length of prefix li is never larger than the current length of the sequence.
+
+The next line contains integer n (1 ≤ n ≤ 105) — the number of elements Sereja is interested in. The next line contains the numbers of elements of the final sequence Sereja is interested in. The numbers are given in the strictly increasing order. It is guaranteed that all numbers are strictly larger than zero and do not exceed the length of the resulting sequence. Consider the elements of the final sequence numbered starting from 1 from the beginning to the end of the sequence.
+
+Please, do not use the %lld specifier to read or write 64-bit integers in С++. It is preferred to use the cin, cout streams or the %I64d specifier.
+
+Output
+
+Print the elements that Sereja is interested in, in the order in which their numbers occur in the input. 
+
+Examples
+
+Input
+
+6
+1 1
+1 2
+2 2 1
+1 3
+2 5 2
+1 4
+16
+1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16
+
+
+Output
+
+1 2 1 2 3 1 2 1 2 3 1 2 1 2 3 4
+</user>
+<bot>
+<think>
+Okay, let's see. We need to solve this problem where Sereja builds a sequence through m stages, and then answer n queries about the elements in the final sequence. The challenge is to handle the stages efficiently, especially the type 2 operations which can exponentially grow the sequence's length. Directly simulating the sequence isn't feasible because the final length could be up to 1e5 * (1e4)^... which is way too big.
+
+Hmm. So the key is to represent the sequence in a way that allows us to compute the k-th element without building the entire sequence. Maybe using a hierarchical structure where each step is tracked, and when a query comes in, we backtrack through the steps to find the original position.
+
+Let me think. Each operation can be represented as a node in a tree or a stack. For type 1, it's straightforward—each adds a single element. For type 2, when we append copies of a prefix, the new elements are determined by the existing elements up to that prefix. So for any position in the new part, it can be traced back to the original prefix.
+
+So perhaps we can track the 'history' of the sequence's construction using a list of segments. Each segment can be either a single element (from type 1) or a reference to a previous segment (from type 2). When we process a query, we can work backward through these segments to find the original position.
+
+For example, let's say after several operations, the current length is L. Then, a type 2 operation adds l * c elements. So the total length becomes L + l * c. Now, for any query index that's in the new part (L+1 to L + l*c), we can compute which repetition and which position within the prefix l it corresponds to, then recursively find that position in the previous structure.
+
+This approach avoids building the actual array. Instead, we keep track of the steps and, for each query, we work backwards through these steps to find the original value. That way, even if the array is huge, the queries can be processed in logarithmic time per query.
+
+Let's outline the steps:
+
+1. For each stage, keep track of the length after the operation. Also, for type 2 operations, store the parameters (l, c, and the length before this operation). So we can have a list of 'events' where each event is either a single element or a block of l elements copied c times.
+
+2. When processing a query k, we need to find out which event in the history corresponds to the position k. We can binary search through the events to find the earliest event where the cumulative length is >= k. Once found, if the event is type 1, the value is known. If it's type 2, we compute the position within the copied blocks. For example, the copied part is (k - previous_length) which can be divided by l to get which copy it's in, then the remainder gives the position in the original prefix. Then, we recursively find that position's value in the previous events.
+
+So the main data structure is a list that records the steps (events) and their accumulated lengths. For each query, we perform a binary search on this list to find the relevant event and then backtrack.
+
+Let's think about the data structure. Each event can be stored as a tuple:
+
+For type 1: (type, value, length_after)
+For type 2: (type, l, c, length_before, length_after)
+
+Wait, the length_before is the length before the type 2 operation. So when a type 2 is applied, the length increases by l * c. So length_after = length_before + l * c.
+
+So the list of events will allow us to track how the sequence was built. Then, for each query k, we can process it as follows:
+
+- Start with k.
+- Find the earliest event where the length_after is >= k. If the event is type 1, return its value. If type 2, subtract the length_before from k, then k' = (k - length_before) mod l. If k' is zero, then it's the last element of the prefix (so k' = l). Then, recursively find the value at position k'.
+
+Wait, no. Let's see. Suppose the type 2 operation is adding l elements c times. So each copy contributes l elements. So for a position in the new part (after length_before), the position within the new part is (k - length_before). Let's call this offset. The new part is l * c elements long. For offset in [1, l*c], the actual position in the original prefix is ((offset -1) % l) + 1. Because each of the c copies contributes the same l elements. So for example, offset 1 is first element of the first copy, offset l+1 is first element of the second copy, etc. So (offset-1) mod l gives the 0-based index, then +1 to get 1-based.
+
+So for a given k, if we determine that it's part of a type 2 operation, then the actual original position is ((k - length_before) -1) % l + 1. Then, we set k to this value and continue searching in the events up to before the current type 2 operation.
+
+So the approach is to:
+
+- For each query, start with k and loop through the events backwards, using binary search to find which event the k is in. Then, for type 2, compute the corresponding position in the previous steps. Repeat until we reach a type 1 event, which gives the value.
+
+This way, even for large c, the number of steps is logarithmic in the number of events (since each step reduces k to a position in a previous step), and each binary search is O(log m) per query.
+
+Now, how to structure the events. Let's create a list of events, each with their start and end positions. Wait, but the end position is the cumulative length. So for each event, we can track the cumulative length after that event. Then, when we process a query, we can binary search the list to find the smallest event where the cumulative length is >= k. Once found, we check if it's type 1 or 2.
+
+Wait, but the list is built incrementally. For example, event 1 adds 1 element (length 1). Event 2 adds another element (length 2). Then event 3 is a type 2 that appends l=2 elements c=2 times. So the new length is 2 + 2*2 =6. So the events list would have entries like:
+
+event0: type1, value1, length 1
+
+event1: type1, value2, length 2
+
+event2: type2, l=2, c=2, length_before=2, length_after=6.
+
+So the binary search for k=5 would find event2. Then compute offset =5 -2=3. Then, offset is 3. l=2. So (3-1) mod 2 +1 = (2 mod 2) +1 =0+1=1. So new k=1. Then binary search again for k=1, find event0 (type1) with value 1.
+
+So the steps are:
+
+events = list of events, each with their type, parameters, and length_after.
+
+To process a query k:
+
+while True:
+
+   find the event in events where event's length_after >=k and (previous event's length_after <k or it's the first event).
+
+   if event is type1: return its value.
+
+   else (type2):
+
+       offset = k - event.length_before
+
+       l = event.l
+
+       pos_in_block = ((offset-1) % l) +1
+
+       k = pos_in_block
+
+So each iteration reduces k to a position in the previous steps, until we hit a type1.
+
+This way, even if the sequence is built with multiple layers of type2 operations, each query will be resolved in O(log m) steps, and each step requires a binary search over the events list.
+
+The key is to precompute the events list with their cumulative lengths, and for each query, perform this backtracking process.
+
+Now, the next step is to model the events in code.
+
+First, read all the m stages. For each stage:
+
+If type1: add an event with type, value, and length_after.
+
+If type2: read l, c. The length_before is the current length. The added length is l * c. So the new length_after is length_before + l * c. Add an event with type2, l, c, length_before, length_after.
+
+Then, for each query k, we process it as described.
+
+But m can be up to 1e5, and n up to 1e5. So for each query, we need to perform O(log m) binary search steps, each time possibly O(log m) time. So total time is O(n * log m * log m). But 1e5 * (20)^2 is 4e6, which is manageable.
+
+Wait, each binary search is O(log m). For each query, how many steps do we need? Each step reduces k to a position that is within the length_before of the current event. So the number of steps is proportional to the depth of the recursion in the events. For example, if there are multiple type2 operations that reference previous type2 operations, then each step could take k to a previous event. In the worst case, this could be O(log m) steps per query. So total time is O(n * (log m)^2), which for 1e5 is 1e5 * (20)^2 = 4e7 operations. Which is acceptable.
+
+But maybe we can optimize the binary search part. Since each event's length_after is strictly increasing, we can binary search in the events list for the first event where length_after >=k.
+
+Implementing that in Python using bisect module's bisect_left.
+
+Wait, the events list is in the order they were added, and each event's length_after is increasing. So for example, event0 has length_after 1, event1 2, event2 6, etc. So the list of length_after is in order. So for a given k, we can binary search to find the earliest index where events[i].length_after >=k.
+
+But the events list can be represented as a list, and for each event, store the length_after. So the binary search can be on the list of length_after.
+
+So for code:
+
+We can create a list called 'history' where each element is a tuple (type, data, len_after). For type1, data is (x,), for type2 data is (l, c, len_before). So for example:
+
+history = []
+current_len = 0
+
+for each m lines:
+    type = ... 
+    if type == 1:
+        x = ...
+        current_len += 1
+        history.append( (1, x, current_len) )
+    else:
+        l, c = ...
+        added = l * c
+        new_len = current_len + added
+        history.append( (2, (l, c, current_len), new_len) )
+        current_len = new_len
+
+Then, for a query k:
+
+current_k = k
+
+while True:
+    # find the event in history where len_after >= current_k and is the earliest such
+    # using bisect to find the insertion point of current_k in the len_after array.
+
+    left = 0
+    right = len(history) -1
+    pos = -1
+    while left <= right:
+        mid = (left + right) //2
+        if history[mid][2] >= current_k:
+            pos = mid
+            right = mid -1
+        else:
+            left = mid +1
+
+    # pos is the index of the event that contains current_k
+
+    event = history[pos]
+    if event[0] == 1:
+        print(event[1], end=' ')
+        break
+    else:
+        # type2
+        l, c, len_before = event[1]
+        offset = current_k - len_before
+        pos_in_block = (offset -1) % l +1
+        current_k = pos_in_block
+
+So this loop continues until current_k is found in a type1 event.
+
+This seems correct.
+
+Testing the sample input:
+
+Sample input:
+
+6
+1 1
+1 2
+2 2 1
+1 3
+2 5 2
+1 4
+
+So let's model the events:
+
+event0: type1, x=1, len_after=1
+
+event1: type1, x=2, len_after=2
+
+event2: type2, l=2, c=1, len_before=2, len_after=2 + 2*1 =4
+
+event3: type1, x=3, len_after=5
+
+event4: type2, l=5, c=2, len_before=5, len_after=5 +5*2=15
+
+event5: type1, x=4, len_after=16
+
+history = [ (1,1,1), (1,2,2), (2, (2,1,2),4), (1,3,5), (2, (5,2,5),15), (1,4,16) ]
+
+Now, the queries are 1-16.
+
+Let's take query 3:
+
+current_k=3.
+
+Find the event in history where len_after >=3. The events after event2 have len_after=4, which is >=3. The first event with len_after >=3 is event2 (since event1's len is 2 <3). event2 is type2.
+
+offset=3 - len_before (2) =1.
+
+pos_in_block = (1-1) mod 2 +1 =0 +1=1. So current_k=1.
+
+Now, process current_k=1.
+
+Find event0 (len_after=1 >=1). It's type1, so output 1.
+
+Which matches the sample output's third element being 1.
+
+Another example: query 7.
+
+The final sequence length is 16. Let's see.
+
+For k=7:
+
+current_k=7.
+
+Looking through the events:
+
+event5 is len_after=16. But wait, the events in the sample:
+
+After event5 (type1, x=4, len_after=16), but the type2 event4 adds 5*2=10 elements to len_before=5, making len_after=15. Then event5 adds 1, making len_after=16.
+
+So the events are:
+
+event0: len1=1.
+
+event1: len2=2.
+
+event2: len4=4.
+
+event3: len5=5.
+
+event4: len15=15.
+
+event5: len16=16.
+
+So for k=7:
+
+binary search for 7 in the len_after array. The len_after of events are [1,2,4,5,15,16].
+
+We need the smallest index where len_after >=7. len_after of event3 is 5 <7. event4's len is 15 >=7. So pos=4 (event4).
+
+event4 is type2, l=5, c=2, len_before=5.
+
+offset=7 -5 =2.
+
+pos_in_block = (2-1) mod5 +1 =1 mod5=1, +1=2. So current_k=2.
+
+Now process current_k=2.
+
+Find event where len_after >=2.
+
+event1's len is 2. So event1 is type1, x=2. So output 2.
+
+Which matches the sample's 7th element (index 6 if 0-based) being 2.
+
+Yes, the sample output for 7 is 2.
+
+So the approach works.
+
+Now, coding this in Python.
+
+But how to handle the bisect? Since the events are stored in order, and each event's len_after is the third element in the tuple, we can precompute a list of len_after and use bisect on that.
+
+Alternatively, for each query, perform a binary search on the events list.
+
+But the code can be written as follows:
+
+Read m, process the m lines, building the history list as a list of tuples (type, data, len_after), where data is (x) for type1, or (l, c, len_before) for type2.
+
+Then, read n and the list of queries. For each query k in the list, process as per the backtracking method.
+
+In Python, implementing the binary search for each step.
+
+But for each step, the code can be written as:
+
+current_k = k
+
+while True:
+
+    # find the earliest event where len_after >= current_k
+
+    low = 0
+
+    high = len(history) -1
+
+    pos = len(history)  # default to beyond the list
+
+    while low <= high:
+
+        mid = (low + high) // 2
+
+        if history[mid][2] >= current_k:
+
+            pos = mid
+
+            high = mid -1
+
+        else:
+
+            low = mid +1
+
+    # pos is the first event with len_after >= current_k
+
+    if pos == len(history):
+
+        # impossible, since k <= total length, which is the last event's len_after.
+
+        pass
+
+    event = history[pos]
+
+    if event[0] == 1:
+
+        print(event[1], end=' ')
+
+        break
+
+    else:
+
+        # handle type2
+
+        l, c, len_before = event[1]
+
+        offset = current_k - len_before
+
+        pos_in_block = (offset -1) % l +1
+
+        current_k = pos_in_block
+
+So this loop will process each query.
+
+Testing this code with the sample input should give the correct output.
+
+Edge Cases:
+
+What if a type2 operation uses l=1 and c=1e4. The total added is 1e4 elements. Then, for a query in that block, say k= len_before + 5000, the code would compute offset=5000, mod 1 gives 0, so pos_in_block =0 +1=1. Then current_k=1, which is the first element added by a type1 operation.
+
+Another case: multiple layers of type2. For example, after a type2 adds some elements, another type2 uses the new prefix. Then, a query in the new part would have to backtrack through both type2 steps.
+
+But the code should handle that correctly.
+
+Now, handling the data structures.
+
+In Python, the history is built as a list. For each event, we store:
+
+For type 1: (1, x, len_after)
+
+For type 2: (2, (l, c, len_before), len_after)
+
+Yes.
+
+Now, code steps:
+
+Read m.
+
+history = []
+
+current_len =0
+
+for _ in range(m):
+
+    parts = list(map(int, input().split()))
+
+    if parts[0] ==1:
+
+        x = parts[1]
+
+        current_len +=1
+
+        history.append( (1, x, current_len) )
+
+    else:
+
+        # type2
+
+        l = parts[1]
+
+        c = parts[2]
+
+        len_before = current_len
+
+        added = l * c
+
+        current_len += added
+
+        history.append( (2, (l, c, len_before), current_len) )
+
+Then read n and the list of queries.
+
+queries = list(map(int, input().split()))
+
+for k in queries:
+
+    current_k = k
+
+    while True:
+
+        # binary search for the event containing current_k
+
+        low =0
+
+        high = len(history)-1
+
+        pos = len(history)
+
+        while low <= high:
+
+            mid = (low + high)//2
+
+            if history[mid][2] >= current_k:
+
+                pos = mid
+
+                high = mid -1
+
+            else:
+
+                low = mid +1
+
+        event = history[pos]
+
+        if event[0] ==1:
+
+            print(event[1], end=' ')
+
+            break
+
+        else:
+
+            l, c, len_before = event[1]
+
+            offset = current_k - len_before
+
+            pos_in_block = (offset-1) % l +1
+
+            current_k = pos_in_block
+
+This code should work.
+
+Now, testing with the sample input.
+
+Sample input:
+
+6
+
+1 1
+
+1 2
+
+2 2 1
+
+1 3
+
+2 5 2
+
+1 4
+
+16
+
+1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16
+
+Processing:
+
+The events are as follows:
+
+After each step:
+
+event0: (1,1,1)
+
+event1: (1,2,2)
+
+event2: (2, (2,1,2),4)
+
+event3: (1,3,5)
+
+event4: (2, (5,2,5),15)
+
+event5: (1,4,16)
+
+Now, for k=6:
+
+current_k=6.
+
+Binary search in history:
+
+Looking for event where len_after >=6.
+
+history[3].len_after=5 <6.
+
+history[4].len_after=15 >=6. So pos=4.
+
+event is type2: l=5, c=2, len_before=5.
+
+offset=6-5=1.
+
+pos_in_block= (1-1) mod5 +1 =0+1=1.
+
+current_k=1.
+
+Now find event where len_after >=1: event0. type1, value 1. So output 1.
+
+Which matches the sample output for k=6.
+
+Thus, the code works.
+
+The code's time complexity is acceptable for the problem constraints.
+</think>
+To solve this problem, we need to determine the elements of a sequence built through a series of operations. Directly simulating the sequence is infeasible due to potential exponential growth from copy operations. Instead, we use a backtracking approach to efficiently determine the value at any given position without constructing the entire sequence.
+
+### Approach
+1. **Track Operations**: Maintain a list of operations (history) that records each step taken to build the sequence. Each entry in the history tracks the operation type and the resulting length of the sequence after the operation.
+2. **Binary Search for Efficient Lookup**: For each query, use binary search to determine which operation affects the queried position. This helps in quickly narrowing down the relevant operation without iterating through all operations.
+3. **Backtracking**: If the operation is a copy (type 2), compute the original position within the copied prefix by adjusting the query index and recursively resolving it until a direct value (type 1 operation) is found.
+
+### Solution Code
+```python
+import bisect
+
+def main():
+    import sys
+    input = sys.stdin.read().split()
+    ptr = 0
+    m = int(input[ptr])
+    ptr +=1
+    
+    history = []
+    current_len = 0
+    
+    for _ in range(m):
+        type_op = int(input[ptr])
+        ptr +=1
+        if type_op == 1:
+            x = int(input[ptr])
+            ptr +=1
+            current_len +=1
+            history.append( (1, x, current_len) )
+        else:
+            l = int(input[ptr])
+            c = int(input[ptr+1])
+            ptr +=2
+            len_before = current_len
+            added = l * c
+            current_len += added
+            history.append( (2, (l, c, len_before), current_len) )
+    
+    n = int(input[ptr])
+    ptr +=1
+    queries = list(map(int, input[ptr:ptr+n]))
+    
+    len_afters = [event[2] for event in history]
+    output = []
+    
+    for k in queries:
+        current_k = k
+        while True:
+            pos = bisect.bisect_left(len_afters, current_k)
+            event = history[pos]
+            if event[0] == 1:
+                output.append(str(event[1]))
+                break
+            else:
+                l, c, len_before = event[1]
+                offset = current_k - len_before
+                pos_in_block = (offset -1) % l +1
+                current_k = pos_in_block
+    
+    print(' '.join(output))
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Reading Input**: The input is read in one go for efficiency, and parsed using a pointer to track the current position.
+2. **Building History**: Each operation (either adding a number or copying a prefix) is recorded in the `history` list along with the resulting sequence length.
+3. **Processing Queries**: For each query, binary search (`bisect_left`) is used to find the earliest operation affecting the queried position. If the operation is a copy, the position is adjusted to reference the original prefix, and the process repeats until a direct value is found.
+4. **Efficiency**: The use of binary search and backtracking ensures that each query is resolved in logarithmic time relative to the number of operations, making the solution efficient even for large inputs.
+</bot>

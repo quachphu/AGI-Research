@@ -1,0 +1,777 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.On his free time, Chouti likes doing some housework. He has got one new task, paint some bricks in the yard.
+
+There are n bricks lined in a row on the ground. Chouti has got m paint buckets of different colors at hand, so he painted each brick in one of those m colors.
+
+Having finished painting all bricks, Chouti was satisfied. He stood back and decided to find something fun with these bricks. After some counting, he found there are k bricks with a color different from the color of the brick on its left (the first brick is not counted, for sure).
+
+So as usual, he needs your help in counting how many ways could he paint the bricks. Two ways of painting bricks are different if there is at least one brick painted in different colors in these two ways. Because the answer might be quite big, you only need to output the number of ways modulo 998 244 353.
+
+Input
+
+The first and only line contains three integers n, m and k (1 ≤ n,m ≤ 2000, 0 ≤ k ≤ n-1) — the number of bricks, the number of colors, and the number of bricks, such that its color differs from the color of brick to the left of it.
+
+Output
+
+Print one integer — the number of ways to color bricks modulo 998 244 353.
+
+Examples
+
+Input
+
+
+3 3 0
+
+
+Output
+
+
+3
+
+
+Input
+
+
+3 2 1
+
+
+Output
+
+
+4
+
+Note
+
+In the first example, since k=0, the color of every brick should be the same, so there will be exactly m=3 ways to color the bricks.
+
+In the second example, suppose the two colors in the buckets are yellow and lime, the following image shows all 4 possible colorings.
+
+<image>
+</user>
+<bot>
+<think>
+Okay, let's see. I need to find the number of ways to paint n bricks with m colors such that exactly k bricks have a different color from their left neighbor. Hmm, this sounds like a dynamic programming problem. Because the choices depend on previous choices, especially the previous color.
+
+So, the first brick can be any color. Then each subsequent brick either matches the previous color or not. For each step, we track how many changes we've made so far. So the state in the DP would be something like the position we're at, the number of changes up to that point, and the color of the previous brick. But wait, that might be too memory-intensive if we track the previous color. Since the colors are up to 2000, and n is 2000, and k is up to 2000, the DP state would be O(n^2 * m), which for 2000 would be 2000*2000*2000 = 8e10 operations. That's way too big.
+
+So, maybe we can find a way to optimize this. Let's think: for each position i and number of changes j, instead of tracking the exact previous color, track how many ways there are when the previous color is fixed (so, for each j, we have a count of sequences ending with a color that could vary). Wait, perhaps we can model the DP state as two variables: the number of ways up to the i-th brick with j changes, and for each of those, whether the next brick is the same color or different.
+
+Wait, here's an idea. Let's split the DP into two parts for each i and j:
+
+dp[i][j][0] = number of ways to paint the first i bricks with j changes, where the i-th brick is the same color as the (i-1)-th brick.
+
+dp[i][j][1] = number of ways where the i-th brick is different from the previous.
+
+But how does this help? Let's think about transitions.
+
+For the first brick (i=1), since there's no previous brick, the initial state is that j=0, but since there's no previous, how do we handle it? Maybe the first brick can be considered as a base case. Then for i >=2, each brick can be either same as previous (no change) or different (adds a change).
+
+Wait, the first brick contributes 0 changes, since changes are counted as bricks (after the first) that are different from the left. So for the first brick, there are m possibilities. Then, for each subsequent brick, each choice can affect the count.
+
+So let's model the DP as follows:
+
+Define dp[i][j] as the number of ways to paint the first i bricks with j changes, considering that the i-th brick's color is... Hmm, maybe not enough. Because when adding the (i+1)-th brick, whether it's same or different depends on the previous color.
+
+Alternatively, we can model the DP[i][j] as the number of sequences of i bricks with j changes, with the last color being the same as the previous one or different, but maybe that's not sufficient. Wait, perhaps we can split dp[i][j] into two parts: same and different.
+
+Wait, here's a better approach. Let's have two DP arrays:
+
+- same[i][j]: the number of ways to paint the first i bricks with j changes, where the i-th brick is the same color as the (i-1)-th.
+
+- diff[i][j]: the number of ways where the i-th is different from the (i-1)-th.
+
+Then, the transitions would be:
+
+For same[i][j], the previous brick (i-1) must have been same as (i-2), and the i-th is same as (i-1). So, the transition would be from same[i-1][j] multiplied by 1 (since we choose the same color again). Or wait, no. Wait, if the i-th is same as i-1, then there's no new change. So the j remains the same. So, same[i][j] can be derived from same[i-1][j] (if we choose same color again) plus diff[i-1][j] (if the i-1 was different, but the i-th is same as i-1). Wait, no. Let's think again.
+
+Wait, when i-th is same as i-1, then the number of changes is j. To reach this state, the previous step (i-1) must have j changes, and the i-th is same. So:
+
+same[i][j] = same[i-1][j] * 1 (since same color as before) + diff[i-1][j] * 1 (because if the i-1 was different, then making i same as i-1 does not add a change. Wait, but how did we get to j changes in the i-1 steps? Let me think. For example, when building up the i-th brick, j is the total number of changes up to i bricks.
+
+So, the transitions for same[i][j] would be:
+
+same[i][j] = same[i-1][j] * 1 (since we add a same color, no new change) + diff[i-1][j] * (1) ?
+
+Wait, that's not possible. Because when adding the i-th brick, if the previous (i-1)th was part of a same sequence, then adding same again doesn't change j. But if the i-1th was part of a different sequence (diff), then adding same would not create a new change.
+
+Wait, perhaps the way to model it is:
+
+For the i-th brick:
+
+If the (i-1)th was same as (i-2)th (same[i-1][j]):
+
+- choosing same color again: same[i][j] += same[i-1][j] * 1
+
+- choosing different color: this would add a change, so j+1. So diff[i][j+1] += same[i-1][j] * (m-1)
+
+If the (i-1)th was different (diff[i-1][j]):
+
+- choosing same color as i-1th: same[i][j] += diff[i-1][j] * 1 (no change)
+
+Wait, but how does that affect j? Because when the i-th is same as i-1th, then the i-th does not contribute a change. So j remains the same.
+
+Similarly, if the i-th is different from i-1th, then j increases by 1.
+
+Wait, maybe the transitions are:
+
+same[i][j] = same[i-1][j] + diff[i-1][j]
+
+Because:
+
+If the i-1th was same (same[i-1][j]), then for i to be same as i-1, we have 1 choice (same color). So same[i][j] += same[i-1][j] * 1.
+
+If the i-1th was different (diff[i-1][j]), then for i to be same as i-1, we have 1 choice (same as previous, which was different). So same[i][j] += diff[i-1][j] * 1.
+
+But this would sum to same[i][j] = same[i-1][j] + diff[i-1][j]
+
+Wait, but how?
+
+Wait, for example: in the case where the i-1th was same, then the i-th can be same, but that requires the same color as before. So the number of choices is 1. So same[i][j] += same[i-1][j] * 1.
+
+Similarly, if the i-1th was different, then to make i-th same as i-1th, you have 1 choice (the same color as i-1th). So same[i][j] += diff[i-1][j] * 1.
+
+Wait, but the same[i][j] would then be the sum of those two possibilities. So same[i][j] = same[i-1][j] * 1 + diff[i-1][j] * 1.
+
+But then, for the diff[i][j] part:
+
+When the i-th is different from i-1th, which can happen in two cases:
+
+Case 1: i-1th was same (same[i-1][j-1] because adding a different color increases the change count by 1). Wait, no. Because if i-th is different, then the number of changes is j, which implies that up to i-1, it was j-1, and then adding this change gives j.
+
+Wait, perhaps the transitions are:
+
+diff[i][j] = same[i-1][j-1] * (m-1) + diff[i-1][j-1] * (m-1 - 1) ?
+
+Wait, no. Let's think again.
+
+When the previous (i-1th) was same (same[i-1][j_prev]):
+
+To make i-th different, we can choose any of the (m-1) other colors. This would add 1 to the change count, so j_prev must be j-1.
+
+So, same[i-1][j-1] * (m-1) contributes to diff[i][j].
+
+When the previous (i-1th) was different (diff[i-1][j_prev]):
+
+To make i-th different, we need to choose a color different from the previous (i-1th). So, if the previous was part of a different sequence, the previous color is already different. So for the i-th brick, the number of choices is (m-1) (since we can't choose the same as the previous color). So, this contributes diff[i-1][j_prev] * (m-1). But since adding this choice would increase the change count by 1, j_prev must be j-1.
+
+So, putting it all together:
+
+For transitions:
+
+same[i][j] = same[i-1][j] + diff[i-1][j]
+
+diff[i][j] = (same[i-1][j-1] + diff[i-1][j-1]) * (m-1)
+
+Wait, wait. Let's re-derive this.
+
+When building the i-th brick:
+
+Case 1: i-th is same as i-1th.
+
+Then, j remains the same as it was for i-1 bricks. So, for same[i][j], the previous state must have j changes. The way to reach this is:
+
+Either the i-1th was same (so adding same does nothing to j), or the i-1th was different (but adding same doesn't create a change, so j remains the same). Wait, but how can the i-1th be different and then adding same would keep j the same?
+
+Wait, the number of changes up to i bricks is j. So, for the i-th to be same as i-1th, the number of changes in the first i-1 bricks must be j. Because adding the same color doesn't add a new change.
+
+So, same[i][j] is the sum of the ways where i-1 bricks have j changes and the i-th is same.
+
+So:
+
+same[i][j] = same[i-1][j] * 1 (choose same color) + diff[i-1][j] * 1 (choose same color as i-1, which was different from i-2). So the total is same[i-1][j] + diff[i-1][j].
+
+Case 2: i-th is different from i-1th.
+
+Then, the number of changes is j, which means that before adding this brick, there were j-1 changes. Because adding this brick adds a new change.
+
+So, the transitions here would be:
+
+diff[i][j] = (same[i-1][j-1] + diff[i-1][j-1]) * (m-1)
+
+Because, for each of the same[i-1][j-1] and diff[i-1][j-1] ways, we can choose (m-1) colors different from the previous color.
+
+Wait, but in the case of diff[i-1][j-1], the previous color is already different from the one before. So when we choose a different color again, how many options are there?
+
+Yes. Because the previous color is the color of i-1th brick, which in the case of diff[i-1][j-1], is different from i-2th. So to choose a different color for i-th brick, we have (m-1) options (since it's any color except the i-1th color, regardless of what it was).
+
+So, combining these two cases, the transitions are:
+
+same[i][j] = same[i-1][j] + diff[i-1][j]
+
+diff[i][j] = (same[i-1][j-1] + diff[i-1][j-1]) * (m-1)
+
+But wait, for the first brick (i=1), there's no previous brick. So the initial conditions are:
+
+For i=1:
+
+same[1][0] = m (since the first brick can be any color, and there's no change)
+
+diff[1][0] = 0 (since there's no previous brick, so no change can happen here)
+
+Wait, but the first brick doesn't contribute to changes. So for i=1, the number of changes is 0, and all possibilities are same[1][0] = m, diff[1][0] = 0. Then for i >=2, the transitions proceed as above.
+
+So, this is the DP approach. Now, the final answer is the sum of same[n][k] and diff[n][k], multiplied by the initial possibilities. Wait, no. Because the first brick has same[1][0] = m, and the transitions for i>=2.
+
+Wait, the total number of ways is same[n][k] + diff[n][k]. Because for the nth brick, whether it's same or different, the total is the sum of both possibilities.
+
+But let's test this with the examples.
+
+First example: Input 3 3 0.
+
+So n=3, m=3, k=0.
+
+So the answer is 3. Let's see.
+
+For i=1, same[1][0] =3, diff[1][0] =0.
+
+i=2:
+
+same[2][0] = same[1][0] + diff[1][0] =3 +0=3.
+
+diff[2][1] = (same[1][0] + diff[1][0]) * (m-1) =3 *2=6. But k is 0 here, so for i=3, k=0.
+
+i=3:
+
+same[3][0] = same[2][0] + diff[2][0]. But for k=0, we need to compute same[3][0]. But for i=2, same[2][0] is 3, diff[2][0] is 0. Because when i=2, j can be at most 1 (since each step can add a change). So same[3][0] = same[2][0] + diff[2][0] =3 +0=3. So the total is 3, which matches the example.
+
+Second example: input 3 2 1. Output 4.
+
+Let's see:
+
+i=1: same[1][0]=2, diff=0.
+
+i=2:
+
+same[2][0] = same[1][0] + diff[1][0] =2+0=2.
+
+diff[2][1] = (same[1][0] + diff[1][0])*(1) =2*1=2.
+
+Now for j=1, same[2][1] and diff[2][1] are?
+
+Wait, for i=2 and j=1:
+
+same[2][1] = same[1][1] + diff[1][1]. But for i=1, j can be 0 only. So same[1][1] is 0, diff[1][1] is 0. So same[2][1] is 0.
+
+diff[2][1] is 2.
+
+Then, i=3, j=1.
+
+same[3][1] = same[2][1] + diff[2][1] =0 +2=2.
+
+diff[3][1] is (same[2][0] + diff[2][0])*(1) = (2 +0)*1=2.
+
+So the total ways is same[3][1] + diff[3][1] =2+2=4. Which matches the example.
+
+So this DP approach works for the examples. So now, the problem is to compute this DP efficiently.
+
+Now, considering the constraints: n and k can be up to 2000. So the DP tables same and diff can be represented as 2D arrays of size (n+1) x (k+1). For each i from 2 to n, and j from 0 to min(k, i-1), since the maximum possible changes for i bricks is i-1 (each brick after the first is different from the previous). So for each i, j can range up to min(k, i-1). But since k can be up to 2000, and n is up to 2000, the total number of states is O(n*k), which is 2000*2000=4e6. And for each state, we have O(1) operations. So this should be manageable.
+
+The steps are:
+
+Initialize same[1][0] = m, diff[1][0] =0.
+
+For i from 2 to n:
+
+   for j from 0 to min(k, i-1):
+
+       same[i][j] = (same[i-1][j] + diff[i-1][j]) % mod
+
+       if j >=1:
+
+           diff[i][j] = (same[i-1][j-1] + diff[i-1][j-1]) * (m-1) % mod
+
+       else:
+
+           diff[i][j] remains 0 (since j=0, but for i>=2, j can't be 0 for diff[i][j], since adding a change would require j>=1. So for j=0, diff[i][j] is 0.
+
+Wait, for j=0, in the case of i>=2, the only way to have j=0 is all bricks are the same. So same[i][0] = same[i-1][0], and diff[i][0] =0.
+
+But according to the transitions:
+
+For i=2 and j=0:
+
+same[2][0] = same[1][0] + diff[1][0] = m +0 =m.
+
+diff[2][0] = (same[1][-1] + ... ), but j=0, j-1 is -1, which is invalid. So for j=0, the diff[i][j] is 0.
+
+So the code would handle that.
+
+Now, the code needs to precompute these DP tables. Then the answer is (same[n][k] + diff[n][k]) % mod.
+
+But wait, for n=1 and k=0, the answer is same[1][0] + diff[1][0] = m +0 =m.
+
+Which is correct.
+
+Now, the code structure:
+
+Read n, m, k.
+
+mod = 998244353.
+
+Initialize same and diff as 2D arrays with dimensions (n+1) x (k+1), initialized to 0.
+
+same[1][0] = m.
+
+for i from 2 to n:
+
+    for j from 0 to min(k, i-1):
+
+        same[i][j] = (same[i-1][j] + diff[i-1][j]) % mod
+
+        if j >=1:
+
+            prev_j = j-1
+
+            if prev_j >=0:
+
+                diff[i][j] = (same[i-1][prev_j] + diff[i-1][prev_j]) * (m-1) % mod
+
+sum = (same[n][k] + diff[n][k]) % mod
+
+print(sum)
+
+But how to handle the loops for j in each i?
+
+For each i, the possible j values range from 0 to min(k, i-1). Because for i bricks, the maximum possible changes is i-1 (each brick after the first is different from the previous). So for each i, j can't exceed i-1, and also can't exceed k.
+
+So in the code, for each i in 2..n:
+
+   max_j = min(k, i-1)
+
+   for j in 0..max_j:
+
+       compute same[i][j]
+
+       if j >=1:
+
+           compute diff[i][j]
+
+       else:
+
+           diff[i][j] remains 0 (since j=0, but i>=2: to have j=0, all bricks must be same, so diff[i][j] is 0)
+
+Wait, but in the code, we need to loop j from 0 to max_j, but for each j, check if j>=1 to compute the diff[i][j].
+
+Alternatively, in the code, for each i in 2 to n:
+
+   for j in 0 to min(k, i-1):
+
+       same[i][j] = (same[i-1][j] + diff[i-1][j]) % mod
+
+   for j in 1 to min(k, i-1):
+
+       prev_j = j-1
+
+       # since i-1 >=1 (as i >=2), and prev_j = j-1 >=0 when j >=1.
+
+       # prev_j can be up to (i-1-1) = i-2.
+
+       # for the same[i-1][prev_j] and diff[i-1][prev_j] to exist, prev_j must be <= (i-1)-1 = i-2. Which it is, since j <= i-1 implies prev_j <= i-2.
+
+       diff[i][j] = (same[i-1][prev_j] + diff[i-1][prev_j]) * (m-1) % mod
+
+But how to handle this in code?
+
+In Python, perhaps:
+
+for i in range(2, n+1):
+
+    max_j = min(k, i-1)
+
+    for j in range(0, max_j+1):
+
+        same[i][j] = (same[i-1][j] + diff[i-1][j]) % mod
+
+    for j in range(1, max_j+1):
+
+        prev_j = j-1
+
+        total_prev = (same[i-1][prev_j] + diff[i-1][prev_j]) % mod
+
+        diff[i][j] = (total_prev * (m-1)) % mod
+
+But we can also combine the two loops into one. For example:
+
+for i in 2 to n:
+
+    max_j = min(k, i-1)
+
+    for j in 0 to max_j:
+
+        same[i][j] = (same[i-1][j] + diff[i-1][j]) % mod
+
+        if j >=1:
+
+            prev_j = j-1
+
+            diff_val = (same[i-1][prev_j] + diff[i-1][prev_j]) * (m-1) % mod
+
+            diff[i][j] = diff_val
+
+This way, for j=0, the same is computed, and diff remains 0 (as initial value).
+
+But in code, the same and diff arrays need to be initialized properly.
+
+In Python, perhaps using a list of lists:
+
+Initialize same = [[0]*(k+1) for _ in range(n+1)]
+
+same[1][0] = m
+
+diff = [[0]*(k+1) for _ in range(n+1)]
+
+Then proceed as per the transitions.
+
+But what about when k is larger than i-1 for a certain i? For example, if k is 2000 and i is 2, then min(k, i-1) is 1. So for j in 0 to 1.
+
+But since the code loops up to min(k, i-1), which is the maximum possible j for that i, it's handled.
+
+Now, let's test this code with the second example.
+
+Sample Input 3 2 1.
+
+n=3, m=2, k=1.
+
+Initialize same[1][0] =2.
+
+For i=2:
+
+max_j = min(1, 1) =1.
+
+Loop j from 0 to 1:
+
+For j=0:
+
+same[2][0] = same[1][0] + diff[1][0] =2+0=2.
+
+j=0: no diff computation.
+
+For j=1:
+
+same[2][1] = same[1][1] (0) + diff[1][1] (0) =0.
+
+Then, in the j loop for j>=1:
+
+j=1:
+
+prev_j =0.
+
+same[1][0] + diff[1][0] =2+0=2.
+
+diff[2][1] = 2 * (2-1) = 2*1=2.
+
+So after i=2:
+
+same[2][0] =2, same[2][1]=0.
+
+diff[2][1]=2, others are 0.
+
+For i=3:
+
+max_j = min(1, 2) =1.
+
+Loop j from 0 to 1.
+
+For j=0:
+
+same[3][0] = same[2][0] + diff[2][0] =2+0=2.
+
+For j=1:
+
+same[3][1] = same[2][1] (0) + diff[2][1] (2) =2.
+
+Then compute diff[3][1]:
+
+prev_j=0.
+
+same[2][0] + diff[2][0] =2+0=2.
+
+diff[3][1] = 2*1=2.
+
+So same[3][1] =2, diff[3][1] =2.
+
+Total is 2+2=4. Which is correct.
+
+So the code works for the sample.
+
+Now, the code needs to handle cases where m=1. For example, if m=1 and k=0, then the answer is 1. If m=1 and k>0, the answer is 0, since all bricks must be same color.
+
+But in the code, when m=1, then (m-1) is 0. So, in transitions for diff[i][j], when m=1, any attempt to choose a different color (which is impossible) would result in 0.
+
+But let's see.
+
+For example, n=3, m=1, k=0. The answer is 1.
+
+In the code:
+
+same[1][0] =1.
+
+i=2:
+
+max_j= min(0, 1) =0.
+
+so j=0:
+
+same[2][0] = same[1][0] + diff[1][0] =1+0=1.
+
+diff[2][0] remains 0.
+
+i=3:
+
+max_j=0.
+
+same[3][0] = same[2][0] + 0=1.
+
+diff[3][0] remains 0.
+
+Total is 1+0=1.
+
+Which is correct.
+
+Another case: n=3, m=1, k=1. Then, since m=1, you can't have any changes. So answer is 0.
+
+In code:
+
+same[1][0] =1.
+
+i=2:
+
+max_j= min(1, 1) =1.
+
+For j=0: same[2][0] =1+0=1.
+
+For j=1:
+
+same[2][1] = same[1][1] (0) + diff[1][1] (0) =0.
+
+Then for j=1, compute diff[2][1] = (same[1][0] + diff[1][0]) *0 = (1+0)*0=0.
+
+At i=3:
+
+max_j=1.
+
+for j=0:
+
+same[3][0] = same[2][0] + diff[2][0] =1+0=1.
+
+j=1:
+
+same[3][1] = same[2][1] + diff[2][1] =0+0=0.
+
+diff[3][1] is (same[2][0] + diff[2][0]) *0 = (1+0)*0=0.
+
+So sum is 0+0=0. Correct.
+
+Thus, the code handles m=1 correctly.
+
+Now, for space optimization. Since each i only depends on i-1, we can use 1D arrays to save space. But given that n can be 2000, and k up to 2000, using 2D arrays is manageable.
+
+Now, code implementation.
+
+The code needs to read n, m, k from stdin.
+
+But in cases where k is larger than n-1, the answer is 0.
+
+Wait, the problem statement says that 0 ≤k ≤n-1. So input constraints include k <=n-1. So the code doesn't have to handle k>n-1. So if the input has k>n-1, output 0.
+
+But according to the input constraints, k is between 0 and n-1. So no need to handle that.
+
+So code:
+
+Read n, m, k.
+
+mod = 998244353.
+
+if n ==0: but n>=1 per input constraints.
+
+Initialize same and diff as 2D arrays (n+1) x (k+1).
+
+same[1][0] =m.
+
+for i from 2 to n:
+
+    max_j = min(k, i-1)
+
+    for j in 0 ... max_j:
+
+        same[i][j] = (same[i-1][j] + diff[i-1][j]) % mod
+
+    for j in 1 ... max_j:
+
+        prev_j = j-1
+
+        sum_prev = (same[i-1][prev_j] + diff[i-1][prev_j]) % mod
+
+        diff[i][j] = sum_prev * (m-1) % mod
+
+Then the answer is (same[n][k] + diff[n][k]) % mod.
+
+But wait, in the code, for each i, after computing same[i][j], when processing j in 1..max_j, the code uses the same i-1's same and diff.
+
+So in Python, code could be written as follows:
+
+n, m, k = map(int, input().split())
+
+mod = 998244353
+
+if k > n-1:
+    print(0)
+    exit()
+
+same = [[0]*(k+1) for _ in range(n+1)]
+diff = [[0]*(k+1) for _ in range(n+1)]
+
+same[1][0] = m % mod
+
+for i in range(2, n+1):
+    max_j = min(k, i-1)
+    for j in range(0, max_j +1):
+        same[i][j] = (same[i-1][j] + diff[i-1][j]) % mod
+    for j in range(1, max_j +1):
+        prev_j = j-1
+        sum_prev = (same[i-1][prev_j] + diff[i-1][prev_j]) % mod
+        diff[i][j] = (sum_prev * (m-1)) % mod
+
+ans = (same[n][k] + diff[n][k]) % mod
+
+print(ans)
+
+But wait, when j runs up to max_j which is min(k, i-1), then for j=0 to max_j.
+
+But when i-1 is less than j, then prev_j may not be available.
+
+But in the code, since j can be up to min(k, i-1), and prev_j =j-1, which is >=0. So prev_j can be up to min(k, i-1)-1. But same[i-1][prev_j] and diff[i-1][prev_j] are available since prev_j <= i-2, and i-1 >=1 (since i starts at 2). So same and diff for i-1 and prev_j are valid.
+
+Yes.
+
+Now, let's test the first sample:
+
+Input 3 3 0.
+
+n=3, m=3, k=0.
+
+same[1][0] =3.
+
+i=2:
+
+max_j = min(0, 1) =0.
+
+so j=0:
+
+same[2][0] = same[1][0] + diff[1][0] =3 +0=3.
+
+no j>=1, so diff remains 0.
+
+i=3:
+
+max_j = min(0, 2) =0.
+
+so j=0:
+
+same[3][0] = same[2][0] + diff[2][0] =3+0=3.
+
+diff remains 0.
+
+ans is 3+0=3.
+
+Correct.
+
+Another test case: input 3 2 1.
+
+As before.
+
+Thus, the code should work.
+
+Edge cases:
+
+n=1, m=5, k=0. Output 5.
+
+n=1, any k>0 is invalid, but according to input constraints, k is 0.
+
+Another edge case: n=2, m=2, k=1.
+
+Possible ways:
+
+First brick can be color A or B. Second brick different.
+
+So 2 *1 =2.
+
+In code:
+
+i=2:
+
+max_j=1.
+
+j=1:
+
+same[2][1] = same[1][1] (0) + diff[1][1] (0) =0.
+
+diff[2][1] = (same[1][0] + diff[1][0]) *1 = (2 +0) *1 =2.
+
+sum is 0+2=2. Correct.
+
+Another case: n=2, m=5, k=1.
+
+Then, first brick: 5 options. Second must be different: 4 options. Total 5*4=20.
+
+In code:
+
+same[2][1] = same[1][1] (0) + diff[1][1] (0) =0.
+
+diff[2][1] = (5 +0) *4 =20.
+
+sum is 20. Correct.
+
+Thus, the code seems correct.
+</think>
+To solve this problem, we need to determine the number of ways to paint `n` bricks using `m` colors such that exactly `k` bricks have a different color from their immediate left neighbor. The result should be computed modulo 998244353.
+
+### Approach
+The problem can be efficiently solved using dynamic programming (DP). The key idea is to track two states for each position and each possible number of color changes:
+1. `same[i][j]`: The number of ways to paint the first `i` bricks with `j` changes where the `i-th` brick is the same color as the `(i-1)-th` brick.
+2. `diff[i][j]`: The number of ways to paint the first `i` bricks with `j` changes where the `i-th` brick is a different color from the `(i-1)-th` brick.
+
+#### Transitions:
+1. **Same Color Transition**: If the `i-th` brick is the same as the `(i-1)-th` brick, the number of ways is the sum of the ways where the `(i-1)-th` brick was either the same as the `(i-2)-th` brick or different.
+2. **Different Color Transition**: If the `i-th` brick is different from the `(i-1)-th` brick, the number of ways is derived from all previous ways where the `(i-1)-th` brick could be either the same or different, multiplied by `(m-1)` possible color choices.
+
+### Solution Code
+```python
+n, m, k = map(int, input().split())
+mod = 998244353
+
+if k > n - 1:
+    print(0)
+    exit()
+
+# Initialize DP tables
+same = [[0] * (k + 1) for _ in range(n + 1)]
+diff = [[0] * (k + 1) for _ in range(n + 1)]
+
+same[1][0] = m % mod  # First brick can be any color, no changes possible
+
+for i in range(2, n + 1):
+    max_j = min(k, i - 1)
+    # Update same[i][j] for all j in 0..max_j
+    for j in range(0, max_j + 1):
+        same[i][j] = (same[i - 1][j] + diff[i - 1][j]) % mod
+    # Update diff[i][j] for j starting from 1
+    for j in range(1, max_j + 1):
+        prev_j = j - 1
+        sum_prev = (same[i - 1][prev_j] + diff[i - 1][prev_j]) % mod
+        diff[i][j] = (sum_prev * (m - 1)) % mod
+
+ans = (same[n][k] + diff[n][k]) % mod
+print(ans)
+```
+
+### Explanation
+1. **Initialization**: The first brick can be painted in `m` ways, which initializes `same[1][0] = m`.
+2. **Dynamic Programming Transitions**:
+   - For each subsequent brick `i`, compute the number of ways to paint up to `i` bricks with `j` changes.
+   - Update `same[i][j]` by considering both cases where the previous brick was the same or different.
+   - Update `diff[i][j]` by considering transitions from previous states where a new color change is introduced.
+3. **Result Calculation**: The final result is the sum of ways where the last brick is either the same or different, modulo 998244353.
+
+This approach efficiently computes the number of valid colorings using dynamic programming with a time complexity of O(n*k), which is feasible given the problem constraints.
+</bot>

@@ -1,0 +1,721 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.We have a string s consisting of lowercase English letters. Snuke is partitioning s into some number of non-empty substrings. Let the subtrings obtained be s_1, s_2, ..., s_N from left to right. (Here, s = s_1 + s_2 + ... + s_N holds.) Snuke wants to satisfy the following condition:
+
+* For each i (1 \leq i \leq N), it is possible to permute the characters in s_i and obtain a palindrome.
+
+
+
+Find the minimum possible value of N when the partition satisfies the condition.
+
+Constraints
+
+* 1 \leq |s| \leq 2 \times 10^5
+* s consists of lowercase English letters.
+
+Input
+
+Input is given from Standard Input in the following format:
+
+
+s
+
+
+Output
+
+Print the minimum possible value of N when the partition satisfies the condition.
+
+Examples
+
+Input
+
+aabxyyzz
+
+
+Output
+
+2
+
+
+Input
+
+byebye
+
+
+Output
+
+1
+
+
+Input
+
+abcdefghijklmnopqrstuvwxyz
+
+
+Output
+
+26
+
+
+Input
+
+abcabcxabcx
+
+
+Output
+
+3
+</user>
+<bot>
+<think>
+Okay, so I need to find the minimum number of partitions for a string such that each partition can be rearranged into a palindrome. Let's think about what that means.
+
+A string can be rearranged into a palindrome if and only if at most one character has an odd count. Because for even length, all characters must have even counts. For odd length, exactly one character has an odd count. So for each substring in the partition, this condition must hold.
+
+The problem is to split the original string into the least number of such substrings. Hmm. How do I approach this?
+
+Let me think of dynamic programming. Maybe the state can be the current position, and the value is the minimum number of partitions up to that point. But how do I track the necessary information to check the palindrome condition for the next possible substring?
+
+Wait, but the key is that each substring must satisfy the even counts except for one. So when building the substrings, we need to track the parity (even or odd) of each character's count. Because for the current substring, the parity flips each time a character is added. For example, adding a 'a' toggles the parity of 'a's count.
+
+So maybe, for each position, I can track a bitmask where each bit represents the parity (0 for even, 1 for odd) of each character. Then, for a substring to be a valid partition, the bitmask must have at most one set bit. Because that would mean that the total counts of each character in the substring have at most one odd count.
+
+Wait, no. Wait, the bitmask represents the current state of counts. Wait, the bitmask would represent the parity of each character. If the entire substring's parity is represented by the XOR of the initial and current state. Wait, maybe not. Let's think again.
+
+Suppose we start at position i, and end at position j. The parity of each character from i to j is the count of that character modulo 2. So for the substring s[i..j], each character's count mod 2 is the parity for that substring. To be a valid partition, the number of 1s in this parity must be 0 or 1.
+
+So the idea is to find the earliest positions where the parity from the start of the substring has at most one 1.
+
+So, maybe the approach is to use dynamic programming where dp[i] is the minimum number of partitions up to position i.
+
+How do we compute dp[j]? For each j, we look back at all possible i where the substring s[i+1..j] is valid (i.e., the parity of the substring has at most one 1). Then dp[j] = min(dp[i] + 1) for all valid i.
+
+But considering the string can be up to 2e5 characters, this approach would be O(n^2), which is way too slow.
+
+Hmm, so that's not feasible. So we need a way to track possible states more efficiently.
+
+Wait, let's think about the parity state. The parity state is a 26-bit mask. Each bit represents whether the count of that character is odd (1) or even (0). For the substring ending at position j, the current state is the cumulative XOR from the start of the substring to j.
+
+So, for each j, if we can track all possible parity masks that could end a substring at j, then for each such mask, we check if it has at most one 1. If it does, then the substring can form a valid partition.
+
+But how do we track this efficiently?
+
+Alternative idea: for each position j, keep track of the current parity mask up to j. Then, for each possible previous position i, the parity mask from i+1 to j is the current mask at j XOR the mask at i. Because the cumulative parity up to j is mask_j, and up to i is mask_i. So the parity for the substring i+1 to j is mask_j XOR mask_i.
+
+We want mask_j XOR mask_i to have at most one set bit.
+
+So for each j, we need to find all masks that when XORed with mask_j result in a mask with at most one set bit. Then, among those, find the earliest i (so that the dp[i] is as small as possible) and set dp[j] to dp[i] + 1.
+
+But again, how to track this efficiently.
+
+Wait, the possible masks that XOR with mask_j to have at most one set bit. Let's think about that. For a given mask_j, what masks x would satisfy x XOR mask_j has at most one bit set?
+
+That means mask_j XOR x can be 0 (all bits even, which is allowed), or a single bit set (exactly one character has an odd count).
+
+So, the possible x's are mask_j XOR (a mask with 0 or 1 bit set). For example, x can be mask_j (since XOR with mask_j gives 0) or mask_j XOR (a mask with exactly one bit set). Because then x XOR mask_j would be that mask.
+
+Wait, no. Let's see: x XOR mask_j = mask with 0 or 1 bits. So x can be mask_j (gives 0), or mask_j XOR (mask with exactly one bit set) (gives that single bit).
+
+So for each j, the possible x's (masks that we have seen in previous positions) are those where x is in the set { mask_j ^ y | y is a mask with 0 or 1 bits set }.
+
+So for each j, we can compute the set of possible x's that, if present in the previous masks, would allow a valid partition ending at j.
+
+Then, for each x in this set, if we have a mask stored from some i where mask_i = x, then dp[j] could be min(dp[i] + 1) over all such i.
+
+So the approach would be:
+
+- Keep a dictionary (or array) that maps a mask to the earliest position where that mask was encountered, along with the minimum dp value for that mask.
+
+Wait, but for each x in the possible set, we need the minimum dp value for x, because we want the smallest possible partitions.
+
+So, for each j, we generate all possible x's (masks that can form a valid partition when XORed with current mask_j). For each x in the possible set, if x exists in our map, then we can take the dp value for x (dp[i]) and add 1 to get a candidate for dp[j].
+
+The minimum of all these candidates is the dp[j].
+
+So the key is to precompute all possible x's that would allow mask_j XOR x to have at most 1 bit set. Then, for each x in that set, check if x exists in the map of previously seen masks and their minimum dp values. Then, take the minimum of those and set dp[j] to that.
+
+Moreover, we need to track the masks and their minimum dp values as we process each character.
+
+Let me formalize this.
+
+Initialize a dictionary (or hash map) called mask_dp. This will store the minimum number of partitions (dp value) for each mask encountered so far.
+
+Initially, before processing any characters, the mask is 0 (all counts even). So mask_dp starts with {0: 0}.
+
+Then, for each position j from 0 to n-1:
+
+1. Update the current mask by flipping the bit corresponding to the current character. For example, if the current character is 'a', we toggle the 0th bit.
+
+2. Generate all possible masks x such that x XOR current_mask has <=1 bit set. These x's are the ones that, when XORed with current_mask, form a valid partition ending at j.
+
+3. For each x in this set, if x is present in mask_dp, then the candidate dp value is mask_dp[x] + 1.
+
+4. The dp[j] (or the current state's dp) is the minimum of these candidates.
+
+5. Then, we need to update the mask_dp with the current_mask and the current dp value. However, since multiple masks can be stored, but we only need the minimum dp for each mask. So, if the current_mask is not in mask_dp, or if the new dp value is less than the existing one, we update it.
+
+But wait, how does this work for overlapping possibilities? Because for each step j, the current mask is the cumulative parity up to j. Then, for the next steps, this mask can be used to form new partitions.
+
+Wait, let's see with an example. Suppose the string is "aabxyyzz".
+
+The first partition could be "aabxyyz" (but wait, let's see the example's output is 2. Hmm.)
+
+Wait, the first example input is "aabxyyzz", output 2. So the optimal partition is two substrings. How?
+
+Looking at the characters:
+
+a a b x y y z z
+
+The first substring could be 'aabx' and the rest 'yyzzz'? Wait, no. Let's see:
+
+Wait, 'aabx' has counts: a:2 (even), b:1 (odd), x:1 (odd). So two odd counts. That's invalid. So that can't be.
+
+Wait, maybe the first partition is 'aabxyy' and the next 'zz'.
+
+Wait, 'aabxyy' has counts: a:2, b:1, x:1, y:2. So two odd counts (b and x). That's invalid again.
+
+Hmm. The example output is 2. Let's think of a way to split into two parts where each part can be permuted into a palindrome.
+
+The correct split is 'aabxyyzz' is split into two parts. Wait, maybe 'aab' and 'xyyzzz'? Let's see:
+
+First part 'aab' counts: a:2, b:1. That's one odd (valid). Second part 'xyyzzz' has x:1, y:2, z:3. z has odd count. So that's one odd (valid). So two partitions. That would work. So the split is after index 2.
+
+So the approach would need to find such splits.
+
+Back to the algorithm. For each j, the current mask is the parity after processing j characters. Then, for each possible x in the set of masks that can form a valid partition when XORed with current mask, we check if x is present in the mask_dp. The mask_dp stores the minimum number of partitions needed to reach mask x up to some position before j.
+
+Wait, but how does the mask_dp work? For example, when we process j-th character, the mask is updated. Then, the possible x's are the masks that, when XOR with current mask, have <=1 set bits. So the current substring (from i+1 to j) has parity mask x XOR current mask. For that to be valid, that mask must have <=1 set bits. So x can be current_mask (so x XOR current_mask is 0, which is valid), or x can be current_mask ^ (mask with exactly one bit set) (so x XOR current_mask is that mask, which is valid if only one bit is set).
+
+So for each j, the possible x's are current_mask and current_mask ^ (1 << k) for each k from 0 to 25. That's 27 possibilities in total.
+
+So for each j, we generate these 27 possible x's and check if they are in mask_dp. Then, for each x found in mask_dp, the candidate is mask_dp[x] + 1. The minimum of these candidates is the current dp value.
+
+Then, we need to update the mask_dp. For the current mask, we can keep the minimum dp value encountered so far. So if the current mask is not in the mask_dp, we add it with the current dp value. Otherwise, if the current dp value is smaller than the existing one, we update it.
+
+This approach would be O(n * 26) time, which is acceptable for n up to 2e5.
+
+Wait, because for each of the n characters, we check 27 possible x's (the 26 possible masks with one bit set, plus the current_mask). For each of these, we check if x is present in the mask_dp, which is a hash map with O(1) lookups. So the total time is O(n * 26), which is 2e5 *26 =5.2e6 operations, manageable.
+
+So this approach should work.
+
+Now, let's think about how to implement this.
+
+Initialize mask_dp with {0:0}. The initial mask is 0 (before processing any characters). The dp value here is 0, since 0 partitions are needed for the empty string.
+
+Then, for each character in the string:
+
+1. Update the current mask by XORing with the bit corresponding to the current character.
+
+   For example, if the character is 'a', then mask ^= 1 << 0.
+
+2. Generate all possible x's: the current_mask, and current_mask ^ (1 << k) for each k in 0..25.
+
+3. For each x in this list, check if x exists in mask_dp. If so, collect the value mask_dp[x] + 1.
+
+4. The minimum of these values is the current dp value. If no x is found, then it's impossible, but according to the problem statement, each character can be a single partition, so it's always possible.
+
+5. Then, update the mask_dp: if the current_mask is not present, or the current dp value is less than the existing value for current_mask, then update it.
+
+Wait, but why do we update the mask_dp with the current_mask and the current dp value? Because in future steps, other positions can use the current_mask to form a valid partition.
+
+But here's the key: the mask_dp stores for each mask, the minimal number of partitions needed to reach that mask. So when we process position j, the mask after j is the current_mask. The next steps (j+1) can use this mask to compute their possible x's.
+
+So for example, if in step j, the mask is M, and the minimal number of partitions to reach M is dp[j], then in future steps, if another position j' has mask M again, but with a higher dp[j'], we can ignore it, because the earlier entry (with lower dp) is better.
+
+Therefore, when we process each character, after computing the current mask and the current dp, we check if the current mask is already in mask_dp. If the current dp is better (smaller) than the existing value, we update it. Otherwise, we leave it as is.
+
+This way, mask_dp always holds the minimal dp value for each mask encountered so far.
+
+So the steps are:
+
+Initialize mask_dp as {0:0}.
+
+current_mask = 0
+
+for each char in s:
+
+    current_mask ^= (1 << (ord(char) - ord('a')))
+
+    min_partitions = infinity
+
+    # check x = current_mask (so mask_j XOR x is 0)
+    if current_mask in mask_dp:
+        min_partitions = min(min_partitions, mask_dp[current_mask] + 1)
+
+    # check x = current_mask ^ (1 << k) for each k
+    for k in 0..25:
+        x = current_mask ^ (1 << k)
+        if x in mask_dp:
+            min_partitions = min(min_partitions, mask_dp[x] + 1)
+
+    # if none found (shouldn't happen), but in case, default to something
+    # but according to the problem, each character can be a partition, so min_partitions would be previous min +1? Not sure.
+
+    # Now, update the mask_dp for current_mask
+    if current_mask in mask_dp:
+        if min_partitions < mask_dp[current_mask]:
+            mask_dp[current_mask] = min_partitions
+    else:
+        mask_dp[current_mask] = min_partitions
+
+Wait, but the code as above for the min_partitions may have min_partitions as the minimal among all possible x's. Then, after processing, the mask_dp for current_mask is updated to the min_partitions. But wait, the mask_dp for current_mask would be the minimal partitions up to this position, right?
+
+Wait, no. Because the mask_dp is supposed to track the minimal number of partitions up to the current position. For example, if the current mask is M, then the minimal partitions up to here is min_partitions. So when we update mask_dp[M], we need to see if this is the first time we've encountered M, or if the previous value was higher.
+
+So for example, if we have M in mask_dp with value 3, and the current min_partitions is 2, then we update it to 2.
+
+But how do we compute min_partitions? Because min_partitions is the minimal possible partitions up to the current position. So for example, the current mask M is the XOR after processing this character. The min_partitions is the minimal number of partitions possible for the substring ending at this character.
+
+Thus, after processing each character, the current_mask is the XOR up to that character, and the min_partitions is the minimal partitions for that position. Then, we need to store that in mask_dp for future steps.
+
+But what if the current_mask was already present in mask_dp with a lower value? For example, suppose previous steps had the same mask with a lower partitions count. Then, we should not overwrite it. Because the existing entry is better.
+
+Wait, no. Because the mask_dp is supposed to track the best (minimal) dp value for each mask. So when processing the current character, the current_mask's dp is min_partitions. We need to check if the existing entry in mask_dp for current_mask has a higher value than min_partitions. If so, we update it. Otherwise, leave it.
+
+So the code would be:
+
+current_min = min_partitions
+
+if current_mask in mask_dp:
+
+    if current_min < mask_dp[current_mask]:
+
+        mask_dp[current_mask] = current_min
+
+else:
+
+    mask_dp[current_mask] = current_min
+
+But wait, the mask_dp is tracking the minimal dp values for each mask. So when we process a character, the current_mask's dp value is current_min. So, if there's a previous entry for current_mask in mask_dp, and its value is lower than current_min, then we should not update it. Because the previous entry is better.
+
+Wait, that's a problem. Let me think again.
+
+For example, suppose mask_dp has mask M with value 2. Then, processing the next character gives a new mask M (same as before) and the current_min is 3. Then, the existing entry (2) is better than current_min (3), so we don't update. Because future steps would want to use the minimal possible.
+
+But how does that work?
+
+No. Because in this case, the current_min is the minimal partitions up to this current position. But the existing entry in mask_dp for mask M was from a previous position, which has a lower dp value. So for future steps, using that previous entry would be better.
+
+So in the code, when we process a character, compute current_min as the minimal possible partitions for the current position. Then, when updating mask_dp, if the current_mask is not present in mask_dp, add it with current_min. If it is present, compare current_min with the existing value. If current_min is smaller, then update. Otherwise, leave the existing (smaller) value.
+
+But wait, the current_min is the minimal possible for the current position, but the mask_dp stores the minimal dp values for each mask. So when you process a character, you generate a mask, and compute the current_min (the minimal partitions up to this point). Then, for the mask_dp, you need to update the entry for the current_mask to be the minimum between the existing value (if any) and current_min.
+
+Because if the mask_dp already has a lower value, there's no need to update. But if the current_min is lower, then that's better for future steps.
+
+Yes. So the code for updating mask_dp should be:
+
+mask_dp[current_mask] = min(current_min, mask_dp.get(current_mask, float('inf')))
+
+Wait, that's correct. Because:
+
+If mask_dp doesn't have current_mask, then mask_dp.get returns infinity, so current_min is the min, which is stored.
+
+If mask_dp has current_mask with value v, then min(current_min, v) is stored. So whichever is smaller.
+
+But wait, the current_min is the minimal possible partitions for the current position (i.e., up to j). The existing value in mask_dp could be from a previous position i, which had a mask equal to current_mask. So, for future steps, the mask_dp would have the best possible (minimal) dp value for each mask.
+
+But how can the existing value in mask_dp be smaller than current_min?
+
+Because mask_dp is built from previous positions. For example, suppose previous position i had mask M with dp value 2. Now, current position j has mask M again, but current_min is 3. Then, the existing entry is better (2), so we should not update mask_dp[M] to 3.
+
+So the code should take the minimum between the existing value and current_min. Wait, but current_min is the minimal possible value for the current position j. How could the existing value be lower than current_min?
+
+Because mask_dp holds the minimal dp values for each mask. So, when processing j, the current_min is the minimal possible partitions up to j. But mask_dp holds the minimal partitions up to previous positions. So when mask_dp has a value for mask M that is less than current_min, that means that there's a previous position where the mask was M and the partitions were fewer than the current_min. So in that case, the existing entry is better, so we should not update it. Therefore, the correct code is to keep the mask_dp entry as the minimum between the existing value and the current_min.
+
+Wait, no. Because the existing value in mask_dp is the minimal partitions up to some previous position i where the mask was M. The current_min is the minimal partitions up to position j. For mask M, the minimal partitions up to j is current_min, which may be higher than the existing value. So, for future steps, it's better to use the existing value (from i) when possible, because it's smaller.
+
+Thus, for mask_dp[M], the value should be the minimal between all the dp values of positions where the mask was M.
+
+So, when processing position j, after computing current_min, we check if mask_dp already has M. If it does, and the existing value is smaller than current_min, then we leave it as is. Otherwise, we update it to current_min.
+
+So the code is:
+
+if current_mask is in mask_dp:
+
+    if mask_dp[current_mask] > current_min:
+
+        mask_dp[current_mask] = current_min
+
+else:
+
+    mask_dp[current_mask] = current_min
+
+But wait, that's not taking the minimum. For example, if mask_dp has M with 2, and current_min is 3, then we do not update. If mask_dp has M with 4, and current_min is 3, then we update to 3.
+
+So, the code would be:
+
+existing_value = mask_dp.get(current_mask, float('inf'))
+
+mask_dp[current_mask] = min(existing_value, current_min)
+
+Yes, this is correct.
+
+So, in code:
+
+mask_dp[current_mask] = min(mask_dp.get(current_mask, float('inf')), current_min)
+
+So, for each character, after computing current_min, we check if the current_mask is in the mask_dp, and update it to the minimum of the existing value and current_min.
+
+This way, mask_dp always holds the minimal number of partitions required to achieve each mask.
+
+So, the steps are:
+
+Initialize mask_dp with {0:0}.
+
+current_mask = 0
+
+for each char in s:
+
+    current_mask ^= (1 << (ord(char) - ord('a')))
+
+    current_min = infinity
+
+    # check x = current_mask (XOR gives 0)
+    if current_mask in mask_dp:
+        current_min = min(current_min, mask_dp[current_mask] + 1)
+
+    # check x = current_mask ^ (1 << k) for each k
+    for k in range(26):
+        x = current_mask ^ (1 << k)
+        if x in mask_dp:
+            current_min = min(current_min, mask_dp[x] + 1)
+
+    # if all possibilities are not present (which shouldn't happen as each character can be split)
+    # but just in case, set current_min to something. Like, if current_min is still infinity, then set to previous min +1. But how?
+
+    # Now, update mask_dp for current_mask
+
+    mask_dp[current_mask] = min(mask_dp.get(current_mask, float('inf')), current_min)
+
+Wait, but current_min could be infinity. How can that be? Because initially, mask_dp has {0:0}. For the first character, let's say 'a'.
+
+current_mask becomes 1 << 0 = 1 (binary 000...0001).
+
+Then, possible x's are current_mask (1) and x = 1 ^ (1 <<k) for each k.
+
+For x = current_mask (1), check if it's in mask_dp. Initially, mask_dp has 0:0. So x is 1, which is not in mask_dp. So current_min remains infinity.
+
+Then for each k in 0-25, x = 1 ^ (1 <<k). For k=0, x = 0. Which is in mask_dp. So current_min = 0 +1 =1.
+
+So current_min becomes 1.
+
+Then, mask_dp is updated for current_mask (1) to min(inf, 1) → 1.
+
+So for the first character, current_min is 1. So the minimal partitions for the first character is 1. Which makes sense, as you have to split into one partition (the first character itself). Because 'a' can form a palindrome.
+
+But wait, for the first character 'a', the mask is 1. The substring is just 'a', which has one odd count (valid). So the minimal partition is 1. Which is correct.
+
+So the code works.
+
+Another example: the third input, 'abcdefghijklmnopqrstuvwxyz', each character appears once. So each character must be a separate partition. So the output is 26.
+
+Let's see how the code would handle this.
+
+mask_dp starts with {0:0}.
+
+Processing first character 'a':
+
+current_mask becomes 1 <<0 =1.
+
+Check x=1 (not in mask_dp). Then check x=1 ^ (1 <<k) for each k.
+
+For k=0, x=0, which is in mask_dp. So current_min is 0+1=1.
+
+mask_dp[1] = min(inf, 1) → 1.
+
+Processing next character 'b' (mask 1<<1=2 → mask becomes 1 ^2=3).
+
+Check x=3. Not in mask_dp (which has 0 and 1). Then check x=3 ^ (1<<k) for each k.
+
+For example, x=3 ^1=2 (mask_dp has 0 and 1, not 2). For k=1, x=3 ^2=1 (mask_dp has 1 → dp is 1. So current_min becomes 1+1=2.
+
+So the current_min is 2. So the minimal partitions after two characters is 2.
+
+mask_dp[3] is updated to 2.
+
+Next character 'c' (mask 3 ^4=7).
+
+Check x=7. Not in mask_dp.
+
+Then for each k, x=7 ^ (1<<k). For k=2, 7 ^4=3 → which is in mask_dp (mask 3 has value 2). So current_min is 2+1=3.
+
+So after 3 characters, the minimal partitions is 3.
+
+And so on. Each step adds 1, leading to 26 partitions at the end.
+
+This works.
+
+So the code seems to handle that.
+
+Now, let's test the second example: input 'byebye' → output 1.
+
+The string is 'byebye'. Let's see:
+
+Each character count is:
+
+b:2, y:2, e:2 → all even. So the entire string can be partitioned into one substring. So the mask is 0 (even counts for all). So when processing all characters, the mask is 0.
+
+But how does the code reach this?
+
+Let's walk through:
+
+mask_dp starts with 0:0.
+
+Processing each character:
+
+First character 'b' (mask 1<<1 =2 → mask=2).
+
+Check x=2 (not in mask_dp). For k in 0-25:
+
+x=2 ^ (1<<k). For k=1 (the same as the character's bit), x=0. Which is in mask_dp with value 0. So current_min =0+1=1.
+
+mask_dp[2] =1.
+
+Second character 'y' (ord('y')-ord('a') =24. mask is 2 ^ (1<<24) = 2 | (1<<24). Let's call this mask M1.
+
+Check x=M1. Not in mask_dp. Then, check x=M1 ^ (1<<k) for each k.
+
+For k=24 (the same as the character), x = M1 ^ (1<<24) → 2. Which is in mask_dp with value 1. So current_min =1+1=2.
+
+mask_dp[M1] =2.
+
+Third character 'e' (mask 4). So mask becomes M1 ^4 = (2 | (1<<24)) ^4. Let's call this M2.
+
+Check x=M2. Not in mask_dp. For each k, x = M2 ^ (1<<k). For k=4 (e is 4), x = M2 ^4 = M1. Which is in mask_dp with value 2. current_min =2+1=3.
+
+mask_dp[M2] =3.
+
+Fourth character 'b' (mask 1<<1=2. So current_mask becomes M2 ^2 = (2 | (1<<24) ^4) ^2 → (1<<24) ^4.
+
+Check x= (1<<24) ^4. Not in mask_dp. For k=1, x= (1<<24)^4 ^2 → (1<<24) ^4 ^2. Not sure. But perhaps the code finds x= M2 ^2 ^ (1<<k) for some k. Wait, no. For the code, x is current_mask (which is (1<<24)^4^2) XOR (1<<k). Wait, perhaps in the code, when processing the fourth character 'b', the current_mask is the previous mask (after third character) XOR with 2.
+
+But let's think, after third character, mask is M2. Fourth character is 'b' → 1<<1=2. So mask becomes M2 ^2.
+
+But this is getting complicated. Let's skip the detailed steps and think: after processing all six characters, the mask would be 0. Because each character appears even times. So the mask would be 0.
+
+At that step, the code would check x=0. Which is in mask_dp. The mask_dp at that point would have entries for previous masks, but when processing the sixth character, the current_mask is 0.
+
+So for the sixth character:
+
+current_mask is 0.
+
+Check x=0. Which is in mask_dp (initially 0:0). So current_min is 0+1=1.
+
+Then, for each k, x=0 ^ (1<<k). Check if any of these are in mask_dp. For example, 1<<k for any k, but mask_dp may have some of them.
+
+But the minimal current_min is 0+1=1. Then, mask_dp[0] is updated to min(existing 0, current_min 1). So mask_dp[0] remains 0.
+
+But wait, after processing the sixth character, the current_min is 1 (from x=0 in mask_dp, which is 0:0. So 0+1=1). Then, the code would set mask_dp[0] to min(0,1) → 0. So the mask_dp entry for 0 remains 0.
+
+But how does the code compute the answer?
+
+The answer is the current_min after processing all characters. Because the current_min represents the minimal partitions up to the last character.
+
+Wait, in the code, after processing each character, current_min is the minimal partitions up to that character. So the final answer is current_min after processing all characters.
+
+But in the code, after processing each character, current_min is computed and mask_dp is updated. So the code should return current_min after processing the entire string.
+
+Yes. So, the code would return current_min after processing all characters, which is the minimal number of partitions.
+
+In the 'byebye' example, after processing all six characters:
+
+current_mask is 0.
+
+So, when checking x=0 (which is in mask_dp with value 0), current_min becomes 0 +1 =1. Then, since there are other x's (0 ^ (1<<k) for each k), but even if some are in mask_dp, the minimal current_min is 1. So the final answer is 1, which matches the example.
+
+Thus, the code should work.
+
+Now, to implement this in Python.
+
+The steps are:
+
+Read the input string.
+
+Initialize mask_dp as a dictionary with {0:0}.
+
+Initialize current_mask as 0.
+
+current_min starts as infinity for each step.
+
+For each character in the string:
+
+   current_mask ^= (1 << (ord(c) - ord('a')))
+
+   compute the possible x's (current_mask and current_mask ^ (1<<k) for k in 0-25).
+
+   for each x in this list:
+
+       if x is in mask_dp:
+
+           candidate = mask_dp[x] + 1
+
+           current_min is the minimum of current_min and candidate.
+
+   then, update mask_dp for current_mask as min(existing value, current_min)
+
+The final answer is current_min after processing all characters.
+
+But wait, in the code, after each character, current_min is computed, and mask_dp is updated. So after processing the last character, the current_min is the minimal partitions.
+
+Yes.
+
+But what if current_min is still infinity after processing a character? That's impossible because each character can be a partition. For example, even if the code can't find any x's, the worst case is to split into individual characters. So how is that handled?
+
+Wait, in the code, the current_min is computed as the minimal among the possible x's. However, in the worst case, the code would choose to split the current character into a new partition, which is always possible. For example, if there's no x's found, then current_min would be the previous step's mask_dp's current_min plus 1. Wait, but how is that handled?
+
+No. Because the code for each step considers all possible x's. But if none are found, the code would set current_min to infinity, which is not possible.
+
+But since each individual character can be a valid partition (since a single character is a palindrome), then for any position j, there's always a way to split up to j into j partitions, each being a single character. So the code must find a valid x in each step.
+
+But why?
+
+Because for each step j, the code checks x's that allow the substring ending at j to be valid. For example, even if j is the first character, the code can split into a single character. So the code must find at least one x that allows current_min to be set.
+
+Let me see. For the first character, the code checks x= current_mask (which is 1<<0). If x is not in mask_dp, then check x= current_mask ^ (1<<k) for all k. For k=0, x=0, which is in mask_dp. So current_min becomes 0+1=1. So it's handled.
+
+For the second character, if the first character's mask was 1, then current_mask after second character is 1 ^ mask of second character. Suppose the second character is 'b', current_mask becomes 3.
+
+Check x=3. Not in mask_dp (which has 0 and 1). Then check x=3 ^ (1<<k) for each k. For example, if the second character is 'b' (k=1), then x=3 ^ (1<<1) = 3-2=1. Which is in mask_dp (value 1). So current_min is 1+1=2. So the partitions would be two.
+
+But if the code can't find any x's, but that's impossible.
+
+Thus, the code will always find a valid x, and current_min will not be infinity.
+
+So the code is safe.
+
+Now, to implement this in Python.
+
+The code would read s from stdin, then process each character.
+
+But since the string can be up to 2e5 characters, we need to process it efficiently.
+
+In Python, using a dictionary to track mask_dp is acceptable.
+
+Now, code:
+
+Read s from input.
+
+mask_dp = {0:0}
+
+current_mask = 0
+
+for c in s:
+
+    current_mask ^= 1 << (ord(c) - ord('a'))
+
+    min_val = float('inf')
+
+    # check x = current_mask
+    if current_mask in mask_dp:
+        min_val = mask_dp[current_mask] +1
+
+    # check x = current_mask ^ (1<<k) for all k in 0-25
+    for k in range(26):
+        x = current_mask ^ (1 << k)
+        if x in mask_dp:
+            if mask_dp[x] +1 < min_val:
+                min_val = mask_dp[x] +1
+
+    # update the mask_dp for current_mask
+    if current_mask in mask_dp:
+        if min_val < mask_dp[current_mask]:
+            mask_dp[current_mask] = min_val
+    else:
+        mask_dp[current_mask] = min_val
+
+print(min_val)
+
+Wait, but after processing each character, min_val is the minimal partitions up to that character. So after processing all characters, min_val is the answer.
+
+Yes.
+
+Let's test the examples.
+
+First example:
+
+Input: aabxyyzz → output 2.
+
+Let's see:
+
+Processing the characters:
+
+Let's track current_mask and min_val.
+
+Initial mask_dp {0:0}.
+
+First character 'a' (0^1=1). Check x=1 (not in mask_dp). Check x=1^ (1<<0) =0 → in mask_dp. So min_val=0+1=1. mask_dp[1] =1.
+
+Second character 'a' (1^1=0). Check x=0 (in mask_dp, value 0 → 0+1=1). Also check x=0^ (1<<k) for each k. For example, x=1 (if k=0), which is in mask_dp with value 1. So 1+1=2. So min_val is min(1, 2, ...) → 1. So mask_dp[0] is updated to min(0, 1) →0. So the min_val here is 1.
+
+Third character 'b' (0 ^ (1<<1) =2. Check x=2 (not in mask_dp). Check x=2^ (1<<1) =0. Which is in mask_dp with value 0. So min_val=0+1=1. mask_dp[2] =1.
+
+Fourth character 'x' → ord('x')-ord('a') =23. current_mask becomes 2 ^ (1<<23). Let's call this mask M. Check x=M (not in mask_dp). Then check x=M ^ (1<<k) for each k. For k=23, x=2. Which is in mask_dp with value 1. So min_val=1+1=2. So mask_dp[M] =2.
+
+Fifth character 'y' (k=24). current_mask ^= (1<<24). Check x=current_mask (M^ (1<<24)). Check x in mask_dp → no. Check x= current_mask ^ (1<<k) for each k. For k=24, x=M. Which is in mask_dp with value 2. So min_val=2+1=3. Also check other k's. For example, maybe another k where x is present in mask_dp. But perhaps in this case, the minimal is 3.
+
+But this depends on the exact mask. However, after processing all characters, the code will calculate the correct min_val.
+
+But perhaps after processing all characters, the minimal partitions is 2.
+
+But I'm not going to step through all steps. The code should handle it correctly.
+
+Thus, the code should work.
+
+Now, test the third example: input 'abcdefghijklmnopqrstuvwxyz' → output 26.
+
+Each character is processed. For each step, the current_mask is toggling a new bit. For each step, the minimal partitions is i+1. Because the code can't find any x's that allow merging with previous partitions. For example, after processing the first character (a), the mask is 1. The only x is 0 (current_mask ^1<<0=0). So min_val=0+1=1. So partitions is 1. For the second character (b), mask is 3. The x is 3 ^1<<1=1, which is in mask_dp with value 1. So min_val=2. And so on. Each step adds 1, leading to 26 partitions.
+
+The code returns 26.
+
+Thus, the code works.
+
+So, the code should be correct.
+</think>
+To solve this problem, we need to partition a string into the minimum number of substrings such that each substring can be rearranged into a palindrome. A string can be rearranged into a palindrome if at most one character has an odd count. 
+
+### Approach
+1. **Dynamic Programming with Bitmask Tracking**: Use dynamic programming (DP) to keep track of the minimum number of partitions needed up to each position in the string. Utilize a bitmask to efficiently track the parity (even/odd) of character counts.
+2. **Bitmask Representation**: Each bit in the bitmask represents the parity of the count of a corresponding character. For example, if the 0th bit is set, it means the count of 'a' is odd.
+3. **Valid Substring Check**: For each position, check all possible previous bitmasks to determine if the substring from the previous position to the current position can form a valid palindrome. This is done by ensuring the XOR of the current bitmask and a previous bitmask results in a bitmask with at most one bit set.
+4. **Efficient Update**: Maintain a dictionary to track the minimum number of partitions required for each encountered bitmask, allowing for efficient look-up and updates.
+
+### Solution Code
+```python
+s = input().strip()
+
+mask_dp = {0: 0}
+current_mask = 0
+
+for c in s:
+    current_mask ^= 1 << (ord(c) - ord('a'))
+    
+    min_val = float('inf')
+    
+    # Check x = current_mask
+    if current_mask in mask_dp:
+        min_val = mask_dp[current_mask] + 1
+    
+    # Check x = current_mask ^ (1 << k) for each k
+    for k in range(26):
+        x = current_mask ^ (1 << k)
+        if x in mask_dp:
+            if mask_dp[x] + 1 < min_val:
+                min_val = mask_dp[x] + 1
+    
+    # Update the mask_dp for current_mask
+    if current_mask in mask_dp:
+        if min_val < mask_dp[current_mask]:
+            mask_dp[current_mask] = min_val
+    else:
+        mask_dp[current_mask] = min_val
+
+print(min_val)
+```
+
+### Explanation
+1. **Bitmask Initialization**: Start with an initial bitmask of 0 (all counts even) and a dictionary to track the minimum partitions needed for each bitmask.
+2. **Character Processing**: For each character, update the current bitmask by toggling the bit corresponding to the character.
+3. **Check Valid Partitions**: For each new bitmask, check all possible previous bitmasks that could form a valid substring ending at the current position. This includes the current bitmask itself and all bitmasks differing by exactly one bit.
+4. **Update Minimum Partitions**: Track the minimum partitions required for each bitmask encountered, updating the dictionary to ensure efficient future look-ups.
+
+This approach efficiently checks all possible valid substrings using bitmask operations, ensuring an optimal solution with a time complexity of O(n * 26), where n is the length of the string. This makes it suitable for large input sizes up to 200,000 characters.
+</bot>

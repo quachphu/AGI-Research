@@ -1,0 +1,1387 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Suppose there is a X x Y x Z 3D matrix A of numbers having coordinates (i, j, k) where 0 ≤ i < X, 0 ≤ j < Y, 0 ≤ k < Z. Now another X x Y x Z matrix B is defined from A such that the (i, j, k) element of B is the sum of all the the numbers in A in the cuboid defined by the (0, 0, 0) and (i, j, k) elements as the diagonally opposite vertices. In other word (i, j, k) in B is the sum of numbers of A having coordinates (a, b, c) such that 0 ≤ a ≤ i, 0 ≤ b ≤ j, 0 ≤ c ≤ k. The problem is that given B, you have to find out A.
+
+Input
+The first line of input will contain the number of test cases ( ≤ 10). That many test cases will follow in subsequent lines. The first line of each test case will contain the numbers X Y Z (0 ≤ X, Y, Z ≤ 100). After that there will be X x Y lines each containing Z numbers of B. The first line contains the numbers (0, 0, 0), (0, 0, 1)..., (0, 0, Z-1). The second line has the numbers (0, 1, 0), (0, 1, 1)..., (0, 1, Z-1) and so on. The (Y+1)^th line will have the numbers (1, 0, 0), (1, 0, 1)..., (1, 0, Z-1) and so on.
+
+Output
+For each test case print the numbers of A in exactly the same fashion as the input.
+
+Example
+
+Input:
+2
+3 1 1
+1 
+8 
+22 
+1 2 3
+0 9 13 
+18 45 51 
+
+Output:
+1 
+7 
+14 
+0 9 4 
+18 18 2
+</user>
+<bot>
+<think>
+Okay, I need to solve this problem where given a 3D matrix B, I have to find the original matrix A such that each element in B is the sum of all elements in A's cuboid from (0,0,0) to (i,j,k). Hmm. So the problem is essentially to reverse the inclusion-exclusion steps used to compute B from A. 
+
+Let me think about how B is formed. For each point (i,j,k) in B, it's the sum of all A[a][b][c] where a <= i, b <= j, c <= k. So this is like a 3D prefix sum. To get A from B, I need to subtract the overlapping sums that are counted multiple times. 
+
+In 2D prefix sums, to get the original value, you subtract the top and left and add back the top-left. For 3D, the inclusion-exclusion is more involved. I remember the formula for 3D: A[i][j][k] = B[i][j][k] - (sum of the previous layers in each dimension) + (sum of their intersections) - (the corner). Wait, maybe it's similar to the inclusion-exclusion principle where you subtract the contributions from the lower layers. 
+
+The formula for A[i][j][k] should be B[i][j][k] minus the contributions from all the cuboids that are subsets of the current one. Let me formalize this. 
+
+The formula in 3D would involve the inclusion-exclusion of all the previous cells. So, for each (i,j,k) in A, it's equal to B[i][j][k] minus the sum of A for cells that are in the lower dimensions. So, the inclusion-exclusion formula would be:
+
+A[i][j][k] = B[i][j][k] 
+- (if i>0 then A[i-1][j][k] else 0) 
+- (if j>0 then A[i][j-1][k] else 0) 
+- (if k>0 then A[i][j][k-1] else 0) 
++ (if i>0 and j>0 then A[i-1][j-1][k] else 0) 
++ (if i>0 and k>0 then A[i-1][j][k-1] else 0) 
++ (if j>0 and k>0 then A[i][j-1][k-1] else 0) 
+- (if i>0 and j>0 and k>0 then A[i-1][j-1][k-1] else 0)
+
+Wait, that makes sense. Because when you subtract the three adjacent cells, you've subtracted their overlapping parts too much, so you add back the pairwise overlaps, but then subtract the triple overlap again. 
+
+So for each position (i,j,k), we calculate A[i][j][k] using that formula. The key is to compute this correctly for all possible combinations of i, j, k. 
+
+Now, how do I structure the code? Let's see. The input gives the B matrix in a specific order. The first line of each test case is X, Y, Z. Then there are X*Y lines, each with Z numbers. Each line corresponds to (i,j, ...) where the lines are ordered first by i (from 0 to X-1), then by j (from 0 to Y-1). Each line has the Z elements for k from 0 to Z-1. 
+
+So for example, if X=3, Y=1, Z=1, the lines are for (0,0,0), (1,0,0), (2,0,0). So the order is i varying first, then j. Wait, the problem statement says: "The first line contains the numbers (0,0,0), (0,0,1)... (0,0,Z-1). The second line has (0,1,0), (0,1,1)... (0,1,Z-1). So j increases first, then i? Wait, wait. Let me recheck. 
+
+The problem statement says: "the first line of each test case will contain the numbers X Y Z. After that there will be X × Y lines each containing Z numbers of B. The first line contains the numbers (0, 0, 0), (0, 0, 1)..., (0, 0, Z-1). The second line has the numbers (0, 1, 0), (0, 1, 1)..., (0, 1, Z-1) and so on. The (Y+1)^th line will have the numbers (1, 0, 0), (1, 0, 1)..., (1, 0, Z-1) and so on."
+
+So, the lines are ordered in such a way that for each (i,j), there's a line. The order is: for each i from 0 to X-1, and within each i, j runs from 0 to Y-1. So the first Y lines correspond to i=0, j from 0 to Y-1. Then the next Y lines are i=1, j from 0 to Y-1, etc. So the order is i increasing first, then j. For example, X=2, Y=3: lines are i=0,j=0; i=0,j=1; i=0,j=2; i=1,j=0; i=1,j=1; i=1,j=2.
+
+So, for reading B, the input is structured as X*Y lines, each with Z numbers. Each line represents (i,j,k) for varying k (0 to Z-1). So for each (i,j), the line has all k values. 
+
+So, the B matrix can be represented as a 3D list, where B[i][j][k] is the value from the input. 
+
+Now, the task is to compute A[i][j][k] using the inclusion-exclusion formula above. 
+
+The steps for each test case would be:
+
+1. Read X, Y, Z.
+
+2. Read X*Y lines, each with Z numbers. These lines are ordered by i (0 to X-1), then j (0 to Y-1). So for each i in 0..X-1, for each j in 0..Y-1, read the line, which is the k=0 to Z-1 values. So B[i][j][k] = the k-th element in the line for (i,j).
+
+3. Compute A using the formula for each (i,j,k). 
+
+4. Output the A matrix in the same format as the input B. So, for each (i,j), output a line with Z numbers, which are A[i][j][k] for k from 0 to Z-1. 
+
+Now, the main challenge is to compute A correctly. Let's think about how to implement the formula. 
+
+For each (i,j,k), A[i][j][k] is B[i][j][k], minus the sum of A for the cells that are "previous" in each dimension, plus the overlaps, etc. 
+
+So, for each (i,j,k), we can compute A as follows:
+
+value = B[i][j][k]
+
+if i > 0:
+    value -= A[i-1][j][k]
+if j > 0:
+    value -= A[i][j-1][k]
+if k > 0:
+    value -= A[i][j][k-1]
+
+if i >0 and j>0:
+    value += A[i-1][j-1][k]
+if i>0 and k>0:
+    value += A[i-1][j][k-1]
+if j>0 and k>0:
+    value += A[i][j-1][k-1]
+
+if i>0 and j>0 and k>0:
+    value -= A[i-1][j-1][k-1]
+
+Then assign this value to A[i][j][k]. 
+
+But wait, this order depends on the previous computation of the cells. So for a 3D array, we can process the cells in order from (0,0,0) to (X-1, Y-1, Z-1). Because each A[i][j][k] depends only on cells that are before it in the 3D space (i.e., lower i, j, or k). So processing in order i from 0 to X-1, j from 0 to Y-1, k from 0 to Z-1 should work. Because when we compute A[i][j][k], all the required previous cells (like i-1, j-1, etc.) have already been computed. 
+
+So the algorithm is:
+
+Initialize A as a 3D array of the same dimensions as B.
+
+For each i in 0..X-1:
+    for each j in 0..Y-1:
+        for each k in 0..Z-1:
+            compute A[i][j][k] using the formula above.
+
+But wait, the formula requires the values of A for cells with lower indices. So, yes, processing in the order of increasing i, j, k will work.
+
+So the code can loop through i, j, k in order, and compute each A[i][j][k] based on the formula.
+
+Now, let's test this with the sample input.
+
+Sample Input:
+
+2
+3 1 1
+1 
+8 
+22 
+1 2 3
+0 9 13 
+18 45 51 
+
+First test case:
+
+X=3, Y=1, Z=1.
+
+So B is a 3x1x1 matrix. So for i from 0 to 2, j=0, k=0.
+
+So B[0][0][0] =1, B[1][0][0]=8, B[2][0][0]=22.
+
+Compute A for each (i,j,k):
+
+For (0,0,0):
+
+A[0][0][0] = B[0][0][0] =1.
+
+For (1,0,0):
+
+A[1][0][0] = B[1][0][0] - A[0][0][0] =8-1=7.
+
+For (2,0,0):
+
+A[2][0][0] = B[2][0][0] - A[1][0][0] - ... wait. Let's compute:
+
+value = 22
+
+subtract A[i-1][j][k] (i=2-1=1, j=0, k=0) → 7.
+
+No j or k subtraction since j and k are 0.
+
+No terms for i and j>0, etc.
+
+So 22 -7 =15? Wait, no, but according to the sample output for the first test case, the output is 1,7,14. So the third value is 14. Wait, how?
+
+Wait sample output first case:
+
+Output:
+
+1 
+
+7 
+
+14 
+
+So for i=0, j=0: output 1. Then i=1, j=0: 7. Then i=2, j=0:14. So how?
+
+Let's compute step by step.
+
+Test case 1:
+
+A[0][0][0] = B[0][0][0] =1.
+
+A[1][0][0] = B[1][0][0] (8) - A[0][0][0] (1) → 7.
+
+A[2][0][0] = B[2][0][0] (22) minus A[1][0][0] (7). Because j and k are 0, so other terms are zero.
+
+So 22-7=15. But sample output has 14. Hmm. Wait, perhaps the formula I have is wrong.
+
+Wait, maybe I made a mistake in the formula. Let's think again.
+
+Wait, the formula for 3D is similar to the 2D case. In 3D, the formula is:
+
+A[i][j][k] = B[i][j][k] 
+- (B[i-1][j][k] if i>0 else 0) 
+- (B[i][j-1][k] if j>0 else 0)
+- (B[i][j][k-1] if k>0 else 0)
++ (B[i-1][j-1][k] if i>0 and j>0 else 0)
++ (B[i-1][j][k-1] if i>0 and k>0 else 0)
++ (B[i][j-1][k-1] if j>0 and k>0 else 0)
+- (B[i-1][j-1][k-1] if i>0 and j>0 and k>0 else 0)
+
+Wait wait, no. Because B is the prefix sum. So the formula for A is B[i][j][k] minus the sum of all the overlapping B's. Wait no, that's not correct. Because B is the prefix sum, so the inclusion-exclusion is done on B, not on A. Wait, no. Because A is the original matrix. So the correct way to compute A is using the inclusion-exclusion on B. 
+
+Wait, I'm getting confused. Let's think again. 
+
+The problem is that B is the 3D prefix sum of A. So B[i][j][k] = sum_{a=0 to i} sum_{b=0 to j} sum_{c=0 to k} A[a][b][c].
+
+To get A[i][j][k], which is the value at (i,j,k), we can use the inclusion-exclusion principle. 
+
+In 1D, A[i] = B[i] - B[i-1] (if i>0).
+
+In 2D, A[i][j] = B[i][j] - B[i-1][j] - B[i][j-1] + B[i-1][j-1].
+
+In 3D, the formula is:
+
+A[i][j][k] = B[i][j][k] 
+- B[i-1][j][k] 
+- B[i][j-1][k] 
+- B[i][j][k-1] 
++ B[i-1][j-1][k] 
++ B[i-1][j][k-1] 
++ B[i][j-1][k-1] 
+- B[i-1][j-1][k-1]
+
+But wait, this is the standard inclusion-exclusion formula for 3D prefix sums. Oh right! So I had a mistake earlier. The formula for A[i][j][k] is based on B's values, not A's. Because B is the prefix sum. 
+
+So the correct formula is using B's previous elements. So the formula for A[i][j][k] is as above. 
+
+Wait, but in the initial approach I thought that the formula uses the A's elements. But no, perhaps I got that wrong. 
+
+So let's clarify. Let's think about 1D. Suppose B[i] is the sum of A[0..i]. Then A[i] = B[i] - B[i-1] (if i>0). So yes, the formula uses B's previous elements. 
+
+Similarly, in 2D, the formula uses B's elements, not A's. So in the 2D case, the formula for A[i][j] is B[i][j] minus B[i-1][j] (the sum up to (i-1,j)), minus B[i][j-1] (sum up to (i,j-1)), then adding back B[i-1][j-1] (since it's subtracted twice). 
+
+So applying the same logic to 3D:
+
+A[i][j][k] = B[i][j][k] 
+- B[i-1][j][k] (sum up to i-1,j,k)
+- B[i][j-1][k] 
+- B[i][j][k-1] 
++ B[i-1][j-1][k] (these two are added back because subtracting three times overlaps)
++ B[i-1][j][k-1] 
++ B[i][j-1][k-1] 
+- B[i-1][j-1][k-1] (subtracted once again for the triple overlap)
+
+So this is the correct formula. 
+
+Ah, so I had a mistake in my earlier reasoning. The formula uses the B's elements, not the A's. That's a critical error. 
+
+So this changes everything. So the code must compute A[i][j][k] based on B's elements, not the previously computed A's. 
+
+So how to proceed? For each (i,j,k), compute A[i][j][k] by applying the inclusion-exclusion formula to the B's elements. 
+
+But wait, B is the prefix sum matrix. So when we compute A[i][j][k], we can directly use B's values. 
+
+So the code would be:
+
+For each (i,j,k), compute A[i][j][k] as:
+
+sum = B[i][j][k]
+
+if i > 0:
+    sum -= B[i-1][j][k]
+if j > 0:
+    sum -= B[i][j-1][k]
+if k >0:
+    sum -= B[i][j][k-1]
+
+if i>0 and j>0:
+    sum += B[i-1][j-1][k]
+if i>0 and k>0:
+    sum += B[i-1][j][k-1]
+if j>0 and k>0:
+    sum += B[i][j-1][k-1]
+
+if i>0 and j>0 and k>0:
+    sum -= B[i-1][j-1][k-1]
+
+A[i][j][k] = sum
+
+So this is the correct formula. 
+
+Let's test this with the first sample input.
+
+Test case 1:
+
+X=3, Y=1, Z=1. So all j=0, k=0.
+
+B[0][0][0] =1 → A[0][0][0] =1 (since i=0, j=0, k=0, all other terms are 0).
+
+B[1][0][0] =8. So A[1][0][0] = B[1][0][0] - B[0][0][0] → 8-1=7. Which matches the sample.
+
+B[2][0][0] =22. So A[2][0][0] = B[2][0][0] - B[1][0][0] → 22-8=14. Which matches the sample output. 
+
+So yes, the formula is correct.
+
+Another sample case:
+
+Second test case input:
+
+1 2 3
+
+Lines:
+
+0 9 13 → this is (i=0,j=0,k=0,1,2) → B[0][0][0] =0, B[0][0][1]=9, B[0][0][2]=13.
+
+Then, 18 45 51 → this is (i=0,j=1,k=0,1,2) → B[0][1][0]=18, B[0][1][1]=45, B[0][1][2]=51.
+
+Wait, but X is 1, Y is 2. So i ranges from 0 to 0, j from 0 to 1. So each i=0, j=0: line is 0 9 13. j=1: line is 18 45 51.
+
+So let's compute A for all (0,j,k) where j is 0 or 1, and k is 0,1,2.
+
+For j=0:
+
+k=0: A[0][0][0] = B[0][0][0] → 0 (since all i,j,k are 0).
+
+k=1: A[0][0][1] = B[0][0][1] - B[0][0][0] (since k>0) → 9-0=9.
+
+k=2: A[0][0][2] = B[0][0][2] - B[0][0][1] →13-9=4.
+
+For j=1:
+
+k=0: A[0][1][0] = B[0][1][0] - B[0][0][0] (j>0) →18-0=18.
+
+k=1: A[0][1][1] = B[0][1][1] - B[0][0][1] (since j>0) - B[0][1][0] (k>0) + B[0][0][0] (since i and j are same, but since i=0, j-1=0, k=1-1=0? Wait, the formula:
+
+A[i][j][k] = B[i][j][k] 
+- (B[i-1][j][k] if i>0 else 0)
+- (B[i][j-1][k] if j>0 else 0)
+- (B[i][j][k-1] if k>0 else 0)
++ (B[i-1][j-1][k] if i>0 and j>0 else 0)
++ (B[i-1][j][k-1] if i>0 and k>0 else 0)
++ (B[i][j-1][k-1] if j>0 and k>0 else 0)
+- (B[i-1][j-1][k-1] if i>0 and j>0 and k>0 else 0)
+
+For j=1, k=1, i=0:
+
+i=0, j=1, k=1:
+
+sum = B[0][1][1] (45) 
+
+minus B[i-1][j][k] (i=0-1 invalid, so 0)
+
+minus B[i][j-1][k] (j-1=0, so B[0][0][1] =9)
+
+minus B[i][j][k-1] (k-1=0, so B[0][1][0] =18)
+
+plus B[i-1][j-1][k] → 0
+
+plus B[i-1][j][k-1] →0
+
+plus B[i][j-1][k-1] → B[0][0][0] =0
+
+minus B[i-1][j-1][k-1] →0.
+
+So sum is 45 -9 -18 +0 +0 +0 -0 = 45 -27 =18. But sample output for this case is 18 18 2.
+
+Wait, the sample output for the second test case is:
+
+0 9 4 
+
+18 18 2 
+
+Which for j=0: A[0][0][0] =0, [0][0][1]=9, [0][0][2]=4.
+
+For j=1: [0][1][0]=18, [0][1][1]=18, [0][1][2]=2.
+
+So for j=1, k=1: what's the calculation?
+
+A[0][1][1] = B[0][1][1] (45) - B[0][0][1] (9) - B[0][1][0] (18) + B[0][0][0] (0) →45-9-18+0 =18. Which matches the sample output (18).
+
+Then for j=1, k=2:
+
+A[0][1][2] = B[0][1][2] (51) 
+
+minus B[0][1][1] (45) →51-45=6
+
+minus B[0][0][2] (13) →6-13= -7
+
+minus B[0][1][1] (18) →-7-18= -25? Wait, no. Wait, let's re-calculate:
+
+Wait, in the formula:
+
+A[0][1][2] = B[0][1][2] 
+
+minus B[i-1][j][k] → i-1 is -1, so 0.
+
+minus B[i][j-1][k] → j-1=0, so B[0][0][2] =13.
+
+minus B[i][j][k-1] →k-1=1, B[0][1][1] =45.
+
+Then, plus B[i-1][j-1][k] →0.
+
+Plus B[i-1][j][k-1] →0.
+
+Plus B[i][j-1][k-1] → B[0][0][1] =9.
+
+Minus B[i-1][j-1][k-1] →0.
+
+So:
+
+51 -13 -45 +9 = 51-58+9 = 2. Which matches the sample output. 
+
+So the formula works. 
+
+Therefore, the code must compute A[i][j][k] using the formula based on B's elements. 
+
+So the code steps are:
+
+Read the test cases.
+
+For each test case:
+
+Read X, Y, Z.
+
+Read X*Y lines, each with Z numbers. Then arrange them into a 3D B matrix.
+
+Then, for each (i,j,k) in order, compute A[i][j][k] using the formula based on B's elements.
+
+Then, output the A matrix in the same format as the input B.
+
+Now, the code structure in Python.
+
+First, handling input:
+
+For each test case, read X, Y, Z.
+
+Then read X*Y lines. Each line has Z integers. These are stored in B as B[i][j][k].
+
+But how to map the lines to i and j?
+
+The lines are ordered first by i from 0 to X-1. For each i, then j from 0 to Y-1.
+
+So for i in 0 to X-1:
+
+    for j in 0 to Y-1:
+
+        line = next input line → this is the line for (i,j, 0 to Z-1).
+
+So, the code can be:
+
+B = [[[0 for _ in range(Z)] for _ in range(Y)] for _ in range(X)]
+
+for i in range(X):
+    for j in range(Y):
+        line = list(map(int, input().split()))
+        for k in range(Z):
+            B[i][j][k] = line[k]
+
+Then compute A[i][j][k] using the formula.
+
+Initialize A as a 3D list of same dimensions.
+
+A = [[[0 for _ in range(Z)] for _ in range(Y)] for _ in range(X)]
+
+Then for each i, j, k:
+
+sum_val = B[i][j][k]
+
+if i > 0:
+    sum_val -= B[i-1][j][k]
+if j > 0:
+    sum_val -= B[i][j-1][k]
+if k > 0:
+    sum_val -= B[i][j][k-1]
+
+if i >0 and j>0:
+    sum_val += B[i-1][j-1][k]
+if i>0 and k>0:
+    sum_val += B[i-1][j][k-1]
+if j>0 and k>0:
+    sum_val += B[i][j-1][k-1]
+
+if i>0 and j>0 and k>0:
+    sum_val -= B[i-1][j-1][k-1]
+
+A[i][j][k] = sum_val
+
+But wait, what if X, Y, or Z is zero? Then we have to handle those cases. The problem statement says 0 ≤ X, Y, Z ≤ 100. So for example, if X is zero, then there are no elements. So, in such cases, the code should not process anything.
+
+So, in code, we need to handle cases where X, Y, or Z is zero. For example, if X is zero, then Y and Z can be anything, but the code shouldn't process anything. Similarly for others.
+
+So, before proceeding, check that X, Y, Z are all positive. Because if any of them is zero, then the matrix is empty (since the dimensions are 0). 
+
+So in code:
+
+if X == 0 or Y ==0 or Z ==0:
+
+    # output nothing, but for each test case, the output is the same as the input format.
+
+But the problem statement says that for each test case, the output is the numbers of A in exactly the same fashion as the input. So, if X, Y, Z are zero, then there are no lines to output.
+
+So, for example, if X=0, then there are 0 lines. So, in code, we need to check whether X, Y, Z are all positive before proceeding. Otherwise, the code can skip processing.
+
+So the code should first check if X, Y, Z are all >=1. Otherwise, the matrix is empty.
+
+So, in code:
+
+if X == 0 or Y ==0 or Z ==0:
+
+    print() # but for X*Y lines, which is zero. So output nothing.
+
+else:
+
+    process the matrix.
+
+Thus, the code can proceed.
+
+Now, let's code this.
+
+But how to read the input? For example, if X=0, the input may have lines for the test case. But according to the problem statement, when X, Y, Z are zero, the input lines for B are not present. 
+
+Wait, the problem statement says that after the first line of the test case (X Y Z), there are X×Y lines each containing Z numbers of B. So if X or Y is zero, then X*Y is zero, so no lines follow. 
+
+So, for example, in a test case with X=0, Y=5, Z=5: since X×Y is 0, no lines are read. 
+
+Thus, in code, after reading X, Y, Z, the code must read X*Y lines. But if X*Y is zero, then no lines are read. 
+
+So in Python, after reading X, Y, Z, the code can read X*Y lines, but only if X*Y is positive.
+
+Thus, the code can be:
+
+for each test case:
+
+    read X, Y, Z.
+
+    if X * Y * Z == 0:
+
+        read nothing else for this test case.
+
+        output nothing (since the output is the same as input format, which has X×Y lines each with Z numbers. So if X×Y is 0, output nothing.
+
+    else:
+
+        read X*Y lines.
+
+        process the B matrix.
+
+        compute A.
+
+        output the A matrix.
+
+So, handling that in code.
+
+Putting it all together:
+
+Read T test cases.
+
+For each test case:
+
+read X, Y, Z.
+
+if X * Y * Z ==0:
+
+    output nothing.
+
+else:
+
+    read X*Y lines.
+
+    build B.
+
+    compute A.
+
+    output A in the same format.
+
+Now, in Python, the code:
+
+But note that in Python, when using list comprehensions for 3D arrays, it's important to create new lists each time. So, for example:
+
+B = [[[0 for _ in range(Z)] for _ in range(Y)] for _ in range(X)]
+
+But if X, Y, or Z is zero, this will create empty lists, but perhaps that's okay.
+
+But in code, after checking X*Y*Z is not zero, we can proceed.
+
+But to read the B matrix correctly.
+
+So, here's the code:
+
+def main():
+    import sys
+    input = sys.stdin.read().split()
+    ptr = 0
+    T = int(input[ptr])
+    ptr +=1
+    for _ in range(T):
+        X = int(input[ptr])
+        Y = int(input[ptr+1])
+        Z = int(input[ptr+2])
+        ptr +=3
+        if X ==0 or Y ==0 or Z ==0:
+            # no lines to read; output nothing.
+            print()
+            continue
+        # Read X*Y lines, each with Z numbers.
+        B = []
+        for i in range(X):
+            B.append([])
+            for j in range(Y):
+                line = list(map(int, input[ptr:ptr+Z]))
+                ptr +=Z
+                B[i].append(line)
+        # Compute A.
+        A = [[[0 for _ in range(Z)] for _ in range(Y)] for _ in range(X)]
+        for i in range(X):
+            for j in range(Y):
+                for k in range(Z):
+                    sum_val = B[i][j][k]
+                    if i >0:
+                        sum_val -= B[i-1][j][k]
+                    if j>0:
+                        sum_val -= B[i][j-1][k]
+                    if k>0:
+                        sum_val -= B[i][j][k-1]
+                    if i>0 and j>0:
+                        sum_val += B[i-1][j-1][k]
+                    if i>0 and k>0:
+                        sum_val += B[i-1][j][k-1]
+                    if j>0 and k>0:
+                        sum_val += B[i][j-1][k-1]
+                    if i>0 and j>0 and k>0:
+                        sum_val -= B[i-1][j-1][k-1]
+                    A[i][j][k] = sum_val
+        # Output A.
+        for i in range(X):
+            for j in range(Y):
+                print(' '.join(map(str, A[i][j])))
+        # But wait, the sample output shows a space at the end of each line. For example, the first sample's first line is "1 " (with a space). Wait, looking at the sample input and output:
+
+Sample Input:
+
+2
+3 1 1
+1 
+8 
+22 
+1 2 3
+0 9 13 
+18 45 51 
+
+Sample Output:
+
+1 
+7 
+14 
+0 9 4 
+18 18 2
+
+In the first test case, each line has Z=1 number, and each line ends with a space. Or perhaps each line is the numbers separated by space, but trailing space is allowed.
+
+But in the sample input, the lines are like "1 " (with a trailing space?), but perhaps the actual input is read as integers split by any whitespace. 
+
+In Python, when we split the input, leading and trailing whitespaces are ignored. So when we read a line "0 9 13 ", it's split into ['0','9','13'].
+
+So when outputting, each line should have the Z numbers separated by spaces, but according to the sample output, even when Z=1, the line has the number followed by a space. For example, the first test case's output lines are "1 ", "7 ", "14 ".
+
+But when we print(' '.join(map(str, A[i][j]))), for a list of one element, it would produce that element followed by a space. But in Python, ' '.join of a single-element list will just be the string of that element. So for example, [1] → '1'.
+
+But in the sample output, each line in the first test case ends with a space, which suggests that maybe the code should print each line with a trailing space. But that's not possible with the sample output. For example, the sample output's first line is "1 " with a space. But when you have Z=1, ' '.join would produce "1", not "1 ".
+
+Ah, but looking at the sample output, perhaps the trailing space is optional. Let me look again:
+
+Sample Output:
+
+1 
+
+7 
+
+14 
+
+0 9 4 
+
+18 18 2 
+
+The first three lines have a single number followed by a space and then a new line. So perhaps each line, after the Z numbers, is followed by a space and then a new line. But that's not standard. It's more likely that the sample output has each line's numbers printed with a space separator, and the line ends with a space. For example, the first line is "1 ".
+
+But that's not the case. Let me check the problem statement's example:
+
+Example Input:
+
+For the first test case, the input is:
+
+3 1 1
+
+1 
+
+8 
+
+22 
+
+The output is:
+
+1 
+
+7 
+
+14 
+
+Each line of output has a single number followed by a space. So when Z=1, each line is printed as "number ".
+
+But how to replicate this? The ' '.join would create "1", but the sample has "1 ".
+
+So this suggests that after each number in the line, including the last one, there's a space. But that's not possible with ' '.join. 
+
+Wait, no. Let's see:
+
+The sample input's first line for the first test case is "1 " (assuming that the input line is "1\n", but the problem statement's example shows that in the input, each test case's B lines are in the same format. For example, the first test case's input lines are "1 ", "8 ", "22 ".
+
+But perhaps when the input is read via split(), leading and trailing spaces are ignored. So for a line like "1 ", the line is split into ["1"], and then read as one integer.
+
+When outputting, the code needs to output Z numbers separated by spaces. So for Z=1, output one number followed by a space? Or just the number?
+
+The sample output shows that for Z=1, the line ends with a space and then a new line. So for example, the first line of output is "1 ".
+
+But in Python, if you print ' '.join(str(x) for x in list) followed by a new line, each element is separated by space, and no trailing space. So for Z=1, it would print "1\n".
+
+But the sample output shows a trailing space. So how to handle this discrepancy.
+
+Alternatively, perhaps the problem allows trailing spaces. For example, when Z=1, it's acceptable to have a trailing space. So to replicate the sample output, the code should print each line as the elements separated by spaces, regardless of trailing space.
+
+In Python, the line can be printed as ' '.join(map(str, A[i][j])) + ' '.
+
+But wait, the sample output lines have a trailing space. For example, the third line of the first test case's output is "14 ", and the fourth line is "0 9 4 ".
+
+But when we look at the sample input, the input lines also have trailing spaces. For example, the first line of the first test case's input is "1 ".
+
+But when you read input via split(), the trailing space is ignored. So the code may not need to worry about trailing spaces. However, for the output, the problem expects the same format as the input, which includes trailing spaces. So the code must output each line of Z numbers, each separated by a space, and with a trailing space.
+
+Wait, but the sample output shows that the second test case's first output line is "0 9 4 " (with a trailing space), and the second line is "18 18 2" (without a trailing space?). No, looking at the sample output:
+
+Sample Output:
+
+1 
+
+7 
+
+14 
+
+0 9 4 
+
+18 18 2 
+
+Each line ends with a space. The fourth line has three numbers with a trailing space. The fifth line has three numbers but ends with a new line. Wait, perhaps it's a formatting error. For example, perhaps the last line in each test case's output does not have a trailing space. Or perhaps all lines must have exactly Z numbers separated by space, with no trailing space.
+
+But the sample's first test case's output lines have one number each, followed by a space and a new line. But how to replicate this?
+
+In Python, when you print a line with print(' '.join(...)), it adds a new line. So if the line is '1 ', then print would output '1 ' followed by a new line. But the sample's first line is "1 " followed by a new line.
+
+So perhaps the code should print each line as the elements joined by spaces, and then a new line. For example, for Z=1, the line would have one element followed by a new line.
+
+But the sample output seems to show that each line ends with a space and a new line. Which suggests that for Z=1, the line has a space after the number. But why?
+
+Alternatively, perhaps the problem statement's example is presented with formatting that includes the trailing space, but the actual correct output is to have exactly Z numbers, separated by space, with no trailing space. For example, for Z=1, the line should have "1" followed by a new line. But the sample shows "1 ".
+
+This is a problem. Because the code's correctness depends on this.
+
+Looking back at the problem statement's example:
+
+Sample Input:
+
+For the first test case, the input is:
+
+3 1 1
+
+1 
+
+8 
+
+22 
+
+The output is:
+
+1 
+
+7 
+
+14 
+
+Each line has one number followed by a space. 
+
+But perhaps in the problem statement's sample, the trailing space is just a formatting artifact, and the actual correct output should have each line's numbers separated by spaces, with no trailing space. For example, in the first test case, each line is printed as "1", "7", "14" followed by a new line.
+
+But according to the problem statement's example output, they are written with a trailing space. So perhaps the code should print a trailing space.
+
+But in programming contest problems, trailing spaces are generally allowed. So the code can output each line as the numbers separated by spaces, with a trailing space. 
+
+But how to do that in Python. For example, if Z=1, then ' '.join will produce "1", but the line should be "1 ".
+
+Alternatively, perhaps the problem expects that each line is printed with exactly Z numbers separated by spaces, and then a new line. So for Z=1, the line is "1" followed by a new line. 
+
+But according to the sample output, it's "1 ".
+
+This is confusing. Let's look at the sample output more carefully.
+
+Sample output lines:
+
+The first test case's output lines:
+
+1 
+
+7 
+
+14 
+
+These are three lines, each with a single number followed by a space and a new line.
+
+Second test case's output:
+
+0 9 4 
+
+18 18 2 
+
+The fourth line has three numbers followed by a space and new line. The fifth line has three numbers followed by a new line.
+
+This suggests that perhaps the trailing space is optional. But how to determine.
+
+Alternatively, perhaps the problem allows trailing spaces in the output. So the code can output them. So how to handle this in Python.
+
+For example, to print a line with Z numbers separated by spaces, each line can be printed by joining with spaces, then adding a space at the end. But that would add an extra space even when Z>0.
+
+Alternatively, perhaps each line should be printed as ' '.join(map(str, A[i][j])), which for Z=1 would give a single number with no trailing space, but the sample shows a trailing space.
+
+This is a problem. So perhaps the code should print each line with the numbers separated by spaces, followed by a space, but that's not correct. Alternatively, perhaps the sample is a formatting mistake, and the trailing space is not required.
+
+Alternatively, perhaps the problem requires that each line ends with exactly one space. 
+
+But this is a bit ambiguous. 
+
+Looking at the problem statement's example, the input for the first test case's B is three lines each with one number followed by a space. So when the code reads the input, it would read the numbers as 1, 8, 22.
+
+But in the output, the A's lines must be in the same format as the input. So the output for the first test case must have three lines, each with one number followed by a space.
+
+So in Python, to replicate this, each line should be printed as the numbers joined by spaces, followed by a space. But how?
+
+Alternatively, perhaps the problem expects that each line has exactly Z numbers, and the numbers are separated by a single space, with no leading or trailing spaces. But the sample shows trailing spaces.
+
+So this is conflicting.
+
+But according to the problem statement's example, the output lines for the first test case have a trailing space. So to match the sample output, perhaps each line must have a trailing space. 
+
+But in Python, the code can't do that with ' '.join. For example, if Z=1, ' '.join([str(1)]) is '1', which is printed as '1'. But the sample shows '1 '.
+
+So to add a trailing space, the code can do:
+
+print(' '.join(map(str, A[i][j])) + ' ')
+
+But this would add an extra space even when Z>1. For example, if Z=3, the line would be "0 9 4 " (with trailing space), which matches the sample.
+
+Alternatively, perhaps the sample has a mistake, and the trailing space is not required. 
+
+In programming contests, it's common to require that the output have exactly the required numbers, with no leading or trailing spaces. So perhaps the code should output each line as the numbers joined by spaces, and that's all. 
+
+But the sample shows trailing spaces. So perhaps the problem expects that each line is followed by a space, even if that's trailing. 
+
+This is a bit of a problem, but given the sample, the code should follow the example.
+
+So, for example, in the first test case, each line must have a single number followed by a space, and then a new line.
+
+In Python, to achieve that, after joining the numbers with spaces, we can add a space to the end. But this would work even for Z=1.
+
+So, the code can output:
+
+for each line in A[i][j]:
+
+    line_str = ' '.join(map(str, A[i][j])) + ' '
+
+    print(line_str)
+
+But then, for Z=3, this would add an extra space at the end. For example, "0 9 4 " would have an extra space.
+
+But the sample's fourth line is "0 9 4 " (with trailing space), so this matches.
+
+But the fifth line in the sample's second test case is "18 18 2" (no trailing space). So this contradicts the previous assumption.
+
+Ah, the sample's second test case's output has two lines for X=1, Y=2:
+
+0 9 4 
+
+18 18 2 
+
+The first line (for i=0,j=0) has three numbers followed by a space. The second line (i=0,j=1) has three numbers followed by a new line. So in the sample, the lines after the first in the test case have no trailing space. Which is impossible. So perhaps the problem statement's example has a formatting error.
+
+Alternatively, perhaps the trailing space is not required, and the sample's presentation is incorrect. 
+
+This is a problem. But given that the code must match the sample, perhaps the code should output each line's numbers separated by spaces, with a trailing space, even if Z>1. But in the sample, the fifth line ends with a '2' and no trailing space. 
+
+But in the sample's output, the fifth line is written as "18 18 2", which does not have a trailing space. So this contradicts the previous assumption. 
+
+Thus, this suggests that trailing spaces are not required. So the code should print each line's numbers separated by spaces, with no trailing space. 
+
+But how to reconcile this with the sample's first test case's output lines which have a trailing space? 
+
+Ah, perhaps the sample's presentation is incorrect. For example, perhaps the trailing space is not part of the actual output, but a formatting artifact when the sample was written. 
+
+Thus, the code should output the numbers separated by spaces, with no trailing space. 
+
+But then, the first test case's sample output would be:
+
+1
+
+7
+
+14
+
+But the problem's sample shows:
+
+1 
+
+7 
+
+14 
+
+Which are lines with a space after the number. 
+
+But this is impossible. So perhaps the problem allows trailing spaces, and the code should output each line as ' '.join(map(str, ...)), which for Z=1 would be '1', and in the sample, the trailing space is added by the problem's formatting. 
+
+But the code's output for the first test case would be three lines each containing "1", "7", "14", and when printed with print(' '.join(...)), the code would add a new line. 
+
+But in the sample's first test case, the lines are shown as "1 ", "7 ", "14 ". Which suggests that each line ends with a space. 
+
+This is a problem. To resolve this, perhaps the code should output the numbers separated by spaces, and the trailing space is allowed. Thus, for Z=1, the line is "1 ", for Z=3 it's "0 9 4 " (as in the sample).
+
+So the code must ensure that each line has Z numbers separated by spaces, and ends with a space. But how?
+
+In Python, the code can print each number followed by a space, but that would leave a trailing space. For example:
+
+print(' '.join(map(str, A[i][j])) + ' ')
+
+But this will add a trailing space even when Z=3. But in the sample's second test case's second line, the trailing space is not present.
+
+This is conflicting. 
+
+Alternatively, perhaps the sample's presentation is incorrect, and the trailing space is not required. Thus, the code can proceed with ' '.join, which would output the correct numbers separated by spaces.
+
+Given that the problem's sample output is not clear on trailing spaces, but the code must pass the test cases, perhaps the correct approach is to print the numbers separated by spaces, without any trailing space. 
+
+But according to the sample, the first line of output is "1 " which suggests a trailing space. But if the code outputs "1", then it would not match. So perhaps the problem requires that each line is followed by a trailing space. 
+
+But how to handle this in Python.
+
+Alternatively, perhaps the code can print each line as ' '.join(...) followed by a space, and then a new line. For example:
+
+for each line in A:
+
+    print(' '.join(map(str, line)) + ' ')
+
+But this would add a trailing space even when Z=0, but in our code, Z is not zero.
+
+But this approach would generate a trailing space for every line, which matches the sample. For example, in the first test case, each line is "1 ", "7 ", "14 ". In the second test case, each line is "0 9 4 ", "18 18 2 ".
+
+But in the problem's sample, the second test case's last line is "18 18 2", without a trailing space. So this approach would lead to a mismatch.
+
+This is a problem. 
+
+Perhaps the problem allows trailing spaces. So the code can generate trailing spaces, and the judge will accept it. 
+
+Thus, the code can output each line with a trailing space. 
+
+So, in Python, after joining with spaces, add a space at the end.
+
+So:
+
+print(' '.join(map(str, A[i][j])) + ' ')
+
+But when Z is zero, but in that case, the code doesn't output anything.
+
+But why does the sample's second test case's last line not have a trailing space? Perhaps it's a mistake in the sample, and the trailing space is required.
+
+In any case, the code must pass the sample test cases. So let's see.
+
+Sample Input 2:
+
+1 2 3
+
+0 9 13 
+
+18 45 51 
+
+The B matrix is:
+
+i=0, j=0: [0,9,13]
+
+i=0, j=1: [18,45,51]
+
+Computed A is:
+
+For (0,0,0) →0.
+
+(0,0,1) →9-0=9.
+
+(0,0,2) →13-9=4.
+
+(0,1,0) →18-0=18.
+
+(0,1,1) →45 -9 (B[0][0][1]) -18 (B[0][1][0]) +0 (B[0][0][0]) →45-9-18=18.
+
+(0,1,2) →51 -13 (B[0][0][2]) -45 (B[0][1][1]) +9 (B[0][0][1]) →51-13-45+9=2.
+
+So the lines are:
+
+For i=0, j=0: [0,9,4] → printed as "0 9 4 ".
+
+For i=0, j=1: [18,18,2] → printed as "18 18 2 ".
+
+But the sample's output is:
+
+0 9 4 
+
+18 18 2 
+
+So with a trailing space in the first line, and no trailing space in the second. So this approach of adding a trailing space would result in the first line being correct but the second line incorrect. 
+
+So this suggests that the trailing space is not required, and the sample's formatting is wrong.
+
+Thus, the correct approach is to output the numbers separated by spaces, with no trailing space. 
+
+But the sample's first line is "1 ", which must be generated by the code. 
+
+But how to reconcile this?
+
+Alternatively, perhaps the code should print each line with the numbers separated by spaces, followed by a new line. And the trailing space in the sample is just a formatting error.
+
+Thus, the code should proceed with ' '.join and print normally, which would generate lines without trailing spaces. 
+
+In that case, for the first test case, the output would be:
+
+1
+
+7
+
+14
+
+But the sample shows "1 ", "7 ", "14 ".
+
+So this would be a problem. 
+
+This suggests that the problem statement's sample is incorrect, and the code should proceed with the ' '.join approach.
+
+But how to know.
+
+Alternatively, perhaps the problem allows trailing spaces, and the code should output them. 
+
+Given that the sample's first test case's output includes trailing spaces, the code must output them. So the code must add a trailing space after each line.
+
+But how?
+
+In Python, after joining the numbers with spaces, add a space, then print.
+
+But for Z=3, this would add a trailing space. So for the second test case's first line: "0 9 4 " and the second line "18 18 2 ".
+
+But in the sample's output, the second line is "18 18 2", no trailing space. So this approach would lead to a mismatch.
+
+Alternatively, perhaps the problem requires that the trailing space is present in the output, but the sample has a formatting error in the last line. 
+
+But without more information, it's hard to say. 
+
+But given that the code must pass the sample, perhaps the code should output the lines with trailing spaces.
+
+Thus, in the code, after joining the numbers with spaces, add a space and then print. 
+
+So in Python:
+
+for i in range(X):
+    for j in range(Y):
+        line = ' '.join(map(str, A[i][j])) + ' '
+        print(line)
+
+But wait, this will add a trailing space even for Z=0. But in code, X, Y, Z are all >=1, so Z is at least 1.
+
+But when Z=1, it would print "1 ", which matches the sample's first line.
+
+In the second test case's second line (j=1, Z=3), the line would be "18 18 2 ", which includes a trailing space. But the sample's output is "18 18 2".
+
+Thus, the code would generate a trailing space, which is not present in the sample. So this would lead to a wrong answer. 
+
+This is a dilemma. 
+
+But given that the sample's first test case requires trailing spaces and the second test case's last line does not, perhaps the trailing space is not required, and the sample has formatting errors.
+
+Thus, the code should output the lines with the numbers separated by spaces, with no trailing spaces.
+
+So, the code would generate the first test case's lines as "1", "7", "14", which would not match the sample. 
+
+But the sample's expected output is "1 ", "7 ", "14 ". So this would lead to a wrong answer. 
+
+This suggests that the code must output trailing spaces. 
+
+But why? 
+
+Perhaps the problem's input format allows trailing spaces, and the output requires the same. So the code should output trailing spaces.
+
+But how to reconcile the second test case's sample.
+
+Alternatively, perhaps the trailing space is required only when Z>1. But that's not likely.
+
+Given the confusion, perhaps the problem statement's sample is incorrect, and the code should proceed with the standard approach of outputting the numbers separated by spaces, with no trailing space.
+
+Thus, the code would be written as:
+
+for each line in A:
+
+    print(' '.join(map(str, line)))
+
+But in the first test case, the output would be:
+
+1
+
+7
+
+14
+
+Which doesn't match the sample. 
+
+Thus, the code will fail the sample.
+
+But according to the problem's sample, the correct output is lines with trailing spaces. So the code must output trailing spaces. 
+
+Thus, to pass the sample, the code must output trailing spaces. 
+
+But how to do that in Python.
+
+In Python, for each line, after joining the numbers with spaces, add a space, then print.
+
+Thus, for the first test case:
+
+"1 " is printed.
+
+In the second test case's first line, "0 9 4 " is printed. The second line is "18 18 2 ".
+
+But the sample's second line is "18 18 2". 
+
+This suggests that there's a mistake in the sample. 
+
+But perhaps the problem allows any amount of trailing whitespace, including none. So the code can proceed with adding a trailing space.
+
+Thus, the code's line would be:
+
+print(' '.join(map(str, A[i][j])) + ' ')
+
+This would generate the trailing space required by the first test case. For the second test case's lines, it would add an extra space, but the problem's judge may accept it.
+
+In programming contests, trailing spaces are generally allowed. So even if the code adds a trailing space, it's acceptable.
+
+Thus, the code will proceed with adding a trailing space to each line.
+
+So, the code's output for the first test case would match the sample. The second test case's lines would have trailing spaces, but the sample shows that the second line does not. But perhaps the sample's presentation is incorrect, and the code's output is still acceptable.
+
+Thus, the code will be written with adding a trailing space to each line.
+
+Thus, the code will be:
+
+After computing A, for each i and j:
+
+print(' '.join(map(str, A[i][j])) + ' ')
+
+But in Python, the print function adds a new line. So the code would generate lines like "1  " for Z=1. 
+
+But perhaps the code should rstrip the line and then add a space.
+
+Alternatively, perhaps it's better to build the line as a string with trailing space, then print with end='' to avoid the new line added by print. But then we have to add the new line manually. 
+
+But this is getting too complicated. 
+
+Alternatively, perhaps the code can print each line with the trailing space and a new line.
+
+Thus, the code will proceed as follows:
+
+for i in range(X):
+    for j in range(Y):
+        print(' '.join(map(str, A[i][j])) + ' ')
+
+But this will add a trailing space and a new line.
+
+In the first test case's output, each line is "1 " followed by a new line, which matches the sample. 
+
+In the second test case's output, the lines are "0 9 4 " and "18 18 2 ", each followed by a new line, but the sample's second line is "18 18 2" followed by a new line. 
+
+But the problem's sample output may be incorrect. However, in programming contests, the judge may accept the code's output even if there's a trailing space.
+
+Thus, the code is written as:
+
+def main():
+    import sys
+    input = sys.stdin.read().split()
+    ptr = 0
+    T = int(input[ptr])
+    ptr +=1
+    for _ in range(T):
+        X = int(input[ptr])
+        Y = int(input[ptr+1])
+        Z = int(input[ptr+2])
+        ptr +=3
+        if X ==0 or Y ==0 or Z ==0:
+            # no lines to read; output nothing.
+            continue
+        # Read X*Y lines, each with Z numbers.
+        B = []
+        for i in range(X):
+            B_row = []
+            for j in range(Y):
+                line = list(map(int, input[ptr:ptr+Z]))
+                ptr +=Z
+                B_row.append(line)
+            B.append(B_row)
+        # Compute A.
+        A = [[[0]*Z for _ in range(Y)] for __ in range(X)]
+        for i in range(X):
+            for j in range(Y):
+                for k in range(Z):
+                    sum_val = B[i][j][k]
+                    if i >0:
+                        sum_val -= B[i-1][j][k]
+                    if j >0:
+                        sum_val -= B[i][j-1][k]
+                    if k >0:
+                        sum_val -= B[i][j][k-1]
+                    if i>0 and j>0:
+                        sum_val += B[i-1][j-1][k]
+                    if i>0 and k>0:
+                        sum_val += B[i-1][j][k-1]
+                    if j>0 and k>0:
+                        sum_val += B[i][j-1][k-1]
+                    if i>0 and j>0 and k>0:
+                        sum_val -= B[i-1][j-1][k-1]
+                    A[i][j][k] = sum_val
+        # Output A.
+        for i in range(X):
+            for j in range(Y):
+                line = ' '.join(map(str, A[i][j])) + ' '
+                print(line)
+    return
+
+main()
+
+Now, testing this code with the sample input.
+
+First test case:
+
+Input lines:
+
+3 1 1
+
+1 
+
+8 
+
+22 
+
+After reading, B is:
+
+i=0, j=0: [1]
+
+i=1, j=0: [8]
+
+i=2, j=0: [22]
+
+Computed A:
+
+i=0, j=0, k=0: B[0][0][0] →1.
+
+i=1, j=0, k=0: 8 - B[0][0][0] (1) →7.
+
+i=2, j=0, k=0: 22 - B[1][0][0] (8) →14.
+
+Output lines for i=0, j=0: "1 ".
+
+i=1, j=0: "7 ".
+
+i=2, j=0: "14 ".
+
+Which matches the sample.
+
+Second test case:
+
+X=1, Y=2, Z=3.
+
+B matrix:
+
+i=0, j=0: [0,9,13]
+
+i=0, j=1: [18,45,51]
+
+Computed A:
+
+For (0,0,0): 0.
+
+(0,0,1):9-0=9.
+
+(0,0,2):13-9=4.
+
+(0,1,0):18-0=18.
+
+(0,1,1):45 - B[0][0][1] (9) - B[0][1][0] (18) + B[0][0][0] (0) →45-9-18=18.
+
+(0,1,2):51 - B[0][0][2] (13) - B[0][1][1] (45) + B[0][0][1] (9) →51-13-45+9=2.
+
+Output lines:
+
+For i=0, j=0: [0,9,4] → "0 9 4 ".
+
+For i=0, j=1: [18,18,2] → "18 18 2 ".
+
+But the sample output for this test case is:
+
+0 9 4 
+
+18 18 2 
+
+Which suggests that the second line has no trailing space. But according to the code, it would have a trailing space. So this would lead to a mismatch.
+
+But perhaps the sample's trailing space is optional, and the code's output is considered correct.
+
+In programming contests, judges typically allow trailing spaces. So even though the sample shows no trailing space for the second line, the code's output would still be considered correct.
+
+Thus, the code should be correct.
+</think>
+To solve this problem, we need to reconstruct the original 3D matrix A from the given 3D matrix B, where each element in B is the sum of all elements in A's cuboid from (0,0,0) to (i,j,k). This involves reversing the inclusion-exclusion principle used to compute B from A.
+
+### Approach
+1. **Understanding the Problem**: Each element in B is a cumulative sum of elements in A up to that point. To find A from B, we use the inclusion-exclusion principle to subtract overlapping sums that were counted multiple times in B.
+2. **Inclusion-Exclusion Principle**: For each element in B, we subtract the contributions from the previous layers in each dimension, add back the contributions from their intersections, and subtract the contribution from the intersection of all three dimensions.
+3. **Input Handling**: Read the input values and construct the 3D matrix B.
+4. **Reconstructing Matrix A**: Using the inclusion-exclusion formula, compute each element of A from the corresponding elements of B.
+5. **Output Formatting**: Print the reconstructed matrix A in the same format as the input for B.
+
+### Solution Code
+```python
+def main():
+    import sys
+    input = sys.stdin.read().split()
+    ptr = 0
+    T = int(input[ptr])
+    ptr += 1
+    for _ in range(T):
+        X = int(input[ptr])
+        Y = int(input[ptr+1])
+        Z = int(input[ptr+2])
+        ptr += 3
+        if X == 0 or Y == 0 or Z == 0:
+            continue
+        # Read B matrix
+        B = []
+        for i in range(X):
+            B.append([])
+            for j in range(Y):
+                line = list(map(int, input[ptr:ptr+Z]))
+                ptr += Z
+                B[i].append(line)
+        # Compute A matrix
+        A = [[[0]*Z for _ in range(Y)] for __ in range(X)]
+        for i in range(X):
+            for j in range(Y):
+                for k in range(Z):
+                    sum_val = B[i][j][k]
+                    if i > 0:
+                        sum_val -= B[i-1][j][k]
+                    if j > 0:
+                        sum_val -= B[i][j-1][k]
+                    if k > 0:
+                        sum_val -= B[i][j][k-1]
+                    if i > 0 and j > 0:
+                        sum_val += B[i-1][j-1][k]
+                    if i > 0 and k > 0:
+                        sum_val += B[i-1][j][k-1]
+                    if j > 0 and k > 0:
+                        sum_val += B[i][j-1][k-1]
+                    if i > 0 and j > 0 and k > 0:
+                        sum_val -= B[i-1][j-1][k-1]
+                    A[i][j][k] = sum_val
+        # Output A matrix
+        for i in range(X):
+            for j in range(Y):
+                line = ' '.join(map(str, A[i][j])) + ' '
+                print(line)
+                
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Reading Input**: The input is read and parsed into a 3D list B. Each element in B is accessed using indices (i, j, k).
+2. **Reconstructing A**: For each element in A, we use the inclusion-exclusion principle to subtract the contributions from the previous layers in each dimension, add back the contributions from their intersections, and subtract the contribution from the intersection of all three dimensions.
+3. **Output**: The reconstructed matrix A is printed in the same format as the input matrix B, with each line representing elements for a specific (i, j) pair and all k values.
+
+This approach efficiently reconstructs the original matrix A by reversing the cumulative sums stored in B using the inclusion-exclusion principle, ensuring correctness and optimal performance.
+</bot>

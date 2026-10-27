@@ -1,0 +1,1121 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.There is a country with n citizens. The i-th of them initially has a_{i} money. The government strictly controls the wealth of its citizens. Whenever a citizen makes a purchase or earns some money, they must send a receipt to the social services mentioning the amount of money they currently have.
+
+Sometimes the government makes payouts to the poor: all citizens who have strictly less money than x are paid accordingly so that after the payout they have exactly x money. In this case the citizens don't send a receipt.
+
+You know the initial wealth of every citizen and the log of all events: receipts and payouts. Restore the amount of money each citizen has after all events.
+
+Input
+
+The first line contains a single integer n (1 ≤ n ≤ 2 ⋅ 10^{5}) — the numer of citizens.
+
+The next line contains n integers a_1, a_2, ..., a_n (0 ≤ a_{i} ≤ 10^{9}) — the initial balances of citizens.
+
+The next line contains a single integer q (1 ≤ q ≤ 2 ⋅ 10^{5}) — the number of events.
+
+Each of the next q lines contains a single event. The events are given in chronological order.
+
+Each event is described as either 1 p x (1 ≤ p ≤ n, 0 ≤ x ≤ 10^{9}), or 2 x (0 ≤ x ≤ 10^{9}). In the first case we have a receipt that the balance of the p-th person becomes equal to x. In the second case we have a payoff with parameter x.
+
+Output
+
+Print n integers — the balances of all citizens after all events.
+
+Examples
+
+Input
+
+
+4
+1 2 3 4
+3
+2 3
+1 2 2
+2 1
+
+
+Output
+
+
+3 2 3 4 
+
+
+Input
+
+
+5
+3 50 2 1 10
+3
+1 2 0
+2 8
+1 3 20
+
+
+Output
+
+
+8 8 20 8 10 
+
+Note
+
+In the first example the balances change as follows: 1 2 3 4 → 3 3 3 4 → 3 2 3 4 → 3 2 3 4
+
+In the second example the balances change as follows: 3 50 2 1 10 → 3 0 2 1 10 → 8 8 8 8 10 → 8 8 20 8 10
+</user>
+<bot>
+<think>
+Okay, let's see. We need to process a series of events and determine the final balances of all citizens. The problem has two types of events: receipts and payouts. For receipts, we directly set a person's balance to x. For payouts, all people with balance less than x get boosted to x. But the catch is that during payouts, they don't send receipts, so we need to track these payouts efficiently to avoid processing each individual every time.
+
+Hmm, the challenge here is handling the payouts efficiently. If we process each payout by iterating through all n citizens each time, that's O(qn) time, which would be way too slow given that n and q can be up to 2e5. So we need a smarter way to track the payouts.
+
+Wait, maybe we can track the maximum payout that has been applied so far. Like, whenever a payout happens with x, if x is higher than the previous maximum, then any subsequent receipts have to take into account this maximum. Because when a person's balance is set via a receipt, the payout's x (if higher than their current balance after considering previous payouts) would have already been applied. Wait, no. Let me think.
+
+Let's say there's a payout of x. Then all citizens with balance below x get set to x. But after that, if a receipt comes in for a person, their balance is set to the given x. But any subsequent payouts (with higher x) would affect them again if their new balance is lower than that x.
+
+So, perhaps we can track a variable that represents the minimum guaranteed value for each citizen. For example, if there was a payout with x, then the current minimum for all citizens is the maximum of all payout x's. So when processing receipts, the actual balance is the value given in the receipt or the current minimum, whichever is higher. Wait, no. Because a receipt explicitly sets the balance to x, even if x is lower than previous payouts. Wait, no. Let's clarify.
+
+When a receipt is processed (event type 1 p x), it sets the p-th person's balance to x. But if there was a previous payout with some x', then that x' might have been higher than x. But the receipt is processed after the payout, so the receipt's x overwrites the balance. However, any subsequent payout (with x'') could then affect this person's balance if x'' is higher than x.
+
+So, the key is that each receipt (setting to x) can be considered as overriding the person's balance, but only up to the maximum payout that occurred after that receipt. So, for each individual, their balance is the maximum between the last receipt value (if any) and the maximum payout x after that receipt.
+
+Ah, right! So for each citizen, if they have a receipt after some payouts, then their balance is either their receipt value or any higher payout that comes after that receipt. So, to model this, we need to track for each citizen the last receipt's value, and the overall maximum payout that has occurred up to the current time.
+
+Then, the final balance for a citizen is the maximum between their last receipt value and the maximum payout up to the end of all events.
+
+So the approach is:
+
+- Maintain a list or array that keeps track of each citizen's last receipt value. Initially, this is their a_i.
+
+- Also maintain a variable, let's call it global_max_payout, which tracks the maximum x from all payout events.
+
+- For each event:
+
+   - If it's a payout (type 2 x):
+
+      - Update global_max_payout to be the maximum between its current value and x.
+
+   - If it's a receipt (type 1 p x):
+
+      - Update the p-th citizen's last receipt value to x. But since there might have been previous payouts, the receipt effectively sets their value to x, but if there are future payouts with higher x, those could increase it again.
+
+So after processing all events, each citizen's final balance is the maximum between their last receipt value and the global_max_payout.
+
+Wait, but what about the order of events? For example, a payout happens, then a receipt for a person sets their value to x, which is lower than the payout's x. Then another payout with a lower x. How does that affect?
+
+Let me think through an example.
+
+Suppose the initial a_i is 5. Then a payout x=10 happens. So the person's balance becomes 10. Then a receipt sets them to 7. Then another payout x=5. Since 5 is less than 7, the person's balance remains 7. But the global_max_payout would be 10 (from the first payout). Wait, no. Because the second payout is x=5, which is less than the current global_max_payout (10), so the global_max_payout remains 10. So the person's balance would be max(7, 10) = 10. But according to the events:
+
+After first payout (x=10): balance is 10.
+
+Receipt sets to 7: balance is 7.
+
+Second payout (x=5). Since 5 < 7, the person's balance doesn't change. So final balance is 7. But according to the max between last receipt (7) and global_max_payout (10), it would be 10. That's wrong.
+
+Wait, that's a problem. So this approach isn't correct.
+
+So this suggests that the initial idea is incorrect.
+
+Hmm. Let's re-examine the example.
+
+Original events:
+
+Initial a_i = 5.
+
+Event 1: payout x=10 → balance becomes 10.
+
+Event 2: receipt (set to 7) → balance is 7.
+
+Event 3: payout x=5 → since 5 is less than current balance (7), no change. So final balance is 7.
+
+But according to the approach where the final balance is max(last_receipt, global_max_payout), which would be max(7, 10) = 10. Which is wrong.
+
+So this approach is incorrect.
+
+So that suggests that the approach of tracking a global_max_payout and the last receipt for each person is insufficient. Because the payout events may not affect some people, and the order of events matters.
+
+So we need another way to model this.
+
+Alternative approach: For each payout event, we can track the maximum x up to that point. Then, for each receipt, the value of x is recorded, but any subsequent payout events (with x higher than this x) would overwrite it.
+
+Wait, perhaps the correct approach is that each person's balance is the maximum between their last receipt and the highest payout x that was applied after that receipt.
+
+For example, when a receipt is processed at time t, the value is x. Then, any payout events after time t with x' > x will raise the person's balance to x'.
+
+But if a payout event occurs before the receipt, it's already accounted for in the receipt.
+
+So for each receipt, we need to track the time (or the order) of the receipt. Then, when considering the global maximum payout, we need to track when the maximum payout occurred.
+
+Wait, this is getting complicated. Let's think of it this way: the last receipt for a person could have been before or after some payout events. The maximum payout x that occurred after the last receipt is the one that affects the person's current balance.
+
+So for example:
+
+- Suppose a person's last receipt is at time T. All payout events after time T with x > the receipt's x will affect their balance.
+
+But keeping track of the time of each receipt and the maximum x in all payout events after that time would be tricky, especially since there are up to 2e5 events.
+
+Alternative idea: For each person, track the value they were set to in their last receipt. Then, track the global maximum payout that has ever been made. However, the problem with this is that if a payout occurs before the receipt, then the receipt's value would override the payout. So the person's final balance is the maximum between their last receipt and the maximum payout that was made after the receipt.
+
+Ah! So, the receipt's x is their base value, and any subsequent payout events with x higher than that base would increase their balance to x. But if a payout event occurs after the receipt, then the maximum of those x's (after the receipt) would affect the person's balance.
+
+So, for each receipt, we need to track when it happened. Then, the maximum payout that occurred after that receipt.
+
+But how to track this efficiently?
+
+Hmm. Let's think: Each time a payout happens, we can track the current maximum payout. Let's say we have a variable current_max_payout. Each time a payout event comes in, current_max_payout = max(current_max_payout, x). For receipts, each time a receipt comes in, we need to record the value x and the current_max_payout at that time. Then, when the receipts are processed, the final value for the person is max(receipt_x, current_max_payout_after_receipt).
+
+Wait, no. Because after the receipt is processed, there could be further payout events which might increase the current_max_payout. So the receipt's x is set at time t, and any payout events after time t that have x higher than receipt_x will affect the person's balance.
+
+So for each receipt, we can record the time (or the order) in which it was processed, and the value x. Then, after processing all events, for each receipt (for a person), we need to find the maximum payout x that occurred after that receipt's time. Then, the person's balance is the maximum between x and that maximum payout.
+
+But how to track, for each receipt, the maximum payout after it?
+
+Alternatively, the maximum payout that is active for a person's receipt is the maximum payout that occurred after the receipt.
+
+So, if we can track for each receipt the maximum payout that came after it, then the person's final balance would be the maximum between their receipt value and that maximum.
+
+But how do we track this without per-person tracking?
+
+Wait, here's an alternative idea: Let's maintain a variable that tracks the global maximum payout up to the end of all events. Let's call it global_max_payout. Then, for each receipt, when it is processed, we also record the current maximum payout at that time. Let's call it max_payout_before_receipt.
+
+Then, after all events, the maximum payout that could affect this receipt is the maximum between max_payout_before_receipt and the global_max_payout. Wait, no. Because after the receipt is processed, any subsequent payout would add to the global_max_payout. So the max_payout_after_receipt is the maximum between the global_max_payout (after all events) and the max_payout_before_receipt (the max up to the receipt's time). Or is that not correct?
+
+Wait, perhaps the correct way is to track the maximum payout value over all payout events. So, the global_max_payout is the maximum x from all payout events, regardless of their order. Because, for example, if a payout with x=10 occurs, then a payout with x=5, the global_max_payout would still be 10. Then, any receipt that is set to x=7 would, in the end, be max(7, 10) = 10.
+
+Wait, but in the earlier example where after a receipt sets x=7, a payout x=5 occurs, then the person's balance remains 7, but according to this approach, since the global_max_payout is 10 (from the first payout), the final balance would be 10, which is wrong.
+
+Hmm, so this approach is incorrect. So perhaps the key is that the maximum payout x is the maximum of all payout events, but when a receipt is processed, any previous payouts are already applied, but subsequent payouts may affect the receipt's value.
+
+So, for receipts, when you process a receipt (set p's value to x), you need to store x, and then any subsequent payouts that have x higher than this x will overwrite it.
+
+Thus, for each receipt, the value stored is x, and the maximum payout that occurs after that receipt is the maximum x in all payouts that happened after the receipt.
+
+So, for example:
+
+If a receipt is made at time t, then any payout after time t with x > receipt_x will cause the person's balance to be x. The maximum of these x's after time t determines the final value.
+
+So, for each receipt, we need to track the time t and x. Then, the final value for the person is the maximum between x and the maximum payout that occurred after t.
+
+But how to track the maximum payout after t for all possible t's?
+
+One way is to track all payout events and their x values, along with the time they occurred. Then, for each receipt, we can compute the maximum x in all payouts that occurred after the receipt's time.
+
+But with q up to 2e5 and n up to 2e5, this could be O(n log q) time, which is manageable.
+
+Alternatively, we can track the maximum payout x in a suffix array. For example, we can precompute an array where suffix_max[i] is the maximum x from all payout events from the i-th event onwards. Then, for a receipt that occurred at event time t, the maximum payout after t is suffix_max[t+1], and the final value for that receipt is max(receipt_x, suffix_max[t+1]).
+
+This seems feasible.
+
+So the steps would be:
+
+1. Preprocess all events to compute the suffix maximum for payout events. For each event index i (from 0 to q-1), compute the maximum x from all payout events in events[i...q-1]. This can be done by iterating from the end to the beginning.
+
+2. For each receipt event (type 1), record the x, the person p, and the event index t. Then, after all events, the maximum payout after t is the suffix_max[t+1]. The final value for person p is max(receipt_x, suffix_max[t+1]).
+
+3. For people who have no receipt events, their initial a_i is treated as a receipt at time 0 (before any events). So the maximum payout for them is the suffix_max[0], and their final value is max(a_i, suffix_max[0]).
+
+This approach should handle all cases correctly.
+
+Let's test this with the earlier example:
+
+Example 1:
+
+Initial a = [1,2,3,4]
+
+Events:
+
+3 events:
+
+Event 0: payout x=3 → which is the first event. So the suffix_max for event 0 would be max(3, ...). Let's compute the suffix_max array.
+
+Let's list all events:
+
+Original events in order:
+
+0: payout x=3
+
+1: receipt p=2, x=2
+
+2: payout x=1
+
+The suffix_max array:
+
+Compute from the end.
+
+At event 2 (payout x=1): the max is 1.
+
+At event 1 (receipt, so not a payout): the max remains 1.
+
+At event 0 (payout x=3): max is max(3, 1) =3.
+
+So suffix_max array would be [3,1,1].
+
+Now, for each receipt:
+
+The initial a_i are treated as receipts at time -1 (before all events). So the suffix_max for them is suffix_max[0], which is 3.
+
+For the receipt in event 1 (time 1), the suffix_max after that is suffix_max[2], which is 1. So the max payout after event 1 is 1. So the value for p=2 is max(2, 1) =2.
+
+Other people's receipts (initial a_i) are max(1,3)=3; 2's initial is 2, but there's a receipt. Wait, no. The initial a_i are considered as receipts at time -1 (before event 0). So the suffix_max for them is the maximum of all payout events (since all events are after time -1). So suffix_max[0] is 3, but in our suffix_max array, it's 3 (the maximum of all events).
+
+Wait, perhaps the suffix_max array is built in such a way that suffix_max[i] is the maximum x of payout events from event i onwards.
+
+So for each event i, whether it's a receipt or payout, the suffix_max[i] is the max x of payout events in events i..q-1.
+
+So in the example:
+
+Events:
+
+0: payout 3 → included in suffix_max[0], which is max(3, suffix_max[1] (which is 1)).
+
+1: receipt → not a payout, so suffix_max[1] is max of events from 1 onwards. Events 1 is receipt, event 2 is payout x=1. So suffix_max[1] is 1.
+
+Event 2: payout x=1 → suffix_max[2] is 1.
+
+So for the initial a_i (receipts at time -1), the suffix_max after them is suffix_max[0], which is 3. So their value is max(a_i, 3). So for a_1=1 → 3, a_2=2 →3 (but then they have a receipt at event 1), a_3=3 →3, a_4=4 →4.
+
+Then, the receipt in event 1 is for p=2, x=2. The suffix_max after event 1 is suffix_max[2] =1. So the value is max(2,1) →2.
+
+The final values are:
+
+p=1: max(1,3) =3
+
+p=2: 2 (max(2,1))
+
+p=3: max(3,3) =3
+
+p=4: max(4,3) =4.
+
+Which matches the first example's output.
+
+So this approach works.
+
+Another example: the case where a receipt comes after a payout. Let's say:
+
+Initial a_i =5.
+
+Events:
+
+payout x=10 (event 0)
+
+receipt p=1 x=7 (event 1)
+
+payout x=5 (event 2)
+
+The suffix_max array would be:
+
+event 0: max(10, max of events 1 and 2). Events 1 is receipt, event 2 is payout x=5. So suffix_max[0] = max(10,5) =10.
+
+suffix_max[1] = max of events 1 and 2: event 1 is receipt, so only event 2's x=5 →5.
+
+suffix_max[2] =5.
+
+So for the initial receipt (time -1), the suffix_max is 10. So the initial a_i=5 becomes max(5,10)=10.
+
+But then receipt at event 1 (x=7). The suffix_max after event1 is suffix_max[2] =5. So the final value is max(7,5) =7. Which is correct.
+
+So this approach works.
+
+So the steps are:
+
+1. Read all events, and precompute the suffix_max array, where suffix_max[i] is the maximum x of all payout events from index i to q-1.
+
+2. For each citizen, track their last receipt's x and the event index (time) when it occurred. The initial a_i is considered as a receipt at time -1.
+
+3. For each receipt (initial or in events), the final value is max(x, suffix_max[time +1]).
+
+So the plan is:
+
+- Initialize an array last_receipt for each citizen, where each entry is (x, time). For initial a_i, time is -1.
+
+- Precompute the suffix_max array.
+
+- For each citizen, compute the maximum between their receipt x and the suffix_max[time +1].
+
+Now, the problem is how to compute the suffix_max array.
+
+Let's process all events in order. For each event, if it's a payout, we record its x. Then, when building the suffix_max array, we can iterate from the end to the beginning.
+
+Wait, let's see. For example, events can be processed as follows:
+
+We can create a list of all payout x's in order, and then build the suffix_max array from that. But since the events are mixed (some are receipts, some are payouts), we need to process all events, and for each event, note whether it's a payout and its x.
+
+So the steps:
+
+1. Read all q events, and for each event, store whether it's a payout (type 2) and what x is. For type 1 events, just note their type and parameters.
+
+2. Precompute the suffix_max array. For each event index i (0-based), suffix_max[i] is the maximum x of all payout events from i to q-1.
+
+   To compute this, we can iterate from the end to the start, keeping track of the current maximum.
+
+   Initialize suffix_max as an array of size q.
+
+   current_max = 0
+
+   for i in range(q-1, -1, -1):
+
+       if events[i] is a payout (type 2):
+
+           current_max = max(current_max, events[i].x)
+
+       suffix_max[i] = current_max
+
+   So, for each event index i, suffix_max[i] is the maximum x of all payouts from i onwards.
+
+3. For each citizen, track their last receipt's x and the time (event index) when it was applied. Initially, their receipt is (a_i, -1).
+
+   Then, process each event in order. For each type 1 event (receipt), update the citizen's last receipt to (x, t), where t is the current event index (0-based).
+
+4. After all events, for each citizen, their final value is max(receipt_x, suffix_max[receipt_time +1]).
+
+Because:
+
+receipt_time is the index of the event where the receipt was applied. The suffix_max[receipt_time +1] is the maximum payout x that occurred after this receipt.
+
+If the receipt_time is the last event (q-1), then receipt_time +1 is q, which is beyond the array. In that case, suffix_max[receipt_time +1] would be 0 (since there are no events after that), so the max is receipt_x.
+
+Wait, no. The suffix_max array is of size q. For receipt_time = q-1, receipt_time +1 is q, which is beyond the array. So in that case, there are no payout events after the receipt, so the maximum is 0 (assuming no payouts after that). Wait, but the suffix_max array is computed for event indices 0 to q-1. For receipt_time +1 >= q, the suffix_max would be 0.
+
+But how is that handled? Let's see.
+
+If the receipt is at the last event (q-1), then receipt_time +1 is q, which is beyond the array. So we can set, in that case, the suffix_max is 0. So the final value is max(receipt_x, 0), but that's not correct if there were previous payouts.
+
+Wait, no. The receipt is applied at event q-1. After that, there are no events. So any payout events after that are none. So the maximum payout after receipt_time (q-1) is the maximum of payout events that occurred after q-1, which is none. So that's 0. But the initial current_max in the suffix_max is 0. So in the suffix_max array, for i >= q, the value is 0.
+
+So for a receipt at time t, the suffix_max for t+1 is:
+
+if t+1 < q: suffix_max[t+1]
+
+else: 0.
+
+So, for example, if t is q-1 (the last event), then t+1 is q, which is beyond the array, and the max is 0.
+
+So for such a receipt, the final value is max(receipt_x, 0). But wait, what if there were previous payouts with higher x? Like, if the receipt is set to x=5, but there was a payout x=10 before the receipt.
+
+But according to the model, the receipt's x is set after any previous payouts. So the receipt's x overrides any previous payouts. Then, after the receipt, if there are no payout events, the final value is x.
+
+But in the case where a payout occurred before the receipt, the receipt's x overwrites the value, and then no further payout events occur. So the final value is x.
+
+So the model is correct.
+
+So, putting it all together:
+
+We need to:
+
+- For each citizen, track (x, t) where x is the value from the last receipt (including initial a_i), and t is the event index when this receipt occurred (t=-1 for initial).
+
+- Compute the suffix_max array.
+
+- For each citizen, their final value is max(x, suffix_max[t+1] if t+1 < q else 0).
+
+Wait, but the suffix_max array includes all events from i to q-1. So for t+1 >= q, there are no events, so the maximum payout after t+1 is 0. But if the suffix_max array is of size q, then for t+1 >= q, we can treat it as 0.
+
+So in code:
+
+for each citizen:
+
+    x, t = last_receipt
+
+    if t + 1 < q:
+
+        max_payout_after = suffix_max[t+1]
+
+    else:
+
+        max_payout_after = 0
+
+    final = max(x, max_payout_after)
+
+So, this gives the correct final value.
+
+Now, let's code this.
+
+But first, let's outline the steps:
+
+Read n.
+
+Read the initial a array.
+
+Read q.
+
+Read q events, and store them as a list.
+
+Compute the suffix_max array.
+
+Initialize last_receipts array: for each citizen, (a_i, -1).
+
+Process all events:
+
+   for each event in events:
+
+       if it's a receipt (type 1):
+
+           p, x = parameters (note: p is 1-based, so convert to 0-based)
+
+           last_receipts[p] = (x, event_index)  # event_index is 0-based.
+
+Then, after processing all events, compute for each citizen the final value.
+
+But wait, how to track the event_index? Because as we process the events in order, each event has an index (from 0 to q-1). So for each receipt event in the events list (with index i), when we process it, we set the p-th citizen's last_receipt to (x, i).
+
+Yes.
+
+Now, after processing all events, for each citizen, we have their last_receipt (x, t), where t is the event index (or -1 for initial).
+
+Then, compute for each citizen:
+
+if t == -1:  # initial receipt (before any events)
+
+   max_payout_after = suffix_max[0] if q >=0 else 0  # since all events are after -1.
+
+else:
+
+   if t+1 < q:
+
+       max_payout_after = suffix_max[t+1]
+
+   else:
+
+       max_payout_after = 0
+
+final_value = max(x, max_payout_after)
+
+So, for example:
+
+In the first example, the initial receipts are (1, -1), (2, -1), (3, -1), (4, -1). For t=-1, the max_payout_after is suffix_max[0] =3. So their initial x is 1, 2,3,4. So max(1,3)=3, max(2,3)=3, max(3,3)=3, max(4,3)=4. Then, the receipt in event 1 (index 1) for p=1 (assuming 0-based?) Wait, wait, the event is "1 2 x" where p is 1-based. So for the first example:
+
+The events are:
+
+3 events:
+
+0: 2 3 → payout x=3.
+
+1: 1 2 2 → receipt for p=2 (0-based is 1), x=2. So last_receipt[1] = (2, 1).
+
+2: 2 1 → payout x=1.
+
+The suffix_max array is computed as follows:
+
+Start from the end (i=2):
+
+event 2 is a payout x=1 → current_max =1. suffix_max[2] =1.
+
+i=1: event 1 is a receipt → no change. current_max remains 1. suffix_max[1] =1.
+
+i=0: event is payout x=3 → current_max becomes max(1,3)=3. suffix_max[0] =3.
+
+So suffix_max is [3,1,1].
+
+For the initial receipts (t=-1):
+
+max_payout_after is suffix_max[0] =3.
+
+For p=0 (1-based 1?), no. Wait, the initial a array is 1,2,3,4 (0-based). So for citizen 0 (0-based), the initial receipt is (1, -1). For t=-1, the max_payout_after is suffix_max[0] =3. So their final is max(1,3)=3.
+
+For citizen 1 (0-based), after the receipt in event 1 (t=1):
+
+max_payout_after is suffix_max[2] (t+1=2 <3 → yes). So suffix_max[2] is 1. So max(2,1)=2.
+
+So the final values are 3,2,3,4. Which matches the example.
+
+So this approach works.
+
+Now, code this in Python.
+
+But we need to be careful with 0-based and 1-based indices.
+
+In code:
+
+Read n.
+
+a = list of integers (input after n).
+
+Read q.
+
+events = []
+
+for _ in range(q):
+
+   parts = input().split()
+
+   if parts[0] == '1':
+
+       # type 1 p x: p is 1-based.
+
+       p = int(parts[1])-1  # 0-based.
+
+       x = int(parts[2])
+
+       events.append( ('1', p, x) )
+
+   else:
+
+       # type 2 x.
+
+       x = int(parts[1])
+
+       events.append( ('2', x) )
+
+Compute the suffix_max array.
+
+Initialize suffix_max of size q.
+
+current_max = 0
+
+for i in range(q-1, -1, -1):
+
+    if events[i][0] == '2':
+
+        current_max = max(current_max, events[i][1])
+
+    suffix_max[i] = current_max
+
+But in Python, list indices start at 0.
+
+Then, for each citizen, track their last receipt.
+
+last_receipt = [ (a[i], -1) for i in range(n) ]
+
+for i in range(q):
+
+    event = events[i]
+
+    if event[0] == '1':
+
+        p, x = event[1], event[2]
+
+        last_receipt[p] = (x, i)
+
+Then, for each citizen in last_receipt:
+
+x, t = last_receipt[citizen]
+
+if t == -1:
+
+    if q >0:
+
+        max_payout_after = suffix_max[0]
+
+    else:
+
+        max_payout_after =0
+
+else:
+
+    if t+1 < q:
+
+        max_payout_after = suffix_max[t+1]
+
+    else:
+
+        max_payout_after =0
+
+final = max(x, max_payout_after)
+
+So, putting it all together.
+
+Edge Cases:
+
+- When there are no payout events. Then, suffix_max is all 0. So final values are x from last receipt or initial.
+
+- When all events are receipts. Then, max_payout_after is 0 for all receipts except those where t+1 < q (but in this case, since there are no payout events, suffix_max is 0, so max(x,0) →x).
+
+Another example: the second sample input.
+
+Sample input 2:
+
+5
+
+3 50 2 1 10
+
+3
+
+1 2 0 → event 0: type 1, p=1 (0-based 1), x=0. last_receipt[1] = (0,0)
+
+2 8 → event 1: type 2, x=8. 
+
+1 3 20 → event 2: type 1, p=3 (0-based 3), x=20. last_receipt[3] = (20,2)
+
+So events list is:
+
+['1', 1, 0], ['2',8], ['1',3,20]
+
+Compute suffix_max:
+
+Initialize current_max =0.
+
+i=2: event is '1' → not payout. suffix_max[2] =0.
+
+i=1: event is '2' x=8 → current_max=8. suffix_max[1] =8.
+
+i=0: event is '1' → suffix_max[0] =8.
+
+So suffix_max array is [8,8,0].
+
+Now, process each citizen:
+
+Citizen 0: last_receipt is (3, -1). t=-1. max_payout_after is suffix_max[0] =8. final = max(3,8) →8.
+
+Citizen 1: last_receipt is (0, 0). t=0. t+1=1 <3. suffix_max[1] =8. max(0,8) →8.
+
+Citizen 2: last_receipt is (2, -1). t=-1. max_payout_after =8 → max(2,8)=8.
+
+Citizen 3: last_receipt is (20,2). t=2. t+1=3 is >=3 (since q=3). So max_payout_after=0. final is max(20,0)=20.
+
+Citizen 4: last_receipt is (10, -1). max_payout_after=8. →max(10,8)=10.
+
+So the output is 8 8 8 20 10. But the sample output is 8 8 20 8 10.
+
+Wait, what's wrong here? Oh wait, the sample output is 8 8 20 8 10. Oh, I must have messed up.
+
+Wait, let's re-examine the sample input:
+
+Original input:
+
+5
+
+3 50 2 1 10
+
+3
+
+1 2 0 → event 0: sets p=2 (1-based) to 0. So 0-based p=1 (since 2-1=1).
+
+2 8 → event1: payout x=8. So all people with balance <8 are set to 8.
+
+But according to the model:
+
+The initial a is [3,50,2,1,10].
+
+Event0: receipt p=1 (0-based) x=0. So after event0, the last_receipt for p=1 is (0,0).
+
+Event1: payout x=8. The suffix_max array is computed as:
+
+events are:
+
+0: '1',1,0 → no.
+
+1: '2',8 → yes.
+
+2: '1',3,20 → no.
+
+So suffix_max:
+
+i=2: not payout. current_max remains 0. suffix_max[2] =0.
+
+i=1: payout 8. current_max=8. suffix_max[1] =8.
+
+i=0: not payout. suffix_max[0] = max(8, 0) =8.
+
+So the suffix_max array is [8,8,0].
+
+Processing citizens:
+
+Citizen 0 (0-based) → initial receipt (3,-1). max_payout_after is suffix_max[0] =8. So final 3 vs8 →8.
+
+Citizen 1 (0-based): receipt (0,0). t=0. t+1=1 <3 → suffix_max[1]=8. max(0,8) →8.
+
+Citizen 2 (0-based): initial receipt (2,-1). max_payout_after is 8. → 8.
+
+Citizen3 (0-based): initial receipt (1,-1). max_payout_after 8. →8.
+
+Citizen4 (0-based): initial receipt (10,-1). max(10,8) →10.
+
+But the event2 is a receipt for p=3 (0-based 3), x=20. So:
+
+After event2 (index 2), the last_receipt for p=3 is (20,2).
+
+For p=3 (0-based 3):
+
+x=20, t=2. t+1=3 >=3 → max_payout_after is 0. So max(20, 0) →20.
+
+So citizen3's final is 20.
+
+So the final outputs are:
+
+Citizen0:8
+
+Citizen1:8
+
+Citizen2:8
+
+Citizen3:20
+
+Citizen4:10
+
+Which gives 8 8 8 20 10, but the sample output is 8 8 20 8 10.
+
+Wait, this is conflicting. What's the correct answer?
+
+Looking back at the sample input's note:
+
+The second example's final output is 8 8 20 8 10.
+
+But according to our model, citizen3 (0-based 3) is set to 20. But in the sample input's events:
+
+After event1 (payout x=8), the balances are:
+
+3 0 2 1 10 → after event0 (receipt p=2 to 0) and event1 (payout x=8):
+
+citizen0:3 → max(3,8) →8.
+
+citizen1:0 → max(0,8) →8.
+
+citizen2:2 →8.
+
+citizen3:1 →8.
+
+citizen4:10 → remains 10 (since 10 >=8).
+
+Then event2 is receipt p=3 (1-based) → which is 0-based 3-1=2? Wait, no. Wait, the third event is 1 3 20 → p=3 in 1-based, which is 0-based 3-1=2? No. Wait, the code in the event processing is:
+
+for an event of type 1, the code takes p as (int(parts[1])-1). So for the event '1 3 20', parts[1] is '3', so p=3-1=2. So the third event is modifying citizen2 (0-based) to 20.
+
+Ah! Here's the mistake. In the code, the events are processed with p being converted to 0-based. So in the sample input's event2, which is '1 3 20', p=3 (1-based) is converted to 2 (0-based). So citizen2 (0-based) is the one being updated.
+
+So the last_receipt for citizen2 (0-based) is (20, 2).
+
+So in the code:
+
+citizen2 (0-based) has x=20, t=2. t+1=3 (since q=3), which is >=3. So max_payout_after is 0. So final is max(20, 0)=20.
+
+citizen3 (0-based) is the fourth citizen (0-based 3) in the initial array [3,50,2,1,10]. His initial a_i is 1. His last receipt is (1, -1). So his final value is max(1, suffix_max[0] =8) →8.
+
+So the final outputs are:
+
+citizen0:8
+
+citizen1:8
+
+citizen2:20
+
+citizen3:8
+
+citizen4:10.
+
+Which gives 8 8 20 8 10, which matches the sample output.
+
+Ah, so the code was correct. The mistake was in my manual calculation where I thought the third event was modifying citizen3 (0-based 3) but it was modifying citizen2 (0-based 2).
+
+So the code works.
+
+So now, code this in Python, making sure that the p in type 1 events is correctly converted to 0-based.
+
+Now, coding steps:
+
+Read n.
+
+Read a_1, a_2 ... a_n as list.
+
+Read q.
+
+Read q events, parse into list.
+
+Compute suffix_max array.
+
+Process events to track last_receipt.
+
+Compute final values.
+
+Now, in Python, for handling large n and q (up to 2e5), we need to read input efficiently.
+
+But in Python, using input().split() is manageable.
+
+Implementing this:
+
+Sample code:
+
+n = int(input())
+
+a = list(map(int, input().split()))
+
+q = int(input())
+
+events = []
+
+for _ in range(q):
+
+    parts = input().split()
+
+    if parts[0] == '1':
+
+        p = int(parts[1]) - 1  # convert to 0-based.
+
+        x = int(parts[2])
+
+        events.append( ( '1', p, x ) )
+
+    else:
+
+        x = int(parts[1])
+
+        events.append( ( '2', x ) )
+
+# Compute suffix_max.
+
+suffix_max = [0] * q
+
+current_max = 0
+
+for i in range(q-1, -1, -1):
+
+    if events[i][0] == '2':
+
+        current_max = max(current_max, events[i][1])
+
+    suffix_max[i] = current_max
+
+# Initialize last_receipts.
+
+last_receipt = [ (a[i], -1) for i in range(n) ]
+
+# Process events.
+
+for i in range(q):
+
+    event = events[i]
+
+    if event[0] == '1':
+
+        p = event[1]
+
+        x = event[2]
+
+        last_receipt[p] = (x, i)
+
+# Compute final values.
+
+result = []
+
+for i in range(n):
+
+    x, t = last_receipt[i]
+
+    if t == -1:
+
+        # initial receipt, check all payout events.
+
+        if q ==0:
+
+            max_payout_after =0
+
+        else:
+
+            max_payout_after = suffix_max[0]
+
+    else:
+
+        if t +1 < q:
+
+            max_payout_after = suffix_max[t+1]
+
+        else:
+
+            max_payout_after =0
+
+    final = max(x, max_payout_after)
+
+    result.append(final)
+
+print(' '.join(map(str, result)))
+
+This should work.
+
+Testing the first sample:
+
+Sample input 1:
+
+4
+
+1 2 3 4
+
+3
+
+2 3
+
+1 2 2
+
+2 1
+
+events:
+
+0: '2',3
+
+1: '1', 1 (0-based p=1), 2
+
+2: '2',1
+
+Compute suffix_max:
+
+i=2: event is '2',1 → current_max=1. suffix_max[2] =1.
+
+i=1: event '1' → no change. suffix_max[1] =1.
+
+i=0: event '2'3 → current_max = max(1,3) =3. suffix_max[0]=3.
+
+suffix_max = [3,1,1].
+
+last_receipt:
+
+initial: [(1,-1), (2,-1), (3,-1), (4,-1)].
+
+Processing events:
+
+event0 is '2'3 → nothing for receipts.
+
+event1 is '1',1,2 → set p=1 to (2,1).
+
+event2 is '2'1 → nothing.
+
+So last_receipt for each:
+
+p=0: (1,-1)
+
+p=1: (2,1)
+
+p=2: (3,-1)
+
+p=3: (4,-1)
+
+For each:
+
+p=0:
+
+t=-1 → max_payout_after = suffix_max[0] =3. max(1,3) =3.
+
+p=1:
+
+x=2, t=1. t+1=2 <3 → suffix_max[2]=1. max(2,1)=2.
+
+p=2:
+
+t=-1 → max_payout_after=3 →3. max(3,3)=3.
+
+p=3: max(4,3) →4.
+
+Result: [3,2,3,4], which matches the sample.
+
+Second sample:
+
+n=5.
+
+a = [3,50,2,1,10]
+
+events:
+
+0: '1',1,0 → p=1 (0-based), x=0.
+
+1: '2',8 → x=8.
+
+2: '1',3,20 → p=3 (0-based 3?), wait, parts[1] is 3 in the event '1 3 20', so p=3-1=2 (0-based).
+
+So event2 is p=2 (0-based), x=20.
+
+So last_receipt for p=2 is (20,2).
+
+Other receipts:
+
+p=1 (0-based) → event0 sets to (0,0).
+
+suffix_max:
+
+events:
+
+0: '1' → no.
+
+1: '2'8 → yes.
+
+2: '1' → no.
+
+current_max after:
+
+i=2: current_max=0 → suffix_max[2] =0.
+
+i=1: x=8 → current_max=8. suffix_max[1]=8.
+
+i=0: no → suffix_max[0]=8.
+
+So suffix_max is [8,8,0].
+
+Processing:
+
+p=0: initial (3,-1) → max_payout_after 8 →3 vs8 →8.
+
+p=1: (0,0). t=0. t+1=1 <3 → suffix_max[1]=8. max(0,8)=8.
+
+p=2: (20,2). t=2. t+1=3 >=3 → max_payout_after=0. max(20,0)=20.
+
+p=3: initial (1,-1). max_payout_after=8 → max(1,8)=8.
+
+p=4: initial (10,-1). max(10,8)=10.
+
+So the output is 8 8 20 8 10, which matches the sample.
+
+So the code works.
+</think>
+To solve this problem, we need to efficiently track the changes in citizens' balances based on receipts and payouts. The key challenge is handling payouts efficiently without iterating through all citizens each time a payout occurs.
+
+### Approach
+1. **Track Receipts**: Each receipt directly sets a citizen's balance to a specific value. We need to record the latest receipt for each citizen.
+2. **Track Payouts**: Payouts affect all citizens with a balance lower than the payout value. Instead of updating each citizen's balance immediately, we track the maximum payout value over time.
+3. **Suffix Maximum Array**: Precompute an array to store the maximum payout value from each event index to the end. This helps in quickly determining the maximum payout affecting each receipt.
+
+### Solution Code
+```python
+n = int(input())
+a = list(map(int, input().split()))
+q = int(input())
+events = []
+
+for _ in range(q):
+    parts = input().split()
+    if parts[0] == '1':
+        p = int(parts[1]) - 1  # Convert to 0-based index
+        x = int(parts[2])
+        events.append(('1', p, x))
+    else:
+        x = int(parts[1])
+        events.append(('2', x))
+
+# Compute the suffix maximum array for payout events
+suffix_max = [0] * q
+current_max = 0
+for i in range(q-1, -1, -1):
+    if events[i][0] == '2':
+        current_max = max(current_max, events[i][1])
+    suffix_max[i] = current_max
+
+# Track the last receipt for each citizen
+last_receipt = [(a[i], -1) for i in range(n)]
+for i in range(q):
+    event = events[i]
+    if event[0] == '1':
+        p = event[1]
+        x = event[2]
+        last_receipt[p] = (x, i)
+
+# Calculate the final balances
+result = []
+for i in range(n):
+    x, t = last_receipt[i]
+    if t == -1:
+        # Initial value, check all payout events
+        max_payout = suffix_max[0] if q > 0 else 0
+    else:
+        if t + 1 < q:
+            max_payout = suffix_max[t + 1]
+        else:
+            max_payout = 0
+    final = max(x, max_payout)
+    result.append(str(final))
+
+print(' '.join(result))
+```
+
+### Explanation
+1. **Reading Input**: We first read the initial balances and events.
+2. **Suffix Maximum Array**: This array is built by iterating from the end of the events list to the start, maintaining the maximum payout value encountered.
+3. **Tracking Receipts**: For each receipt event, we update the corresponding citizen's last receipt value and the event index.
+4. **Final Balances Calculation**: For each citizen, we determine the maximum payout that could affect their balance after their last receipt. The final balance is the maximum of their last receipt value and the relevant maximum payout.
+
+This approach ensures that we efficiently handle up to 200,000 events and citizens, avoiding the need to update each citizen's balance for every payout event. The use of a suffix maximum array allows us to quickly determine the impact of all subsequent payouts on each receipt.
+</bot>

@@ -1,0 +1,433 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Chef loves games! But he likes to invent his own. Now he plays game "Digit Jump". Chef has sequence of digits S1, S2,..., SN,. He is staying in the first digit (S1) and want to reach the last digit (SN) in the minimal number of jumps. 
+While staying in some digit x with index i (digit Si) Chef can jump into digits with indices i - 1 (Si-1) and i + 1 (Si+1) but he can't jump out from sequence. Or he can jump into any digit with the same value x. 
+Help Chef to find the minimal number of jumps he need to reach digit SN from digit S1. 
+ 
+
+Input
+Input contains a single line consist of string S of length N- the sequence of digits.
+ 
+
+Output
+In a single line print single integer - the minimal number of jumps he needs.
+ 
+
+Constraints
+
+1 ≤ N ≤ 10^5
+Each symbol of S is a digit from 0 to 9. 
+
+ 
+
+Example
+Input:
+01234567890
+
+Output:
+1
+
+Input:
+012134444444443
+
+Output:
+4
+
+ 
+
+Explanation
+In the first case Chef can directly jump from the first digit (it is 0) to the last (as it is also 0).
+In the second case Chef should jump in such sequence (the number of digits from 1: 1-2-4-5-15).
+</user>
+<bot>
+<think>
+Okay, I need to solve this problem where Chef has to jump from the first digit to the last with minimal jumps. Let's see the problem again. The rules are that from a current position i, Chef can jump to i-1 or i+1 (if they exist), or any position with the same digit as the current one. The goal is to find the minimum steps to get from the first to the last digit.
+
+Hmm. So this seems like a shortest path problem on a graph, where each node is a position in the string. The edges are the possible jumps. But since the string can be up to 1e5 characters long, a standard BFS would be O(N) which might be acceptable, but maybe there's a way to optimize it by pre-processing the same digits.
+
+Wait, but BFS for each node can have O(1) steps if we handle the same digits properly. Because when we visit a node, we can immediately add all the same digits to the queue, but then mark them as visited so they don't get processed again. That way, we avoid processing all same digits each time, which would be O(N^2) in the worst case.
+
+Let me think. Let's model this as a BFS where each level represents the number of jumps. The key is to process all same digits at once when you first encounter a digit. For example, when you visit a '0', you can jump to all other '0's in one step, but once you process them, you don't need to process them again. So, perhaps we can precompute a map of digits to their positions, and when we process a position, we check all same digits, add them to the queue if not visited, and then clear that list so that other same digits don't get processed again.
+
+Yes. So here's an approach:
+
+1. Precompute a dictionary where each key is a digit, and the value is a list of indices where that digit occurs. Also, for each digit, once we've processed all occurrences (i.e., added them to the queue in a BFS step), we can remove them from the dictionary so that they aren't processed again. This is important because if we don't, then each time we encounter the same digit, we would re-process all the same positions, leading to O(N) operations per digit and thus O(N^2) time.
+
+2. Use BFS where each node is the current index. The BFS queue will track the steps needed. The visited array keeps track of visited indices.
+
+3. For each node (current index) dequeued, check the i-1, i+1 positions. Also, check all indices that have the same digit as the current index (from the precomputed list). For each of these, if not visited, add them to the queue, mark as visited, and then remove them from the digit's list to prevent reprocessing.
+
+Wait, but when we process a digit, say '5' at index i, we can jump to all '5's. So in the BFS step, when we process index i, we can add all the '5's (from the digit's list) to the queue, then remove all those from the digit's list so that in future steps, even if another '5' is processed, we don't have to check them again. That's clever because it ensures that each position is only enqueued once, either through a left/right step or through a same-digit jump.
+
+So the steps would be:
+
+- Create a adjacency map: a dictionary where each key is a digit, and the value is a list of indices (positions) where that digit occurs. But note that for the current digit, once we process all the indices in the list, we can clear them. So for example, when we first process a digit '0', we can enqueue all '0's, mark them as visited, and then remove them from the digit's list. So next time when another '0' is processed (if any left), but in reality, they have already been processed.
+
+So here's how the BFS would work:
+
+Initialize a queue with the starting index (0), mark it as visited. The distance array starts with 0 for the starting index and infinity for others.
+
+For each node in the queue, check:
+
+- Left neighbor (i-1) if not visited.
+- Right neighbor (i+1) if not visited.
+- All same digits (from the adjacency map for current S[i]). For each of those, check if not visited. Add them to the queue, mark as visited, and remove them from the adjacency map's list (so they aren't processed again in future steps).
+
+This way, the same digits are processed in one go, and once they are processed, they are removed from the adjacency map, preventing redundant checks.
+
+So the steps in code would be:
+
+1. Read the input string S.
+
+2. Preprocess the adjacency map: a dictionary where each key is a digit, and the value is a deque (for efficient pops from front or back?) or a list. For example, for each position i in S, add i to the list for the digit S[i].
+
+3. Initialize a visited array (or a distance array) where visited[i] is whether the index has been processed. Since we need to find the minimal steps, BFS is the right approach here as BFS explores nodes in order of their distance from the start.
+
+4. The BFS queue starts with index 0, and distance 0.
+
+5. For each node in the queue:
+
+   a. If the node is the last index (len(S)-1), return the current distance.
+
+   b. Check left and right neighbors. If within bounds and not visited, add to the queue, mark visited, and set their distance as current +1.
+
+   c. Check all same digits in the adjacency map for S[current]. For each index in the list (but since we are going to remove them from the list, perhaps iterate through the list once and add to the queue if not visited, then clear the list. Wait, but the list is all the same digits. Wait, for example, when processing index 0 (digit '0'), we can add all indices in the adjacency map for '0' (including index 0 itself?), but perhaps we should process all of them except the current one. Wait, no. Because when we process index 0, we can jump to any of the same digits. So all of them can be added to the queue in one step. But once we process them, we should remove them from the adjacency map, so that when another index with same digit is processed, we don't reprocess the same digits again.
+
+Wait, but the adjacency map's list for a digit is all the indices that have that digit. So when processing any of those indices (say, the first one in BFS order), we can collect all the indices in that list, add them to the queue (if not visited), and then clear the list. Because once you process a digit, all other same digits can be jumped to from any occurrence. So processing them once (the first time a digit is encountered) is sufficient.
+
+So for example, suppose the digit '0' occurs at indices 0, 5, 10. When processing index 0, we add 5 and 10 to the queue (as 0 is already visited). Then, the adjacency map for '0' is cleared. So if later steps (like processing index 5) encounter '0', but the list is empty, so there's nothing to process. So this way, the same digits are processed only once.
+
+So in the code:
+
+When processing current index i:
+
+- Get the list of indices for the digit S[i], say 'd_list'.
+
+- For each index in d_list:
+
+   - if not visited, add to queue, mark as visited, distance is current +1.
+
+- Then, clear d_list. But wait, because the same digit's list may have other indices that were not processed yet. Wait, but no. Because when you process the first occurrence of a digit, you process all the indices in its list. Then you remove them from the list, so subsequent occurrences of the same digit (if any) would not have any indices left in the list.
+
+Wait, perhaps the key is that once you process any occurrence of a digit, you can jump to all other occurrences. So when you process the first occurrence, you can collect all the same digits and add them to the queue. Then, you can remove those digits from the adjacency map. So that in the future, when another occurrence of the same digit is processed, there are no more digits left in the list, so you don't process them again.
+
+But how does that work? Let's see.
+
+Suppose the first occurrence is index 0 (digit '0'), and the list is [0,5,10]. So when we process index 0, we check the list. For each index in [0,5,10], if not visited, add to the queue. So 0 is already visited. 5 and 10 are added. Then, the list is cleared. So when processing index 5 (which is '0'), the list for '0' is now empty, so no steps are taken. Similarly for 10. This way, all same digits are processed in one step when the first occurrence is processed. But is that correct?
+
+Yes. Because once you jump to any of the same digits, you can then process all of them in one BFS level. For example, when you process index 0, you add 5 and 10. When you process 5 (distance 1), you can check left (4), right (6), and same digits (but list is empty). So this approach ensures that all same digits are processed in the first occurrence's step, and thus added to the queue in the same BFS level (distance +1). So the minimal steps would be accounted for.
+
+This is an optimization to avoid O(N^2) time. Because otherwise, for each occurrence of the same digit, you would have to check all other occurrences, leading to O(N) steps per digit.
+
+So the key steps in code:
+
+- For each node in the BFS queue:
+
+   a. Check left and right.
+
+   b. Check the same digits list, add all in the list, then clear the list.
+
+So the adjacency map is a dictionary where each digit maps to a list of indices. But once a digit is processed, the list is cleared.
+
+Wait, but how do we process the same digits when we encounter them through left or right jumps? Let's say you have a digit '5' at index 10. Suppose you reach index 10 through a left jump from 9. Then, when you process index 10, you check the list for '5' (which may have other indices). If the list hasn't been processed yet (i.e., it's not empty), then you add all those indices to the queue and clear the list. So this way, even if you reach a same digit through a different path, you still process all same digits once.
+
+Yes. So the idea is that whenever you process a node, you check if the same digit's list is non-empty. If yes, you add all those nodes to the queue (if not visited), then clear the list.
+
+But how to handle that in code?
+
+Let me outline the code steps:
+
+- Create a dictionary, let's call it digit_indices, which maps each digit to a list of indices. For example, for S = "01234567890", digit_indices['0'] would be [0,10], and others would have their own lists.
+
+- Initialize a queue with (0, 0) where the first 0 is the index, and the second is the distance. Or, perhaps use a deque where each element is a tuple (index, distance). Alternatively, BFS can track the distance level-wise, but for code simplicity, perhaps just enqueue with the current distance.
+
+- Create a visited array (or a distance array) of size N, initialized to -1 (unvisited). Set visited[0] = 0.
+
+- While the queue is not empty:
+
+   - Dequeue the front element (i, dist).
+
+   - If i is the last index (N-1), return dist.
+
+   - Check i-1: if valid (>=0) and not visited, enqueue (i-1, dist+1), mark visited[i-1] = dist+1.
+
+   - Check i+1: if valid (<N) and not visited, enqueue (i+1, dist+1), mark visited[i+1] = dist+1.
+
+   - Get the current digit (d = S[i]).
+
+   - For each index in digit_indices[d]:
+
+      - if not visited, enqueue (j, dist+1), mark visited[j] = dist+1.
+
+   - Clear digit_indices[d] to empty list. Because once processed, even if there are more indices in the future, they would have been added through other steps. Wait, no. The digit_indices is precomputed. So when you process the current d's list, you add all the indices in that list. Then, you clear the list so that next time when another same d is processed, you don't add the same indices again.
+
+But wait, the digit_indices[d] is a list of all indices that have digit d. So when you process any occurrence of d, you process all of them. So for example, when you process index 0 (digit '0'), you add all indices in digit_indices['0'] (including 0 itself, but 0 is already visited). Then, you clear the list, so when any other '0' is processed (like index 10, which is in the list but already processed), their lists are empty.
+
+Wait, but if the list is [0,5,10], and you process index 0, you add 5 and 10 to the queue. Then, clear the list. So when you process 5, which is a '0' (assuming S[5] is '0'), you check digit_indices['0'], which is now empty. So no action is taken. Thus, the same digits are only processed once.
+
+Yes. That's the key. So the first time any occurrence of a digit is processed, you process all the indices in that digit's list, enqueue them, and clear the list. This way, any subsequent processing of the same digit (from other paths) won't have any indices left in the list.
+
+This ensures that each index is enqueued once, either through left/right steps or through the same digit processing.
+
+This approach should be O(N), since each index is processed once. For each index, we check left, right, and same digits (but the same digits are processed once per digit, not per index).
+
+Now, how to implement this in Python.
+
+First, read the input string.
+
+Then, create the digit_indices as a dictionary, where for each character in S, we store the indices. For example:
+
+digit_indices = defaultdict(list)
+for idx, c in enumerate(S):
+    digit_indices[c].append(idx)
+
+But since the indices are added in order, when we process a digit, the list has all the indices of that digit.
+
+Then, BFS:
+
+from collections import deque
+
+def minimal_jumps(s):
+    n = len(s)
+    if n == 1:
+        return 0
+    digit_indices = defaultdict(list)
+    for idx, c in enumerate(s):
+        digit_indices[c].append(idx)
+    visited = [False] * n
+    q = deque()
+    q.append(0)
+    visited[0] = True
+    distance = [0] * n
+    while q:
+        i = q.popleft()
+        current_dist = distance[i]
+        if i == n-1:
+            return current_dist
+        # Check left
+        if i-1 >= 0 and not visited[i-1]:
+            visited[i-1] = True
+            distance[i-1] = current_dist + 1
+            q.append(i-1)
+        # Check right
+        if i+1 < n and not visited[i+1]:
+            visited[i+1] = True
+            distance[i+1] = current_dist + 1
+            q.append(i+1)
+        # Check same digits
+        current_char = s[i]
+        # Get the list of indices for this char
+        same_indices = digit_indices[current_char]
+        # Iterate through them and add to queue if not visited
+        for j in same_indices:
+            if not visited[j]:
+                visited[j] = True
+                distance[j] = current_dist + 1
+                q.append(j)
+        # Clear the list to prevent reprocessing
+        same_indices.clear()
+    # If not reachable (but problem says input is valid)
+    return -1
+
+Wait, but in the code above, same_indices is the list in the digit_indices. When we do same_indices.clear(), it modifies the list in the dictionary, right? Because same_indices is a reference to the list in the defaultdict. So after processing, the list becomes empty, so next time when a same character is processed, the list is empty.
+
+Yes. So that's correct.
+
+Testing the first example:
+
+Input: 01234567890 (length 11, indices 0-10, last index is 10).
+
+digit_indices['0'] is [0,10].
+
+Processing starts with 0 (distance 0).
+
+Check same_indices (0 and 10). For j in same_indices:
+
+- j=0: already visited.
+
+- j=10: not visited. So mark as visited, distance 1, add to queue.
+
+Then, same_indices is cleared (now empty).
+
+So now, the queue has (0's left and right: i-1 is -1 (invalid), i+1 is 1. So i+1 is added, distance 1.
+
+But in the code, during processing i=0, the same_indices is [0,10]. So after processing, 10 is added to the queue. Then, the left and right steps add 1.
+
+In the queue after processing i=0: 1 and 10.
+
+When we process 1 (distance 0+1=1?), wait wait, no. Wait, the code appends the left and right steps with current_dist +1. For i=0, current_dist is 0. So when adding i+1 (1), the distance[1] is set to 1.
+
+But then, after processing 0, the queue contains 1 and 10. The next step is to process 1 (distance 1). Then, check same_indices for '1', which is digit_indices['1'] (assuming S[1] is '1').
+
+But in the initial setup, digit_indices['1'] contains index 1. When processing i=1, same_indices is [1]. So we add all of them. But 1 is already visited. So no new nodes added. Then, same_indices is cleared. So when another '1' is encountered, the list is empty.
+
+So after processing i=1, the left is 0 (visited), right is 2. So add 2 (distance 2). Then same_indices is cleared.
+
+But in the first example, the target is index 10. So when the queue processes 10 (added when processing i=0), then i=10 is the last index. So returns current_dist which was set when i=10 was added. How?
+
+Wait, when i=0 processes same_indices, which includes 10. So when j=10 is added to the queue, its distance is current_dist (0) +1 = 1. So when 10 is dequeued, it's the first time, and returns 1.
+
+Yes. Which matches the first example's output.
+
+Second example: "012134444444443" → output 4. Let's see:
+
+The steps in the explanation are 1-2-4-5-15. So indices 0 →1 →3 →4 →5 → ... →15 (if length is 16, indices 0-15). So the minimal jumps are 4 steps.
+
+In the code, when processing 0 (distance 0), same_indices for '0' is [0]. So nothing added except 1. Then process 1 (distance 1), same_indices for '1' is [1,3]. So when processing i=1, same_indices are [1,3]. So 3 is added (distance 2). Then, same_indices are cleared. So when processing 3, which is '2'? Wait, no. Let me see:
+
+Wait, the input is "012134444444443". Let's break it down:
+
+Indices:
+
+0:0, 1:1, 2:2, 3:1, 4:3, 5:4, 6:4, 7:4, ..., up to the last index (let's say length is 15, last is 3).
+
+The path is 0 →1 →3 →4 →5 →15. Steps:
+
+0 →1 (distance 1). Then 1's same digits are 1 and 3. So when processing 1 (distance 1), same_indices for '1' is [1,3]. 1 is already visited. 3 is added (distance 2). Then processing 3 (distance 2). The same digits for '1' is now empty. So when processing 3, the same_indices for '1' is empty. Then, check left and right. Left is 2 (digit 2), right is 4 (digit 3). So adding 4 (distance 3). Then, when processing 4, same_indices for '3' is [4]. So when processing 4, the same digits are '3's. So the list is [4]. Adding 4's same digits (but 4 is already visited). So nothing. Then, check left (3) and right (5). Adding 5 (distance 4). Then, processing 5 (digit 4), same_indices for '4' is all the 4s (5,6,7, etc.). So when processing 5, same_indices is a list of all the 4s. So adding all of them (assuming they are not visited) and setting their distance to 5's distance (4) +1? Wait, no. Because the current_dist when processing 5 is 4 (since 5 was added from 4, which had distance 3). So when processing 5 (distance 4), same_indices for '4' is a list of all the 4s (5,6,7,... up to 14?), and the last index is 15 which is 3.
+
+So when processing 5 (distance 4), adding all same_indices (5's digit is '4'), which includes 5,6,7,8,...,14. Since 5 is already visited, others are added. For example, 14 (if that's part of the 4s) would be added. Then, when 14 is processed, check left (13) and right (15). 15 is the target. So when 14 is processed, adding 15. But wait, 15's digit is 3. So when 14 (digit 4) is processed, the same digits are '4's (but after processing 5's same_indices, the list is cleared). So in 14's step, same_indices for '4' is empty. So when processing 14, check right (15), which is the last index. So when 14 is processed, the code checks i+1=15, which is not visited. So adds it to queue with distance 5. Then, when 15 is dequeued, the code returns 5. But the sample output is 4. Hmm, this suggests that maybe the code isn't handling this case correctly.
+
+Wait, maybe the sample input is "012134444444443" which has length 15, indices 0-14. The last digit is 3. Wait, the sample input's output is 4. So the path is 1-2-4-5-15 (but wait, indices are from 0. So maybe the path is 0 → 1 → 3 → 4 → 5 → ... →14? Let me check the example explanation. The example explanation says the sequence is 1-2-4-5-15. So probably the indices are 1-based. So in 0-based, it's 0 →1 →3 →4 →14 (if 14 is the last index). Then the steps are 4 jumps (0 to 1 is 1 step, 1 to 3 is 2, 3 to4 is 3, 4 to 14 via same digit jumps (but in the code, when processing 4, same_indices for '3' is [4], but S[4] is 3? Wait, maybe the code has a mistake here.
+
+Wait, the input is "012134444444443". Let's count the characters:
+
+0: '0'
+
+1: '1'
+
+2: '2'
+
+3: '1'
+
+4: '3'
+
+5: '4'
+
+6: '4'
+
+7: '4'
+
+8: '4'
+
+9: '4'
+
+10: '4'
+
+11: '4'
+
+12: '4'
+
+13: '4'
+
+14: '3'
+
+So the last index is 14 (digit '3'). The starting index is 0 (digit '0'), and the target is 14.
+
+So the path is:
+
+0 →1 (distance 1)
+
+1 can jump to same digits. The same digits are indexes 1 and 3. So when processing 1, enqueues 3 (distance 2).
+
+Processing 3 (distance 2). Current character is '1' (S[3] is '1'). But digit_indices['1'] was cleared when processing index 1. So same_indices for '1' is empty. So check left (2: '2') and right (4: '3'). So enqueue 4 (distance 3).
+
+Processing 4 (distance 3). S[4] is '3'. So same_indices for '3' includes indexes 4 and 14. So when processing 4, add 14 (distance 4). Then, when 14 is processed, since it's the last index, return 4. Which matches the sample output.
+
+So the code would work here. Let's see:
+
+When processing i=4 (distance 3), same_indices for '3' is [4,14]. So 4 is already visited. 14 is not. So add 14 to queue with distance 4. Then, when 14 is dequeued, check if it's the last index (14), which is yes. Return 4.
+
+Yes. So the code should handle this correctly.
+
+So the code seems correct.
+
+Now, let's think about possible edge cases.
+
+Test case 1: N=1. Then, return 0.
+
+Test case 2: All digits same. For example, input "0000". The minimal jumps is 0 (if N=1?), else 1 (from first to last in one jump). Wait, for N=4, indexes 0,1,2,3. The code would process 0, same_indices is [0,1,2,3]. So 1,2,3 are added with distance 1. So when the last index (3) is processed, returns 1.
+
+Yes.
+
+Another edge case: when the path requires going left. For example, input "010". The code would process 0's same indices (0, 2). So add 2 to the queue (distance 1). So return 1.
+
+Another case: input "010", indexes 0,1,2. The minimal steps: 0→2 (1 step).
+
+Yes.
+
+Now, considering the code's efficiency. For N=1e5, the code runs in O(N) time. Because each index is processed once. The digit_indices is built in O(N) time, and each index is added to the queue once. For each index, the left, right, and same digits are checked, but same digits are processed once in total (since the list is cleared after processing).
+
+So this code should handle the constraints.
+
+Thus, the Python code is as follows.
+</think>
+To solve this problem, we need to determine the minimal number of jumps Chef needs to move from the first digit to the last digit in a sequence. Chef can jump to adjacent digits or any digit with the same value. The solution involves using Breadth-First Search (BFS) to efficiently explore the shortest path, leveraging a dictionary to handle same-digit jumps optimally.
+
+### Approach
+1. **Preprocessing**: Create a dictionary where each key is a digit and the value is a list of indices where that digit occurs. This helps in quickly accessing all positions of the same digit.
+2. **BFS Initialization**: Use a queue to manage the BFS process starting from the first index (0). Track visited indices and their distances from the start.
+3. **Processing Each Node**:
+   - Check adjacent indices (left and right).
+   - For the current digit, check all indices from the preprocessed list, enqueue them if unvisited, and then clear the list to avoid reprocessing.
+4. **Termination**: The BFS ensures that the first time we reach the last index, it is via the shortest path.
+
+### Solution Code
+```python
+from collections import deque
+from sys import stdin
+
+def minimal_jumps(s):
+    n = len(s)
+    if n == 1:
+        return 0
+    digit_indices = {}
+    for idx, c in enumerate(s):
+        if c not in digit_indices:
+            digit_indices[c] = []
+        digit_indices[c].append(idx)
+    visited = [False] * n
+    distance = [0] * n
+    q = deque()
+    q.append(0)
+    visited[0] = True
+    while q:
+        current = q.popleft()
+        current_dist = distance[current]
+        if current == n - 1:
+            return current_dist
+        # Check left neighbor
+        left = current - 1
+        if left >= 0 and not visited[left]:
+            visited[left] = True
+            distance[left] = current_dist + 1
+            q.append(left)
+        # Check right neighbor
+        right = current + 1
+        if right < n and not visited[right]:
+            visited[right] = True
+            distance[right] = current_dist + 1
+            q.append(right)
+        # Check same digits
+        current_char = s[current]
+        if current_char in digit_indices:
+            same_indices = digit_indices[current_char]
+            for idx in same_indices:
+                if not visited[idx]:
+                    visited[idx] = True
+                    distance[idx] = current_dist + 1
+                    q.append(idx)
+            # Clear to prevent future processing
+            del digit_indices[current_char]
+    return -1  # This line is theoretically unreachable as per problem constraints
+
+s = stdin.read().strip()
+print(minimal_jumps(s))
+```
+
+### Explanation
+- **Preprocessing**: The dictionary `digit_indices` maps each digit to its positions, allowing efficient same-digit jumps.
+- **BFS Queue**: Starts at the first index, exploring adjacent and same-digit indices. Each index is processed once to ensure efficiency.
+- **Distance Tracking**: The `distance` array keeps track of the minimal jumps required to reach each index, ensuring the shortest path is found.
+- **Same-Digit Optimization**: By clearing the list of indices for a digit after processing, we avoid redundant checks, ensuring the algorithm runs in linear time, O(N), where N is the length of the input string.
+
+This approach efficiently combines BFS with preprocessing to handle same-digit jumps optimally, ensuring minimal computational complexity and correct results.
+</bot>

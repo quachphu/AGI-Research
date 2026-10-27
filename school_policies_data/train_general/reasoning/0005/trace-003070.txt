@@ -1,0 +1,702 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Santa Claus has received letters from n different kids throughout this year. Of course, each kid wants to get some presents from Santa: in particular, the i-th kid asked Santa to give them one of k_i different items as a present. Some items could have been asked by multiple kids.
+
+Santa is really busy, so he wants the New Year Bot to choose the presents for all children. Unfortunately, the Bot's algorithm of choosing presents is bugged. To choose a present for some kid, the Bot does the following:
+
+  * choose one kid x equiprobably among all n kids; 
+  * choose some item y equiprobably among all k_x items kid x wants; 
+  * choose a kid z who will receive the present equipropably among all n kids (this choice is independent of choosing x and y); the resulting triple (x, y, z) is called the decision of the Bot. 
+
+
+
+If kid z listed item y as an item they want to receive, then the decision valid. Otherwise, the Bot's choice is invalid.
+
+Santa is aware of the bug, but he can't estimate if this bug is really severe. To do so, he wants to know the probability that one decision generated according to the aforementioned algorithm is valid. Can you help him?
+
+Input
+
+The first line contains one integer n (1 ≤ n ≤ 10^6) — the number of kids who wrote their letters to Santa.
+
+Then n lines follow, the i-th of them contains a list of items wanted by the i-th kid in the following format: k_i a_{i, 1} a_{i, 2} ... a_{i, k_i} (1 ≤ k_i, a_{i, j} ≤ 10^6), where k_i is the number of items wanted by the i-th kid, and a_{i, j} are the items themselves. No item is contained in the same list more than once.
+
+It is guaranteed that ∑ _{i = 1}^{n} k_i ≤ 10^6.
+
+Output
+
+Print the probatility that the Bot produces a valid decision as follows:
+
+Let this probability be represented as an irreducible fraction x/y. You have to print x ⋅ y^{-1} mod 998244353, where y^{-1} is the inverse element of y modulo 998244353 (such integer that y ⋅ y^{-1} has remainder 1 modulo 998244353). 
+
+Examples
+
+Input
+
+
+2
+2 2 1
+1 1
+
+
+Output
+
+
+124780545
+
+
+Input
+
+
+5
+2 1 2
+2 3 1
+3 2 4 3
+2 1 4
+3 4 3 2
+
+
+Output
+
+
+798595483
+</user>
+<bot>
+<think>
+Okay, let's try to solve this problem. Hmm, the problem is about calculating the probability that the Bot's decision is valid. The steps the Bot takes are a bit involved, so I need to break it down.
+
+First, the Bot's process: it selects a kid x uniformly at random, then selects an item y uniformly from x's desired items. Then, it picks a kid z uniformly again. The decision is valid if z's list includes y. We need to find the probability that this entire process leads to a valid decision.
+
+So the probability we're looking for is the total number of valid possible decisions divided by the total number of possible decisions. Since all choices are equiprobable and independent, each possible (x,y,z) triple has the same probability. So the denominator is straightforward: it's the number of possible x choices multiplied by the number of y choices for x multiplied by the number of z choices. Since each x is chosen with probability 1/n, each y for x is 1/k_x, and each z is 1/n. So the total possible is n * (sum over x of k_x) * n, but wait, no. Wait, each decision is (x,y,z), and each x is selected with probability 1/n, then y with 1/k_x, then z with 1/n. So the total possible combinations is sum for each x (1/n * (1/k_x) * 1/n) multiplied by ... Wait, no. Wait, each x is selected first, then y, then z. So the total number of possible triples is n (choices for x) multiplied by k_x (choices for y for x) multiplied by n (choices for z). So the denominator is (n) * (sum of k_i) * (n) ? Wait, no. Because for x, we choose x among n kids. Then, given x, choose y among k_x options. Then choose z among n. So each triple (x,y,z) has a probability of (1/n) * (1/k_x) * (1/n). The total number of possible triples is sum over x (k_x) * n, since for each x, there are k_x y's and n z's. But the probability is the sum over all valid triples of their individual probabilities.
+
+Wait, maybe it's easier to model this as expected value. The probability that a randomly generated decision is valid is equal to the expected value of the indicator variable that the decision is valid.
+
+But perhaps a better approach is to compute the probability as follows:
+
+For a given decision (x,y,z), it's valid if y is in z's list. So the probability is the sum over all possible x, y, z of the probability of choosing x, then y, then z multiplied by whether y is in z's items.
+
+So, the formula is:
+
+prob = sum_{x=1 to n} sum_{y in x's list} sum_{z=1 to n} [ (1/n) * (1/k_x) * (1/n) ) * I(y is in z's list) ]
+
+Where I(...) is 1 if true, else 0.
+
+We can rearrange this sum. Let's reorganize the terms. The outer loops are x, then y, then z. For each x and y, we can compute how many z's have y in their list. Let's denote the count for a particular y as c(y), which is the number of kids z that have y in their list. Then, for each x and y (in x's list), the contribution is (1/n * 1/k_x * 1/n) * c(y).
+
+So the total probability is the sum over all x, y in x's list, of [ (1/(n^2 k_x)) * c(y) ].
+
+So the numerator is sum_{x} sum_{y in x's list} [ c(y) / (n^2 k_x) ]
+
+But how do we compute this efficiently?
+
+First, we need to compute c(y) for each y. That is, for each item y, how many kids have y in their wish list. We can build a frequency map/dictionary for this. For example, a hashmap where the key is the item and the value is the count of kids that have it.
+
+Once we have this, for each kid x, we can iterate through each of their items y, and for each y, add (c(y)) / (k_x * n^2) to the total probability.
+
+So the steps are:
+
+1. Read all the kids' wish lists, and for each item y, count how many times it appears across all kids (c(y)).
+
+2. For each kid x, iterate through their items y, and accumulate sum += (c(y)) / (k_x * n^2) for each y in x's list.
+
+3. The sum is the total probability. Then, we need to represent this as a fraction x/y, reduce it to the lowest terms, then compute x * y^{-1} mod 998244353.
+
+Wait, but dealing with fractions mod 998244353 requires modular inverses. So perhaps we can compute the sum as a modular value directly, using modular inverses where needed.
+
+Let me think. Let's model the sum as:
+
+sum_total = sum_{x=1 to n} sum_{y in x's list} [ c(y) / (k_x * n^2) ]
+
+But since all terms are fractions, we can represent this as a sum of terms (c(y) * 1) / (k_x * n^2 )
+
+Which can be written as:
+
+sum_total = (1 / (n^2)) * sum_{x=1 to n} (1/k_x) * sum_{y in x's list} c(y) )
+
+So the sum can be broken down into two parts: for each kid x, sum the c(y) over all their y's, then multiply by 1/(k_x), then sum over x. Then multiply by 1/(n^2).
+
+This seems manageable. So the steps are:
+
+- Precompute c(y) for all items y.
+
+- For each kid x, compute the sum of c(y) for their items. Then divide that sum by k_x. Then sum all those divided values over all x. Then multiply by 1/(n^2).
+
+So the total sum is (S) / (n^2 ), where S is the sum over x of (sum_{y in x's list} c(y)) / k_x.
+
+Now, to compute S:
+
+For each x, sum all c(y) for y in x's list, then divide by k_x. Sum all those.
+
+So, for example, if a kid x has items [a, b], and c(a) is 2, c(b) is 3, then sum_y c(y) is 5, divided by k_x (2) gives 5/2. Sum over all x.
+
+So this approach is feasible.
+
+Now, the problem is to compute this sum S, then divide by n^2. Then, express this as a fraction x/y, reduce it, then compute x * y^{-1} mod MOD.
+
+But how do we compute this sum efficiently, given that n can be up to 1e6 and the sum of k_i up to 1e6?
+
+The plan is:
+
+1. Read all the kids' lists, and for each item in each kid's list, track the count of how many kids have that item (c(y)).
+
+2. For each kid x, compute the sum of c(y) for their items. Then divide that sum by k_x, and add to S.
+
+3. Compute S / (n^2 ), which is the probability.
+
+But all divisions here are in modular arithmetic. So we need to handle this with modular inverses.
+
+The modulus is 998244353, which is a prime, so inverses exist for non-zero elements.
+
+So let's model the computation step by step modulo MOD.
+
+First, precompute the counts c(y) for each item y. For each kid x's list, for each y in x's list, increment c(y) by 1. But this is not correct. Wait, because c(y) is the number of kids z that have y in their list. So for each y, we need to count the number of kids z where y is in z's list. So for each occurrence of y in any kid's list, we need to count how many distinct kids have y. Wait no: each kid's list has unique items. So for each y, the number of kids that have y is the number of times y appears across all kids' lists. Wait, no: each kid can have y at most once (since each list has unique items). So for example, if kid 1's list is [2,1], and kid 2's list is [1], then y=1 is in two kids' lists. So c(1) is 2, y=2 is in 1 kid's list.
+
+So c(y) is the number of kids that have y in their list.
+
+So to compute c(y), we can process all the kids' lists, and for each y in a kid's list, increment a counter for y. But since a kid's list has unique items, each y in a kid's list contributes exactly 1 to c(y). So for example, if a kid's list has y appearing once, then c(y) increases by 1 for that kid. So for all kids, for each of their items, we add 1 to c(y).
+
+So this can be done by using a dictionary (hash map) to count how many times each y appears across all kids.
+
+Once we have c(y) for all y, then for each kid x, we need to sum the c(y) for all y in x's list, then multiply by the inverse of k_x, then sum all these values.
+
+So the steps in code would be:
+
+- Read n.
+
+- For each of the n kids:
+
+   - Read k_i and the list of a_i's.
+
+   - For each a_i in the list, add to a frequency map (like a defaultdict(int)) the count.
+
+   - Also, store each kid's list (so that we can process them again later).
+
+- Then, for each kid x in the list:
+
+   - Compute the sum of c(y) for each y in x's list.
+
+   - Multiply this sum by inv(k_x) modulo MOD.
+
+   - Add this to the total S.
+
+- Then, multiply S by inv(n^2) modulo MOD, which is inv(n) * inv(n) mod MOD.
+
+- The result is the answer.
+
+Wait, but how to compute inv(n^2)? Since MOD is a prime, inv(n^2) = inv(n) * inv(n) mod MOD.
+
+So the steps are:
+
+Compute inv_n = pow(n, MOD-2, MOD).
+
+Then inv_n_squared = (inv_n * inv_n) % MOD.
+
+Multiply S by inv_n_squared to get the answer.
+
+But wait, the initial S is sum over x of (sum_y c(y) / k_x). So in modular terms, each term is sum_y c(y) multiplied by inv(k_x) mod MOD.
+
+Yes.
+
+So the code outline is:
+
+Read n.
+
+For all kids, read their lists and build the frequency map.
+
+Then, for each kid's list:
+
+   sum_c = sum of c[y] for each y in their list.
+
+   term = sum_c * inv(k_x) mod MOD.
+
+   add this term to S.
+
+Multiply S by inv(n^2) mod MOD.
+
+Output the result.
+
+This should give the correct answer.
+
+Now, let's test this approach against the examples.
+
+First example:
+
+Input:
+
+2
+
+2 2 1
+
+1 1
+
+So n=2.
+
+Processing each kid:
+
+First kid's list: [2,1]. So for each y=2 and 1, increment their counts. c(2) becomes 1, c(1) becomes 1.
+
+Second kid's list: [1]. c(1) becomes 2.
+
+So c(2)=1, c(1)=2.
+
+Now process each kid:
+
+First kid's k is 2. The sum of c(y) is 1 (for 2) + 2 (for 1) = 3. Then term is 3 * inv(2) mod MOD.
+
+Second kid's k is 1. sum_c is 2 (from 1). term is 2 * inv(1) = 2.
+
+So S = 3 * inv(2) + 2.
+
+Then multiply by inv(n^2) = inv(4).
+
+So S is (3/2 + 2) = (3 +4)/2 = 7/2. Then multiplied by 1/4 gives 7/(8).
+
+The output is 7/8 mod MOD. Let's compute 7 * inv(8) mod MOD.
+
+MOD is 998244353. inv(8) is 124780544. So 7 * 124780544 mod MOD is 873453808 mod MOD. Wait wait, but the first sample's output is 124780545. Hmm, perhaps I made a mistake here.
+
+Wait wait, let's check the first example again.
+
+Wait the first example's input is:
+
+2
+
+2 2 1
+
+1 1
+
+So for each kid:
+
+First kid's list is 2,1. So when processing all kids, the counts for 2 and 1 are each incremented by 1 for the first kid, and the second kid's list is 1, so c(1) becomes 2.
+
+Now for the first kid's sum_c: 1 (for 2) + 2 (for 1) = 3. Then inv(2) is 499122177 mod MOD.
+
+3 * 499122177 mod MOD = (3 * 499122177) = 1497366531. 1497366531 mod 998244353 is 1497366531 - 1*998244353 = 499122178.
+
+Then the second kid's term is 2 * inv(1) = 2.
+
+So S is 499122178 + 2 = 499122180.
+
+Multiply by inv(4) (since inv(2^2) = inv(4)). inv(4) is 748683265.
+
+So 499122180 * 748683265 mod MOD. Let's compute:
+
+First, 499122180 * 748683265.
+
+But let's compute this step by step modulo MOD.
+
+But 499,122,180 * 748,683,265 is a huge number, but we can compute mod MOD.
+
+But 499122180 mod MOD is 499122180.
+
+748683265 mod MOD is 748683265.
+
+Multiply these two:
+
+(499,122,180 * 748,683,265) mod MOD.
+
+But perhaps we can compute this as (499,122,180 mod MOD) * (748,683,265 mod MOD) mod MOD.
+
+So 499,122,180 * 748,683,265 = ?
+
+But let's compute 499,122,180 * 748,683,265 mod MOD.
+
+Alternatively, note that 499122180 is (3 * inv(2) ) + 2, but perhaps that's not helpful.
+
+Alternatively, perhaps I made a mistake in the sample calculation.
+
+Wait the sample output is 124780545. Let's see what 7/8 mod MOD is.
+
+7 * inv(8) mod MOD is 7 * 124780544 mod MOD. 7 * 124,780,544 = 873,463,808. 873,463,808 mod 998,244,353 is 873,463,808 - 0*998,244,353 = 873,463,808. Wait that's larger than MOD. Wait MOD is 998,244,353. So 873 million is less than that. So 873,463,808 mod MOD is 873,463,808. But the sample output is 124,780,545. So my approach must be wrong here.
+
+Wait perhaps I messed up the calculation. Let's re-examine.
+
+Wait first sample input:
+
+The correct answer is the probability 7/8. Let's confirm.
+
+The possible valid cases:
+
+The Bot's process:
+
+x is chosen uniformly (1/2), then y from x's items (1/k_x), then z (1/2).
+
+The decision is valid if z's list includes y.
+
+For each (x, y, z):
+
+Compute whether y is in z's list.
+
+In the first example:
+
+Kid 1 has items {2,1}, kid 2 has {1}.
+
+So for x=1:
+
+y can be 2 or 1.
+
+If y is 2: which z's include 2? Only kid 1. So for x=1, y=2: valid z's are 1 (since kid 2's list doesn't have 2). So the probability for this (x=1,y=2) is (1/2) * (1/2) * (1/2) * 1 (valid count is 1, out of 2 z's). Wait no: when x=1 and y=2, z can be 1 or 2. But for z=1: does his list have 2? Yes. For z=2: no. So the count is 1 (z=1). So the contribution is (1/2) * (1/2) * (1/2) * 1/2. Wait, no: the probability for (x,y,z) is (1/2) for x, (1/2) for y (since k_x=2), and (1/2) for z. So for (x=1, y=2), each possible z contributes (1/2) * (1/2) * (1/2) * I(y in z's list). For z=1: I is 1. So the contribution is 1/(2*2*2) *1. For z=2: 0. So for y=2, total contribution is 1/(2^3) *1 + 0.
+
+Then for x=1, y=1: y=1 is in both z=1 and z=2's lists. So for z=1 and z=2, both are valid. So the contribution is (1/2 * 1/2) * (2/2) ) = (1/4) * 1. Because when z is chosen, probability that it's valid is (number of valid z) / n. So for each (x,y), the probability that z is valid is (c(y) / n). So for each x and y, the contribution is (1/(n)) [prob x] * (1/k_x) [prob y] * (c(y)/n) [prob z is valid]. So the overall formula is sum over x and y in x's list of [1/(n) * 1/k_x * c(y)/n ].
+
+Which is equivalent to sum (c(y)) / (n^2 k_x) for all x and y in x's list.
+
+So in the first example, for each x and y:
+
+x=1, y=2: c(y) is 1 (only kid 1 has 2). So term is 1/(2^2 *2) = 1/(8).
+
+x=1, y=1: c(y) is 2 (kids 1 and 2). term is 2/(2^2 *2) = 2/(8) = 1/4.
+
+x=2, y=1: c(y) is 2. term is 2/(2^2 *1) = 2/(4) = 0.5.
+
+Adding all terms: 1/8 + 1/4 + 0.5 = (1 + 2 +4)/8 =7/8. So the answer is 7/8.
+
+Which when computed modulo 998244353 is 7 * inv(8) mod MOD. inv(8) is 124780544. 7 * 124780544 = 873463808. 873463808 mod 998244353 is 873463808 (since 998244353 is about a billion, and 873 million is less). So 873463808 mod 998244353 is 873463808. But the sample output is 124780545. Wait this is conflicting. Oh wait, what's 873463808 mod 998244353?
+
+Wait 998244353 is 998,244,353. 873,463,808 is less than that. So 873,463,808 mod 998244353 is 873,463,808. But sample output is 124780545.
+
+Ah! Wait no. That can't be. So perhaps there's a mistake here. Wait what's the modular inverse of 8 mod 998244353?
+
+Let's compute 8 * 124780544 = 998244352. Which is 1 less than 998244353. So 8*124780544 ≡ -1 mod MOD. So 8 * 124780544 ≡ -1 mod 998244353. Then 8 * (MOD - 124780544) = 8*(998244353 - 124780544) = 8*873463809 = ... which would be congruent to 8*873463809 mod MOD. Wait maybe I made a mistake in the inverse calculation. Let's check.
+
+The inverse of 8 mod MOD is a number inv such that 8*inv ≡ 1 mod 998244353. Since MOD is prime.
+
+We can compute inv(8) as 8^(MOD-2) mod MOD.
+
+MOD is 998244353, which is prime. So inv(8) = pow(8, 998244351, 998244353).
+
+But perhaps the inverse of 8 is 124780544. Because 8*124780544 = 998244352, which is -1 mod MOD. So that's not 1. So perhaps my earlier calculation is wrong.
+
+Wait what's 8 * 124780544 mod MOD?
+
+8 * 124,780,544 = 998,244,352. Which is MOD-1. So mod MOD, this is -1. So 8 * (-1) * 124780544 mod MOD is 1? Wait no. So perhaps the correct inverse is different.
+
+Wait 8 * x ≡ 1 mod MOD.
+
+Let me compute x using Fermat's little theorem. x = 8^(MOD-2) mod MOD.
+
+But calculating this would take time. Alternatively, maybe the sample output is 7/8 mod MOD, which would be 7 * inv(8) mod MOD.
+
+But if 8*inv(8) ≡1, then inv(8) is 998244353 *k + 1 /8.
+
+Alternatively, perhaps in the first sample, the correct answer is 7/8, which when converted to modular inverse is 7 * inv(8) mod MOD.
+
+But according to the sample output, the answer is 124780545.
+
+But 7 * inv(8) mod MOD is 7 * inv(8) mod MOD. Let's compute inv(8).
+
+Wait 998244353 divided by 8 gives 124780544.125. So 8 * 124780544 = 998244352. Which is MOD -1. So 8 * 124780544 ≡ -1 mod MOD.
+
+Multiply both sides by 7: 8*124780544*7 ≡ -7 mod MOD → 7 * (8 * 124780544) ≡ -7 mod MOD → 8*(7*124780544) ≡ -7 mod MOD → 8* (7*124780544 + 1) ≡ (-7 +8) mod MOD → 8* (7*124780544 +1) ≡ 1 mod MOD. So (7*124780544 +1) is the inverse of 8 mod MOD. Let's compute that.
+
+7 * 124780544 = 873463808. 873463808 +1 = 873463809. So 8 * 873463809 = 6,987,710,472. Now divide 6,987,710,472 by MOD (998244353):
+
+Compute 998244353 * 6 = 5,989,466,118. 6,987,710,472 - 5,989,466,118 = 998,244,354. Which is MOD +1. So 6,987,710,472 mod MOD is 1. So yes, 8 * 873463809 ≡1 mod MOD. So inv(8) is 873463809. So 7/8 mod MOD is 7 * 873463809 mod MOD.
+
+7 * 873463809 = 6,114,246,663. Now mod MOD (998244353):
+
+Compute how many times MOD fits into 6,114,246,663. Let's see:
+
+998,244,353 *6 = 5,989,466,118. Subtract that from 6,114,246,663: 124,780,545.
+
+So 6,114,246,663 mod MOD is 124,780,545. Which matches the sample output. So the correct answer is 124780545.
+
+But according to our approach, the sum S would be:
+
+For first kid x=1: sum_c = 1 (for 2) + 2 (for 1) =3. term is 3 * inv(2) mod MOD. inv(2) is 499122177. So 3*499122177 = 1,497,366,531. mod MOD: 1,497,366,531 - 1 * 998,244,353 = 499,122,178.
+
+For x=2: sum_c is 2 (y=1). term is 2 * inv(1) mod MOD → 2.
+
+So S = 499,122,178 + 2 = 499,122,180.
+
+Multiply by inv(n^2) = inv(4) mod MOD. inv(4) is 748683265 (since 4 * 748683265 = 2,994,733,060 → mod MOD: 2,994,733,060 - 3*MOD (3*998,244,353=2,994,733,059) → 2,994,733,060 - 2,994,733,059 =1 → 4 * 748683265 ≡1 mod MOD. So inv(4) is 748683265.
+
+So 499,122,180 * 748683265 mod MOD.
+
+Let's compute this:
+
+We can compute 499,122,180 * 748683265 mod MOD.
+
+But how?
+
+Note that 499,122,180 mod MOD is 499,122,180.
+
+748,683,265 mod MOD is 748,683,265.
+
+We can compute the product as (a * b) mod MOD.
+
+We can break this down as (a mod MOD) * (b mod MOD) mod MOD.
+
+But 499,122,180 * 748,683,265 = ?
+
+But this is a large number, but perhaps we can compute it as follows:
+
+We can compute (a * b) mod MOD as:
+
+Compute a mod MOD = 499122180
+
+Compute b mod MOD =748683265
+
+Multiply these two numbers:
+
+Let's compute (499,122,180) * (748,683,265) mod MOD.
+
+But perhaps there's a smarter way. Let's note that 499122180 is (3 * inv(2)) mod MOD.
+
+Wait 3 * inv(2) mod MOD is 3 * 499122177 mod MOD. 3 * 499,122,177 = 1,497,366,531. mod MOD: 1,497,366,531 - 998,244,353 = 499,122,178. So 499,122,180 is that plus 2. So 499,122,180 = 499,122,178 +2. So maybe that's not helpful.
+
+Alternatively, note that 499,122,180 is (3 * inv(2) ) + 2 mod MOD. But not sure.
+
+Alternatively, let's compute (499,122,180 * 748,683,265) mod MOD.
+
+Let me compute this as:
+
+(499,122,180 * 748,683,265) mod 998244353.
+
+But this is a big multiplication. Let's split the numbers into parts.
+
+But perhaps using Python's built-in pow and modular arithmetic would handle this.
+
+But let's see: 499,122,180 * 748,683,265 = ?
+
+Let's compute this step by step:
+
+But in Python, even with large numbers, (a * b) % MOD is computed efficiently.
+
+But in this case, the product is 499,122,180 * 748,683,265 = ?
+
+But in Python, integers can handle this, but since MOD is 998244353, which is a prime, we can compute this as follows:
+
+But perhaps I should compute (a * b) % MOD, where a=499,122,180 and b=748,683,265.
+
+But in code, 499122180 * 748683265 % 998244353.
+
+Let me compute this with Python:
+
+But perhaps we can note that:
+
+499,122,180 = (MOD - 499,122,173) ?
+
+Wait MOD is 998,244,353. 998,244,353 - 499,122,180 = 499,122,173. So 499,122,180 ≡ -499,122,173 mod MOD.
+
+But not sure if that helps.
+
+Alternatively, note that 748,683,265 = (MOD - 249,561,088) ?
+
+MOD is 998244353. 998,244,353 - 748,683,265 = 249,561,088. So yes. So 748,683,265 ≡ -249,561,088 mod MOD.
+
+So the product becomes (-499,122,173) * (-249,561,088) mod MOD.
+
+Which is 499,122,173 * 249,561,088 mod MOD.
+
+But I'm not sure. Alternatively, let's compute 499122180 * 748683265 mod 998244353 using Python.
+
+But let's compute this with Python:
+
+In Python:
+
+a = 499122180
+
+b = 748683265
+
+mod = 998244353
+
+result = (a * b) % mod
+
+print(result)
+
+Let me compute this.
+
+But I can't compute it right now, but let's see:
+
+The result should be 124,780,545, which is the sample output.
+
+So according to our approach, after calculating S * inv(n^2) mod MOD, we get the correct answer.
+
+Thus, the code should correctly compute this.
+
+Now, the code steps:
+
+We need to read the input, count the frequencies of each item, then compute for each kid x the sum of c(y) for y in x's list, multiply by inv(k_x), sum all those, multiply by inv(n)^2 mod MOD.
+
+But since n can be up to 1e6 and each kid's list can be up to 1e6 items, the code needs to be efficient.
+
+In Python, using a default dictionary or a regular dictionary to track the counts is feasible.
+
+But for speed, using a standard dictionary is better.
+
+So, the code outline:
+
+Read n.
+
+Initialize a dictionary to count the items.
+
+Read each kid's list:
+
+For each kid, split the line into k_i and the items.
+
+For each item in the list, increment the count in the dictionary.
+
+Also, store all the kids' lists (so we can process them again later).
+
+Once all counts are computed, for each kid's list:
+
+Compute sum_c = sum of counts[y] for each y in the list.
+
+Compute term = sum_c * inv(k_i) mod MOD.
+
+Add term to the total S.
+
+Finally, multiply S by inv(n) * inv(n) mod MOD.
+
+Output the result.
+
+Now, implementing this in Python.
+
+But for handling the modulo operations, we need to compute inverses correctly.
+
+In Python, the pow function can compute modular inverses if the modulus is prime. So inv(k_i) = pow(k_i, MOD-2, MOD).
+
+Similarly for inv(n).
+
+So the code:
+
+MOD = 998244353
+
+n = int(input())
+
+from collections import defaultdict
+
+count = defaultdict(int)
+
+lists = []
+
+for _ in range(n):
+
+    parts = list(map(int, input().split()))
+
+    k_i = parts[0]
+
+    items = parts[1:]
+
+    lists.append( (k_i, items) )
+
+    for y in items:
+
+        count[y] += 1
+
+S = 0
+
+for k_i, items in lists:
+
+    sum_c = 0
+
+    for y in items:
+
+        sum_c += count[y]
+
+    sum_c %= MOD  # Not necessary, but to prevent overflow?
+
+    inv_k = pow(k_i, MOD-2, MOD)
+
+    term = (sum_c * inv_k) % MOD
+
+    S = (S + term) % MOD
+
+inv_n = pow(n, MOD-2, MOD)
+
+inv_n_squared = (inv_n * inv_n) % MOD
+
+ans = (S * inv_n_squared) % MOD
+
+print(ans)
+
+Wait, but sum_c could be up to n (since c(y) is the number of kids that have y, which can be up to n). For each kid's list, sum_c can be up to k_i * n, but since k_i can be up to 1e6, sum_c can be up to 1e12, which when summed across all kids, could be up to 1e18. But in Python, integers can handle that, but when mod MOD is applied, we can mod each term to prevent overflow.
+
+But in the code above, sum_c is summed normally (without mod), then multiplied by inv_k. But sum_c can be up to 1e6 * 1e6 = 1e12, which is manageable in Python. But when multiplied by inv_k mod MOD, then the sum_c is treated as an integer modulo MOD?
+
+Wait, no. Because the sum_c is a sum of counts, which are numbers of kids. So sum_c is sum of count[y], which is the number of kids that have y in their list, for each y in the current kid's list. But when we compute sum_c * inv_k mod MOD, sum_c is a regular integer. But in Python, when we multiply two large integers, it can handle it, but when taking mod MOD, it's better to mod sum_c first.
+
+But in the code, sum_c is computed as a sum of count[y], which can be up to n for each y. So for a kid with k_i items, sum_c is up to k_i * n. For example, if a kid has 1e6 items, and each y in their list is present in all n=1e6 kids, sum_c could be 1e12. But in Python, this is manageable as an integer, but when multiplied by inv_k (mod MOD), the sum_c is mod MOD first.
+
+Wait, no. Because sum_c is sum of count[y], and each count[y] is the number of kids that have y. So count[y] can be up to n, which is up to 1e6. So sum_c can be up to 1e6 * 1e6 = 1e12. Which fits into Python's integer.
+
+But when we compute sum_c * inv_k mod MOD, sum_c is treated as a regular integer. So sum_c * inv_k can be up to 1e12 * 1e6 (since inv_k is up to MOD-1). But in Python, multiplying two 1e18 numbers is okay.
+
+But mod MOD is applied after that, so even if the product is 1e18, mod MOD would bring it down.
+
+So the code is correct.
+
+Testing the first sample:
+
+In the first sample, sum_c for the first kid is 3 (1+2), inv_k is inv(2) = 499122177. 3 * 499122177 = 1497366531. mod MOD is 1497366531 - 1 * MOD (998244353) = 499122178.
+
+Second kid's sum_c is 2, inv_k is 1. So term is 2. S is 499,122,178 + 2 = 499,122,180.
+
+Multiply by inv_n_squared (inv(2)^2 = inv(4) = 748683265). 499,122,180 * 748683265 mod MOD. Which, as earlier, equals 124,780,545. Which matches the sample.
+
+Thus, the code is correct.
+
+Another test case is the second sample, but the code will handle that as well.
+
+Now, handling large inputs: since sum of k_i is up to 1e6, the code reads all lines, processes each item in O(1), and then processes each kid again, which is O(1) per item. So the code runs in O(sum k_i) time, which is acceptable for the problem's constraints.
+
+So the final code should be as written above.
+</think>
+To solve this problem, we need to determine the probability that the New Year Bot's decision is valid. The decision is valid if the chosen item by the bot for a randomly selected kid is present in another randomly selected kid's wish list. The solution involves calculating this probability and presenting it in a specific modular arithmetic form.
+
+### Approach
+1. **Understanding the Problem**: The bot's decision involves selecting a kid (x), an item (y) from x's wish list, and another kid (z). The decision is valid if z's wish list includes y. We need to compute the probability of this event.
+
+2. **Mathematical Formulation**:
+   - For each item y, count how many kids have y in their wish list (denoted as c(y)).
+   - The probability is the sum over all possible (x, y, z) combinations where y is in z's list, divided by the total number of possible decisions.
+
+3. **Efficient Calculation**:
+   - Use a dictionary to count occurrences of each item across all kids.
+   - For each kid x, compute the sum of counts of all items in their wish list, then divide by the number of items in their list (k_x).
+   - Sum these values for all kids and normalize by the square of the number of kids (n^2) using modular arithmetic.
+
+### Solution Code
+```python
+MOD = 998244353
+
+n = int(input())
+from collections import defaultdict
+
+count = defaultdict(int)
+lists = []
+
+for _ in range(n):
+    parts = list(map(int, input().split()))
+    k_i = parts[0]
+    items = parts[1:]
+    lists.append((k_i, items))
+    for y in items:
+        count[y] += 1
+
+total_S = 0
+for k_i, items in lists:
+    sum_c = 0
+    for y in items:
+        sum_c += count[y]
+    inv_k = pow(k_i, MOD - 2, MOD)
+    term = (sum_c * inv_k) % MOD
+    total_S = (total_S + term) % MOD
+
+inv_n = pow(n, MOD - 2, MOD)
+inv_n_squared = (inv_n * inv_n) % MOD
+result = (total_S * inv_n_squared) % MOD
+
+print(result)
+```
+
+### Explanation
+1. **Reading Input**: We read the number of kids and their wish lists, storing each list and counting the occurrences of each item using a dictionary.
+
+2. **Counting Occurrences**: For each item in each kid's wish list, we increment its count in the dictionary.
+
+3. **Summing Valid Probabilities**: For each kid, we compute the sum of counts of items in their wish list. Each sum is then divided by the number of items in that kid's list using modular inverse to handle division in modular arithmetic.
+
+4. **Final Calculation**: The accumulated sum is normalized by the square of the number of kids (n^2) using modular arithmetic to get the final result.
+
+This approach efficiently handles large inputs and ensures correctness using modular arithmetic, adhering to the problem constraints and requirements.
+</bot>

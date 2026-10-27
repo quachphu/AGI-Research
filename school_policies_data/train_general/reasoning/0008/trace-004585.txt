@@ -1,0 +1,462 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Mr Keks is a typical white-collar in Byteland.
+
+He has a bookshelf in his office with some books on it, each book has an integer positive price.
+
+Mr Keks defines the value of a shelf as the sum of books prices on it. 
+
+Miraculously, Mr Keks was promoted and now he is moving into a new office.
+
+He learned that in the new office he will have not a single bookshelf, but exactly k bookshelves. He decided that the beauty of the k shelves is the [bitwise AND](https://en.wikipedia.org/wiki/Bitwise_operation#AND) of the values of all the shelves.
+
+He also decided that he won't spend time on reordering the books, so he will place several first books on the first shelf, several next books on the next shelf and so on. Of course, he will place at least one book on each shelf. This way he will put all his books on k shelves in such a way that the beauty of the shelves is as large as possible. Compute this maximum possible beauty.
+
+Input
+
+The first line contains two integers n and k (1 ≤ k ≤ n ≤ 50) — the number of books and the number of shelves in the new office.
+
+The second line contains n integers a_1, a_2, … a_n, (0 < a_i < 2^{50}) — the prices of the books in the order they stand on the old shelf.
+
+Output
+
+Print the maximum possible beauty of k shelves in the new office.
+
+Examples
+
+Input
+
+10 4
+9 14 28 1 7 13 15 29 2 31
+
+
+Output
+
+24
+
+
+Input
+
+7 3
+3 14 15 92 65 35 89
+
+
+Output
+
+64
+
+Note
+
+In the first example you can split the books as follows:
+
+$$$(9 + 14 + 28 + 1 + 7) \& (13 + 15) \& (29 + 2) \& (31) = 24.$$$
+
+In the second example you can split the books as follows:
+
+$$$(3 + 14 + 15 + 92) \& (65) \& (35 + 89) = 64.$$$
+</user>
+<bot>
+<think>
+Okay, let's see. The problem is about splitting a list of books into k shelves, each containing consecutive books, and maximizing the bitwise AND of their sums. Hmm. Bitwise AND is tricky because it's all about the bits being set in all operands. So to maximize the AND, we want each bit to be set as high as possible, but only if all the shelf sums have that bit set.
+
+The approach here probably involves checking each bit from the highest possible down to the lowest. For each bit position, we try to see if it's possible to split the books into k shelves such that all shelf sums have that bit set, along with any higher bits we've already determined. Then, we accumulate those bits as we go.
+
+Let me think step by step.
+
+First, the maximum possible bit we can consider is 50 bits, since the a_i can be up to 2^50. So we'll start checking from bit 50 down to 0.
+
+For each bit position 'b', we check if it's possible to split the books into k shelves such that each shelf's sum has all the bits we've already confirmed (from higher positions) plus the current bit 'b'. If this is possible, then we can keep that bit in our result and proceed to lower bits.
+
+So the algorithm might look like this:
+
+1. Initialize the result to 0.
+2. For each bit from the highest (like 60 maybe, since sum could be up to 50 * 2^50) down to 0:
+   a. Tentatively set this bit in the result.
+   b. Check if there's a way to split the books into k shelves such that each shelf's sum, when ANDed with the current mask (result | (1 << b)), equals the mask. Wait, no. The mask should be the bits we have so far plus the current bit. Wait, maybe the mask is built incrementally. For example, we start with the highest bit. If we can have that bit set in all shelf sums, then we keep it and check lower bits. For each subsequent bit, we check if we can set it in all shelf sums, considering the bits already set in the mask.
+
+Wait, perhaps the standard approach for such bitwise maximization problems is to use a greedy algorithm, building the result bit by bit from the highest to the lowest. At each step, we check if setting the current bit is possible given the previous bits, and if so, we include it.
+
+So here's how it would work:
+
+- Start with mask = 0.
+- For each bit from highest (like 60) down to 0:
+   - Try setting this bit in the mask (mask_candidate = mask | (1 << b)).
+   - Check if there's a way to split the books into k shelves such that each shelf's sum has all bits in mask_candidate set. That is, each shelf sum AND mask_candidate equals mask_candidate. Which is equivalent to each shelf sum having all the bits set in mask_candidate.
+   - If such a split exists, then update mask to mask_candidate.
+- The final mask is the maximum possible AND.
+
+So the crux is, for each candidate mask, can we split the array into k parts where each part's sum has all the bits set in the mask?
+
+Now, how to check this efficiently.
+
+We need to model this as a dynamic programming problem. Let's think: for each position in the array and for each possible number of shelves used so far, can we track whether the sum up to that position satisfies the mask (i.e., sum & mask_candidate == mask_candidate) ?
+
+Wait, but for the check when considering a mask_candidate, we need to split the array into exactly k parts. Each part's sum must have all the bits in mask_candidate set.
+
+So, the check is: can we split the array into k consecutive segments, each of which has a sum that is at least mask_candidate and when ANDed with mask_candidate equals mask_candidate. Wait, no. Because the sum must have all the bits set in mask_candidate. So sum & mask_candidate should be equal to mask_candidate.
+
+But mask_candidate is a subset of bits. So sum must have at least those bits. So when you AND the sum with mask_candidate, you get mask_candidate. Which means that all the bits in mask_candidate are set in sum.
+
+So, during the check for a particular mask_candidate, we need to split the array into k consecutive segments, each with sum S_i, such that S_i & mask_candidate == mask_candidate. Which implies that S_i >= mask_candidate (since the mask_candidate's bits are set). Wait, not exactly. For example, mask_candidate could be 0b1000, and the sum could be 0b1000 (8) or 0b1100 (12), etc. But the sum must have all the bits of the mask_candidate set. So the sum must be at least the mask_candidate.
+
+But how do we check if such a split is possible?
+
+This seems like a problem that can be solved with dynamic programming. Let's think of dp[i][j] as a boolean indicating whether the first i books can be split into j shelves, each satisfying the mask_candidate condition.
+
+The transitions would be: for each i and j, check if there's a previous position m (m < i) where dp[m][j-1] is true, and the sum from m+1 to i is S such that (S & mask_candidate) == mask_candidate.
+
+The base case would be dp[0][0] = true (zero books, zero shelves), and then for each j from 1 to k, we check if we can split the books.
+
+Wait, but the books are consecutive, so the split has to be into consecutive segments. So for the j-th shelf, the sum is the sum from the start of that shelf to the end. So for example, if we split the first m books into j-1 shelves, then the next shelf is from m+1 to current i.
+
+So for each i (current end of j-th shelf), we look for all possible m < i where the sum from m+1 to i satisfies the mask_candidate, and dp[m][j-1] is true.
+
+This approach could work. The problem is the time complexity. For each mask_candidate, we have to run this DP, which is O(n^2 * k). Since n is up to 50, and k up to 50, for each mask_candidate, the DP is O(50^2 *50) = 125,000 operations. And there are up to 60 bits to check, so total operations are 60 * 125,000 = 7,500,000, which is manageable.
+
+So the plan is:
+
+1. Precompute the prefix sums to quickly calculate the sum of any interval.
+
+2. For each bit from highest (like 60) down to 0:
+   a. Tentatively set this bit to form a candidate mask (current_mask | bit).
+   b. Check if it's possible to split the array into k shelves, each with sum & candidate_mask == candidate_mask.
+   c. If possible, update the current_mask to include this bit.
+
+3. The final current_mask is the maximum possible AND.
+
+So how to implement the check for a candidate mask?
+
+First, compute the prefix sums. Then, for each possible split into k shelves, check each shelf's sum.
+
+But the DP approach would be more efficient. Let's outline the steps for the DP:
+
+For a given mask_candidate:
+
+- Compute prefix sums. Let's say prefix_sum[0] = 0, prefix_sum[i] = a[0] + ... + a[i-1].
+
+Then, the sum from l to r (exclusive) is prefix_sum[r] - prefix_sum[l].
+
+We need to split the array into k intervals. Let's model the DP as dp[j][i] = whether we can split the first i books into j shelves, each satisfying the mask condition.
+
+Initialize dp[0][0] = True.
+
+For each j from 1 to k:
+   For each possible i (current end of j-th shelf):
+       For each possible m (start of j-th shelf, which is the end of (j-1)-th shelf):
+           if dp[j-1][m] is True, and sum from m to i (exclusive) has sum & mask_candidate == mask_candidate:
+               set dp[j][i] = True.
+
+Finally, check if dp[k][n] is True.
+
+But how to implement this efficiently.
+
+The sum from m to i is prefix_sum[i] - prefix_sum[m]. So for each j, we loop over i from 1 to n. For each i, we check all possible m from j-1 to i-1 (since each shelf must have at least one book, so for j shelves, the first j-1 shelves have at least j-1 books, leaving at least one for the last shelf). So m can be from (j-1) up to (i-1), but also considering that the sum from m to i must meet the mask condition.
+
+But in code, for each j in 1..k:
+   for i in 1..n:
+       for m in 0..i-1:
+           if dp[j-1][m] is True:
+               sum = prefix_sum[i] - prefix_sum[m]
+               if (sum & mask_candidate) == mask_candidate:
+                   dp[j][i] = True
+                   break (since once found, no need to check other m's)
+       So for each i and j, iterate m up to i-1 and check.
+
+But this would be O(k * n^2) operations for each mask.
+
+Which, given the constraints, is acceptable.
+
+So in code, for each mask_candidate:
+
+Compute the DP as follows:
+
+Initialize a 2D array (or list of lists) dp of size (k+1) x (n+1), all False. Set dp[0][0] = True.
+
+Then for j in 1 to k:
+   for i in j to n (since each shelf must have at least one book, so the first j shelves need at least j books. So i must be at least j):
+       for m in j-1 to i-1:
+           if dp[j-1][m] is True:
+               sum_part = prefix_sum[i] - prefix_sum[m]
+               if (sum_part & mask_candidate) == mask_candidate:
+                   dp[j][i] = True
+                   break (since once found, no need to check other m's)
+So after filling the dp table, we check if dp[k][n] is True.
+
+If yes, then this mask_candidate is possible, and we can keep the bit.
+
+So putting this all together:
+
+The steps are:
+
+- Compute the prefix sum array.
+
+- Initialize the answer as 0.
+
+- For each bit from the highest (like 60) down to 0:
+
+   - Tentatively set this bit in the candidate mask (ans | (1 << b)).
+
+   - Check if the candidate mask is possible using the DP approach.
+
+   - If possible, update ans to the candidate mask.
+
+- Return ans.
+
+Now, the highest possible bit for the sum would be up to sum of all a_i. Since each a_i is up to 2^50, and n is 50, the maximum sum is 50 * 2^50, which is about 2^55. So we can loop from bit 60 down to 0.
+
+So in code, the bits would be checked in the order from 60 down to 0.
+
+Now, let's test this logic with the first example.
+
+First example input:
+
+n=10, k=4
+
+a = [9,14,28,1,7,13,15,29,2,31]
+
+The sample output is 24 (binary 11000).
+
+So let's see how the algorithm would find this.
+
+The initial answer is 0.
+
+Check bit 60: candidate is 2^60. The sum of all books is 9+14+28+1+7+13+15+29+2+31 = let's compute:
+
+9+14=23, +28=51, +1=52, +7=59, +13=72, +15=87, +29=116, +2=118, +31=149. So total sum is 149. So 2^60 is way bigger, so the mask_candidate for bit 60 is 0 | 2^60. But the sum of any shelf is at least 2^60? No, since the total sum is 149. So the DP will return false. So bit 60 is not set.
+
+Continue this down until some bit where the candidate mask can be achieved.
+
+At bit 4 (16), perhaps.
+
+But how does the algorithm proceed.
+
+Let's see when the candidate mask includes bits 4 (16) and 3 (8), etc.
+
+But perhaps the algorithm would check each bit from high to low, accumulating the mask, and testing if including the current bit is possible.
+
+In the first example, the maximum possible mask is 24 (16+8). So the code would check each bit starting from the highest possible. For example, let's see:
+
+The initial mask is 0. Then, for bit 60 down to 4 (assuming that 2^4 is 16, which is part of the answer), the code would try to set that bit. Let's see when the candidate mask is 24.
+
+But the candidate mask is built step by step. For example, first, the algorithm checks the highest possible bit that can be set. Let's imagine:
+
+Suppose that when the mask is 0, and the current candidate is 1<<b. Let's see for b=4 (16). The candidate mask is 16. The code checks if it's possible to split into 4 shelves where each sum has 16 bits set.
+
+But the sum of each shelf must have 16 as a subset of bits. So sum >= 16, and sum & 16 ==16.
+
+For example, the first shelf in the sample solution has sum 9+14+28+1+7= 59. 59 in binary is 111011. 16 is 10000. 59&16= 16, so it's okay. Then the next shelf sums 13+15=28. 28&16=16. Then 29+2=31, which also has 16. Then 31, which has 16. So each sum has 16 as part of their bits. So the mask 16 would be possible. Then the algorithm would proceed to check lower bits, adding them if possible.
+
+Wait, but the mask_candidate is built incrementally. For example, once we have 16, then the next candidate is 16 | 8 (24), then check if that's possible. If yes, then keep adding the next lower bits.
+
+So the algorithm starts with the highest bits and greedily includes them.
+
+So let's see for the first example:
+
+After considering bit 4 (16), the mask becomes 16. Then, moving to bit 3 (8), the candidate mask is 16 | 8 =24. The code checks if it's possible to split the shelves such that each shelf's sum AND 24 equals 24. That requires that each shelf's sum has both bits 16 and 8 set.
+
+In the sample solution, the shelf sums are 59, 28, 31, 31. Let's compute 59 & 24: 59 is 0b111011. 24 is 0b11000. AND is 0b1000 (8), which is not equal to 24. Wait, this is conflicting. Wait, the sample's AND is 24. How does that happen?
+
+Wait, the sample solution is (59) & (28) & (31) & (31). Let's compute each:
+
+59 in binary is 111011 (59). 28 is 11100. 31 is 11111. 31 is 11111.
+
+So the AND is 59 & 28 = 24 (binary 11000), then 24 & 31 is 24, then 24 &31 is 24. So the final AND is 24.
+
+But for the mask_candidate of 24 (binary 11000), each shelf sum must have all bits in 24 set. But 28 in binary is 11100. 28 & 24 is 24, yes. 59 is 111011, 59 &24 is 24. 31 is 11111, 31&24 is 24. So each sum when ANDed with 24 gives 24. So the mask_candidate 24 is possible.
+
+So the algorithm will first check if 24 is possible. Wait, but how?
+
+Because the algorithm builds the mask bit by bit. Let's see:
+
+Initially, the mask is 0.
+
+Then, check each bit from highest possible (like 60 down to 0).
+
+Suppose that when the current bit is 4 (16), the candidate mask is 16. The code checks if it's possible to split into 4 shelves where each sum's AND with 16 is 16. Which is possible, as each shelf sum in the sample is >=16 and has the 16 bit set.
+
+So the mask is updated to 16.
+
+Then, the next bit is 3 (8). The candidate mask is 16 | 8 =24. The code checks if it's possible to split into 4 shelves where each sum's AND with 24 equals 24.
+
+In this case, each sum must have bits 16 and 8 set.
+
+But 28 (sum of 13+15) is 28. 28 in binary is 11100. So 28 has 16 (bit 4) and 8 (bit 3) set. Because 16+8=24, which is 11000. But 28 is 11100, which is 16+8+4. So 28 AND 24 is 24, which is correct. Similarly, 59 is 59-16=43, which has 32 (bit5), 8 (bit3), 2, 1. So 59 in binary is 111011. AND with 24 (11000) gives 11000 (24). So yes. The other sums (31 and 31) also have those bits. So the code will check that this is possible, and thus update the mask to 24.
+
+Then, the next bit is 2 (4). The candidate mask is 24 |4=28. Now, the code checks if each shelf sum's AND with 28 is 28. Let's see:
+
+59 &28 = 24 (since 59 is 111011, 28 is 11100, which is 24+4=28). So 59 &28 is 24 (which is not equal to 28). So this condition would fail for the first shelf. So the code would not be able to split into 4 shelves where each sum has 28. Therefore, the candidate mask 28 is invalid, so the code skips adding bit 2.
+
+Then, bit 1 (2). Candidate mask 24 | 2 =26. Check if each sum's AND with 26 is 26. 59 &26: 59 is 111011, 26 is 11010. AND is 100010 (34?), wait no. Wait, 59 is 0b111011 (59). 26 is 0b11010. So in binary:
+
+59:  0b 111011 (bits 5,4,3,1,0)
+26: 0b 011010 (bits 4,3,1)
+AND: 0b011010? Wait no, 59 is 64 is 2^6=64, which is larger than 59. Wait 59 is 32+16+8+2+1=59. So bits 5 (32), 4 (16), 3 (8), 1 (2), 0 (1). So when ANDed with 26 (16+8+2), the bits 4,3,1 would be set. So the AND is 16+8+2=26. So 59&26=26. Similarly, 28&26 is 24 (since 28 is 16+8+4, AND 26 (16+8+2) gives 16+8=24). So 24 is not equal to 26. So the second shelf's sum would not meet the condition. So the candidate mask 26 is invalid. So the code doesn't add this bit.
+
+Similarly, for bit 0 (1). Candidate mask 24 |1=25. Each sum's AND with 25 must be 25. For example, 59&25 is 25 (since 59 has 16+8+32+ etc. Wait, 25 is 16+8+1. 59 is 32+16+8+2+1. So 32 is bit5, 16 (bit4), 8 (bit3), 2 (bit1), 1 (bit0). So 59 &25 is 16+8+1=25. So first shelf's sum is okay. Second shelf sum is 28. 28&25 is 16+8=24, which is not 25. So this is invalid. So mask 25 is invalid.
+
+Thus, the algorithm proceeds and the mask remains 24.
+
+So the code would correctly return 24.
+
+So the approach seems correct.
+
+Now, let's think about how to implement this in Python.
+
+First, read n and k.
+
+Then read the array of a_i.
+
+Compute the prefix sums.
+
+Then, iterate from the highest bit down to 0.
+
+For each bit, check if the candidate mask (current answer | (1 << bit)) can be achieved.
+
+Implement the DP check as described.
+
+Now, the code.
+
+But how to handle very large numbers? Since the a_i can be up to 2^50, the sums can be up to 50*2^50. But in Python, integers can handle arbitrary size, so no problem.
+
+Now, the code outline:
+
+def main():
+    import sys
+    n, k = map(int, sys.stdin.readline().split())
+    a = list(map(int, sys.stdin.readline().split()))
+    prefix = [0] * (n+1)
+    for i in range(n):
+        prefix[i+1] = prefix[i] + a[i]
+    
+    ans = 0
+    for bit in reversed(range(60)):  # 60 bits is enough
+        candidate = ans | (1 << bit)
+        # Check if possible to split into k shelves, each sum & candidate == candidate
+        # Use DP
+        dp = [[False]*(n+1) for _ in range(k+1)]
+        dp[0][0] = True
+        for j in range(1, k+1):
+            for i in range(1, n+1):
+                for m in range(0, i):
+                    if dp[j-1][m]:
+                        s = prefix[i] - prefix[m]
+                        if (s & candidate) == candidate:
+                            dp[j][i] = True
+                            break  # Once found, break to save time
+        if dp[k][n]:
+            ans = candidate
+    print(ans)
+
+if __name__ == "__main__":
+    main()
+
+Wait, but the code uses reversed(range(60)), which starts from 59 down to 0. But since 2^59 is way larger than the sum possible, perhaps the code will correctly process all bits.
+
+Testing the first sample:
+
+In the first sample, when candidate is 24 (bit 4 and 3 set), the DP should return true.
+
+In the DP for j=4 (k=4):
+
+For j=1 to 4:
+
+j=1: check if the entire array can be split into 1 shelf. The sum is 149. 149 & 24 = 24. So yes.
+
+But the code would check for k=4, so in the code when j runs up to 4.
+
+Wait, the code for j in 1 to k. For k=4, j runs from 1 to 4.
+
+In the code, when checking for candidate=24, the code's DP will look for splits into 4 shelves. Each shelf's sum must have the candidate mask.
+
+In the first example, the split is possible, so dp[4][10] is True. Thus, the code will set ans to 24.
+
+So this code should work.
+
+Now, let's test the second example:
+
+Input:
+
+7 3
+
+3 14 15 92 65 35 89
+
+The sum of the shelves in the sample is (3+14+15+92) = 124, 65, 35+89=124.
+
+The AND is 124 & 65 & 124 = 64.
+
+So the mask is 64 (binary 1000000).
+
+So the algorithm would check for each bit starting from high.
+
+The candidate mask 64 can be achieved. Let's see:
+
+For example, when building up the mask:
+
+Start with 0.
+
+Check bit 6 (64). The candidate is 64. Check if it's possible to split into 3 shelves, each sum's AND with 64 is 64. That means each sum must be >=64 and have the 64 bit set.
+
+In the sample, the first shelf's sum is 124 (64+32+28?), but 64 is 64. So 124's 64 bit is set. Then 65's 64 bit is set. Then 124's 64 bit is set.
+
+So yes. So the code would set the mask to 64.
+
+Then, when checking lower bits, like 5 (32), the candidate mask becomes 64+32=96. Check if each sum's AND with 96 is 96.
+
+But 124 & 96 is 96 (since 124 is 64+32+28, but 64+32=96, so 124's bits 6 and 5 are set. So 124 & 96 = 96. 65 &96 is 64 (since 65 is 64 +1). So 65 &96 is 64, which is not equal to 96. So the split is not possible, so the mask remains 64.
+
+Thus, the code returns 64.
+
+Thus, the code works.
+
+Now, let's check possible optimizations. For example, in the DP loops, once we find a valid m for a given i and j, we can break early. Which the code does with 'break' after setting dp[j][i] to True. This should optimize the inner loop.
+
+Thus, the code should handle all cases correctly.
+</think>
+To solve this problem, we need to maximize the bitwise AND of the sums of k consecutive shelves of books. The approach involves using a greedy algorithm combined with dynamic programming to check each bit from the highest possible down to the lowest, ensuring each bit can be set in the result while maintaining valid splits into k shelves.
+
+### Approach
+1. **Bitwise Maximization**: Start with a result initialized to 0. For each bit from the highest possible (60 bits due to constraints) down to 0, tentatively set the bit and check if it's possible to split the books into k shelves such that each shelf's sum has all the bits set in the current result.
+2. **Dynamic Programming (DP) Check**: For each candidate bit, use a DP approach to determine if the books can be split into k shelves where each shelf's sum, when ANDed with the current candidate mask, equals the candidate mask. This ensures all bits in the candidate mask are set in each shelf's sum.
+3. **Prefix Sums**: Precompute prefix sums to efficiently calculate the sum of any subarray, which helps in quickly checking the sums for each potential shelf.
+
+### Solution Code
+```python
+def main():
+    import sys
+    n, k = map(int, sys.stdin.readline().split())
+    a = list(map(int, sys.stdin.readline().split()))
+    prefix = [0] * (n + 1)
+    for i in range(n):
+        prefix[i + 1] = prefix[i] + a[i]
+    
+    ans = 0
+    for bit in reversed(range(60)):  # Check from highest bit down to 0
+        candidate = ans | (1 << bit)
+        # DP table to track possible splits
+        dp = [[False] * (n + 1) for _ in range(k + 1)]
+        dp[0][0] = True  # Base case: 0 shelves, 0 books
+        
+        for j in range(1, k + 1):
+            for i in range(j, n + 1):
+                # Check all possible previous splits for j-1 shelves
+                for m in range(j-1, i):
+                    if dp[j-1][m]:
+                        current_sum = prefix[i] - prefix[m]
+                        if (current_sum & candidate) == candidate:
+                            dp[j][i] = True
+                            break  # No need to check further m
+        if dp[k][n]:
+            ans = candidate
+    print(ans)
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Prefix Sums Calculation**: The prefix sums array is computed to quickly determine the sum of any subarray, which is essential for efficiently checking each potential shelf's sum during the DP checks.
+2. **Bitwise Maximization Loop**: Iterate over each bit from the highest (59) down to 0. For each bit, tentatively set it in the candidate mask and check if the books can be split into k shelves with sums that include all bits in the candidate mask.
+3. **Dynamic Programming Check**: The DP table `dp[j][i]` tracks whether the first `i` books can be split into `j` shelves. For each shelf count `j` and book count `i`, check all possible previous splits to see if the current subarray sum meets the candidate mask condition. If valid, update the DP table and break early for efficiency.
+4. **Result Update**: If the candidate mask is valid (as determined by the DP check), update the result to include the current bit.
+
+This approach ensures that we greedily set the highest possible bits while maintaining valid splits, leading to the maximum possible bitwise AND of the shelf sums.
+</bot>

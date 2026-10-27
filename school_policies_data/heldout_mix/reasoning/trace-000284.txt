@@ -1,0 +1,863 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Recently a serious bug has been found in the FOS code. The head of the F company wants to find the culprit and punish him. For that, he set up an organizational meeting, the issue is: who's bugged the code? Each of the n coders on the meeting said: 'I know for sure that either x or y did it!'
+
+The head of the company decided to choose two suspects and invite them to his office. Naturally, he should consider the coders' opinions. That's why the head wants to make such a choice that at least p of n coders agreed with it. A coder agrees with the choice of two suspects if at least one of the two people that he named at the meeting was chosen as a suspect. In how many ways can the head of F choose two suspects?
+
+Note that even if some coder was chosen as a suspect, he can agree with the head's choice if he named the other chosen coder at the meeting.
+
+Input
+
+The first line contains integers n and p (3 ≤ n ≤ 3·105; 0 ≤ p ≤ n) — the number of coders in the F company and the minimum number of agreed people.
+
+Each of the next n lines contains two integers xi, yi (1 ≤ xi, yi ≤ n) — the numbers of coders named by the i-th coder. It is guaranteed that xi ≠ i, yi ≠ i, xi ≠ yi.
+
+Output
+
+Print a single integer — the number of possible two-suspect sets. Note that the order of the suspects doesn't matter, that is, sets (1, 2) and (2, 1) are considered identical.
+
+Examples
+
+Input
+
+4 2
+2 3
+1 4
+1 4
+2 1
+
+
+Output
+
+6
+
+
+Input
+
+8 6
+5 6
+5 7
+5 8
+6 2
+2 1
+7 3
+1 3
+1 4
+
+
+Output
+
+1
+</user>
+<bot>
+<think>
+Okay, let's see. The problem is about finding the number of ways to choose two suspects such that at least p coders agree with the choice. A coder agrees if at least one of their two named suspects is chosen. 
+
+Hmm. So for each possible pair of suspects (a, b), we need to count how many coders have either a or b in their (xi, yi) pair. Then, check if this count is >= p. If yes, then this pair is valid. The answer is the number of such valid pairs.
+
+The challenge is to compute this efficiently given that n can be up to 3e5. A brute force approach where we check all possible pairs would be O(n^2), which is way too slow. So we need a smarter approach.
+
+Let's think about how to model this. For each coder i, they have two options (xi and yi). When we choose a pair (u, v), the coder i will contribute to the count if either u or v is in {xi, yi}. So the total count for the pair (u, v) is the number of coders whose {xi, yi} intersects with {u, v}.
+
+So the problem reduces to, for all possible unordered pairs (u, v), compute the number of coders whose xi or yi is u or v, and then count how many such pairs have this number >= p.
+
+But how do we compute this efficiently?
+
+First, perhaps we can precompute for each coder their pair (xi, yi). Then, for any pair (u, v), the number of coders who have at least one of u or v in their pair is the sum over all coders of whether (xi is u or xi is v or yi is u or yi is v).
+
+But again, checking this for every possible pair is O(n^2), which is not feasible.
+
+Alternative approach: Let's precompute for each coder i, the set {xi, yi}. Then, for any pair (u, v), the count is the number of coders whose set intersects with {u, v}.
+
+This is equivalent to the inclusion-exclusion principle: the count is the number of coders where either xi is u, xi is v, yi is u, or yi is v. Or, more formally, the size of the union of the two events (coder's set contains u or v).
+
+But how to compute this for all possible (u, v) pairs efficiently?
+
+Hmm. Let's consider that for each coder, their pair can be represented as a set of two elements. For each such set S, when we choose a pair (u, v), if S intersects {u, v}, then this coder contributes 1 to the count for (u, v).
+
+So the problem is equivalent to finding all unordered pairs (u, v) such that the sum over all coders of the indicator function (S_i ∩ {u, v} is non-empty) is >= p.
+
+So, the total for a pair (u, v) is the number of coders where their S_i (the pair) includes u, includes v, or both.
+
+Now, how can we compute this efficiently?
+
+First, note that for each coder's S_i, the set of pairs (u, v) that will include this coder is all pairs where u is in S_i or v is in S_i. So each S_i contributes to certain (u, v) pairs.
+
+But considering all possible S_i and how they contribute to all possible pairs (u, v) is again O(n^2), which is not feasible.
+
+Alternative idea: Let's precompute for each element x, how many coders have x in their S_i (i.e., x is either xi or yi for that coder). Then, the total count for a pair (u, v) would be the sum of the counts of u and v, minus the number of coders that have both u and v in their S_i (since they are counted twice otherwise). So by inclusion-exclusion:
+
+count(u, v) = cnt[u] + cnt[v] - overlap[u][v]
+
+Where cnt[x] is the number of coders who have x in their S_i, and overlap[u][v] is the number of coders who have both u and v in their S_i.
+
+So the formula is:
+
+total = cnt[u] + cnt[v] - overlap(u, v)
+
+If this total >= p, then the pair (u, v) is valid.
+
+Now, the problem reduces to computing for all possible pairs (u, v) the value of cnt[u] + cnt[v] - overlap[u][v], and counting how many such pairs have this >= p.
+
+The question now is how to compute cnt and overlap efficiently.
+
+Computing cnt is straightforward. For each coder's S_i, we can add 1 to cnt[xi] and cnt[yi]. So for each coder, we process both elements in their pair.
+
+Now, for overlap[u][v], which is the number of coders whose S_i contains both u and v. So for each coder, if their S_i is {a, b}, then this coder contributes 1 to overlap[a][b] and overlap[b][a] (but since the pair is unordered, perhaps we can process this once per unordered pair).
+
+So, for each coder i with S_i = {a, b}, where a < b (to avoid duplicates), we can increment overlap[(a, b)] by 1. Then, for any pair (u, v) where u < v, the overlap is the sum in overlap[(u, v)] if u and v are in some S_i.
+
+Wait, but how do we represent overlap? Since for any pair (u, v), u can be less than or greater than v. But when we process the pair (a, b) for a coder, we can store it as a tuple in sorted order, so that (a, b) and (b, a) are considered the same. So for each coder, we process their S_i as (min(xi, yi), max(xi, yi)), and for that tuple, increment the overlap count by 1. Then, for any (u, v) pair, we can check if u < v, and if so, look up the overlap in the map. Otherwise, we swap them and look up.
+
+But considering that the number of possible (u, v) pairs where u < v and overlap[u][v] is non-zero is O(m), where m is the number of coders (since each coder contributes exactly one pair to overlap). So m is up to 3e5.
+
+Therefore, the total possible overlapping pairs is up to 3e5, which is manageable.
+
+So, steps:
+
+1. Compute cnt[x] for all x. This is the number of coders that have x in their S_i (xi or yi).
+
+2. Compute overlap, which is a dictionary (or a hash map) where overlap[(a, b)] is the number of coders whose S_i is exactly {a, b}.
+
+   For each coder, their S_i is (xi, yi) sorted as min and max, so we can process each S_i as a sorted pair. Then, for each such pair (a, b), increment overlap[(a, b)] by 1.
+
+Once we have cnt and overlap, for each possible unordered pair (u, v), we can compute the total as cnt[u] + cnt[v] - overlap.get((min(u, v), max(u, v)), 0). Wait, because if (u, v) is a pair that's present in some coders' S_i, then the overlap is the number of coders who have both u and v. So for a pair (u, v), the overlap is the number of S_i that are exactly {u, v} (if u < v) or {v, u} (but since we stored them sorted, it's the same as looking up (min(u, v), max(u, v))).
+
+Therefore, for any pair (u, v), the overlap is the value stored in the overlap map for the sorted pair. If u and v are the same, but that's not possible here because the problem states that xi and yi are different (from the input constraints: xi != yi).
+
+So the formula is correct.
+
+Now, the next challenge is to compute for all possible pairs (u, v) (u != v, since we are choosing two suspects) the value of (cnt[u] + cnt[v] - overlap_uv) and check if it's >= p.
+
+But how do we compute this efficiently for all possible pairs (u, v)?
+
+The total possible pairs is O(n^2), which is 9e10 when n is 3e5. That's way too big to process directly. So we need a smarter approach.
+
+Alternative Idea:
+
+We can split the problem into two parts:
+
+1. All pairs (u, v) where u and v are connected by at least one coder's S_i (i.e., there exists a coder who mentioned both u and v). For these pairs, the overlap_uv is >= 1.
+
+2. All other pairs (u, v) where no coder has both u and v in their S_i. For these pairs, the overlap_uv is 0.
+
+But even this split might not help directly. Let's think.
+
+We need to find all pairs (u, v) where cnt[u] + cnt[v] - overlap_uv >= p.
+
+But the problem is that even for pairs not in the overlap map, their contribution is cnt[u] + cnt[v], which may be >= p.
+
+So the total valid pairs would be the sum of:
+
+- All pairs (u, v) where u < v and cnt[u] + cnt[v] >= p, minus the number of such pairs where (u, v) is in the overlap map and (cnt[u] + cnt[v] - overlap_uv) < p.
+
+Wait, maybe that's not the right way. Alternatively, maybe the total is:
+
+Total pairs where cnt[u] + cnt[v] >= p, minus those pairs where (u, v) is in the overlap and (cnt[u] + cnt[v] - overlap_uv) < p, but (cnt[u] + cnt[v]) >= p. Because for such pairs, when we subtract the overlap, it drops below p.
+
+But this seems complicated.
+
+Alternative approach: For all possible pairs (u, v), compute the value cnt[u] + cnt[v] - overlap_uv, and count how many are >= p.
+
+But again, the problem is how to compute this for all pairs without iterating through all O(n^2) pairs.
+
+Another Idea: Let's compute the number of pairs (u, v) where (cnt[u] + cnt[v]) >= p, and then subtract the number of pairs (u, v) that are in the overlap and where (cnt[u] + cnt[v] - overlap_uv) < p but (cnt[u] + cnt[v]) >= p.
+
+Wait, but how?
+
+Alternatively, let's first compute all possible pairs (u, v) where cnt[u] + cnt[v] >= p. The number of such pairs is S. Then, for each pair (a, b) in the overlap map, check if (cnt[a] + cnt[b] - overlap_ab) < p but (cnt[a] + cnt[b]) >= p. For each such pair, subtract 1 from S. The remaining S would be the answer.
+
+But this is only if the pair (a, b) was counted in the initial S (since cnt[a] + cnt[b] >= p), but after subtracting overlap_ab, the total is now below p. So those pairs should not be counted in the answer.
+
+But this approach may work. Let's see:
+
+The initial S is the number of unordered pairs (u, v) where u != v and cnt[u] + cnt[v] >= p. Then, for each (a, b) in the overlap map:
+
+if (cnt[a] + cnt[b] - overlap_ab) < p and (cnt[a] + cnt[b] >= p), then this pair (a, b) was counted in S but is invalid. So subtract 1.
+
+Similarly, for pairs (a, b) not in the overlap map, their (cnt[a] + cnt[b] - 0) is cnt[a] + cnt[b], so they are included in S if >= p.
+
+So the answer would be S minus the number of overlapping pairs (a, b) that were included in S (i.e., cnt[a] + cnt[b] >= p) but after subtracting overlap_ab, their total is < p.
+
+But how to compute S?
+
+S can be computed as the number of unordered pairs (u, v) where u < v and cnt[u] + cnt[v] >= p.
+
+So the plan is:
+
+1. Compute cnt array.
+
+2. Compute S: the number of unordered pairs (u, v) where u < v and cnt[u] + cnt[v] >= p.
+
+3. For each (a, b) in the overlap map:
+
+   a. Compute current_total = cnt[a] + cnt[b] - overlap_ab.
+
+   b. If current_total < p and (cnt[a] + cnt[b] >= p), then this pair (a, b) was counted in S but should be excluded. So decrement the answer by 1.
+
+But wait, the pair (a, b) in the overlap map may not be u < v. But in the overlap map, all (a, b) are stored as a < b, since we process them as sorted pairs.
+
+So when we compute S, for all pairs (u, v) with u < v, we check if cnt[u] + cnt[v] >= p.
+
+Then, for each (a, b) in the overlap map (a < b), we check whether (cnt[a] + cnt[b] >= p) and (current_total < p). If so, we subtract 1 from the answer.
+
+Because in S, this (a, b) was counted as a valid pair (since their sum was >= p), but after considering the overlap, the actual total is less than p, so it should not be counted.
+
+So this approach would work, but how to compute S efficiently?
+
+Computing S can be done by first sorting the cnt array, then using a two-pointer approach to count the number of pairs (u, v) where u < v and cnt[u] + cnt[v] >= p.
+
+But let's think:
+
+Sort the cnt array in non-decreasing order. Then, for each i from 0 to n-1, find the smallest j such that cnt[i] + cnt[j] >= p. All j >= that index would form a valid pair with i.
+
+But since the array is sorted, for each i, the number of elements j > i where cnt[i] + cnt[j] >= p can be found using binary search.
+
+Wait, but the array is 1-based or 0-based?
+
+Let's say we have a list of cnt values sorted in non-decreasing order. For each i, starting from 0 to n-1, the number of elements j in the list where j > i and cnt[i] + cnt[j] >= p can be found by finding the smallest index k where cnt[i] + cnt[k] >= p, and then the count is (n - k) if k > i.
+
+Wait, but since j has to be > i, we need to adjust for that.
+
+So the approach is:
+
+Sort the cnt array.
+
+Initialize the answer S to 0.
+
+Then, for each i from 0 to len(cnt)-1:
+
+   We need to find the minimal j where j > i and cnt[i] + cnt[j] >= p.
+
+   The number of elements from j to len(cnt)-1, but j must be > i.
+
+   So using binary search, for the subarray starting from i+1 to the end, find the first index where cnt[j] >= (p - cnt[i]).
+
+   The number of valid elements is len(cnt) - j.
+
+   Summing this over all i gives S.
+
+But wait, the cnt array here is for all the coders' possible x and y. Wait no, the cnt array is for all possible suspects (since each suspect is a coder, numbered from 1 to n). So the cnt array has size n, with cnt[x] for x from 1 to n.
+
+So to compute S, we have to generate a list of all cnt[x] values, then sort them, and then use the two-pointer approach to count the number of pairs (x, y) where x < y and cnt[x] + cnt[y] >= p.
+
+But how to generate this sorted list?
+
+Wait, the suspects are numbered from 1 to n. So the cnt array is of size n. So the sorted list is the sorted version of the cnt array.
+
+But then, when we sort it, the elements are arranged in non-decreasing order, but each element in the list is cnt of a particular x. However, for the two-pointer approach, we need to count all possible pairs (x, y) where x < y (as per their original numbers), but since the cnt array is being sorted, the indices here are not the original x, but the sorted list's indices. Wait, no, this approach would not work, because the original x and y are in the range 1..n, but when sorted, the cnt array is sorted, but each element is a count for a different x.
+
+Wait, perhaps I'm misunderstanding. Let me rephrase.
+
+The S is the number of unordered pairs (u, v) where u and v are distinct elements in 1..n, and cnt[u] + cnt[v] >= p. So this is the same as the number of pairs (u, v) where u < v and cnt[u] + cnt[v] >= p.
+
+So the problem is to compute the number of pairs (u, v) where u < v and cnt[u] + cnt[v] >= p.
+
+How to compute this efficiently.
+
+The standard approach for this is to sort the array of cnt values, and then for each element, find the number of elements after it that are >= (p - current element).
+
+But wait, the sorted array here is the list of cnt values. But in this case, the cnt array is not sorted. So let's create a sorted list of cnt values, and then proceed.
+
+But the problem is that the same cnt value can appear for multiple suspects. But when sorted, the elements are just the cnt values, and each element is considered as a possible candidate for u or v.
+
+But when you have a sorted list, the number of pairs (u, v) where u < v (in the original indices) and cnt[u] + cnt[v] >= p is the same as the number of pairs (i, j) in the sorted array where i < j and sorted[i] + sorted[j] >= p. However, this is not correct, because the original indices u and v are distinct, but their cnt values can be in any order. So sorting the cnt values and then using the two-pointer approach gives the correct number of pairs (u, v) where u and v are distinct and their cnt sum is >= p. But wait, no. Because in the sorted list, the indices i and j refer to elements in the sorted list, not the original u and v. So if there are multiple elements with the same cnt value, this approach may count pairs where u and v are the same suspect (which is invalid), but in reality, u and v must be distinct.
+
+Wait, no. Because in the problem statement, the two suspects must be different. So (u, v) is a pair where u != v. So in the sorted list of cnt values, the two-pointer approach counts the number of pairs (i, j) where i < j and sorted[i] + sorted[j] >= p. Each such pair corresponds to a pair of distinct original suspects (since each element in the sorted list is the cnt value for a unique suspect). Wait, but this is only if each element in the sorted list is from a different suspect. So the sorted list is a list of cnt values of all n suspects, each appearing exactly once. So when we sort them, it's sorted list of all cnt values, and each element in the sorted list corresponds to a unique suspect. Therefore, the two-pointer approach on the sorted list will count all pairs of distinct suspects where the sum of their cnt values is >= p. Because each element in the sorted list is from a distinct suspect. So this approach is valid.
+
+So yes, sorting the cnt array (as a list) and using the two-pointer approach gives the correct number of pairs (u, v) where u < v and cnt[u] + cnt[v] >= p.
+
+So step 1: create a sorted list of cnt values (sorted_cnt) in non-decreasing order.
+
+Then, for each i in 0 to n-2:
+
+   We need to find the minimal j such that j > i and sorted_cnt[i] + sorted_cnt[j] >= p.
+
+   The number of j's that satisfy this is (n - j) where j is the first index >= i+1 where sorted_cnt[i] + sorted_cnt[j] >= p.
+
+   Sum these over all i.
+
+This can be done using a two-pointer approach to avoid O(n log n) time for each i.
+
+Alternatively, for each i, perform a binary search on the subarray i+1 to n-1 to find the first j where sorted_cnt[i] + sorted_cnt[j] >= p.
+
+Since the array is sorted, this can be done in O(n log n) time, which is acceptable for n up to 3e5.
+
+Once we have S, the initial count, then we need to process each (a, b) in the overlap map.
+
+For each (a, b) in the overlap map (stored as a < b), compute current_total = cnt[a] + cnt[b] - overlap_ab.
+
+If current_total < p and (cnt[a] + cnt[b] >= p), then this pair (a, b) was counted in S, but is actually invalid, so subtract 1.
+
+So the answer is S minus the number of such pairs.
+
+So putting it all together:
+
+1. Read n and p.
+
+2. For each coder, read xi and yi. Update cnt[xi] and cnt[yi]. Also, add the pair (a, b) where a = min(xi, yi) and b = max(xi, yi) to a dictionary (overlap_map) to track the count of each such pair.
+
+3. Create a list sorted_cnt which is the cnt values sorted in non-decreasing order.
+
+4. Compute S using the two-pointer or binary search approach on sorted_cnt.
+
+5. For each (a, b) in overlap_map:
+
+   a. Compute sum_ab = cnt[a] + cnt[b]
+
+   b. If sum_ab >= p:
+
+      i. current_total = sum_ab - overlap_map[(a, b)]
+
+      ii. if current_total < p: then decrement the answer by 1.
+
+6. The answer after all such adjustments is the final answer.
+
+Now, the key steps are:
+
+- How to compute S efficiently.
+
+- How to process the overlap_map entries.
+
+Now, let's think about some examples.
+
+Take the first example:
+
+Input:
+
+4 2
+
+2 3
+
+1 4
+
+1 4
+
+2 1
+
+The coders are:
+
+Coder 1: 2,3 → S_i is (2,3). So cnt[2] +=1, cnt[3] +=1.
+
+Coder 2: 1,4 → cnt[1] +=1, cnt[4] +=1.
+
+Coder 3: 1,4 → same as above. cnt[1] +=1, cnt[4] +=1.
+
+Coder 4: 2,1 → S_i is (1,2). cnt[1] +=1, cnt[2] +=1.
+
+So:
+
+cnt[1] = 1 (from coder 2) + 1 (coder 3) + 1 (coder 4) → 3.
+
+cnt[2] = 1 (coder1) +1 (coder4) → 2.
+
+cnt[3] = 1 (coder1).
+
+cnt[4] = 1 (coder2) +1 (coder3) → 2.
+
+So sorted_cnt would be [1, 2, 2, 3].
+
+We need to find the number of pairs (u, v) where u < v and cnt[u] + cnt[v] >=2.
+
+Let's list all possible pairs:
+
+1+2=3 >=2 → yes.
+
+1+2=3 → yes.
+
+1+3=4 → yes.
+
+2+2=4 → yes.
+
+2+3=5 → yes.
+
+2+3=5 → yes.
+
+Wait, the sorted list is [1, 2, 2, 3]. So the elements are indexes 0:1, 1:2, 2:2, 3:3.
+
+For each i, find j > i where sum >=2.
+
+i=0:
+
+sum is 1 +2=3 >=2 → j starts at 1. All j from 1 to 3 are valid. So 3 elements.
+
+i=1:
+
+sum 2+2=4 >=2. j starts at 2. 2 elements (j=2 and 3).
+
+i=2:
+
+sum 2+3=5 >=2. j starts at 3. 1 element.
+
+i=3:
+
+no j >3.
+
+Total S is 3 + 2 +1 =6. Which matches the first example's output of 6. But wait, the first example's output is 6. But the answer also depends on the overlap_map.
+
+In the first example, overlap_map entries are:
+
+Looking at each coder's S_i:
+
+Coder1: (2,3) → add to overlap_map[(2,3)] → count 1.
+
+Coder2: (1,4) → overlap_map[(1,4)] → count 1.
+
+Coder3: (1,4) → overlap_map[(1,4)] → count becomes 2.
+
+Coder4: (1,2) → overlap_map[(1,2)] → count 1.
+
+So the overlap_map has:
+
+(2,3):1, (1,4):2, (1,2):1.
+
+Now, for each (a, b) in overlap_map:
+
+Check if sum_ab = cnt[a] + cnt[b] >= p (which is 2). Then current_total = sum_ab - overlap_ab.
+
+Check if current_total < p.
+
+For (2,3):
+
+sum_ab is cnt[2] + cnt[3] =2+1=3 >=2.
+
+current_total =3-1=2 >=2 → no subtraction.
+
+So no change.
+
+For (1,4):
+
+sum_ab is cnt[1] + cnt[4] =3+2=5 >=2.
+
+current_total =5 -2=3 >=2 → no change.
+
+For (1,2):
+
+sum_ab is 3+2=5 >=2.
+
+current_total =5-1=4 >=2 → no change.
+
+So no pairs are subtracted. Thus the answer remains 6.
+
+Which matches the first example's output.
+
+Another example:
+
+Input:
+
+8 6
+
+5 6
+
+5 7
+
+5 8
+
+6 2
+
+2 1
+
+7 3
+
+1 3
+
+1 4
+
+The output is 1.
+
+Let's compute cnt:
+
+Each coder's S_i:
+
+Coder1:5,6 → sorted (5,6). cnt5 +=1, cnt6 +=1.
+
+Coder2:5,7 → sorted (5,7). cnt5 +=1, cnt7 +=1.
+
+Coder3:5,8 → sorted (5,8). cnt5 +=1, cnt8 +=1.
+
+Coder4:6,2 → sorted (2,6). cnt2 +=1, cnt6 +=1.
+
+Coder5:2,1 → sorted (1,2). cnt1 +=1, cnt2 +=1.
+
+Coder6:7,3 → sorted (3,7). cnt3 +=1, cnt7 +=1.
+
+Coder7:1,3 → sorted (1,3). cnt1 +=1, cnt3 +=1.
+
+Coder8:1,4 → sorted (1,4). cnt1 +=1, cnt4 +=1.
+
+So cnt values:
+
+cnt1: 1 (coder5) +1 (coder7) +1 (coder8) →3.
+
+cnt2: 1 (coder4) +1 (coder5) →2.
+
+cnt3:1 (coder6) +1 (coder7) →2.
+
+cnt4:1 (coder8) →1.
+
+cnt5:3 (coders1,2,3).
+
+cnt6:2 (coders1,4).
+
+cnt7:2 (coders2,6).
+
+cnt8:1 (coder3).
+
+So sorted_cnt is [1, 1, 2, 2, 2, 2, 3, 3].
+
+Wait, let's list all cnt values:
+
+cnt1:3
+
+cnt2:2
+
+cnt3:2
+
+cnt4:1
+
+cnt5:3
+
+cnt6:2
+
+cnt7:2
+
+cnt8:1.
+
+So sorted list would be [1, 1, 2, 2, 2, 2, 3, 3].
+
+Now, p is 6. So compute S as the number of pairs (u, v) where u < v and cnt[u] + cnt[v] >=6.
+
+Looking for pairs in the sorted list where their sum >=6.
+
+The sorted list is [1, 1, 2, 2, 2, 2, 3, 3].
+
+We need to count pairs i < j where sum >=6.
+
+Let's see:
+
+Start from i=0 (1):
+
+We need j where 1 + x >=6 → x >=5. But the largest elements are 3 and 3. 1+3=4 <6. So no j for i=0.
+
+i=1 (1): same as i=0. No j.
+
+i=2 (2): looking for x >=4 (since 2 + x >=6 → x >=4). But the list has elements up to 3. 2+3=5 <6. So no j.
+
+i=3 (2): same as i=2. No j.
+
+i=4 (2): same as above. No j.
+
+i=5 (2): same. No j.
+
+i=6 (3): looking for x >=3 (6-3=3). j starts at 7 (3). 3+3=6 >=6 → so 1 pair.
+
+i=7 (3): no j left.
+
+So S is 1.
+
+Now, we need to process the overlap_map entries.
+
+The overlap_map entries are:
+
+From each coder's S_i:
+
+Coder1: (5,6) → count 1.
+
+Coder2: (5,7) → count 1.
+
+Coder3: (5,8) → count 1.
+
+Coder4: (2,6) → count 1.
+
+Coder5: (1,2) → count 1.
+
+Coder6: (3,7) → count 1.
+
+Coder7: (1,3) → count 1.
+
+Coder8: (1,4) → count 1.
+
+So for each (a, b) in the overlap_map:
+
+Check if sum_ab >=6, and current_total = sum_ab - overlap_ab <6.
+
+Let's compute each:
+
+(5,6):
+
+sum_ab = cnt[5] + cnt[6] =3+2=5 <6 → no condition.
+
+So no subtraction.
+
+(5,7):
+
+sum_ab =3+2=5 <6 → no.
+
+(5,8): sum 3+1=4 <6.
+
+(2,6): sum 2+2=4 <6.
+
+(1,2): sum 3+2=5 <6.
+
+(3,7): sum 2+2=4 <6.
+
+(1,3): sum 3+2=5 <6.
+
+(1,4): sum 3+1=4 <6.
+
+So none of these pairs have sum_ab >=6, so no subtraction.
+
+Thus, the answer remains 1, which matches the example.
+
+So the approach seems to work.
+
+Now, the code steps:
+
+Implementing this in Python.
+
+First, read n and p.
+
+Then, read n lines, each with xi and yi.
+
+Compute the cnt array and the overlap_map.
+
+But note that the suspects are numbered from 1 to n. So we can initialize cnt as a dictionary or a list with indexes from 1 to n.
+
+Then, for each pair xi, yi, add to cnt[xi] and cnt[yi], and for the sorted pair (a, b) where a=min(xi, yi), b=max(xi, yi), add to overlap_map[(a, b)] +=1.
+
+Once that's done, create the sorted_cnt list by taking all cnt[1..n] and sorting them.
+
+Compute S using the two-pointer approach.
+
+Then, for each (a, b) in overlap_map, compute sum_ab = cnt[a] + cnt[b], check if sum_ab >= p. If yes, compute current_total = sum_ab - overlap_map[(a, b)]. If current_total < p, then subtract 1 from the answer.
+
+Now, code-wise:
+
+But for handling large n (3e5), we need to use efficient data structures. For example, using a list for cnt, and a defaultdict for overlap_map.
+
+In Python:
+
+from collections import defaultdict
+
+n, p = map(int, input().split())
+
+cnt = [0] * (n + 1)  # 1-based
+overlap_map = defaultdict(int)
+
+for _ in range(n):
+    x, y = map(int, input().split())
+    if x > y:
+        x, y = y, x
+    overlap_map[(x, y)] += 1
+    cnt[x] += 1
+    cnt[y] += 1
+
+sorted_cnt = sorted(cnt[1:])  # since cnt[0] is unused
+
+# Compute S using two-pointer approach
+s = 0
+left = 0
+right = len(sorted_cnt) - 1
+
+# Wait, but the two-pointer approach for this problem is a bit different.
+
+# Alternative approach: for each i, binary search for the minimal j > i where sorted_cnt[i] + sorted_cnt[j] >= p.
+
+s = 0
+for i in range(len(sorted_cnt)):
+    # Find the minimal j where j > i and sorted_cnt[i] + sorted_cnt[j] >= p
+    low = i + 1
+    high = len(sorted_cnt) - 1
+    res = len(sorted_cnt)
+    while low <= high:
+        mid = (low + high) // 2
+        if sorted_cnt[i] + sorted_cnt[mid] >= p:
+            res = mid
+            high = mid -1
+        else:
+            low = mid +1
+    # The number of elements is len(sorted_cnt) - res
+    s += max(0, len(sorted_cnt) - res)
+
+# Now, subtract the pairs in overlap_map that were counted in S but their current_total is < p.
+
+ans = s
+
+for (a, b), overlap in overlap_map.items():
+    sum_ab = cnt[a] + cnt[b]
+    if sum_ab >= p:
+        current_total = sum_ab - overlap
+        if current_total < p:
+            ans -=1
+
+print(ans)
+
+But wait, the code above uses a list for cnt where the indexes are 1-based, which is correct.
+
+Testing the first example:
+
+cnt for 1-based indexes: cnt[1] =3, cnt[2]=2, cnt[3]=1, cnt[4]=2.
+
+sorted_cnt is [1, 2, 2, 3]. Then, for each i:
+
+i=0 (1):
+
+binary search for j>0 where 1 + sorted_cnt[j] >=2.
+
+sorted_cnt[j] >=1.
+
+Looking from j=1 to 3.
+
+sorted_cnt[1] =2 >=1. So res is 1. len - res =4-1=3. So add 3.
+
+i=1 (2):
+
+binary search for j>1 where 2 + sorted_cnt[j] >=2.
+
+sorted_cnt[j] >=0. All j>1 (sorted_cnt[2]=2, sorted_cnt[3]=3) are >=0. So res=2. len - res=4-2=2. Add 2.
+
+i=2 (2):
+
+binary search j>2. sorted_cnt[j] >=0. j starts at 3. res=3. len - res=1. Add 1.
+
+i=3 (3):
+
+no j>3. add 0.
+
+Total s=3+2+1=6.
+
+Which is correct.
+
+Then, processing overlap_map entries:
+
+For (2,3): sum_ab is 2+1=3 >=2. current_total =3-1=2 >=2 → no subtraction.
+
+For (1,4): sum_ab=3+2=5 >=2. current_total=5-2=3 >=2 → no subtraction.
+
+For (1,2): sum_ab=3+2=5 >=2. current_total=5-1=4 >=2 → no subtraction.
+
+So ans remains 6.
+
+The code works.
+
+For the second example, after processing, the sorted_cnt is [1,1,2,2,2,2,3,3], and s is computed as 1.
+
+Then, the overlap_map entries are processed. All have sum_ab <6, so no subtraction. Ans remains 1.
+
+Thus, the code should be correct.
+
+Now, for edge cases:
+
+Case where p=0: all possible pairs are valid. So ans is n*(n-1)/2 minus the pairs in overlap_map that after subtraction, are <0. But since p is 0, current_total must be >=0. For pairs in overlap_map where sum_ab - overlap >=0 and sum_ab >=0 (which is always true), but if sum_ab >=0 but sum_ab - overlap <0, which is possible only if sum_ab < overlap. But sum_ab = cnt[a]+cnt[b], which is >= overlap (since overlap is the number of coders who have a and b, and cnt[a] is the number of coders who have a in their pairs, which includes those with a and b. So overlap is <= min(cnt[a], cnt[b]). But sum_ab = cnt[a] + cnt[b], which is >= 2*overlap (if a and b are in overlap). Wait no. For example, if a and b are each in some pairs but not necessarily all overlapping. For example, if a is in 5 pairs (cnt[a] =5) and b is in 3 pairs (cnt[b]=3), and overlap is 2. Then sum_ab=8. current_total=8-2=6. Which is >=0.
+
+But if sum_ab is 3, overlap is 5. Then current_total is -2, which is <0. But sum_ab (3) >=0. So for p=0, such pairs would have sum_ab >=0 (3 >=0), but current_total =-2 <0, so they are subtracted.
+
+But since sum_ab >=0 and p=0, the pair (a, b) was counted in S. But current_total <0, which is <p (0). So subtract 1.
+
+Thus, the code would handle this correctly.
+
+Another edge case: when n=2. But according to the input constraints, n >=3. So no need to handle that.
+
+Another case: when all coders have the same pair. For example, n=3, p=3. Each coder says (1,2). Then overlap_map[(1,2)] =3. cnt[1] =3, cnt[2] =3. sorted_cnt is [3,3, other values]. For S: compute pairs where sum >=3. For example, pairs (1,2) sum 6 >=3. All pairs (assuming other cnt values are 0) would include those pairs. Then, for (1,2) in overlap_map: sum_ab=6 >=3. current_total=6-3=3 >=3. So no subtraction. So ans is the number of pairs with sum >=3.
+
+But in this case, the other suspects may have 0 cnt. For example, n=3, and three coders all have (1,2). So cnt[1] =3, cnt[2]=3, cnt[3] =0. sorted_cnt is [0,3,3]. S is the number of pairs (u, v) with sum >=3.
+
+For i=0 (0): need j>0 where 0 + sorted_cnt[j] >=3. sorted_cnt[j] is 3,3. So two elements. So add 2.
+
+i=1 (3): j=2 (3). 3+3 >=3. add 1.
+
+i=2 (3): no j>2.
+
+So S=2+1=3.
+
+Then, overlap_map has (1,2) with overlap=3.
+
+sum_ab=3+3=6 >=3. current_total=6-3=3 >=3 → no subtraction.
+
+So ans=3.
+
+Which is the number of possible pairs (1,2), (1,3), (2,3). But wait, the coders are in the company, so suspects are 1, 2, 3. All possible pairs are (1,2), (1,3), (2,3). For each pair:
+
+(1,2): sum_ab=3+3=6 >=3. current_total=6-3=3 >=3 → valid.
+
+(1,3): sum_ab=3+0=3 >=3 → valid. current_total=3 - 0=3 >=3 → valid.
+
+(2,3): sum_ab=3+0=3 >=3 → valid. current_total=3-0=3 → valid.
+
+Thus, all three pairs are valid, so ans=3. Which is correct.
+
+The code works.
+
+Thus, the code should handle all cases correctly.
+</think>
+To solve this problem, we need to determine the number of ways to choose two suspects such that at least `p` coders agree with the choice. A coder agrees if at least one of the two suspects they named is chosen.
+
+### Approach
+1. **Count Contributions**: For each coder, track how many times each suspect is mentioned using an array `cnt`.
+2. **Track Overlaps**: Use a dictionary to count how many coders mention each pair of suspects together.
+3. **Sort Contributions**: Create a sorted list of the counts of mentions for each suspect.
+4. **Calculate Valid Pairs**: Using the sorted list, determine the number of valid pairs of suspects whose combined mentions meet or exceed `p`.
+5. **Adjust for Overlaps**: Adjust the count of valid pairs by considering overlaps where the combined mentions minus the overlap count drop below `p`.
+
+### Solution Code
+```python
+from collections import defaultdict
+import bisect
+
+def main():
+    import sys
+    input = sys.stdin.read().split()
+    ptr = 0
+    n = int(input[ptr])
+    ptr += 1
+    p = int(input[ptr])
+    ptr += 1
+    
+    cnt = [0] * (n + 1)  # 1-based indexing
+    overlap_map = defaultdict(int)
+    
+    for _ in range(n):
+        x = int(input[ptr])
+        ptr += 1
+        y = int(input[ptr])
+        ptr += 1
+        a, b = min(x, y), max(x, y)
+        overlap_map[(a, b)] += 1
+        cnt[x] += 1
+        cnt[y] += 1
+    
+    # Create a sorted list of cnt values (excluding index 0)
+    sorted_cnt = sorted(cnt[1:])
+    len_cnt = len(sorted_cnt)
+    
+    # Compute the initial count S using binary search
+    s = 0
+    for i in range(len_cnt):
+        target = p - sorted_cnt[i]
+        # Find the first index j > i where sorted_cnt[j] >= target
+        j = bisect.bisect_left(sorted_cnt, target, i + 1, len_cnt)
+        s += len_cnt - j
+    
+    # Adjust for overlapping pairs
+    ans = s
+    for (a, b), overlap in overlap_map.items():
+        sum_ab = cnt[a] + cnt[b]
+        if sum_ab >= p:
+            current_total = sum_ab - overlap
+            if current_total < p:
+                ans -= 1
+    
+    print(ans)
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Reading Input**: The input is read and parsed to extract the number of coders `n` and the minimum agreement count `p`.
+2. **Tracking Mentions**: For each coder's pair of suspects, update their mention counts in `cnt` and track pairs in `overlap_map`.
+3. **Sorting Mentions**: The mention counts are sorted to facilitate efficient pair counting.
+4. **Binary Search for Valid Pairs**: Using binary search, determine the number of valid pairs whose combined mentions meet or exceed `p`.
+5. **Adjusting for Overlaps**: For each pair of suspects mentioned together, adjust the count if their combined mentions minus overlaps fall below `p`.
+
+This approach efficiently handles up to 300,000 suspects using sorting and binary search, ensuring the solution is optimal and runs within acceptable time limits.
+</bot>

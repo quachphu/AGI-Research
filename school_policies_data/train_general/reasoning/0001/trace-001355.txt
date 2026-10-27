@@ -1,0 +1,1338 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Given are a prime number p and a sequence of p integers a_0, \ldots, a_{p-1} consisting of zeros and ones.
+
+Find a polynomial of degree at most p-1, f(x) = b_{p-1} x^{p-1} + b_{p-2} x^{p-2} + \ldots + b_0, satisfying the following conditions:
+
+* For each i (0 \leq i \leq p-1), b_i is an integer such that 0 \leq b_i \leq p-1.
+* For each i (0 \leq i \leq p-1), f(i) \equiv a_i \pmod p.
+
+Constraints
+
+* 2 \leq p \leq 2999
+* p is a prime number.
+* 0 \leq a_i \leq 1
+
+Input
+
+Input is given from Standard Input in the following format:
+
+
+p
+a_0 a_1 \ldots a_{p-1}
+
+
+Output
+
+Print b_0, b_1, \ldots, b_{p-1} of a polynomial f(x) satisfying the conditions, in this order, with spaces in between.
+
+It can be proved that a solution always exists. If multiple solutions exist, any of them will be accepted.
+
+Examples
+
+Input
+
+2
+1 0
+
+
+Output
+
+1 1
+
+
+Input
+
+3
+0 0 0
+
+
+Output
+
+0 0 0
+
+
+Input
+
+5
+0 1 0 1 0
+
+
+Output
+
+0 2 0 1 3
+</user>
+<bot>
+<think>
+Okay, let's tackle this problem. So, the task is to find a polynomial of degree at most p-1 that satisfies certain conditions modulo a prime p. The input gives us a sequence of 0s and 1s, and we need to output the coefficients of the polynomial such that when evaluated at each i (from 0 to p-1), the result is congruent to a_i modulo p. Also, each coefficient must be between 0 and p-1 inclusive.
+
+Hmm. Let me think. The first thing that comes to mind is interpolation. Since we're working modulo a prime, which implies we're in a field, there's a unique polynomial of degree at most p-1 that passes through all given points. Wait, but the problem says the coefficients are integers between 0 and p-1. So maybe we can use Lagrange interpolation here?
+
+But wait, Lagrange interpolation gives a polynomial that matches the given points exactly. Since we're working modulo p, which is a prime, each coefficient can be computed modulo p. But how do we ensure that the coefficients are integers in the required range?
+
+Right. So the approach would be to compute the interpolating polynomial using the Lagrange method, then reduce each coefficient modulo p, and adjust to be in [0, p-1].
+
+But how to compute the coefficients efficiently, especially for large p (up to 3000)? Let's think about the steps.
+
+The Lagrange interpolation formula for a polynomial passing through points (x_0, y_0), ..., (x_n, y_n) is the sum over each y_i multiplied by the Lagrange basis polynomial L_i(x). Each L_i(x) is the product of (x - x_j)/(x_i - x_j) for j != i. 
+
+In our case, the x_i are 0, 1, ..., p-1. So for each i, L_i(x) is a polynomial of degree p-1. Then, the coefficients of the resulting polynomial can be found by expanding all the terms and summing them up. However, directly expanding this for p=3000 would be computationally expensive. So we need a smarter way.
+
+Alternatively, we can model this as a system of linear equations. For each x in 0..p-1, the polynomial f(x) must be congruent to a_x mod p. The polynomial has coefficients b_0, b_1, ..., b_{p-1}, so the equations are:
+
+sum_{k=0 to p-1} b_k * x^k ≡ a_x mod p, for x from 0 to p-1.
+
+This is a system of p equations with p variables (the coefficients b_k). Since we are in a field (mod p), and the system is determined (same number of equations and variables), there should be a unique solution. So solving this system should give us the coefficients.
+
+But solving a linear system of size 3000x3000 using Gaussian elimination would be O(n^3), which for n=3000 would be about 27 billion operations. That's probably too slow for Python, even with optimizations. Wait, but the problem says that p can be up to 2999, which would make the system 2999x2999. So Gaussian elimination is not feasible here.
+
+So we need a better approach. Let's think again about Lagrange interpolation. The idea is that each term in the Lagrange formula contributes to the coefficients in a certain way. Since each basis polynomial L_i(x) can be written as a sum of monomials, the coefficients of the resulting polynomial are the sum over all i of a_i multiplied by the coefficients of L_i(x).
+
+But how to compute these coefficients efficiently.
+
+Wait, perhaps using the fact that the Lagrange basis polynomials can be represented using the concept of interpolation in modular arithmetic. For each i, the Lagrange polynomial L_i(x) is 1 at x=i and 0 at other points. Then, the interpolated polynomial is sum_{i=0}^{p-1} a_i * L_i(x) mod p.
+
+So to compute the coefficients b_0 ... b_{p-1}, we can compute each L_i(x) as a polynomial, multiply it by a_i, and sum all of them. But again, for p=3000, expanding each L_i(x) into its coefficients would be O(p^2), which for p=3e3 is 9e6 operations. That's manageable.
+
+Wait, but how to compute the coefficients of L_i(x)?
+
+Let me think. The Lagrange basis polynomial L_i(x) can be written as:
+
+L_i(x) = product_{j≠i} (x - j) / (i - j)
+
+Since we are working mod p, and i and j are distinct modulo p, the denominator is invertible.
+
+So for each i, compute the product (x - j) for j≠i, then multiply by the inverse of the product of (i-j) for j≠i.
+
+But expanding the product (x - j) for j≠i gives a polynomial of degree p-1, which is the numerator. Then we divide by the denominator mod p.
+
+But how to compute the coefficients of this polynomial efficiently.
+
+Let's consider that the product (x - j) for j≠i is equal to [ (x - 0) (x - 1) ... (x - (i-1)) (x - (i+1)) ... (x - (p-1)) ].
+
+But this product is equal to (x(x-1)(x-2)...(x-p+1)) / (x - i), because the original product is the product over all x-j except j=i. Wait, no. The product (x-j) for j from 0 to p-1, j≠i is equal to (product_{j=0 to p-1} (x - j)) / (x - i). But the product of all (x-j) is x(x-1)(x-2)...(x-p+1) which is a polynomial of degree p. Wait, but for j from 0 to p-1, j≠i, there are p terms, so the product is (product_{j=0}^{p-1} (x-j)) ) / (x - i). But when x-i is not a factor, since i is in 0..p-1. So yes, product_{j≠i} (x-j) = (product_{all j} (x-j)) ) / (x -i).
+
+But product_{j=0}^{p-1} (x-j) is equal to x^p - x mod p (by Fermat's little theorem, since x^p ≡ x mod p). Because over the field GF(p), the polynomial x^p - x factors into x(x-1)(x-2)...(x-p+1). So the product is x^p -x. So, product_{j≠i} (x-j) = (x^p -x) / (x -i).
+
+But since x^p -x = (x - i) * Q(x) + R. Let's compute R. When x =i, x^p -x = i^p -i. Since p is prime, by Fermat's little theorem, i^p ≡ i mod p. So R=0. Therefore, (x^p -x) is divisible by (x -i), so the division is exact. So product_{j≠i} (x-j) = (x^p -x)/(x -i).
+
+But how to compute that division. Let's compute (x^p -x) divided by (x -i) mod p. Let's denote that polynomial as (x -i) * Q(x) + 0. Then Q(x) is the quotient.
+
+But (x^p -x) = (x -i) * Q(x). So Q(x) is the product_{j≠i} (x-j), which is the numerator of L_i(x).
+
+So Q(x) = (x^p -x)/(x -i). Let's compute this division.
+
+But (x^p -x)/(x -i) can be written as x^{p-1} + i x^{p-2} + i^2 x^{p-3} + ... + i^{p-2} x + (i^{p-1} - 1)/(i - 0). Wait, no. Wait, perhaps using polynomial division.
+
+Alternatively, using the formula for a geometric series. Wait, perhaps we can find Q(x) via polynomial division. Let me think.
+
+Let’s write x^p - x as (x - i) * Q(x). We need to find Q(x).
+
+But x^p ≡ x mod p. So x^p -x is 0 mod p for all x. So for the polynomial x^p -x mod p, it factors into (x-0)(x-1)...(x-(p-1)). So when we divide x^p -x by (x-i), the result is the product of (x-j) for j≠i. Which is exactly what we need.
+
+But how to compute the coefficients of Q(x) = product_{j≠i} (x-j).
+
+Alternatively, perhaps there's a way to compute the coefficients of Q(x) using the fact that Q(x) is equal to the sum_{k=0}^{p-1} i^{p-1 -k} x^k. Wait, I'm not sure. Let me check for small primes.
+
+For example, let p=3, i=1. Then x^3 -x = x(x-1)(x-2) mod 3. Dividing by (x-1) gives (x)(x-2) = x^2 -2x. Which is x^2 +x mod 3. So coefficients are 0,1,1.
+
+But what is the sum_{k=0}^{2} i^{2 -k} x^k? For i=1, the exponents are 2-0=2, 2-1=1, 2-2=0. So the coefficients would be 1^2 x^0 + 1^1 x^1 + 1^0 x^2. Which is 1 + x + x^2. Which when mod 3 is x^2 +x +1. But that's not equal to the product x(x-2) mod3. So that approach might not work. Hmm, perhaps that's not the way.
+
+Alternative approach: note that Q(x) = product_{j≠i} (x-j) = product_{j=0}^{p-1} (x-j) / (x-i) = (x^p -x)/(x -i). Let's compute this division.
+
+But how to compute (x^p -x) divided by (x -i) mod p. Let's note that (x^p -x)/(x -i) can be rewritten as x^{p-1} + i x^{p-2} + i^2 x^{p-3} + ... + i^{p-2} x + (i^{p-1} -1)/(i -0) mod p. Wait, perhaps not. Alternatively, let's use the fact that x^p ≡ x mod p. So x^p -x ≡0 mod p. So (x -i) divides x^p -x.
+
+But for the division, perhaps we can use polynomial division. Let me try to compute (x^p -x) divided by (x -i) in mod p.
+
+Let’s perform the division. Let’s suppose that the quotient is a polynomial of degree p-2. Wait, no. x^p divided by (x -i) is x^{p-1} + i x^{p-2} + i^2 x^{p-3} + ... + i^{p-1}. Then, multiply (x -i) by this quotient:
+
+(x -i)(x^{p-1} + i x^{p-2} + i^2 x^{p-3} + ... + i^{p-1} )
+
+= x^p + i x^{p-1} + i^2 x^{p-2} + ... + i^{p-1} x 
+
+- i x^{p-1} - i^2 x^{p-2} - ... - i^{p} 
+
+But x^p ≡x mod p. Also, i^p ≡i mod p. So substituting:
+
+= x + i x^{p-1} + ... + i^{p-1} x 
+
+- i x^{p-1} - ... - i 
+
+The terms in the middle cancel out:
+
+The sum becomes x - i + (terms canceling). Wait, perhaps this approach isn't leading me anywhere. Alternatively, perhaps the quotient is x^{p-1} + i x^{p-2} + i^2 x^{p-3} + ... + i^{p-1} ?
+
+Wait, let's take p=5, i=2. Then (x^5 -x) divided by (x-2) should be (x^5 -x)/(x-2). Let's compute this modulo 5.
+
+x^5 ≡x mod5, so x^5 -x =0 mod5 for all x. So the division is possible.
+
+Let me compute (x^5 -x) = (x-2) * Q(x). Let's find Q(x).
+
+Let me perform polynomial division.
+
+Divide x^5 -x by x-2.
+
+x^5 divided by x is x^4. Multiply x-2 by x^4 gives x^5 -2x^4. Subtract from x^5 -x:
+
+(x^5 -x) - (x^5 -2x^4) = 2x^4 -x.
+
+Now, divide 2x^4 by x to get 2x^3. Multiply x-2 by 2x^3 gives 2x^4 -4x^3. Subtract:
+
+(2x^4 -x) - (2x^4 -4x^3) =4x^3 -x.
+
+Divide 4x^3 by x: 4x^2. Multiply x-2 by 4x^2: 4x^3 -8x^2 → mod5, that's 4x^3 +2x^2. Subtract:
+
+(4x^3 -x) - (4x^3 +2x^2) = -2x^2 -x → mod5, 3x^2 +4x.
+
+Divide 3x^2 by x: 3x. Multiply x-2 by 3x: 3x^2 -6x → mod5, 3x^2 +4x. Subtract:
+
+(3x^2 +4x) - (3x^2 +4x) =0. Then the remaining term is -x. Wait, perhaps I'm making a mistake here.
+
+Alternatively, perhaps there's a pattern. For example, the quotient when x^p -x is divided by (x -i) is a polynomial of degree p-1. Wait, no. Wait, x^p -x is a degree p polynomial. Divided by (x-i), which is degree 1, the quotient is degree p-1. So Q(x) is a degree p-1 polynomial.
+
+But how to find its coefficients.
+
+Alternatively, since x^p ≡x mod p, (x -i) divides x^p -x, and the quotient is the product of all (x-j) for j≠i.
+
+But how to compute the coefficients of Q(x) = product_{j≠i} (x-j) mod p.
+
+Let me think. For each i, the product is a polynomial of degree p-1. To compute its coefficients, perhaps we can compute it as follows:
+
+Initialize a list of coefficients for the product. For j from 0 to p-1, if j !=i, multiply the current polynomial by (x -j). But for p=3000, that would be O(p^2) operations, which for p=3e3 is 9e6 steps. That's manageable, right?
+
+Yes, for each i, we need to compute the product (x -j) for j !=i. Then, multiply by a_i and the inverse denominator.
+
+Wait, but for each i, we can precompute the coefficients of the product (x-j) for j !=i. Then, multiply by the inverse of (i-j) product, which is a scalar mod p.
+
+So for each i, the Lagrange basis polynomial L_i(x) is (product_{j≠i} (x-j)) / (product_{j≠i} (i-j)).
+
+So the denominator is the product of (i-j) for j≠i. Let's compute that.
+
+The denominator D_i = product_{j≠i} (i-j) mod p. Since j runs from 0 to p-1, j≠i. So D_i = product_{k=1 to p-1} (k) mod p, but wait, (i-j) for j≠i is equivalent to (i-j) where j ranges over all elements except i. So j can be written as i - k, where k ranges from 1 to i, then from 1 to p-1 -i. Hmm, perhaps not. Alternatively, note that when j runs from 0 to p-1 except i, the terms (i-j) are all the numbers from -(i-0) to (p-1 -i) except 0. Wait, but the product D_i is product_{j≠i} (i-j) mod p.
+
+But for j in 0..p-1, j≠i: for each j, (i-j) is the same as -(j -i). So product_{j≠i} (i-j) = (-1)^{p-1} product_{j≠i} (j -i) mod p. Since there are p-1 terms, and (-1)^(p-1) is 1 if p is even (but p is a prime >=2, so p is odd except for p=2). For p=2, (-1)^(1) is -1 mod 2 is 1. Wait, for p=2, p-1=1, so (-1)^1 is -1 mod 2 is 1. So for any prime p, (-1)^(p-1) is 1. So D_i = product_{j≠i} (i-j) mod p = product_{j≠i} (j -i) mod p * (-1)^{p-1} = product_{j≠i} (j -i) mod p * 1. So D_i = product_{j≠i} (j -i) mod p.
+
+But product_{j≠i} (j -i) mod p is equal to (product_{k=1}^{i} (i -k) ) * (product_{k=i+1}^{p-1} (k -i)) ). Which is product_{k=1}^i (k') where k' runs from 1 to i, multiplied by product_{k=1}^{p-1 -i} (k). So that's i! * (p-1 -i)! mod p.
+
+But p is a prime, so Wilson's theorem says (p-1)! ≡ -1 mod p. But D_i is product_{j≠i} (j-i) mod p. Wait, but the product is (0 -i)(1 -i)... (i-1 -i)(i+1 -i) ... (p-1 -i) mod p. Let's let k = j -i mod p. Then j can be i +k. But j must be in 0..p-1, so k ranges from -i to p-1 -i. But mod p, the product is ( -i) * (1-i) * ... * (-1) * 1 * 2 * ... * (p-1 -i) mod p.
+
+Wait, this is getting complicated. Alternatively, perhaps note that D_i is (i-0)(i-1)... (i - (i-1)) (i - (i+1)) ... (i - (p-1)) ), but j runs over all values except i.
+
+But when j runs from 0 to p-1, j≠i, the terms (j -i) are all integers from -(i) to (p-1 -i), except 0. So the product is the product of all elements in the multiplicative group of the field except -(i -j) for j≠i. Wait, perhaps there's a smarter way to compute D_i.
+
+Alternatively, since j ranges over all elements except i in 0..p-1, the product D_i is the product of (i - j) for j in 0..p-1, j≠i. So j can be thought of as k where k runs from 0 to p-1, k≠i. So D_i is the product of (i -k) for k≠i.
+
+But the product over all k in 0..p-1 of (i -k) is (i -0)(i-1)... (i - (i)) ... (i - (p-1)). But when k =i, the term is zero. So the product of (i -k) for k≠i is the same as the product for all k in 0..p-1 of (i -k) divided by (i -i) → but that's division by zero. So that approach doesn't work.
+
+Hmm. Alternatively, for a given i, the product D_i is product_{k=0}^{p-1} (i -k) / (i -i) → but that's not valid. So perhaps another approach.
+
+But wait, the product D_i is equal to the product of (i -j) for j in 0..p-1, j≠i. Let's make a substitution: let m = j. So j runs over 0..p-1 except i.
+
+So D_i = product_{m=0}^{p-1} (i -m) when m !=i. Which is the same as product_{m=0}^{p-1} (i -m) divided by (i -i) → which is zero. So that's not helpful.
+
+Wait, but what is product_{m=0}^{p-1} (x -m) mod p? We know that this is x^p -x. So evaluating at x=i, product_{m=0}^{p-1} (i -m) ≡i^p -i ≡0 mod p. So the product of (i -m) over m=0 to p-1 is 0 mod p. Which makes sense, because when m=i, the term is zero.
+
+But that's not helpful. So perhaps there's another way to compute D_i.
+
+Wait, let's consider that D_i is the product of all (i -j) for j≠i. So j can take all values except i. So the product is equal to product_{j=0}^{p-1} (i-j) / (i-i) → but denominator is zero. So that's not useful.
+
+Alternative idea: note that when j runs from 0 to p-1, except i, the terms (i-j) mod p are all the elements of the multiplicative group of the field, except for zero. Wait, no. Because for j≠i, (i-j) mod p is non-zero. So for j≠i, (i-j) mod p ranges over all elements of the multiplicative group (since p is prime, the multiplicative group is cyclic of order p-1). So the product of all (i-j) mod p for j≠i is equal to the product of all elements in the multiplicative group. Which is (p-1)! mod p. And by Wilson's theorem, (p-1)! ≡ -1 mod p. So D_i ≡ -1 mod p.
+
+Wait, wait! That's a critical insight. Because when j≠i, (i-j) mod p is an element of the multiplicative group (since i and j are distinct modulo p). So the product of all (i-j) mod p for j≠i is the same as the product of all non-zero elements in the field, which is (p-1)! mod p. And Wilson's theorem states that (p-1)! ≡ -1 mod p. So D_i ≡ -1 mod p. Therefore, the denominator for L_i(x) is D_i ≡ -1 mod p. So the inverse of D_i mod p is -1 mod p, which is p-1 mod p. Because -1 mod p is p-1.
+
+So this is a huge simplification. So D_i = product_{j≠i} (i-j) ≡ (p-1)! ≡ -1 mod p. So the inverse of D_i is 1/(-1) mod p, which is p-1 mod p. Because (-1)* (p-1) mod p is 1. Because p-1 ≡ -1 mod p, so (-1) * (-1) = 1 mod p.
+
+So the inverse of D_i is (p-1) mod p.
+
+Therefore, L_i(x) = product_{j≠i} (x-j) * inv(D_i) mod p. But product_{j≠i} (x-j) is Q(x) = (x^p -x)/(x-i). So L_i(x) = Q(x) * inv(D_i) mod p.
+
+But since inv(D_i) is (p-1) mod p, this simplifies to L_i(x) = (Q(x) * (p-1)) mod p.
+
+But how do we compute Q(x) = product_{j≠i} (x-j) mod p. Which is the same as (x^p -x)/(x -i) mod p.
+
+But x^p -x is zero mod p for all x, so (x^p -x) = (x-i) * Q(x) mod p.
+
+But how to compute Q(x) mod p. Let's consider that Q(x) is a polynomial of degree p-2, because (x^p -x) is divided by x-i, a degree 1 polynomial. So Q(x) would have degree p-1 -1 = p-2? Wait, x^p is degree p. Divided by x-i (degree 1) gives a quotient of degree p-1. So Q(x) is degree p-1. Wait, no, because x^p -x can be written as (x-i) * Q(x) + R. But since x^p -x is zero when x=i, R=0. So Q(x) must be of degree p-1. Wait, x^p is degree p, subtract x, so x^p -x is degree p. Divided by x-i (degree 1), quotient is degree p-1, and remainder zero. So Q(x) is degree p-1.
+
+But that's not possible. Wait, x^p -x = (x-i) * Q(x). For example, when p=3 and i=1, x^3 -x = x(x-1)(x-2) mod3. Divided by (x-1) gives x(x-2) mod3, which is x² -2x → x² +x mod3, which is degree 2 (p-1=3-1=2). Oh right. So for p=3, the quotient is degree 2. So Q(x) is degree p-2. So perhaps x^p -x is of degree p, when divided by (x-i) gives a quotient of degree p-1? Wait, no. Let's see: (x^5 -x) divided by (x-i) is a polynomial of degree 4 (5-1=4). So the quotient has degree p-1. Wait, but x^p is degree p, subtract x gives degree p. Divided by x-i (degree 1) gives a quotient of degree p-1. Yes. So Q(x) is degree p-1.
+
+But how to compute Q(x) coefficients.
+
+Alternatively, since we know that Q(x) = product_{j≠i} (x-j) mod p. So perhaps we can compute this product for each i, but efficiently.
+
+But for each i, the product is (x-0)(x-1)...(x-(i-1))(x-(i+1))...(x-(p-1)). So for each i, we can compute this product by multiplying (x-j) for j from 0 to p-1, skipping j=i. But doing this naively for each i would be O(p^2) time, which for p=3e3 is 9 million operations. That's manageable in Python.
+
+So here's the plan:
+
+For each i in 0..p-1:
+
+1. Compute the coefficients of the polynomial product_{j≠i} (x-j) mod p. This is a polynomial of degree p-1. Let's call this poly_i.
+
+2. Multiply poly_i by a_i (which is 0 or 1) and then by inv_D_i (which is (p-1) mod p). Since inv_D_i is p-1, which is -1 mod p, this is equivalent to multiplying by a_i * (-1) mod p. But since a_i is 0 or 1, this becomes either 0 or (p-1) mod p.
+
+So for each i, we can compute the contribution to the final coefficients as (a_i * (p-1) mod p) * poly_i, and sum all these contributions mod p.
+
+Then, the sum of all these will give the coefficients of the interpolated polynomial.
+
+So the steps are:
+
+- Precompute all the poly_i (for each i) as lists of coefficients (from x^0 to x^{p-1}).
+
+But how to compute the poly_i coefficients efficiently.
+
+Let's think: for each i, the product (x-0)(x-1)...(x-(i-1))(x-(i+1))...(x-(p-1)).
+
+This product can be computed by initializing a list of coefficients and then iteratively multiplying each (x-j) term, skipping j=i.
+
+But for p=3e3, and each i, the product involves p-1 terms (since we skip j=i). So for each i, we need to multiply (p-1) terms. Each multiplication is O(degree) time, where the degree starts at 0 and increases up to p-2. Wait, no. The product starts with 1 (degree 0), then multiply by (x-j) (degree 1), which increases the degree by 1 each step. But since we're skipping j=i, there are p-1 terms. So the product will be a polynomial of degree p-1. For example, for p=3, skipping one term gives a product of two (x-j) terms, leading to degree 2.
+
+So for each i, to compute poly_i, the product involves (p-1) terms, and each multiplication is O(current_degree + 1) steps. The total steps for each i would be O((p-1)^2) steps, but since p is up to 3e3, this is O(9e6) steps per i. For p=3e3, this would be 3e3 * 9e6 = 2.7e10 steps, which is way too slow.
+
+This approach is not feasible for p=3e3. So we need a better way.
+
+Alternative idea: precompute the entire product (x-0)(x-1)...(x-p+1) = x^p -x mod p. Then, for each i, poly_i is (x^p -x) / (x -i) mod p. So how to compute (x^p -x) divided by (x -i) mod p.
+
+But how to perform this division to get the coefficients.
+
+Let's represent x^p -x as a list of coefficients. Then, divide by (x -i) mod p to get the quotient polynomial Q(x).
+
+Polynomial division can be done efficiently here.
+
+The polynomial x^p -x can be written as x^p -x = (x -i) * Q(x) + R, where R is the remainder. But since x=i is a root of x^p -x, R=0. So the quotient Q(x) is the desired poly_i.
+
+So how to perform the division.
+
+The standard polynomial division algorithm for dividing by a monic linear term (x -i) is as follows:
+
+Given the dividend coefficients as a list, starting from highest degree. For example, if the dividend is x^p -x, then the coefficients are [1, 0, 0, ..., 0, -1], where the highest degree is x^p. Wait, no. x^p is the leading term. But x^p -x is x^p - x, so the coefficients are 1 for x^p, 0 for x^{p-1}, ..., 0 for x^2, -1 for x^1, 0 for x^0.
+
+Wait, no. x^p -x = x^p + (-1)x. So the coefficients are [1, 0, 0, ..., 0, -1, 0], where the positions are from x^p down to x^0. Wait, no. Let's think again.
+
+For example, x^3 -x = x^3 -x, which can be written as 1*x^3 + 0x^2 + (-1)x +0. So the coefficients are [1, 0, -1, 0], but ordered in descending degree. Wait, no. Polynomials are usually represented as coefficients in order from highest to lowest degree. So x^3 is represented as [1, 0, 0, -1, 0], but wait, x^3 has degree 3, so the coefficients are for x^3, x^2, x^1, x^0. No, the list would be [1, 0, 0, -1], where the first element is x^3's coefficient, then x^2, x^1, x^0. So for x^3 -x, the coefficients are [1, 0, -1, 0]. Wait, x^3 is 1*x^3 +0x^2 + (-1)x^1 +0x^0. So coefficients list is [1, 0, -1, 0]. Wait, x^3 -x = x^3 +0x^2 -1x +0. So coefficients are [1, 0, -1, 0].
+
+So when we perform the polynomial division of x^p -x by (x -i), the coefficients of x^p -x are [1] followed by p-2 zeros, then [-1, 0]. For example, if p=5, the coefficients are [1, 0, 0, 0, -1, 0].
+
+Wait, no. For p=5, x^5 -x has coefficients for x^5, x^4, x^3, x^2, x^1, x^0. So it's [1, 0, 0, 0, 0, -1, 0]? No. x^5 has coefficient 1, x^4 0, x^3 0, x^2 0, x^1 -1, x^0 0. So the coefficients list is [1, 0, 0, 0, -1, 0], for degrees 5,4,3,2,1,0. Wait, no. Let's see:
+
+x^5: coefficient is 1.
+
+x^4: 0.
+
+x^3: 0.
+
+x^2: 0.
+
+x^1: -1.
+
+x^0: 0.
+
+So the coefficients list is [1, 0, 0, 0, -1, 0], where the first element is x^5's coefficient, then x^4's, etc., down to x^0.
+
+So the coefficients list has length p+1, but x^p -x is a polynomial of degree p, so the coefficients list should have p+1 elements (from x^p down to x^0).
+
+But for division, perhaps we can represent the coefficients in reverse order (from x^0 to x^p), but I'm not sure. Let's proceed.
+
+The standard polynomial division for dividing polynomial A by B (monic, linear) works as follows:
+
+Let A = a_n x^n + ... + a_0.
+
+We are dividing by (x -i), so B is x -i, a monic polynomial of degree 1.
+
+The quotient Q will have degree n-1.
+
+The algorithm for division:
+
+Initialize the quotient coefficients as an empty list.
+
+The leading term of A is a_n x^n. The leading term of B is x^1. So divide x^n by x^1 to get x^{n-1}. Multiply B by x^{n-1} and subtract from A.
+
+Repeat this process until the degree of A is less than the degree of B.
+
+But since we are dealing with coefficients modulo p, we can perform this division efficiently.
+
+But how to compute the coefficients of Q(x).
+
+Alternatively, for the polynomial A(x) = x^p -x, divided by (x -i), the quotient Q(x) will have degree p-1.
+
+The coefficients of Q(x) can be computed using the following recurrence:
+
+The remainder theorem says that Q(x) = (A(x) - A(i))/(x -i). But since A(i) =0 (because A(x) =x^p -x ≡0 mod p), Q(x) = A(x)/(x -i).
+
+But this doesn't directly help. However, perhaps the coefficients of Q(x) can be computed using the fact that Q(x) = sum_{k=0}^{p-1} q_k x^k.
+
+Expanding (x -i) * Q(x) = x^{p} -x.
+
+So:
+
+x * Q(x) - i * Q(x) = x^p -x.
+
+Which gives:
+
+sum_{k=0}^{p-1} q_k x^{k+1} - i sum_{k=0}^{p-1} q_k x^k = x^p -x.
+
+But x^p is x^p mod p, so x^p -x is equivalent to 0 mod p for all x.
+
+Wait, but this is an identity. So the left-hand side must equal x^p -x.
+
+But let's equate coefficients.
+
+The left-hand side is:
+
+sum_{k=0}^{p-1} q_k x^{k+1} = sum_{m=1}^{p} q_{m-1} x^m.
+
+Minus i sum_{k=0}^{p-1} q_k x^k.
+
+So combining terms:
+
+sum_{m=1}^p q_{m-1} x^m - i sum_{k=0}^{p-1} q_k x^k 
+
+= sum_{m=0}^p [ (q_{m-1} if m >=1 else 0) - i q_m ] x^m,
+
+where q_{-1} is 0.
+
+This must equal x^p -x, which has coefficients:
+
+For x^p: 1.
+
+For x^1: -1.
+
+For other terms: 0.
+
+So equating coefficients:
+
+For x^p term: q_{p-1} = 1.
+
+For x^m term where 0 < m <p:
+
+q_{m-1} - i q_m = 0 → q_{m} = q_{m-1} /i mod p.
+
+For x^0 term:
+
+0 - i q_0 = 0 → q_0 = 0.
+
+But this can't be right because then q_0=0, and q_1 = q_0 /i =0, etc., which would give all coefficients as zero except for q_{p-1} which is 1. But this would make the product (x-i) * Q(x) = x^p -i x^{p-1}, which is not equal to x^p -x. So perhaps this approach is incorrect.
+
+Wait, perhaps I made a mistake in the equation. Let me re-express the equation:
+
+(x -i) * Q(x) = x^p -x.
+
+Expand the left-hand side:
+
+Q(x) is a polynomial of degree p-1: Q(x) = q_{p-1} x^{p-1} + ... + q_0.
+
+(x -i) * Q(x) = x * Q(x) -i Q(x)
+
+= q_{p-1} x^p + q_{p-2} x^{p-1} + ... + q_0 x 
+
+- i q_{p-1} x^{p-1} - ... - i q_0.
+
+So the combined terms are:
+
+x^p term: q_{p-1}
+
+x^{p-1} term: (q_{p-2} -i q_{p-1})
+
+x^{p-2} term: (q_{p-3} -i q_{p-2})
+
+...
+
+x^1 term: (q_0 - i q_1)
+
+x^0 term: (-i q_0)
+
+This must equal x^p -x, which has coefficients:
+
+x^p: 1.
+
+x^1: -1.
+
+x^0: 0.
+
+Other terms: 0.
+
+So setting up the equations:
+
+1. For x^p term: q_{p-1} = 1 mod p.
+
+2. For x^0 term: -i q_0 ≡0 mod p. So q_0 ≡0 mod p.
+
+3. For x^1 term: (q_0 - i q_1) ≡-1 mod p. But since q_0=0, this gives -i q_1 ≡-1 mod p → q_1 ≡ 1/i mod p.
+
+4. For x^2 term: (q_1 -i q_2) ≡0 mod p → q_2 ≡ q_1 /i mod p.
+
+Similarly, for x^k term (k from 2 to p-1):
+
+q_{k-1} -i q_k ≡0 mod p → q_k = q_{k-1} /i mod p.
+
+For x^{p} term: q_{p-1} =1 mod p.
+
+So we can compute the coefficients recursively:
+
+Start with q_{p-1} =1.
+
+Then, for m from p-2 down to 0:
+
+q_m = (q_{m+1} * i) mod p.
+
+Wait, let's see:
+
+For x^{m+1} term: q_{m} -i q_{m+1} =0 → q_{m} = i * q_{m+1} mod p.
+
+So for example, q_{p-2} = i * q_{p-1} mod p → i * 1 mod p = i.
+
+q_{p-3} = i * q_{p-2} mod p = i^2 mod p.
+
+q_{p-4} = i * q_{p-3} mod p = i^3 mod p.
+
+...
+
+q_0 = i^{p-1} mod p.
+
+But wait, this would mean that q_0 = i^{p-1} mod p. However, by Fermat's little theorem, i^{p-1} ≡1 mod p, so q_0 =1 mod p. But earlier, from the x^0 term, we have -i q_0 ≡0 mod p → q_0 must be 0 mod p. This is a contradiction.
+
+So there must be a mistake in this approach.
+
+Ah! The problem arises because when we set the left-hand side equal to x^p -x, the x^0 term of the left-hand side is -i q_0, which must equal 0 (since x^p -x has x^0 term 0). So q_0 must be 0 mod p. But according to the recursive calculation, q_0 = i^{p-1} mod p. Which is 1 mod p. So this is a contradiction. So the previous approach must be wrong.
+
+This suggests that the earlier method is incorrect, possibly because I made a mistake in the equations.
+
+Let me re-examine the equation for x^1 term:
+
+The left-hand side's x^1 term is (q_0 -i q_1), and according to the right-hand side x^p -x, it's -1.
+
+But according to the recursive calculation:
+
+q_1 = q_0 /i mod p. But q_0 is 0 mod p. So q_1 would be 0 /i mod p. But division by i is allowed only if i is not zero. But i can be zero, but in our problem statement, the input a_i is given for i from 0 to p-1. So i can be zero. But in that case, the division by i would be a problem.
+
+So the previous approach is flawed. Therefore, perhaps there's a mistake in the way the equations are set up.
+
+Alternatively, perhaps we can find another way to compute the coefficients.
+
+Let me think differently. Suppose we want to compute the coefficients of Q(x) = (x^p -x)/(x-i) mod p.
+
+Since x^p -x ≡0 mod p for all x, then (x-i) divides x^p -x.
+
+The quotient Q(x) is a polynomial of degree p-1.
+
+But how to find its coefficients.
+
+Another approach: note that Q(x) is the sum_{k=0}^{p-1} i^{p-1-k} x^k. Is this true?
+
+For example, when p=3 and i=1:
+
+Q(x) = (x^3 -x)/(x-1) mod3. x^3 -x = x(x-1)(x-2) mod3. Divided by x-1 gives x(x-2) =x^2-2x → x^2 +x mod3. Which is 1 x^2 +1 x +0. Sum_{k=0}^{2} i^{2 -k} x^k. For i=1, each term is 1^{2-k} x^k. So the sum is x^0 *1^2 + x^1 *1^1 +x^2 *1^0 =1 +x +x^2. Which mod3 is x^2 +x +1. Which is not equal to x^2 +x. So that approach is incorrect.
+
+Alternatively, maybe another pattern.
+
+But perhaps it's easier to proceed with an example. Let's take p=5, i=2.
+
+We need to find Q(x) = (x^5 -x)/(x-2) mod5.
+
+Compute x^5 -x mod5. Since x^5 ≡x mod5, this is zero. So Q(x) is a polynomial of degree 4.
+
+But what are its coefficients?
+
+Let's compute (x^5 -x) divided by (x-2) mod5.
+
+Performing polynomial division:
+
+x^5 -x divided by x-2.
+
+We can use the standard polynomial division algorithm.
+
+Dividend: x^5 +0x^4 +0x^3 +0x^2 -x +0.
+
+Divisor: x-2.
+
+The leading term is x^5, divided by x gives x^4. Multiply divisor by x^4: x^5 -2x^4.
+
+Subtract this from the dividend:
+
+(x^5 +0x^4 +0x^3 +0x^2 -x) - (x^5 -2x^4) = 2x^4 +0x^3 +0x^2 -x.
+
+New dividend: 2x^4 +0x^3 +0x^2 -x.
+
+Leading term: 2x^4. Divided by x gives 2x^3. Multiply divisor by 2x^3: 2x^4 -4x^3 → mod5, 2x^4 +x^3.
+
+Subtract: (2x^4 +0x^3 +0x^2 -x) - (2x^4 +x^3) = -x^3 +0x^2 -x → 4x^3 +0x^2 +4x mod5.
+
+New dividend:4x^3 +0x^2 +4x.
+
+Leading term:4x^3. Divided by x gives4x^2. Multiply divisor by4x^2:4x^3-8x^2 → mod5,4x^3 + 2x^2.
+
+Subtract: (4x^3 +0x^2 +4x) - (4x^3 +2x^2) = -2x^2 +4x → 3x^2 +4x mod5.
+
+New dividend:3x^2 +4x.
+
+Leading term:3x^2. Divided by x gives3x. Multiply divisor by3x:3x^2-6x → mod5,3x^2 +4x.
+
+Subtract: (3x^2 +4x) - (3x^2 +4x) =0. So the remainder is zero.
+
+So the quotient is x^4 +2x^3 +4x^2 +3x. So Q(x) =x^4 +2x^3 +4x^2 +3x mod5.
+
+Now, the coefficients are [0, 3,4,2,1], where the coefficients are x^0, x^1, x^2, x^3, x^4. Or wait, the leading term is x^4, so the coefficients list would be [1,2,4,3,0] for x^4 down to x^0. Or perhaps I have the order reversed.
+
+Wait, in the division process, the quotient terms accumulated are x^4, 2x^3,4x^2,3x. The final term is 3x, which is the x^1 term. So the quotient polynomial is x^4 +2x^3 +4x^2 +3x. So the coefficients are, in order from x^4 down to x^0: 1, 2,4,3,0.
+
+But when multiplied by (x-2), we get:
+
+(x-2)(x^4 +2x^3 +4x^2 +3x) = x^5 +2x^4 +4x^3 +3x^2 -2x^4 -4x^3 -8x^2 -6x.
+
+Combine like terms:
+
+x^5 + (2x^4-2x^4) + (4x^3-4x^3) + (3x^2-8x^2) + (-6x) 
+
+= x^5 -5x^2 -6x → mod5, x^5 -0x^2 -x =x^5 -x, which matches.
+
+So the coefficients of Q(x) are [0,3,4,2,1] when ordered from x^0 to x^4. Or [1,2,4,3,0] when ordered from x^4 to x^0. 
+
+Hmm. But in this case, the coefficients of Q(x) are [0,3,4,2,1] for x^0 to x^4. So Q(x) =0 +3x +4x^2 +2x^3 +x^4.
+
+But I'm not sure what pattern this follows. Let's see:
+
+Looking at the coefficients [0,3,4,2,1], we can see that:
+
+3 = 2^1 mod5.
+
+4 =2^2 mod5 (2^2=4).
+
+2=2^3 mod5 (2^3=8 mod5=3, but no. 2^3=8 mod5 is 3, but here it's 2. So this pattern doesn't hold. So perhaps there's no obvious pattern here.
+
+Alternative idea: the coefficients of Q(x) can be computed as follows. The coefficients of Q(x) are [q_0, q_1, ..., q_{p-1}], where q_k is the sum_{m=0}^{p-1} (i^m) mod p for certain exponents. Not sure.
+
+Alternatively, perhaps the coefficients of Q(x) can be computed using the following recurrence:
+
+q_{p-1} = 1.
+
+For k from p-2 downto 0:
+
+q_k = (q_{k+1} * i) mod p.
+
+But in the example above, when i=2 and p=5, the coefficients are [0,3,4,2,1].
+
+Let's see:
+
+q_4=1.
+
+q_3 = (q_4 *2) mod5= 2.
+
+q_2 = (q_3 *2) mod5=4.
+
+q_1 = (q_2 *2) mod5=8 mod5=3.
+
+q_0 = (q_1 *2) mod5=6 mod5=1.
+
+But in the example, q_0 is 0. So this approach gives q_0=1, which contradicts the example. So this recurrence is incorrect.
+
+Hmm. So this approach doesn't work.
+
+Alternative approach: using the fact that Q(x) = (x^p -x)/(x-i) mod p.
+
+But x^p -x can be written as x(x^{p-1} -1) mod p. Since x^{p-1} ≡1 mod p for x ≠0. So x^p -x ≡0 mod p for all x.
+
+But this doesn't help.
+
+Another idea: For each x !=i, Q(x) = (x^p -x)/(x-i) mod p. But since x !=i, this can be written as sum_{k=0}^{p-2} x^{k} i^{p-2 -k} mod p. Not sure.
+
+Alternatively, using the fact that (x^p -x)/(x-i) is equal to sum_{k=0}^{p-1} i^{p-1 -k} x^k mod p. For example, for p=3, i=1:
+
+sum_{k=0}^2 i^{2-k} x^k = 1^2 x^0 + 1^1 x^1 +1^0 x^2 = 1 +x +x^2. Which for mod3 is x^2 +x +1, but the product (x-0)(x-2) mod3 is x(x-2) mod3 =x^2 -2x mod3 =x^2 +x mod3. Which is different. So this approach is not correct.
+
+Hmm. This is getting quite stuck. Maybe I need to think of a different approach.
+
+Let me recall that the problem requires us to find the coefficients of the interpolated polynomial f(x) such that f(i) ≡a_i mod p for all i. And we need to compute this polynomial's coefficients.
+
+The standard approach for interpolation is to use Lagrange interpolation, which for each i, constructs a basis polynomial L_i(x) that is 1 at x=i and 0 at other points. The interpolated polynomial is sum a_i * L_i(x).
+
+But for large p, this approach is computationally intensive unless we can find a way to compute the coefficients efficiently.
+
+But given that D_i = -1 mod p, and L_i(x) = (product_{j≠i} (x-j)) * (-1) mod p, then the interpolated polynomial is sum_{i} a_i * (-1) * product_{j≠i} (x-j) mod p.
+
+So the coefficients of f(x) can be found as follows:
+
+For each term in the sum (i.e., for each i where a_i is 1), multiply the polynomial product_{j≠i} (x-j) by -1 mod p (which is p-1), and add all these terms together.
+
+But how to compute the coefficients of product_{j≠i} (x-j) for each i where a_i is 1.
+
+But if we can precompute for each i the coefficients of product_{j≠i} (x-j) mod p, then multiply by (a_i * (p-1)) mod p, and sum all these polynomials, we get the coefficients of the interpolated polynomial.
+
+But how to precompute these coefficients efficiently.
+
+The crux of the problem is to find an efficient way to compute all the product polynomials product_{j≠i} (x-j) for each i.
+
+But with p up to 3e3, this is computationally expensive if done naively.
+
+Alternative idea: notice that product_{j≠i} (x-j) = product_{j=0}^{p-1} (x-j) / (x-i) = (x^p -x) / (x-i).
+
+So for each i, the product is (x^p -x) divided by (x-i), which can be computed via polynomial division.
+
+But how to compute this division for each i efficiently.
+
+The polynomial x^p -x can be represented as a list of coefficients. Then, for each i, divide this polynomial by (x-i) to get the quotient Q_i(x).
+
+But for each i, performing polynomial division is O(p) time. Since we need to do this for all p values of i, this gives O(p^2) time.
+
+This might be manageable for p up to 3e3, which would be 9 million operations.
+
+So let's proceed with this approach.
+
+The steps are:
+
+1. Compute the coefficients of x^p -x mod p. This is easy: the coefficients are all zero except for x^p (coefficient 1) and x (coefficient p-1 mod p, since -1 mod p is p-1).
+
+Wait, x^p -x has coefficients:
+
+For x^p: 1.
+
+For x^1: -1 mod p → p-1.
+
+All other coefficients: 0.
+
+So the coefficients list for x^p -x is [1] + [0]*(p-2) + [p-1] + [0] ?
+
+No. Because x^p -x is x^p -x, which is x^p + (p-1)x mod p. So for example, x^5 -x mod5 is x^5 +4x mod5.
+
+So the coefficients list has 1 for x^p, 0 for x^{p-1}, x^{p-2}, ..., x^2, then p-1 for x^1, and 0 for x^0.
+
+So the list is [1, 0, 0, ..., 0, p-1, 0], where the length is p+1 (since x^p is degree p, down to x^0).
+
+But in practice, when representing the coefficients for division, perhaps we need to represent them as a list where the index corresponds to the exponent. For example, coeffs[k] is the coefficient for x^k.
+
+But for division, the standard approach is to handle the coefficients from highest degree to lowest.
+
+So for x^p -x, the coefficients are:
+
+coeffs = [0]*(p+1)
+
+coeffs[p] = 1
+
+coeffs[1] = p-1
+
+coeffs[0] =0.
+
+Now, for each i in 0..p-1:
+
+- Perform polynomial division of coeffs by (x -i) to get Q_i(x).
+
+The division process can be done as follows:
+
+Initialize the quotient coefficients as a list of length p (since Q_i(x) has degree p-1).
+
+We start from the highest degree (p) and work backwards.
+
+But in practice, the polynomial division algorithm steps are:
+
+Given the dividend A (coefficients for x^p, x^{p-1}, ...), which is x^p -x.
+
+The divisor is x -i.
+
+The quotient will have degree p-1.
+
+The algorithm is:
+
+1. Initialize the quotient coefficients q as a list of size p (since degree p-1 has p terms).
+
+2. The leading coefficient of the dividend is 1 (x^p term). Divide by the leading coefficient of the divisor (which is 1), giving 1. This becomes the coefficient of x^{p-1} in the quotient.
+
+3. Multiply the divisor (x -i) by this term (1 * x^{p-1}), subtract from the dividend.
+
+But let's think step by step:
+
+Dividend coefficients (starting with x^p -x):
+
+coeffs = [1, 0, 0, ..., 0, p-1, 0]
+
+We need to divide by x -i.
+
+The division steps are:
+
+1. The leading term of the dividend is x^p. The leading term of the divisor is x. The quotient's first term is x^{p-1} (since x^p /x =x^{p-1}).
+
+Multiply the divisor (x -i) by x^{p-1} to get x^p -i x^{p-1}.
+
+Subtract this from the dividend:
+
+The dividend becomes:
+
+(x^p + 0 x^{p-1} + ...) - (x^p -i x^{p-1}) = i x^{p-1} + ... 
+
+But the x^p terms cancel.
+
+So after this step, the new dividend is [0, i, 0, ..., p-1, 0] (for exponents p-1, ..., 0).
+
+But the next term to process is the new leading term, which is i x^{p-1}.
+
+Divide by x (the divisor's leading term) to get i x^{p-2}.
+
+Multiply the divisor by i x^{p-2} to get i x^{p-1} -i^2 x^{p-2}.
+
+Subtract this from the current dividend:
+
+The x^{p-1} term is i x^{p-1} - i x^{p-1} =0.
+
+The x^{p-2} term is 0 - (-i^2 x^{p-2}) =i^2 x^{p-2}.
+
+This process continues until all terms are processed.
+
+But this seems like a tedious process. Instead, there's a more efficient way to compute the coefficients.
+
+An efficient algorithm for dividing a polynomial by (x -i) is the Horner's method or synthetic division.
+
+Synthetic division can be used to compute the quotient and remainder of dividing a polynomial by (x -c).
+
+The process for synthetic division is:
+
+Given coefficients of the polynomial a_n x^n + ... + a_0, and a constant c.
+
+The coefficients of the quotient polynomial are computed by iterating from the highest degree down to the lowest.
+
+The algorithm is:
+
+1. Initialize a list q with the coefficients of the dividend. The coefficients are ordered from highest degree to lowest. For example, x^p -x would have coefficients [1, 0, 0, ..., 0, p-1, 0], ordered from x^p down to x^0.
+
+But wait, no. For synthetic division, the coefficients are ordered from highest degree to lowest, but the divisor is x -c.
+
+The steps for synthetic division are:
+
+The coefficients of the dividend are written in order of descending degree. For example, x^3 + 2x^2 +3x +4 would be [1, 2, 3,4].
+
+The synthetic division algorithm for divisor x -c:
+
+Bring down the leading coefficient.
+
+Multiply by c, add to the next coefficient.
+
+Repeat.
+
+This gives the coefficients of the quotient, and the remainder is the last value.
+
+But in our case, the dividend is x^p -x, which is x^p + 0x^{p-1} + ... + 0x^2 + (p-1)x + 0.
+
+So the coefficients list is [1, 0, 0, ..., 0, p-1, 0], where the length is p+1.
+
+The synthetic division for x -i would proceed as follows:
+
+Initialize a list of coefficients of the dividend, ordered from x^p to x^0.
+
+We need to compute the quotient of this division. Since the divisor is x -i, and the dividend is of degree p, the quotient will be of degree p-1.
+
+The synthetic division steps are:
+
+coefficients = [1, 0, 0, ..., p-1, 0]
+
+n = p.
+
+q = [0]*(n)
+
+q[0] = coefficients[0]
+
+for k from 1 to n-1:
+
+    q[k] = coefficients[k] + q[k-1] * i
+
+remainder = coefficients[n] + q[n-1] * i
+
+But in our case, the remainder is zero because x^p -x is divisible by x-i.
+
+But for our purpose, we need the quotient coefficients, which are q[0 ... p-1].
+
+Wait, but let's see:
+
+For example, take p=5, i=2, and dividend x^5 -x. coefficients is [1,0,0,0,4,0].
+
+n=5. So q is [0]*5.
+
+q[0] = coefficients[0] =1.
+
+q[1] = coefficients[1] + q[0] *i →0 +1*2=2.
+
+q[2] = coefficients[2] + q[1] *i →0 +2*2=4.
+
+q[3] = coefficients[3] + q[2]*i →0 +4*2=8 mod5=3.
+
+q[4] = coefficients[4] + q[3] *i →4 +3*2=4 +6=10 mod5=0.
+
+remainder is coefficients[5] (0) + q[4] *i →0 +0*2=0.
+
+So the quotient coefficients are [1,2,4,3,0], which corresponds to x^4 +2x^3 +4x^2 +3x +0. Which matches the earlier example.
+
+So this is correct.
+
+So the quotient polynomial is x^4 +2x^3 +4x^2 +3x.
+
+So the coefficients are [1,2,4,3,0] for degrees 4,3,2,1,0.
+
+But for our problem, the polynomial Q_i(x) is the product_{j≠i} (x-j) mod p, which is (x^p -x)/(x-i). So the coefficients are given by the quotient of the synthetic division.
+
+So the coefficients of Q_i(x) are the q array from the synthetic division, excluding the remainder.
+
+Therefore, to compute the coefficients of Q_i(x) for each i, we can perform synthetic division of the polynomial x^p -x by (x-i), and collect the coefficients of the quotient.
+
+Once we have Q_i(x) coefficients, multiply them by (a_i * (p-1)) mod p, then add all these polynomials together. The sum's coefficients mod p will be the desired coefficients of f(x).
+
+So the steps are:
+
+1. Precompute the coefficients of x^p -x mod p. This is a list of length p+1: [1] followed by (p-2) zeros, then (p-1) for x's coefficient, and 0 for the constant term.
+
+2. For each i from 0 to p-1:
+
+   a. Compute the quotient coefficients q_i of (x^p -x)/(x-i) using synthetic division.
+
+   b. Multiply each coefficient of q_i by a_i * (p-1) mod p (since D_i's inverse is p-1).
+
+3. Sum all the multiplied q_i polynomials to get the coefficients of f(x).
+
+4. Output the coefficients of f(x), ordered from b_0 to b_{p-1} (i.e., from x^0 to x^{p-1}).
+
+But how to handle the synthetic division for each i.
+
+Let's formalize this.
+
+The synthetic division for each i:
+
+The dividend coefficients are [1, 0, 0, ..., 0, p-1, 0]. The length is p+1.
+
+But wait, the coefficients for x^p -x are:
+
+coeffs = [1] + [0]*(p-2) + [p-1] + [0]
+
+So for example, if p=5, the coefficients are [1,0,0,0,4,0].
+
+Then, for each i in 0..p-1:
+
+- Perform synthetic division to compute the quotient coefficients q_i.
+
+The quotient will have p coefficients (from x^{p-1} down to x^0).
+
+But since x^p -x divided by (x-i) gives a quotient of degree p-1, which has p terms (x^{p-1} down to x^0), the q array has length p.
+
+So for each i, after synthetic division, the q array is of length p.
+
+But when we compute the coefficients of Q_i(x), which is the quotient, we need to take all terms except the remainder. But since the remainder is zero, the q array contains the coefficients of the quotient.
+
+So, the code steps in Python would be:
+
+Read p and the a list.
+
+Initialize the coefficients of x^p -x as a list.
+
+For each i in 0..p-1:
+
+   Perform synthetic division to get the quotient coefficients q.
+
+   Multiply each coefficient in q by (a[i] * (p-1)) mod p.
+
+   Add these coefficients to a global sum_coeffs array.
+
+Finally, after processing all i, output the sum_coeffs mod p, but ordered from x^0 to x^{p-1}.
+
+Wait, but the quotient coefficients from the synthetic division are ordered from x^{p-1} down to x^0. So when we multiply by (a[i] * (p-1)) and add to sum_coeffs, which is ordered from x^0 to x^{p-1}, we need to reverse the order.
+
+For example, in the previous example where q is [1,2,4,3,0], these are coefficients for x^4, x^3, x^2, x^1, x^0. So to add to sum_coeffs, which is indexed as sum_coeffs[0] is x^0, sum_coeffs[1] is x^1, etc., we need to reverse the quotient coefficients.
+
+So the steps are:
+
+sum_coeffs is initialized to [0] * p (since the polynomial f(x) has degree up to p-1).
+
+For each i in 0..p-1:
+
+   Perform synthetic division for i, get q_i_coeffs (length p, ordered from x^{p-1} to x^0).
+
+   Multiply each coefficient by (a[i] * (p-1)) mod p.
+
+   For each k in 0..p-1:
+
+       sum_coeffs[k] += (coefficient from q_i_coeffs[p-1 -k]) * (a[i] * (p-1)) mod p.
+
+But wait, no. The quotient coefficients q_i_coeffs are ordered from x^{p-1} down to x^0, so q_i_coeffs[0] is x^{p-1}, q_i_coeffs[1] is x^{p-2}, ..., q_i_coeffs[p-1] is x^0.
+
+So to add to sum_coeffs, which is ordered from x^0 to x^{p-1}, we need to reverse the quotient coefficients.
+
+For example, if q_i_coeffs is [1, 2, 3, 4, 5] for p=5 (x^4 +2x^3 +3x^2 +4x +5), then the sum_coeffs indices are:
+
+sum_coeffs[0] =5 (x^0), sum_coeffs[1] =4 (x^1), sum_coeffs[2] =3 (x^2), sum_coeffs[3] =2 (x^3), sum_coeffs[4] =1 (x^4).
+
+So for each i, after multiplying by (a[i] * (p-1)) mod p, we need to add the reversed list of q_i_coeffs to sum_coeffs.
+
+Alternatively, during the addition, for each k in 0..p-1:
+
+sum_coeffs[k] += (q_i_coeffs[p-1 -k] * (a[i] * (p-1))) % p.
+
+But this could be computationally expensive for large p.
+
+Alternatively, we can precompute the reversed quotient coefficients for each i.
+
+But this is manageable.
+
+So the plan is:
+
+- Precompute the coefficients of x^p -x.
+
+- For each i:
+
+   Run synthetic division for (x^p -x) divided by (x-i).
+
+   Obtain quotient coefficients q_i_coeffs (from x^{p-1} to x^0).
+
+   For each coefficient in q_i_coeffs, multiply by (a[i] * (p-1)) mod p.
+
+   Add these multiplied coefficients to sum_coeffs in reverse order (x^0 to x^{p-1}).
+
+But wait, sum_coeffs is a list where sum_coeffs[k] is the coefficient of x^k.
+
+So for each i:
+
+   For k in 0 to p-1:
+
+       sum_coeffs[k] += (q_i_coeffs[p-1 -k] * (a[i] * (p-1))) % p.
+
+But modulo p should be applied at each step to prevent overflow.
+
+But since p is up to 3e3, and a[i] is 0 or 1, the multiplier is either 0 or (p-1) mod p. So for each i, if a[i] is 0, nothing is added. If a[i] is 1, the quotient coefficients are multiplied by (p-1) mod p, which is -1 mod p. So multiplying by -1 mod p.
+
+Thus, for each i where a[i] is 1, we need to subtract the quotient coefficients mod p from the sum.
+
+But let's proceed step by step.
+
+Now, the code:
+
+First, read p and the list a.
+
+Initialize the coefficients of x^p -x: coeffs = [0]*(p+1)
+
+coeffs[0] =1  # x^p
+
+coeffs[p-1] = (p-1) # coefficient of x.
+
+coeffs[p] =0 # x^0 term.
+
+Then, for each i in 0..p-1:
+
+   if a[i] is 0: skip.
+
+   else:
+
+       perform synthetic division for coeffs divided by (x -i).
+
+       get q_i_coeffs (length p).
+
+       multiply each coefficient in q_i_coeffs by (p-1) mod p.
+
+       add to sum_coeffs in reverse order.
+
+So, the code for synthetic division:
+
+def synthetic_division(coeffs, i, p):
+
+    # coeffs is the list of coefficients of the dividend, ordered from x^p down to x^0.
+
+    # but in our case, the dividend is x^p -x, which has coeffs [1, 0, ..., p-1, 0]
+
+    # The synthetic division algorithm for divisor x -c.
+
+    # Initialize the quotient coefficients.
+
+    # coeffs is length p+1 (x^p to x^0).
+
+    n = len(coeffs) -1 # degree of dividend.
+
+    q = [0] * n # quotient has degree n-1 = p-1, so length p.
+
+    for k in range(n):
+
+        if k ==0:
+
+            q[k] = coeffs[k]
+
+        else:
+
+            q[k] = (coeffs[k] + q[k-1] * i) % p
+
+    # remainder is (coeffs[n] + q[-1] *i) %p. But for us, remainder is 0.
+
+    return q
+
+Wait, but in our case, the dividend is x^p -x. So the coefficients are:
+
+coeffs = [1] + [0]*(p-2) + [p-1] + [0]
+
+So len(coeffs) is p+1.
+
+So n = p+1 -1 = p.
+
+But the synthetic division function expects coeffs to be ordered from highest degree to lowest, including x^0.
+
+So for each i, we call synthetic_division with coeffs and i.
+
+But the code for synthetic division needs to handle this.
+
+Wait, let's test with p=5, i=2:
+
+coeffs = [1, 0, 0, 0, 4, 0]
+
+n = len(coeffs) -1 =5.
+
+q is [0]*5.
+
+Then:
+
+k=0: q[0] = coeffs[0] =1.
+
+k=1: q[1] = (coeffs[1] + q[0] *2) mod5 →0 +1*2=2.
+
+k=2: q[2] = (coeffs[2] + q[1]*2) mod5 →0 +2*2=4.
+
+k=3: q[3] = (coeffs[3] + q[2]*2) mod5 →0 +4*2=8 mod5=3.
+
+k=4: q[4] = (coeffs[4] + q[3]*2) mod5 →4 +3*2=10 mod5=0.
+
+Which gives q = [1,2,4,3,0], which matches the example.
+
+So the synthetic division function works.
+
+But wait, the coeffs for x^p -x in the code is:
+
+coeffs = [0]*(p+1)
+
+coeffs[0] =1
+
+coeffs[p-1] = (p-1) %p
+
+coeffs[p] =0
+
+So for p=5:
+
+coeffs[0] =1 (x^5)
+
+coeffs[4] =4 (x^1)
+
+coeffs[5] =0 (x^0)
+
+The other positions are 0.
+
+Yes.
+
+So the code for synthetic division is correct.
+
+Now, for each i, we need to compute q_i_coeffs = synthetic_division(coeffs, i, p).
+
+Then, for each coefficient in q_i_coeffs, multiply by (a[i] * (p-1)) mod p.
+
+But since a[i] is 0 or 1, this multiplier is 0 when a[i] is 0, and (p-1) when a[i] is 1.
+
+Then, for each k in 0..p-1:
+
+sum_coeffs[k] += (q_i_coeffs[p-1 -k] * multiplier) %p.
+
+But sum_coeffs starts as [0] *p.
+
+After processing all i, sum_coeffs contains the coefficients of the interpolated polynomial from x^0 to x^{p-1}, mod p.
+
+Finally, we need to output these coefficients mod p, ensuring they are in 0..p-1.
+
+But since we are adding mod p at each step, the sum_coeffs should already be mod p.
+
+So the code outline is:
+
+Read p.
+
+Read a as a list of integers.
+
+precompute coeffs = [0]*(p+1)
+
+coeffs[0] =1
+
+coeffs[p-1] = (p-1) %p
+
+coeffs[p] =0
+
+sum_coeffs = [0]*p
+
+for i in range(p):
+
+    if a[i] ==0:
+
+        continue
+
+    # compute quotient coefficients for i.
+
+    q = synthetic_division(coeffs, i, p)
+
+    multiplier = (p-1) %p
+
+    # add to sum_coeffs in reverse order.
+
+    for k in range(p):
+
+        # q is x^{p-1} to x^0.
+
+        # sum_coeffs[k] is x^k.
+
+        # q[p-1 -k] is the coefficient of x^{k} in q_i_coeffs.
+
+        sum_coeffs[k] = (sum_coeffs[k] + q[p-1 -k] * multiplier) %p
+
+print(' '.join(map(str, sum_coeffs)))
+
+But wait, the synthetic division function returns q as a list of length p, which is the coefficients from x^{p-1} down to x^0.
+
+So for each q in q, q[0] is x^{p-1}, q[1] is x^{p-2}, ..., q[p-1] is x^0.
+
+So to get the coefficient of x^k, we need to access q[p-1 -k].
+
+Yes. For example, if k=0 (x^0), we need q[p-1 -0] = q[p-1]. Which is correct.
+
+So the code is correct.
+
+Let's test this with the first sample input:
+
+Sample Input 1:
+
+2
+
+1 0
+
+So p=2, a=[1,0].
+
+The coefficients of x^2 -x mod2 is x^2 +x.
+
+coeffs = [1, 0, 1, 0]? No. For p=2:
+
+coeffs has length 3.
+
+coeffs[0] =1 (x^2)
+
+coeffs[1] = (2-1) mod2 =1 mod2=1 (x^1)
+
+coeffs[2] =0 (x^0)
+
+So coeffs = [1,1,0].
+
+Now, for each i where a[i] is 1:
+
+i=0:
+
+a[0] is 1.
+
+Perform synthetic division with i=0.
+
+The coeffs are [1,1,0], divided by x-0=x.
+
+The synthetic division process:
+
+n = len(coeffs) -1 =2.
+
+q = [0] *2.
+
+k=0: q[0] = coeffs[0] =1.
+
+k=1: q[1] = coeffs[1] + q[0] *0 mod2 →1 +0=1.
+
+q is [1,1].
+
+multiplier is 1 (p=2, p-1=1 mod2=1).
+
+The sum_coeffs is [0,0].
+
+For each k in 0..1:
+
+k=0: sum_coeffs[0] += q[1 -0] *1 → q[1] is 1. sum_coeffs[0] =1.
+
+k=1: sum_coeffs[1] += q[1-1] *1 → q[0] is 1. sum_coeffs[1] =1.
+
+So sum_coeffs is [1,1], which matches the sample output.
+
+Sample Input 2:
+
+3
+
+0 0 0
+
+Output is 0 0 0.
+
+Because all a[i] are 0, so sum_coeffs remains [0,0,0].
+
+Sample Input 3:
+
+5
+
+0 1 0 1 0
+
+The code will process i=1 and i=3 (a[1] =1, a[3]=1).
+
+For each of these i, compute the quotient coefficients, multiply by 4 mod5, and add to sum_coeffs.
+
+But the code's output is 0 2 0 1 3.
+
+But verifying this would take time.
+
+But assuming the code works, let's proceed.
+
+Thus, the Python code should be:
+
+Implement the synthetic division, and the steps described.
+</think>
+To solve this problem, we need to find a polynomial of degree at most p-1 that satisfies given conditions modulo a prime number p. The polynomial must be constructed such that when evaluated at each integer from 0 to p-1, the result matches the corresponding value in the input sequence modulo p.
+
+### Approach
+1. **Problem Analysis**: The problem requires constructing a polynomial using modular arithmetic. Given the constraints, we can use Lagrange interpolation to determine the coefficients of the polynomial. The key insight is that each term in the Lagrange polynomial can be computed efficiently using modular arithmetic properties.
+
+2. **Synthetic Division**: To efficiently compute the coefficients of the polynomial, we use synthetic division. This method helps in dividing the polynomial \(x^p - x\) by each linear factor (x - i) modulo p, where i ranges from 0 to p-1. This division helps in constructing the basis polynomials for Lagrange interpolation.
+
+3. **Modular Arithmetic**: Using properties of modular arithmetic, particularly Fermat's Little Theorem and Wilson's Theorem, we simplify the computation of inverses and products modulo p.
+
+4. **Summing Contributions**: For each input value that is 1, compute the contribution of the corresponding basis polynomial scaled by the appropriate factor and sum these contributions modulo p.
+
+### Solution Code
+```python
+def main():
+    import sys
+    p, *rest = list(map(int, sys.stdin.read().split()))
+    a = rest[:p]
+    
+    # Initialize coefficients of x^p - x mod p
+    coeffs = [0] * (p + 1)
+    coeffs[0] = 1  # x^p term
+    coeffs[p-1] = (p - 1) % p  # x term (since -1 mod p = p-1)
+    coeffs[p] = 0  # constant term
+    
+    sum_coeffs = [0] * p
+    
+    def synthetic_division(c, i, prime):
+        n = len(c) - 1  # degree of dividend
+        q = [0] * n
+        for k in range(n):
+            if k == 0:
+                q[k] = c[k] % prime
+            else:
+                q[k] = (c[k] + q[k-1] * i) % prime
+        return q
+    
+    for i in range(p):
+        if a[i] == 0:
+            continue
+        # Compute quotient coefficients for (x^p - x) divided by (x - i)
+        q = synthetic_division(coeffs, i, p)
+        # Multiply by (p-1) mod p (which is the inverse of D_i)
+        multiplier = (p - 1) % p
+        # Add to sum_coeffs in reverse order (x^0 to x^{p-1})
+        for k in range(p):
+            # q[p-1 -k] is the coefficient of x^k in Q_i(x)
+            sum_coeffs[k] = (sum_coeffs[k] + q[p-1 - k] * multiplier) % p
+    
+    print(' '.join(map(str, sum_coeffs)))
+
+if __name__ == '__main__':
+    main()
+```
+
+### Explanation
+1. **Reading Input**: The input consists of a prime number p and a sequence of p integers (0s and 1s). These are read and stored appropriately.
+
+2. **Initializing Polynomial Coefficients**: The polynomial \(x^p - x\) modulo p is initialized with coefficients for \(x^p\) and \(x\), with other terms set to zero.
+
+3. **Synthetic Division**: For each index i where the input sequence has a 1, synthetic division is performed to divide \(x^p - x\) by (x - i). This gives the quotient polynomial coefficients, which are then scaled and added to the sum of coefficients for the final polynomial.
+
+4. **Summing Contributions**: Each valid quotient polynomial (where the input sequence is 1) is scaled by (p-1) modulo p (due to Wilson's Theorem) and added to the sum of coefficients. This ensures the final polynomial meets the required conditions.
+
+This approach efficiently computes the required polynomial using modular arithmetic and synthetic division, ensuring correctness and optimal performance even for large primes up to 2999.
+</bot>

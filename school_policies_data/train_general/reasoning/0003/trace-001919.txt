@@ -1,0 +1,1067 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.You are given two integers l and r (l ≤ r). Your task is to calculate the sum of numbers from l to r (including l and r) such that each number contains at most k different digits, and print this sum modulo 998244353.
+
+For example, if k = 1 then you have to calculate all numbers from l to r such that each number is formed using only one digit. For l = 10, r = 50 the answer is 11 + 22 + 33 + 44 = 110.
+
+Input
+
+The only line of the input contains three integers l, r and k (1 ≤ l ≤ r < 10^{18}, 1 ≤ k ≤ 10) — the borders of the segment and the maximum number of different digits.
+
+Output
+
+Print one integer — the sum of numbers from l to r such that each number contains at most k different digits, modulo 998244353.
+
+Examples
+
+Input
+
+10 50 2
+
+
+Output
+
+1230
+
+
+Input
+
+1 2345 10
+
+
+Output
+
+2750685
+
+
+Input
+
+101 154 2
+
+
+Output
+
+2189
+
+Note
+
+For the first example the answer is just the sum of numbers from l to r which equals to (50 ⋅ 51)/(2) - (9 ⋅ 10)/(2) = 1230. This example also explained in the problem statement but for k = 1.
+
+For the second example the answer is just the sum of numbers from l to r which equals to (2345 ⋅ 2346)/(2) = 2750685.
+
+For the third example the answer is 101 + 110 + 111 + 112 + 113 + 114 + 115 + 116 + 117 + 118 + 119 + 121 + 122 + 131 + 133 + 141 + 144 + 151 = 2189.
+</user>
+<bot>
+<think>
+Okay, I need to solve this problem where I have to compute the sum of numbers between l and r (inclusive) that have at most k different digits. Then, output that sum modulo 998244353. The challenge here is handling very large numbers, up to 1e18, so iterating each number from l to r is impossible. I need an efficient way to calculate this.
+
+First, let's think about the approach. Since the numbers are up to 1e18, we need a digit dynamic programming (DP) approach. Digit DP is a technique used to count numbers in a range with certain properties by processing digits one by one. But here, not only do we need the count but also the sum of those numbers. Plus, we have to track the number of distinct digits used so far.
+
+Let me outline the steps:
+
+1. **Digit DP Concept**: We'll process the number digit by digit, keeping track of the state. The state needs to include:
+   - Position in the digit.
+   - A mask that tracks the digits used so far (since k can be up to 10, we need a way to track which digits are present).
+   - Leading zeros (since leading zeros don't contribute to the digit count).
+   - Whether the current number is already less than the upper bound (to handle the upper limit).
+
+2. **Sum Calculation**: For each valid number, we need to add its value to the sum. In digit DP, this is tricky because we build the number digit by digit. So, we need to track the current sum contribution and the current number's value as we build it. Alternatively, for each position, we can calculate the contribution of each digit choice to the total sum.
+
+3. **Handling Ranges**: Since we need numbers between l and r, we can compute the sum for [0, r] and subtract the sum for [0, l-1]. But since l can be 1, we have to handle edge cases. However, l and r can be up to 1e18, so we need to handle big numbers as strings.
+
+4. **Distinct Digits Tracking**: For each digit in the current number, we need to know which digits have been used. Since digits are 0-9, a bitmask with 10 bits can represent the set of used digits. But leading zeros (before the number starts) should not count. For example, the number 001 is considered as 1, which has one distinct digit. So, leading zeros are treated as not part of the number until the first non-zero digit.
+
+5. **Memoization**: To make this efficient, we need to memoize (cache) the states we've already computed. The state includes:
+   - Position in the digits.
+   - The mask of used digits.
+   - A flag indicating if the number is tight (i.e., bounded by the upper limit's digits so far).
+   - Leading zero flag.
+
+6. **Modulo Operation**: Since the sum can be very large, all calculations must be done modulo 998244353. However, when building the sum incrementally, each step's contributions must be added properly under modulo.
+
+Let's break down each part.
+
+**State Representation**:
+
+The state for the DP will consist of:
+- pos: current digit position being processed.
+- mask: a bitmask of the digits used so far (each bit represents a digit 0-9). For example, if digits 1 and 3 are used, the mask is 0b1010 (bit 1 and 3 are set).
+- tight: a boolean indicating whether the current prefix is exactly the same as the upper bound's prefix up to this position (so further digits can't exceed the upper bound's digits).
+- leading_zero: a boolean indicating if we're still in leading zeros (so that we can ignore 0s until the first non-zero digit).
+
+Additionally, for each state, we need to track two values: the count of valid numbers and the sum of those numbers.
+
+**Handling Leading Zeros**:
+
+When leading_zero is True, adding a zero doesn't contribute to the mask. Once a non-zero digit is added, leading_zero becomes False, and that digit is added to the mask.
+
+For example, when building the number 00123, the leading zeros are ignored, and the mask starts with 1, then 2, then 3.
+
+**Transition Between States**:
+
+For each position, we can choose a digit d. The possible digits depend on the tight constraint. If tight is True, then d can't exceed the corresponding digit in the upper bound. Otherwise, d can be 0-9.
+
+When transitioning:
+- If leading_zero is True and d is 0, then leading_zero remains True, and mask remains 0.
+- If leading_zero is True and d is non-zero, leading_zero becomes False, and the mask is updated to include d.
+- Otherwise, the mask is updated by adding d, and leading_zero is False.
+
+After processing all digits (when pos == length of the upper bound), we check if the number of set bits in mask is <=k. If yes, this number is valid and contributes to the sum.
+
+**Sum Calculation**:
+
+The sum can be built incrementally. For each digit added, the current number's value increases by d * 10^p, where p is the position's power (e.g., units, tens, etc.). So, during the DP transitions, we need to track the current sum contribution.
+
+Wait, this might complicate things. Alternatively, for each state, we can track the sum of numbers that can be formed from that state. For example, when building a number digit by digit, each choice of digit affects the total sum. For example, if at position 3 (hundreds place), choosing a digit d adds d * 100 * count + sum_of_lower_digits.
+
+So, perhaps for the DP state, we need to track both the count of numbers and the sum of those numbers. Then, for each transition, when we add a digit d at position p, the new sum is (current_sum * 10 + d * 10^p * count) + new_contributions. Wait, perhaps it's better to model the sum as the total sum of the numbers formed by the digits so far.
+
+Alternatively, when building the number digit by digit, each digit contributes d multiplied by its position's power. For example, if we have a number "12", the first digit (1) contributes 10, the second (2) contributes 2. So during the DP, the current number's value is built up as we choose digits. However, tracking the exact value is not feasible for large numbers. So instead, we can track the sum modulo 998244353, but the exponents of 10 (like 10^p) can be precomputed modulo 998244353, since 10^p mod m can be calculated.
+
+Thus, the state will track:
+- count: the number of valid numbers in this state.
+- sum: the sum of those numbers modulo 998244353.
+
+For each transition, when adding a digit d at position p, the contribution to the sum is (sum_so_far * 10^remaining_digits + d * 10^remaining_digits * count_so_far) + ...? Wait, maybe that's not the right way. Let's think: when building the number digit by digit, each new digit multiplies the current number by 10 and adds d. So for the sum, if a previous state has sum S and count C, adding a digit d would result in a new sum of S * 10 + d * C. However, this is for numbers being built left to right. For example, if we have a state where sum is S and count is C, which represents numbers like xyz (without the current digit), then adding a digit d would make numbers xyzd. The sum of these numbers is (xyz * 10 + d) summed over all xyz, which is S * 10 + d * C.
+
+But this depends on the position. For example, if we are processing digits from left to right (most significant to least), then each step appends a digit to the right. So each digit added contributes d multiplied by 10^position. Wait, maybe the standard approach is to process digits from left to right, and track the current value modulo 998244353. However, since the numbers can be up to 1e18, we need to compute the sum as we build the digits.
+
+So the key idea is that for each state in the DP, we track:
+- count: number of valid numbers in this state.
+- sum: the sum of those numbers modulo 998244353.
+- the power of 10 needed for the next digits. Wait, perhaps not. Let's think.
+
+For example, when building a number digit by digit, each new digit is added to the right. Suppose we have a current number '12' (sum is 12) and count is 1. If we add a digit 3, the new number is 123. The sum becomes 123. Which is 12 *10 +3. So sum = sum_prev *10 + d * count_prev.
+
+So, if the state transitions from a previous state with sum s and count c, then adding a digit d would contribute a new sum of s * 10 + d * c. And the new count is c (if the digit is allowed). But also, the digit choice depends on the tight constraint.
+
+So, in the DP state, we need to track the sum and count, and for each transition, compute the new sum and count based on the chosen digit.
+
+Thus, for each state, the transitions would be:
+
+For each possible digit d (0-9, but possibly limited by tight):
+   new_tight = tight and (d == upper_digit[pos])
+   new_leading_zero = leading_zero and (d == 0)
+   if new_leading_zero:
+      new_mask = mask
+   else:
+      if leading_zero and d !=0:
+          new_mask = 1 << d
+      else:
+          new_mask = mask | (1 << d)
+   new_num_digits = bin(new_mask).count('1') if not new_leading_zero else 0
+   if new_num_digits > k:
+       skip this digit
+   else:
+       new_sum = (current_sum * 10 + d * current_count) * 10^remaining_digits + ...? Wait, maybe not. Let me think again.
+
+Wait, perhaps the sum in the DP state is the sum of the numbers formed so far. For example, when processing the first digit (most significant), if we choose digit d, then the sum is d * 10^{n-1} for each number. But how do we track this as we go?
+
+Alternatively, the sum in the state is the sum of the numbers built up to the current position. For example, when building the number digit by digit, each step contributes to the sum. Let's see:
+
+Suppose we're at position i (0-based, starting from the left), and the digits processed so far form a prefix. The sum for this state is the sum of all numbers that start with this prefix, considering the remaining digits can be filled in any valid way.
+
+So, for the state (pos, mask, tight, leading_zero), sum is the total sum of all numbers that can be formed by choosing digits from this position onward, given the constraints.
+
+The transitions would then process the next digit, and for each possible digit d (allowed by tight and other constraints), compute the new state, and accumulate the sum and count.
+
+But how do we calculate the sum when adding a new digit?
+
+Let's model the sum as follows: when processing the current digit (pos), each possible digit d contributes d * 10^{length - pos - 1} multiplied by the count of numbers formed in the next positions, plus the sum from the next positions. So, for example, if we choose digit d for position pos, the contribution to the sum is d * (10^power) * next_count + next_sum, where power is the number of digits remaining after pos (including pos?), which depends on the current position.
+
+Wait, maybe the power is 10^{n-pos-1}, where n is the total number of digits. For example, if the number is 123 (n=3), pos=0 (hundreds place), then 10^{2} is 100, which is the value of that digit's place. So for each digit d chosen at position pos, the contribution is d * 10^{n-pos-1} * next_count (the number of numbers formed in the next positions) plus next_sum (the sum of the next digits).
+
+But in the DP, when building from left to right, each digit's place is 10^{remaining_digits -1}, where remaining_digits is the number of digits left to process (including current). So for example, if there are 3 digits left (current pos and two more), the current digit's place is 10^{2} (hundreds place). So for each digit chosen at the current pos, the value contributed by that digit is d * 10^{remaining_digits -1} multiplied by the number of valid numbers formed in the next positions. Then, the sum from the next positions is added.
+
+But this requires knowing the remaining digits when processing each position. So, perhaps in the DP state, we also track the remaining digits. But since the upper bound can be variable in length (like 10^18 has 18 digits), maybe we need to process numbers with leading zeros but consider their actual length. Hmm, this complicates things.
+
+Alternatively, since we are dealing with numbers up to a certain upper bound (like r), the upper bound's length is fixed (as a string). So, for numbers with shorter lengths (like 100 when upper is 123), they are automatically considered as well. Wait, but when the upper bound is 123, numbers like 99 (two digits) are allowed. So perhaps the DP has to consider numbers with lengths less than the upper bound's length first, and then the numbers with the same length but digits <= the upper bound.
+
+So, the approach is to first process numbers with length less than the upper bound's length, then process numbers with the same length but digits <= upper bound's digits. Similarly for the lower bound.
+
+But how to handle this? Let me think.
+
+The standard digit DP approach for numbers <= X is to process the number as a string, and for each position, track whether the number being formed is already less than X's prefix (so tight is False) or not. Additionally, numbers with fewer digits than X's length are automatically allowed.
+
+So for the upper bound, the sum is calculated as sum of all numbers with length less than X's length (each of which can be generated with digits up to 9 in each position, but must have <=k different digits) plus the sum of numbers with the same length as X and digits <= X.
+
+So, the plan is:
+
+1. Compute the sum from 0 to r with <=k digits, then subtract the sum from 0 to l-1 with <=k digits. The result is (sum(r) - sum(l-1)) mod 998244353.
+
+2. To compute sum(X), which is the sum of numbers from 0 to X inclusive that have <=k different digits.
+
+But X can be up to 1e18, which is a 18-digit number. So the sum(X) function must be computed efficiently using digit DP.
+
+So, the core problem is to implement this sum(X) function.
+
+Now, how to model the DP for sum(X)?
+
+Each DP state will track:
+
+- pos: current position (starting from 0 to len(X)-1)
+- mask: the set of digits used so far (bitmask)
+- leading_zero: whether we are still in leading zeros (so digits can be added without contributing to the mask)
+- tight: whether the current number is still tight to X's digits (i.e., the prefix so far is equal to X's prefix up to this position)
+- sum_so_far: the sum of numbers formed so far (mod 998244353)
+- count: the count of numbers formed so far (mod 998244353, but since count can be up to 1e18, but when multiplied by digits, modulo operations are applied)
+
+Wait, but sum_so_far and count need to be tracked for each state. However, since the transitions would combine these, perhaps the DP state can be represented as a memoization key consisting of (pos, mask, leading_zero, tight), and for each such key, store the (count, sum) pair.
+
+So, for each state, the memo will return the number of valid numbers and their sum.
+
+The base case is when pos == len(X), which means we have formed a complete number. Then, we check if the number of different digits (mask) is <=k. But wait, leading_zero may still be True, which would mean the number is zero. For example, if X is 0, then sum(X) is 0, but for X>0, leading zeros are considered as part of the numbers (like 0, 00, 000, etc. but these are all 0). So leading_zero must be handled correctly.
+
+Wait, but the problem states that the numbers are from l to r. But when computing sum from 0 to X, numbers like 0, 1, etc. are included. However, leading zeros in a number (like 00123) are considered as 123. So when building the number digit by digit, leading zeros are not considered part of the digits (until a non-zero digit is added).
+
+For example, the number 00123 is treated as 123, which has digits 1, 2, 3. So during the DP, leading zeros are ignored in the mask. Only once a non-zero digit is added does the mask start to track digits.
+
+So, the mask is built as follows:
+
+- If leading_zero is True and the current digit is 0, mask remains 0.
+- If leading_zero is True and the current digit is non-zero, mask becomes the set containing that digit, and leading_zero becomes False.
+- If leading_zero is False, then mask is updated to include the current digit.
+
+So, the mask is only tracking non-zero digits once leading_zero is False.
+
+But wait, zero can be part of the digits. For example, 100 has digits 1 and 0. So, once leading_zero is False, any digit (including 0) added to the mask.
+
+So, the mask is constructed by adding all digits once leading_zero is False.
+
+Thus, the transition of the mask is:
+
+new_leading_zero = leading_zero and (d == 0)
+if new_leading_zero:
+    new_mask = mask
+else:
+    if leading_zero and d != 0:
+        new_mask = 1 << d
+    else:
+        new_mask = mask | (1 << d)
+But wait, when leading_zero is True and we choose a non-zero digit d, then leading_zero becomes False, and the mask is set to {d}.
+
+If leading_zero is False and we choose a digit d, then mask is updated by adding d.
+
+So, the mask is the set of all digits used in the number (excluding leading zeros).
+
+Once the mask is built, we can check the number of distinct digits by counting the set bits. For example, if mask has 3 bits set, then the number has 3 distinct digits.
+
+So, during the DP transitions, after choosing a digit d, the new_mask is built as described. Then, if the number of distinct digits (bit count of new_mask) exceeds k, then this path is invalid and is skipped.
+
+Wait, but how do we enforce that the total digits in the number (after leading zeros) do not exceed k? Because each transition step can check whether the new_mask's bit count is <=k. If not, that path is invalid and is not considered.
+
+So, during the transition, after building new_mask and new_leading_zero, if new_leading_zero is False, then the new_mask's bit count must be <=k. Otherwise (if new_leading_zero is True, meaning the number is still all zeros), then the mask is 0, which has 0 bits set (which is <=k).
+
+But wait, the mask is 0 only when leading_zero is True. So, in that case, the mask's bit count is 0, which is allowed only if k >=0 (which it always is). But numbers with leading_zero are considered as 0. So, for example, the number 000 is 0, which has 1 distinct digit (0). But according to our mask setup, when leading_zero is True, the mask is 0. So, this is a problem. Because in reality, the number 0 consists of a single 0 digit. So, when leading_zero is True and the entire number is zeros (like 0), then the mask is 0, which would have 0 bits set, which is incorrect.
+
+Ah, here's a flaw in the mask handling. The mask should include zero when the number is zero. So, leading_zero being True only if all previous digits are zero. When the entire number is zero, then the mask should have 0 as the only digit. So, how to handle this?
+
+This suggests that the mask handling is incorrect for numbers that are exactly zero.
+
+Let me think again.
+
+When leading_zero is True (we are still in leading zeros), adding a 0 digit doesn't change the mask. But when the entire number is zero (like 0), the mask should be {0}. However, in our current setup, mask remains 0.
+
+So, this is a problem. How to correct this?
+
+Alternative approach: leading_zero is a flag indicating whether the number is still all zeros. When leading_zero is True and we add a zero, the mask remains empty. But when we reach the end (all digits processed) and leading_zero is True, that means the number is zero. So, for the mask, in this case, we need to count the zero as part of the digits.
+
+So, during the DP transitions, the mask is built as follows:
+
+If leading_zero is True and d is 0, then mask remains as is (possibly 0). But when we reach the end of the digits, if leading_zero is True, then the mask is considered as {0}, because the number is 0.
+
+Alternatively, when building the mask, the leading_zero is True only if all digits up to now are zero. So, when leading_zero is True and the current digit is zero, the mask is still 0. But when leading_zero is True and the current digit is non-zero, the mask is {d}, and leading_zero becomes False. When leading_zero is False, each digit adds to the mask.
+
+So, when the entire number is zero (e.g., processing the digit 0 in all positions), leading_zero remains True, and the mask is 0. But the number itself is zero, which has one distinct digit (0). So, during the final check (when pos == len(X)), if leading_zero is True, then the mask is considered as {0}, and we check if the count of digits (1) is <=k.
+
+Therefore, during the DP's base case (pos == len(X)), we need to handle this:
+
+if leading_zero is True:
+    # the number is 0, which has one distinct digit (0)
+    if 1 <=k:
+        return (1, 0)
+    else:
+        return (0,0)
+else:
+    if number of set bits in mask <=k:
+        return (count, sum)
+    else:
+        return (0,0)
+
+So, in the DP transitions, the mask is built as before, but in the final step, if leading_zero is True, the mask is considered as {0}.
+
+This adjustment will handle the case where the number is zero.
+
+Thus, the DP transitions are as follows:
+
+At each step, for the current digit d (allowed by tight and other constraints):
+
+- new_leading_zero = leading_zero and (d == 0)
+- if new_leading_zero is True:
+   new_mask = mask (which could be 0)
+- else:
+   if leading_zero was True and d is non-zero:
+      new_mask = set containing d
+   else:
+      new_mask = mask | (1 << d)
+- Then, if new_leading_zero is False:
+   check if the number of bits in new_mask is <=k. If not, skip this digit.
+   (But wait, the number is built step by step. So even if adding this digit causes the mask to exceed k, we can't skip it here. Because maybe the digit is part of a number that will be invalid. So, perhaps the mask is built, and then during the base case, we check whether the mask is valid. Wait, but the mask is tracked throughout the transitions. So, if at any step, adding a new digit causes the mask to exceed k, then this path is invalid and should not contribute to the sum.
+
+Wait, no. Because even if the mask exceeds k at an intermediate step, the final number may have more digits, which could possibly have more than k digits, but the mask is built cumulatively. So, once the mask has more than k digits, any further digits added will not reduce the mask's count. So, once the mask's count exceeds k, the entire path is invalid and can be pruned.
+
+Thus, during the transitions, whenever the new_mask has a count of digits (number of set bits) exceeding k, we can skip this digit. Because any number formed from this path will have more than k distinct digits.
+
+So, the transitions would look like:
+
+for each possible digit d allowed by tight:
+
+   new_leading_zero = leading_zero and (d ==0)
+
+   if new_leading_zero:
+       new_mask = mask
+   else:
+       if leading_zero and d !=0:
+           new_mask = 1 << d
+       else:
+           new_mask = mask | (1 <<d)
+
+   new_mask_count = bin(new_mask).bit_count()
+
+   if not new_leading_zero and new_mask_count >k:
+       continue  # skip this digit
+
+   new_tight = tight and (d == upper_digit[pos])
+
+   # proceed with the transition
+
+So, this way, we prune the paths where adding the current digit causes the mask to exceed k digits (but only if we're not in leading_zero, since leading_zero may still be True and new_mask_count is 1 (if d is non-zero)).
+
+But wait, when leading_zero is False, then the new_mask's count is checked. If it's >k, skip. If leading_zero is True, new_mask is same as before (mask), which may be 0. But new_leading_zero is True only if d is 0 and leading_zero was True. So, new_mask is 0. But in the final step, if the entire number is zeros, then the mask is considered as {0}, which has 1 digit. So, during transitions, even if leading_zero is True, but new_mask is 0 (mask_count 0), but once the number is formed, if leading_zero is True, the mask is considered as {0} (count 1).
+
+So, during the transitions, when new_leading_zero is True, the mask is 0 (mask_count 0), but in the final step, it's considered as 1. So, during transitions, the new_mask_count is computed as 0, but during the base case, it's treated as 1. Therefore, when new_leading_zero is True, even if the mask_count is 0, it's possible that the final count is 1.
+
+Therefore, during the transitions, the new_mask_count is not checked if new_leading_zero is True. Because in that case, the mask_count is 0, but the final number may be 0 (count 1). So, even if k is 0, which is impossible (k >=1?), but the problem allows k=0? Wait, no, the input says 1 ≤k ≤10.
+
+Wait, problem statement says k is between 1 and 10. So, the minimum k is 1.
+
+But in the case of leading_zero is True (new_leading_zero is True), then the mask is 0. But during the base case, leading_zero is True implies the number is zero, which has 1 digit. So, the mask is considered as {0}, which has count 1, which must be <=k. So, when k is 1, this is allowed. If k is 0 (but k >=1 in the problem), then not allowed.
+
+So, during the transition steps, if new_leading_zero is False, then the mask_count must be <=k. If new_leading_zero is True, then it's allowed, but during the base case, we need to check if 1 <=k (since the number is zero, which has one digit).
+
+Thus, during transitions, we can skip a digit only if new_leading_zero is False and mask_count exceeds k. Otherwise, proceed.
+
+So, the transitions proceed as follows:
+
+if new_leading_zero is False and mask_count >k: skip.
+
+Else: proceed.
+
+Then, in the base case (pos == len(X)), check:
+
+if leading_zero is True: the number is zero, which has 1 digit. If 1 <=k: include in sum.
+
+else: check if mask's bit count <=k.
+
+Thus, the mask transitions are handled correctly.
+
+Now, for the DP, each state is (pos, mask, leading_zero, tight). The memoization will cache these states and return the (count, sum) for numbers formed from this state onwards.
+
+But the mask can be up to 2^10=1024 possible values, leading_zero is boolean, tight is boolean, and pos up to 18. So the total number of states is 18 (positions) * 1024 (masks) * 2 (leading_zero) * 2 (tight) = 18 * 1024 *4 = 73728 states. Which is manageable.
+
+Now, the DP function needs to be recursive or iterative. Given Python's stack limits, an iterative approach (memoization with lru_cache) may be more manageable, but for very large parameters, it's better to use memoization with a decorator. However, in Python, for memoization of states with many parameters, using lru_cache with a high maximum size (like 1e5 or more) can be done.
+
+So, the plan is to model the DP with memoization, and for each state, track count and sum.
+
+The steps for sum(X) are:
+
+1. Convert X to a string (digits as a list).
+
+2. Define a recursive function that, given pos, mask, leading_zero, tight, returns (count, sum) of valid numbers from this state.
+
+3. The base case is pos == len(digits). Then, check if leading_zero is True: if yes, then the number is 0. Check if 1 <=k. If yes, count is 1, sum is 0. Else, count and sum are 0. If leading_zero is False, check if the mask's bit count is <=k. If yes, count is 1 (since the number is valid), sum is the current number's value (but how to track that?). Wait, no. Wait, in the DP, the sum is accumulated based on the digits chosen. So during the transitions, the sum is built incrementally.
+
+Ah, here's the problem. How to track the sum of the numbers generated by the DP state. Because each state represents a partial number, and the sum is the total of all numbers that can be formed by completing the digits from that state.
+
+But how to calculate the sum when the digits are not yet fully processed.
+
+For example, suppose we are at position pos, and the digits processed so far form the prefix '12'. The remaining digits (positions pos+1 to len(X)-1) can be filled with digits d, and the sum of all numbers formed by '12' followed by any valid suffix.
+
+But the sum would be 120 + 121 + ... etc., depending on the allowed digits and their contributions. However, this sum depends on the current prefix and the allowed suffixes.
+
+Thus, the DP state must track the sum of all numbers that can be formed from that state. To compute this, each transition to a new state contributes to the sum by:
+
+sum = d * 10^p + sum_of_suffix
+
+where p is the position's power (like hundreds, tens, etc.), and sum_of_suffix is the sum from the new state.
+
+But to track this, the DP must calculate the sum as follows:
+
+When you choose a digit d at position pos, the value contributed by this digit is d multiplied by 10^{length-pos-1} (assuming the number has length digits). Then, for each possible suffix, the sum is this value multiplied by the count of suffixes plus the sum of suffixes.
+
+But the problem is that the length of the number can vary (since numbers with fewer digits than X are allowed). How to handle that?
+
+Alternatively, all numbers considered in sum(X) have up to len(X) digits, but numbers with fewer digits are considered by allowing leading zeros. For example, X is 123, so numbers like 99 (two digits) are allowed, but they are treated as 099 (with leading zeros). But leading zeros are ignored when considering the mask.
+
+Wait, no. Because numbers with fewer digits than len(X) can be considered by setting the upper digit string to be the same length as X, but with leading zeros. For example, for X=123 (3 digits), numbers with 1 digit (0-9) are considered as 00d, numbers with two digits as 0dd, etc. However, leading zeros in the digit string are treated as part of the mask only when a non-zero digit is encountered.
+
+But this complicates the DP because the numbers can have varying lengths. So, the alternative approach is to compute the sum for all numbers with 1 to len(X) digits, but handle leading zeros correctly.
+
+Alternatively, the standard way in digit DP is to pad the number with leading zeros to make all numbers have the same length as X. For example, X is 123, then numbers like 1 are considered as 001, 23 as 023, etc. Then, during the DP processing, leading zeros are allowed but do not contribute to the mask until a non-zero digit is encountered.
+
+This way, the DP can handle numbers of any length up to len(X) by padding with leading zeros, and the mask is built correctly.
+
+Thus, the process is:
+
+- For X, convert it to a string with leading zeros (not needed, but numbers with fewer digits are considered as padded with leading zeros). For example, X=123, then numbers are considered as 3-digit numbers, with leading zeros allowed. This way, the DP can process all numbers with up to len(X) digits.
+
+So, the steps for sum(X) are:
+
+1. Convert X into a string s of its digits. For example, 50 becomes "50".
+
+2. Compute the sum of all numbers from 0 to X (inclusive) that have <=k distinct digits.
+
+3. To handle numbers with leading zeros (like 00, which is 0, or 05, which is 5), the DP treats them as numbers with leading zeros, but the mask is built correctly.
+
+Now, the key is that the DP will process numbers as strings of length len(s), padding with leading zeros. So, for example, the number 5 is processed as '05' if len(s) is 2. Then, during mask building, leading zeros are ignored until a non-zero digit is encountered.
+
+Thus, the DP can handle all numbers from 0 to X.
+
+Now, the sum of each number is the actual value of the number (like '05' is 5, '00' is 0). So, during the DP transitions, when building the digits, the actual value must be computed modulo 998244353.
+
+But how to track the actual value of the number formed so far? For example, if the digits chosen so far are '1' and '2' in positions 0 and 1 (assuming len(s)=3), the value is 120 (1*100 + 2*10 + next digits).
+
+But storing the exact value is not feasible for large numbers, but since the result is required modulo 998244353, we can track the value modulo 998244353.
+
+Thus, the DP state must track the current value modulo 998244353. But this adds another parameter to the state, which is not feasible because the value can be up to 1e18, which mod 998244353 is manageable, but the state would then have to track this value, leading to a state space explosion (since mod can have up to 998244353 possible values, multiplied by the other parameters).
+
+This is not feasible. So, we need a way to track the sum without tracking the current value for each state.
+
+Alternative approach: the sum of all numbers formed from a state is equal to the sum of (current_prefix * 10^p + sum_of_suffixes), where p is the number of remaining digits, and sum_of_suffixes is the sum of all possible suffixes for that state. This is similar to how count and sum are accumulated in combinatorial problems.
+
+But how to compute this:
+
+Each transition appends a digit d. The current_prefix is built by multiplying the previous prefix by 10 and adding d. The sum of all numbers formed from this state is the sum over all possible suffixes of (current_prefix * 10^remaining_digits + suffix_sum). The count is the number of suffixes.
+
+But since we can't track current_prefix (as it's too large), we can compute this using modular arithmetic. However, when you multiply by 10^remaining_digits, this can be precomputed modulo 998244353 for each possible remaining_digits (which is up to len(s)).
+
+Thus, for each position pos, the remaining_digits is len(s) - pos. The power of 10 for remaining_digits is 10^{(remaining_digits - 1)} ... no. For example, if we're at pos 0 in a 3-digit number, remaining_digits is 3, and the current digit is the hundreds place (10^2), the next digit is tens (10^1), etc.
+
+Wait, for a 3-digit number, the digits are pos 0 (hundreds), pos 1 (tens), pos 2 (units). remaining_digits after pos is 3 - pos. So, for pos 0, remaining_digits is 3. For each digit d added at pos 0, the contribution to the number is d * 10^{2} (since 3 - 0 -1 = 2). Because the first digit (pos 0) is the hundreds place (10^2), the second digit (pos 1) is the tens place (10^1), etc.
+
+Thus, for a digit d added at position pos, the contribution to the number's value is d * 10^{ (len(s) - pos -1) }.
+
+So, when transitioning to a new state, the contribution of this digit to the sum is d * 10^{ (len(s) - pos -1) } multiplied by the number of suffixes (count from the next state) plus the sum of the suffixes.
+
+Thus, the DP state must track:
+
+- count: the number of valid numbers in this state.
+- sum: the sum of those numbers modulo 998244353.
+
+But to compute this, when we transition from pos to pos+1, we need to calculate the contribution of the current digit d to the sum.
+
+For example, if we choose digit d at pos, the sum contributed is:
+
+sum = d * (10^power) * next_count + next_sum
+
+where power = len(s) - pos - 1
+
+and next_count and next_sum are the count and sum from the new state (pos+1, new_mask, new_leading_zero, new_tight).
+
+So, the DP state returns two values: count and sum. For each transition, we calculate the new count and sum by accumulating the contributions from each allowed digit.
+
+Thus, the recursive DP function will compute for each state (pos, mask, leading_zero, tight):
+
+count = sum of next_counts for each valid digit d
+sum = sum of (d * 10^power * next_count + next_sum) for each valid digit d
+
+This seems manageable.
+
+Now, the power of 10 for each pos can be precomputed modulo 998244353. For len(s) up to 18, we can precompute an array pow10 where pow10[i] = 10^i mod 998244353.
+
+So, precompute pow10 as follows:
+
+pow10 = [1] * (max_len + 1)
+for i in 1 to max_len:
+    pow10[i] = (pow10[i-1] * 10) % mod
+
+But the exponent for a digit at pos is pow10[ (len(s) - pos -1) ].
+
+Thus, for a number with digits of length n, the digits are processed from pos 0 to pos n-1, and for pos i, the exponent is 10^{n-1 -i}.
+
+Now, putting this all together.
+
+The code steps:
+
+1. Precompute pow10 up to 1e18 digits (max 18 digits).
+
+2. For a given X, convert to string s, len = len(s).
+
+3. Compute pow10 for exponents 0 to len(s)-1.
+
+Wait, for each pos in 0..len(s)-1, the exponent is len(s)-1 - pos. So, for pos 0, exponent is len(s)-1, for pos 1, len(s)-2, etc.
+
+So, for example, len(s) =3:
+
+pow10[0] =1 (10^0)
+pow10[1] =10
+pow10[2] =100
+pow10[3] =1000
+
+But for pos 0, exponent is 2 (10^2), so the value is pow10[2].
+
+So, precompute pow10 up to len(s)-1.
+
+Thus, the code can precompute pow10 for each X's length.
+
+Now, the memoization function will compute, for each state, the count and sum.
+
+Implementing this in Python:
+
+The code will use memoization via lru_cache. However, the mask is an integer (bitmask), and the parameters are integers and booleans. So, the state can be represented as (pos, mask, leading_zero, tight), and the function returns (count, sum).
+
+But Python's lru_cache has a limit on the number of parameters and their types. However, since pos is up to 18, mask is up to 1024, leading_zero and tight are booleans, this is manageable.
+
+Thus, the code will look something like this:
+
+mod = 998244353
+
+def compute_sum(s, k):
+    n = len(s)
+    pow10 = [1] * n
+    for i in range(1, n):
+        pow10[i] = (pow10[i-1] * 10) % mod
+    # pow10[i] is 10^i mod mod. But wait, for pos i, the exponent is 10^{n-1 -i} ?
+
+    # Wait, for a digit d at position i (0-based), the value is d * 10^{n-1 -i}.
+    # So, we need to precompute 10^{n-1 -i} for each i.
+
+    # For example, n=3: i=0 → 10^2=100, i=1 →10^1=10, i=2 →1.
+
+    # So, create an array where exponent_pow10[i] = 10^{n-1 -i} mod mod.
+
+    exponent_pow10 = [pow(10, (n-1 - i), mod) for i in range(n)]
+
+    from functools import lru_cache
+
+    @lru_cache(None)
+    def dp(pos, mask, leading_zero, tight):
+        if pos == n:
+            # Check if the number is valid
+            if leading_zero:
+                # number is 0, which has 1 distinct digit (0)
+                return (1, 0) if k >=1 else (0, 0)
+            else:
+                cnt = bin(mask).count('1')
+                return (1, 0) if cnt <=k else (0, 0)
+        res_count = 0
+        res_sum = 0
+        max_d = int(s[pos]) if tight else 9
+        for d in range(0, max_d +1):
+            new_tight = tight and (d == max_d)
+            new_leading_zero = leading_zero and (d ==0)
+            if new_leading_zero:
+                new_mask = mask
+            else:
+                if leading_zero:
+                    # this is the first non-zero digit
+                    new_mask = 1 << d
+                else:
+                    new_mask = mask | (1 << d)
+            # Check if the new_mask is valid
+            if not new_leading_zero:
+                cnt = bin(new_mask).count('1')
+                if cnt >k:
+                    continue
+            # Recurse
+            cnt_next, sum_next = dp(pos+1, new_mask, new_leading_zero, new_tight)
+            if cnt_next ==0:
+                continue
+            # compute contribution of this digit to the sum
+            if new_leading_zero:
+                # the digit is part of leading zeros, so it's not part of the number
+                # sum contribution is sum_next
+                current_contrib_sum = sum_next
+            else:
+                # the digit is part of the number. contribution is d * 10^power * cnt_next + sum_next
+                power = exponent_pow10[pos]
+                d_mod = d % mod
+                digit_contrib = (d_mod * power) % mod
+                total_contrib = (digit_contrib * cnt_next) % mod
+                current_contrib_sum = (total_contrib + sum_next) % mod
+            res_count = (res_count + cnt_next) % mod
+            res_sum = (res_sum + current_contrib_sum) % mod
+        return (res_count, res_sum)
+    total_count, total_sum = dp(0, 0, True, True)
+    return total_sum
+
+Wait, but the function compute_sum returns the sum of numbers from 0 to X, including X, that have at most k distinct digits. But how does this account for leading zeros?
+
+Wait, in the DP function, when leading_zero is True and the number is zero (all zeros), then the sum is zero. Otherwise, the sum is calculated correctly.
+
+But the problem requires the sum of numbers between l and r, inclusive. So, to compute the answer, we need to compute compute_sum(r) - compute_sum(l-1), but how to handle l=0?
+
+So, the main function will do:
+
+answer = (compute_sum(r) - compute_sum(l-1)) % mod
+
+But compute_sum(r) includes 0. But the problem statement says l can be 1. So, when l=1, compute_sum(l-1) is compute_sum(0), which includes 0. Then, subtract that from compute_sum(r) to get the sum from 1 to r.
+
+But wait, the problem's examples include l=10 and r=50, but the first example's sample input is for k=1. So, in the code, compute_sum(50) - compute_sum(9) gives the correct numbers from 10 to 50.
+
+So, the code needs to compute sum(r) - sum(l-1), modulo 998244353.
+
+But there's a problem when l is 0. For example, if l=0, then compute_sum(r) - compute_sum(-1), but compute_sum(-1) is 0. So, the code must handle this case.
+
+Thus, the code needs to check if l is 0. If l ==0, then compute_sum(r) - compute_sum(-1) is compute_sum(r) -0. But compute_sum for X=-1 is not possible. So, the code should handle l=0 by calling compute_sum(r) - compute_sum(-1) which is compute_sum(r).
+
+But how to compute X when X is l-1 and l is 0? So, when l=0, l-1 is -1, but compute_sum(-1) is 0.
+
+So, the code can handle this with a helper function that returns 0 for X <0.
+
+But how to handle very large numbers (up to 1e18) in the code. For example, subtracting 1 from l could result in a negative number, which is handled as 0.
+
+Thus, the code should be structured as follows:
+
+def solve():
+    l, r, k = map(int, input().split())
+    mod = 998244353
+
+    def sum_x(x):
+        if x <0:
+            return 0
+        s = str(x)
+        # compute_sum(s, k)
+        # ... code from before
+
+    total = (sum_x(r) - sum_x(l-1)) % mod
+    print(total)
+
+But implementing sum_x(x) requires converting x into a string, which is straightforward for x >=0. For x <0, return 0.
+
+Now, the problem is handling very large x (up to 1e18) as a string. Python can handle this as it converts integers to strings correctly.
+
+Now, integrating the compute_sum function into this.
+
+But the code needs to handle leading zeros in the string representation. For example, if x is 50, then the string is "50", and the DP will process it as two digits.
+
+But the code for compute_sum needs to handle numbers correctly.
+
+But there's a problem with leading zeros in the X passed to compute_sum. For example, X=0, which is a single digit. The code should process it as "0", and the DP will return 0's contribution.
+
+Thus, the code for sum_x(x) is:
+
+def sum_x(x):
+    if x <0:
+        return 0
+    s = str(x)
+    # compute sum from 0 to x, inclusive.
+    n = len(s)
+    exponent_pow10 = [pow(10, (n-1 - i), mod) for i in range(n)]
+    # ... then, the DP code.
+
+But how to precompute exponent_pow10 correctly.
+
+Wait, for example, for x=5 (s="5", n=1), exponent_pow10[0] is 10^0 (since n-1 -0 =0).
+
+Yes.
+
+Now, let's test the first example:
+
+Sample Input 1:
+
+10 50 2
+
+Sample Output: 1230.
+
+But according to the problem statement, for k=1, the answer is 110, but in the first sample input, k=2, so all numbers from 10 to 50 are allowed. The sum is (50*51/2 - 9*10/2) = 1275-45=1230.
+
+Thus, the code should compute sum_x(50) - sum_x(9) = 1230.
+
+But sum_x(50) with k=2 is the sum of all numbers from 0 to 50, which is 50*51/2 = 1275.
+
+sum_x(9) is sum from 0 to9, which is 45. 1275-45=1230.
+
+But according to the code, when k=2, any number is allowed since all numbers have at most 10 digits. Wait, no. The problem allows numbers with at most k different digits. So when k=2, any number with 1 or 2 different digits is allowed. For example, 12 is allowed (two digits), 112 is allowed (two digits), but 123 is not (three digits).
+
+But in the first sample input, k=2. The sample output is 1230, which is the sum of all numbers from 10 to 50. But according to the note in the problem, when k=1, the sum is 110. But in the first sample input, the user input is 10 50 2, so the answer is the sum of all numbers from 10 to 50, which is 1230. Because when k=2, all numbers are allowed (since each number from 10 to 50 has at most two distinct digits).
+
+Wait, let's check some numbers in 10-50:
+
+10: digits 1 and 0 (2 distinct digits)
+11: 1 (1)
+12: 1 and 2 (2)
+...
+50:5 and 0 (2)
+Yes. So all numbers between 10 and 50 have at most two digits. So their sum is (10+50)*41/2 = 60*41/2=30*41=1230.
+
+So the code should correctly compute this.
+
+But in the code's compute_sum function for x=50 and k=2:
+
+The function should compute the sum of all numbers from 0 to 50 with at most 2 distinct digits. But in reality, all numbers have <=2 digits except those with 3 or more distinct digits. But for numbers up to 50, which are two-digit numbers, the maximum distinct digits is two. So sum_x(50) for k=2 should be the sum from 0 to 50, which is 1275. sum_x(9) is sum from 0 to9, which is 45. So 1275-45=1230.
+
+But according to the code's compute_sum function, when processing x=50 (string "50"), the DP function will process all two-digit numbers. But how does the code handle numbers like 0-9?
+
+In the code's compute_sum function for x=50, the string is "50", which is two digits. So the code will process all two-digit numbers from 00 to 50, but leading zeros are considered. For example, 00 is treated as 0, 01 as 1, etc. The mask for numbers like 01 is {0,1} (when leading_zero is False after the first non-zero digit).
+
+Wait, no. For the number 01 (processed as "01" in len=2), leading_zero is True until the first non-zero digit. So for "0", "1":
+
+pos=0, d=0: leading_zero remains True. mask remains 0.
+
+pos=1, d=1: leading_zero is now False. new_mask is 1<<1 =2.
+
+The mask has 1 bit set (1), which is <=k=2. So this number (01=1) is counted.
+
+Thus, the code will include all numbers from 0 to 50, and sum them. So the sum is 1275.
+
+Thus, the code works correctly for this case.
+
+Another sample input:
+
+Input:
+
+1 2345 10
+
+Output:
+
+2750685
+
+Which is the sum of all numbers from 1 to 2345. Since k=10, all numbers are allowed (since each number can have up to 10 distinct digits, which is allowed). The sum is 2345*2346/2 = (2345 * 2346)//2 = 2750685.
+
+Thus, the code should return this.
+
+But in the code, compute_sum(2345) with k=10 will return the sum of all numbers from 0 to 2345. compute_sum(0) is 0. So 2750685 = sum(0-2345) - sum(0-0) = 2750685.
+
+Thus, the code should correctly handle this case.
+
+Now, for the third sample input:
+
+Input:
+
+101 154 2
+
+Output:
+
+2189
+
+The valid numbers are those with at most 2 distinct digits. The note lists the numbers, which sum to 2189.
+
+The code's compute_sum function must correctly compute this.
+
+Thus, the code seems to handle these cases.
+
+Now, implementing the code.
+
+But there's a problem with the exponent_pow10. For example, for a number with len(s) digits, the exponent for pos i is 10^{len(s)-1 -i}.
+
+But in the code, the code is:
+
+exponent_pow10 = [pow(10, (n-1 - i), mod) for i in range(n)]
+
+Yes.
+
+But for example, for s="50" (n=2), exponent_pow10 for pos 0 is 10^(2-1 -0) = 10^1=10, and for pos 1, 10^(2-1 -1)=10^0=1.
+
+Thus, for d=1 at pos 0, the contribution is 1*10, and for d=0 at pos 1, it's 0*1.
+
+Thus, the value is 10 + 0 =10.
+
+Which is correct.
+
+But the code's DP function will multiply the current digit d by exponent_pow10[pos], then multiply by the count of next numbers, and add the sum of next numbers.
+
+Thus, the code seems correct.
+
+Now, let's write the full code.
+
+But for very large exponents, like 1e18 digits, but since len(s) is up to 18 digits, this is manageable.
+
+The code will:
+
+- Precompute pow10 for each position in the current s.
+
+- Use memoization for the DP function.
+
+Now, the code:
+
+But note that in the code, when leading_zero is True and the digit is 0, new_mask remains mask (which is 0), but in the next state, leading_zero remains True. However, when leading_zero is True and the digit is 0, the mask is not updated. But when the entire number is zero (all digits are zero), leading_zero remains True until the end.
+
+Thus, the code's base case handles this by considering leading_zero as True, which means the number is zero and contributes to the sum only if k >=1.
+
+Thus, the code should correctly handle this.
+
+Now, let's write the code.
+
+But in Python, the pow function can compute pow(10, exponent, mod) directly.
+
+Thus, the code can precompute exponent_pow10 as follows:
+
+n = len(s)
+exponent_pow10 = [pow(10, (n-1 -i), mod) for i in range(n)]
+
+Now, integrating all this into the code.
+
+The code will look like this:
+
+mod = 998244353
+
+def calculate(l, r, k):
+    def sum_x(x):
+        if x < 0:
+            return 0
+        s = str(x)
+        n = len(s)
+        if n ==0:
+            return 0
+        # Precompute the exponents for each position
+        exponent_pow10 = [pow(10, (n-1 - i), mod) for i in range(n)]
+        
+        from functools import lru_cache
+        
+        @lru_cache(maxsize=None)
+        def dp(pos, mask, leading_zero, tight):
+            if pos == n:
+                if leading_zero:
+                    return (1, 0) if k >=1 else (0, 0)
+                else:
+                    cnt = bin(mask).bit_count()
+                    return (1, 0) if cnt <=k else (0, 0)
+            res_count = 0
+            res_sum = 0
+            upper = int(s[pos]) if tight else 9
+            for d in range(0, upper +1):
+                new_tight = tight and (d == upper)
+                new_leading_zero = leading_zero and (d ==0)
+                if new_leading_zero:
+                    new_mask = mask
+                else:
+                    if leading_zero:
+                        new_mask = 1 << d
+                    else:
+                        new_mask = mask | (1 << d)
+                # Check if new_mask is valid (if not leading_zero)
+                if not new_leading_zero:
+                    cnt_bits = bin(new_mask).bit_count()
+                    if cnt_bits >k:
+                        continue
+                # Recursive call
+                cnt_next, sum_next = dp(pos+1, new_mask, new_leading_zero, new_tight)
+                if cnt_next ==0:
+                    continue
+                # Calculate the contribution of this digit
+                if new_leading_zero:
+                    contrib = sum_next
+                else:
+                    power = exponent_pow10[pos]
+                    digit_contrib = (d * power) % mod
+                    total_contrib = (digit_contrib * cnt_next) % mod
+                    contrib = (total_contrib + sum_next) % mod
+                res_count = (res_count + cnt_next) % mod
+                res_sum = (res_sum + contrib) % mod
+            return (res_count, res_sum)
+        total_cnt, total_sum = dp(0, 0, True, True)
+        return total_sum % mod
+    
+    # Compute sum(r) - sum(l-1)
+    sum_r = sum_x(r)
+    sum_l_1 = sum_x(l-1)
+    return (sum_r - sum_l_1) % mod
+
+# Read input and output
+l, r, k = map(int, input().split())
+result = calculate(l, r, k)
+print(result)
+
+But there's a problem with the code's handling of the leading_zero and mask for numbers like 0. For example, when x is 0, the code's DP function will return 1 (count) and 0 (sum), because leading_zero is True. But the sum is 0, which is correct. So sum_x(0) is 0.
+
+Testing the first example:
+
+Sample Input 1:
+
+10 50 2
+
+sum_x(50) should be sum from 0 to50 → 1275 mod 998244353.
+
+sum_x(9) is sum from 0 to9 →45.
+
+1275-45=1230, which matches the sample output.
+
+But according to the code, sum_x(50) returns the sum of numbers from 0 to50 with at most 2 distinct digits. Since all numbers in this range have at most two digits, sum_x(50) is 1275.
+
+Similarly, sum_x(9) is sum of numbers from 0-9, all of which have at most one digit. Since k=2, all are allowed. So sum is 45.
+
+Thus, the code should return 1230.
+
+But in the code, when k=2, the sum_x(50) will include all numbers from 0 to50, which is correct.
+
+Now, for the third sample input:
+
+Input:
+
+101 154 2
+
+Output: 2189
+
+The code's sum_x(154) would include numbers from 0 to154 with at most 2 distinct digits. sum_x(100) would include numbers from 0 to100. The difference should be the sum from101 to154 with the required property.
+
+But how does the code handle numbers like 101 (digits 1 and 0) → allowed. 102 (1,0,2) →3 digits, so not allowed.
+
+Wait, no. 102 has three distinct digits (1, 0, 2) → count is 3, which is more than k=2. So it's not allowed.
+
+But according to the sample, 101 is included, 110 is included (digits 1, 0), 111 (1), etc. The code should correctly sum these.
+
+Thus, the code should correctly compute this.
+
+But given the complexity of the code, there's a possibility of bugs.
+
+Another possible issue is that the code uses bin(mask).bit_count(), which is available in Python 3.10 and above. For earlier versions, this method is not available. But since in programming competitions, Python versions are usually up-to-date, this may not be an issue. Alternatively, we can replace it with bin(mask).count('1').
+
+So, changing the code to use bin(new_mask).count('1') instead of .bit_count().
+
+Yes. So, modifying the code:
+
+cnt_bits = bin(new_mask).count('1')
+
+Thus, the code should be:
+
+...
+
+# inside the dp function:
+
+cnt_bits = bin(new_mask).count('1')
+
+...
+
+And in the base case:
+
+cnt = bin(mask).count('1')
+
+...
+
+Thus, the code is compatible with older Python versions.
+
+Now, modifying the code accordingly.
+
+After making these changes, the code should work.
+
+Finally, the code must be called after it is defined. In the code above, after reading l, r, k, it calls calculate(l, r, k) and prints the result.
+
+Thus, the code should handle the input correctly.
+
+Now, testing the code with the third sample input:
+
+Input:
+
+101 154 2
+
+The valid numbers are listed in the note. The code should compute sum_x(154) and sum_x(100), subtract them, and return 2189.
+
+Thus, the code should work.
+
+Another possible edge case is when l=0. For example, l=0, r=0, k=1. The sum is 0.
+
+But according to the code:
+
+sum_x(0) is 0 (sum from 0-0 is 0).
+
+sum_x(-1) is 0.
+
+Thus, (0-0) mod mod is 0.
+
+Another edge case: l=0, r=9, k=1. The sum is 0+1+2+..+9 =45. But numbers must have at most 1 distinct digit. So each number from 0-9 is allowed. So sum is 45.
+
+Thus, the code should return 45.
+
+In the code, sum_x(9) returns 45 (sum from 0-9). sum_x(-1) is 0. So 45-0=45.
+
+Thus, code handles this.
+
+Thus, the code should be correct.
+</think>
+To solve this problem, we need to calculate the sum of numbers between two integers \( l \) and \( r \) (inclusive) such that each number contains at most \( k \) different digits. The result should be printed modulo 998244353. Given the constraints where \( l \) and \( r \) can be as large as \( 10^{18} \), a brute force approach is infeasible. Instead, we use a digit dynamic programming (DP) approach to efficiently compute the result.
+
+### Approach
+1. **Digit Dynamic Programming (Digit DP)**: This technique allows us to process numbers digit by digit, maintaining state information about the digits used so far, whether the number is still within bounds of the upper limit, and if leading zeros are present.
+2. **State Tracking**: The state in our DP includes the current position in the digit string, a bitmask representing the digits used so far, a flag for leading zeros, and whether the current number is tight (i.e., matches the upper bound's prefix up to the current position).
+3. **Sum Calculation**: For each valid state transition, we track both the count of valid numbers and their sum modulo 998244353. This allows us to efficiently compute the sum without explicitly generating all numbers.
+4. **Precomputation**: We precompute powers of 10 modulo 998244353 to handle large numbers efficiently.
+
+### Solution Code
+```python
+mod = 998244353
+
+def calculate(l, r, k):
+    def sum_x(x):
+        if x < 0:
+            return 0
+        s = str(x)
+        n = len(s)
+        if n == 0:
+            return 0
+        exponent_pow10 = [pow(10, (n - 1 - i), mod) for i in range(n)]
+        
+        from functools import lru_cache
+        
+        @lru_cache(maxsize=None)
+        def dp(pos, mask, leading_zero, tight):
+            if pos == n:
+                if leading_zero:
+                    return (1, 0) if k >= 1 else (0, 0)
+                else:
+                    cnt_bits = bin(mask).count('1')
+                    return (1, 0) if cnt_bits <= k else (0, 0)
+            res_count = 0
+            res_sum = 0
+            upper = int(s[pos]) if tight else 9
+            for d in range(0, upper + 1):
+                new_tight = tight and (d == upper)
+                new_leading_zero = leading_zero and (d == 0)
+                if new_leading_zero:
+                    new_mask = mask
+                else:
+                    if leading_zero:
+                        new_mask = 1 << d
+                    else:
+                        new_mask = mask | (1 << d)
+                # Check if new_mask is valid (if not leading_zero)
+                if not new_leading_zero:
+                    cnt_bits = bin(new_mask).count('1')
+                    if cnt_bits > k:
+                        continue
+                # Recursive call
+                cnt_next, sum_next = dp(pos + 1, new_mask, new_leading_zero, new_tight)
+                if cnt_next == 0:
+                    continue
+                # Calculate the contribution of this digit
+                if new_leading_zero:
+                    contrib = sum_next
+                else:
+                    power = exponent_pow10[pos]
+                    digit_contrib = (d * power) % mod
+                    total_contrib = (digit_contrib * cnt_next) % mod
+                    contrib = (total_contrib + sum_next) % mod
+                res_count = (res_count + cnt_next) % mod
+                res_sum = (res_sum + contrib) % mod
+            return (res_count, res_sum)
+        
+        total_cnt, total_sum = dp(0, 0, True, True)
+        return total_sum % mod
+    
+    sum_r = sum_x(r)
+    sum_l_1 = sum_x(l - 1)
+    return (sum_r - sum_l_1) % mod
+
+# Read input and output
+l, r, k = map(int, input().split())
+result = calculate(l, r, k)
+print(result)
+```
+
+### Explanation
+1. **sum_x Function**: This function computes the sum of valid numbers from 0 to \( x \) using digit DP. It converts \( x \) to a string to handle each digit individually.
+2. **Digit DP Function (dp)**: The DP function recursively processes each digit, tracking the current state and computing the count and sum of valid numbers.
+3. **State Transitions**: For each digit position, the function checks all possible digits (0-9), updating the state (mask, leading zeros, tightness) and pruning invalid transitions where the number of distinct digits exceeds \( k \).
+4. **Modulo Handling**: All calculations are performed modulo 998244353 to handle large numbers and prevent overflow.
+
+This approach efficiently handles the large range constraints using memoization and state pruning, ensuring the solution is computed in feasible time.
+</bot>

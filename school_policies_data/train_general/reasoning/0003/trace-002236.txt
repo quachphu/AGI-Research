@@ -1,0 +1,843 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Sergey Semyonovich is a mayor of a county city N and he used to spend his days and nights in thoughts of further improvements of Nkers' lives. Unfortunately for him, anything and everything has been done already, and there are no more possible improvements he can think of during the day (he now prefers to sleep at night). However, his assistants have found a solution and they now draw an imaginary city on a paper sheet and suggest the mayor can propose its improvements.
+
+Right now he has a map of some imaginary city with n subway stations. Some stations are directly connected with tunnels in such a way that the whole map is a tree (assistants were short on time and enthusiasm). It means that there exists exactly one simple path between each pair of station. We call a path simple if it uses each tunnel no more than once.
+
+One of Sergey Semyonovich's favorite quality objectives is the sum of all pairwise distances between every pair of stations. The distance between two stations is the minimum possible number of tunnels on a path between them.
+
+Sergey Semyonovich decided to add new tunnels to the subway map. In particular, he connected any two stations u and v that were not connected with a direct tunnel but share a common neighbor, i.e. there exists such a station w that the original map has a tunnel between u and w and a tunnel between w and v. You are given a task to compute the sum of pairwise distances between all pairs of stations in the new map.
+
+Input
+
+The first line of the input contains a single integer n (2 ≤ n ≤ 200 000) — the number of subway stations in the imaginary city drawn by mayor's assistants. Each of the following n - 1 lines contains two integers u_i and v_i (1 ≤ u_i, v_i ≤ n, u_i ≠ v_i), meaning the station with these indices are connected with a direct tunnel.
+
+It is guaranteed that these n stations and n - 1 tunnels form a tree.
+
+Output
+
+Print one integer that is equal to the sum of distances between all pairs of stations after Sergey Semyonovich draws new tunnels between all pairs of stations that share a common neighbor in the original map.
+
+Examples
+
+Input
+
+4
+1 2
+1 3
+1 4
+
+
+Output
+
+6
+
+
+Input
+
+4
+1 2
+2 3
+3 4
+
+
+Output
+
+7
+
+Note
+
+In the first sample, in the new map all pairs of stations share a direct connection, so the sum of distances is 6.
+
+In the second sample, the new map has a direct tunnel between all pairs of stations except for the pair (1, 4). For these two stations the distance is 2.
+</user>
+<bot>
+<think>
+Okay, so I need to solve this problem where after adding some edges to a tree, I have to compute the sum of all pairwise distances. Hmm. Let's think through the problem step by step.
+
+First, the original tree has some edges. Then, we add edges between any two nodes that share a common neighbor. The new graph might have a lot more edges, and the distances between pairs of nodes might decrease. The task is to find the sum of all pairwise distances in this new graph.
+
+Let's look at the examples to get some intuition.
+
+In the first example, the tree is a star with center 1 connected to 2, 3, 4. After adding edges, every pair of nodes (like 2-3, 2-4, 3-4) would now be connected directly because they all share the common neighbor 1. So all pairs are at distance 1, and the sum is 6 (since there are 6 pairs, each contributing 1).
+
+In the second example, the tree is a straight line: 1-2-3-4. The original edges are 1-2, 2-3, 3-4. The new edges added are those where two nodes share a common neighbor. So 1 and 3 share 2, so they get an edge. 2 and 4 share 3, so they get an edge. Also, 1 and 2 are already connected, 2 and 3, 3 and 4. Then, 1-3, 2-4, but also nodes that were two steps apart in the original tree but connected via a common node. Wait, but what about other pairs? Like 1 and 4. In the original tree, their path is 1-2-3-4 (distance 3). But after adding edges, are there any new edges that connect them? Let's see: 1's neighbors are 2. So any node connected to 2's neighbors. Wait, 2's neighbors are 1,3. So 1's neighbors' neighbors are 3, which would connect 1 and 3 (already added). But 3's neighbors are 2 and 4, so 2's other neighbors (like 3) would connect 2 and 4 via 3. So after adding edges, the new edges are 1-3 (distance 1), 2-4 (distance 1), and also 1-2 (already there), etc. But the pair 1-4: in the original tree, their distance is 3. In the new graph, can they be connected via a shorter path? Let's see: 1 is connected to 3 (distance 1), and 3 is connected to 4 (distance 1), so 1-3-4 would be distance 2. So the distance between 1 and 4 is 2. So the sum is (all pairs except 1-4) with distance 1, and 1-4 with distance 2. There are 6 pairs total. So sum is 5*1 + 2 =7, which matches the example.
+
+So the key is to figure out, for each pair of nodes (u, v), what is the shortest distance in the modified graph. Then sum all these distances.
+
+But for n up to 2e5, we can't compute this for each pair directly, as there are O(n²) pairs. We need a smarter way.
+
+Hmm. So the problem is to compute the sum of distances between all pairs of nodes in the augmented graph. Let's model the augmented graph.
+
+In the augmented graph, any two nodes that were at a distance of 2 in the original tree are connected by an edge. So the augmented graph includes all original edges plus all edges between nodes at distance 2 in the original tree. Wait, no. Wait, the new edges are between any two nodes that share a common neighbor. So in the original tree, if two nodes are connected via a common neighbor (i.e., there's a node w such that u is adjacent to w and v is adjacent to w), then we add an edge between u and v. So in the original tree, the distance between u and v is 2 if they are connected via a common neighbor. So in the augmented graph, those pairs now have distance 1. But other pairs may have their distances reduced as well.
+
+Wait, but adding edges can create new paths. For example, in the original tree, two nodes that were 3 steps apart (distance 3) may now have a shorter path. For example, consider a chain 1-2-3-4. Original distance between 1 and 4 is 3. But after adding edges between nodes at distance 2 (like 1 and 3, 2 and 4), then the path 1-3-4 (distance 2) exists. So their distance is now 2.
+
+So the problem is that adding edges between nodes at distance 2 reduces their distance. But then, even longer paths may be shortened. So how to model the distances in this augmented graph?
+
+Alternatively, perhaps we can model the augmented graph as follows: in the original tree, the augmented graph adds edges between any two nodes that are at distance exactly 2. Then, in this new graph, the distance between any two nodes u and v is the ceiling of (original distance) / 2. Because:
+
+- If original distance is 1: distance remains 1.
+- If original distance is 2: now it's 1.
+- If original distance is 3: in the original tree, the path is u-w1-w2-v. After adding edges between u and w2 (distance 2) and w1 and v (if possible), then the path could be u-w2 (distance 1) and then w2-v (if they are adjacent in the augmented graph). Wait, perhaps not. Wait, if original distance is 3, the path is three edges. So in the augmented graph, we might have a path that uses edges added. For example, original path u-a-b-c-v. Then, in the augmented graph, u and b are connected (distance 2 in original), a and c are connected. So path u-b-c-v (distance 3 in original, but in augmented, u-b is 1 edge, b-c is original edge (distance 1), c-v is original edge. So distance is 3? Wait no. Wait, in the augmented graph, u and b are connected directly (distance 1), and c and v may be connected if they share a common neighbor (but in the original tree, c and v are adjacent). So the distance from u to v would be u-b (1), then b-c (original edge, 1), then c-v (original edge, 1). So total distance 3. But that's the same as original. Wait, but perhaps there's a shorter path. For example, if in the augmented graph, after adding edges between nodes that are two apart, then maybe the path can be u-b, then c-v (but how? unless b and c are adjacent in the augmented graph).
+
+Hmm, this seems complicated. Let's think again.
+
+Alternatively, maybe the augmented graph can be viewed as a graph where for any two nodes u and v, their distance in the augmented graph is equal to the ceiling of (original distance + 1)/2. Wait, let's see:
+
+Original distance 1 → augmented distance 1. (ok)
+Original distance 2 → augmented distance 1. (correct)
+Original distance 3 → (3+1)/2 = 2. So augmented distance 2. Which is correct for the second example (1-4: original distance 3, augmented distance 2).
+Original distance 4: (4+1)/2=2.5 → ceiling is 3? Wait, no. Let's see. Suppose original distance 4 (path of 4 edges). So nodes are u-a-b-c-d-v. Then in the augmented graph, u and a are adjacent (original edge), a and b adjacent. So u can go to a, then a can go to b, etc. But wait, perhaps there are shortcuts. For example, u can reach b via a's neighbors. a is connected to u and b, so u and b are connected via a in the original (distance 2). So in the augmented graph, u and b are connected directly. So the path from u to v would be u-b (distance 1), then b-c (original edge, 1), then c-d (original edge, 1), then d-v (original edge, 1). That's 4 steps. Wait, but original distance is 4. Then the augmented distance is 4 steps. But according to the formula, (4+1)/2=2.5 → ceiling is 3. So that's a discrepancy.
+
+Hmm, perhaps the formula is not correct. Maybe another approach is needed.
+
+Wait, perhaps the augmented graph is such that the distance between any two nodes is the minimal number of steps needed, where each step can be either moving along an original edge or moving between two nodes that are connected via a common neighbor. So in the augmented graph, each original edge is present, plus edges between nodes at distance 2. So the adjacency list includes all original edges plus edges between nodes at distance 2.
+
+So the augmented graph's edges are:
+
+E' = E ∪ { (u, v) | u and v are at distance 2 in the original tree }
+
+In that case, the augmented graph's adjacency list includes these edges. Now, the question is: what is the shortest path between any two nodes in this graph?
+
+Let’s model this as a graph where edges are original edges plus edges between nodes at distance 2.
+
+In such a graph, the distance between two nodes u and v is the minimal number of steps to traverse through original edges and the added edges.
+
+For example, in the original tree:
+
+If two nodes are at distance d in the original tree, their augmented distance would be floor((d +1)/2). Because:
+
+- For even d: original distance is even. For example, d=2, augmented distance is 1 (since they are directly connected). For d=4, perhaps in the augmented graph, you can take steps that cover two original edges each. So 4 edges would be covered in two steps (since each augmented step can cover two original edges). So (4/2) =2 steps. Hmm, but in that case, for original distance 3: (3+1)/2=2. So augmented distance 2. That seems to fit the example.
+
+But how to verify this?
+
+Take original distance 3. Let's say u is connected to a, a to b, b to v. Original distance 3. The augmented edges would be u connected to a (original), a connected to b (original), b connected to v (original). Also, u and b are connected via a (distance 2 in original), so they are connected in augmented. Similarly, a and v are connected via b (distance 2 in original). So in augmented graph, the path from u to v could be u → b → v. That's two steps. So distance is 2. Which is (3+1)/2=2.
+
+Similarly, original distance 4: u-a-b-c-v. In augmented, u can reach b in one step (distance 2 in original), then b can reach v via c (original edges). Wait, but c and v are connected. So from u to b (1 step), then b to c (original edge, 1 step), c to v (original edge, 1 step). That's 3 steps, which is more than (4)/2=2. So the formula may not hold here.
+
+Hmm, perhaps the formula isn't correct. Maybe there's a different pattern.
+
+Alternatively, perhaps the augmented graph is such that any two nodes at even distance in the original tree can have their augmented distance halved. For example, original distance 2 → augmented 1. Original 4 → augmented 2. Original 6 → 3. And for odd distances, it's (distance +1)/2. Original 3 → 2, original 5 →3, etc. So the formula would be ceil(d/2), where d is the original distance.
+
+Wait, let's test this. For original distance 4: ceil(4/2) = 2. But in the example above, the augmented distance would be 3. So that's not matching.
+
+Alternatively, perhaps the augmented distance is the original distance divided by 2, rounded up. Let's see.
+
+Original distance 3 → ceil(3/2) =2, which matches the example. Original distance 4 → ceil(4/2)=2. But how can that be achieved?
+
+Take the original path u-a-b-c-v (distance 4). In the augmented graph:
+
+u and a are connected (original edge). u and b are connected via a (distance 2). a and c are connected via b (distance 2). So in augmented edges, u can go to b (1 step), then b to c (original edge, 1 step), then c to v (original edge, 1 step). That's 3 steps. But according to the formula, it would be 2. So discrepancy.
+
+Hmm, perhaps this approach isn't working. Maybe I need to think differently.
+
+Alternative approach: For each pair of nodes u and v, compute their original distance d. Then, in the augmented graph, the distance between u and v is the minimum number of steps required, where each step can be:
+
+- Moving along an original edge (cost 1), or
+- Moving along an edge added between nodes at distance 2 (cost 1).
+
+But adding those edges may create new paths. For example, in the augmented graph, if u and w are connected via a common neighbor, then you can move directly between them. So the augmented graph's edges are original edges plus edges between nodes at distance 2. So the augmented graph is a supergraph of the original, and the shortest paths can be found by considering these added edges.
+
+So, the problem reduces to computing the sum of all pairwise shortest paths in this augmented graph.
+
+But how to compute this sum efficiently?
+
+Let's model the augmented graph. The edges added are between nodes at distance 2 in the original tree. Then, the augmented graph is such that any two nodes that are at distance 2 in the original tree are directly connected. So, in the augmented graph, any two nodes that were at distance 1 or 2 in the original tree are connected by an edge. For nodes further apart, perhaps their distance can be reduced by taking some of these new edges.
+
+Wait, but for example, if two nodes are at original distance 3, they can be connected via a new edge if they share a common neighbor. But in the original tree, their path is u - w - x - v. So, u and x are at distance 2 (original), so in the augmented graph, u and x are connected directly. So the path from u to v can be u-x (1 step) and x-v (original edge, 1 step), making the total distance 2. So original distance 3 becomes 2 in the augmented graph.
+
+Similarly, original distance 4: u - a - b - c - v. In the augmented graph, u can jump to b (distance 2 in original, so 1 step in augmented), then b can jump to v (distance 2 in original from b to v? Wait, b to c is original edge, c to v is original. So the original distance between b and v is 2. So in augmented, b and v are connected directly. So the path u-b (1 step) then b-v (1 step). Total steps 2. So original distance 4 becomes 2 in augmented.
+
+So for original distance d:
+
+If d is even, the augmented distance is d/2.
+
+If d is odd, the augmented distance is (d-1)/2 + 1 = (d+1)/2.
+
+Wait, that would mean:
+
+d=1 →1
+
+d=2 →1
+
+d=3 →2
+
+d=4 →2
+
+d=5 →3
+
+So the augmented distance is ceil(d/2). Because for d=3, ceil(3/2)=2. For d=4, ceil(4/2)=2. For d=5, ceil(5/2)=3.
+
+Yes, that seems to fit the examples.
+
+So the formula for the augmented distance is the ceiling of (original distance) / 2.
+
+So the problem reduces to: for all pairs of nodes (u, v), compute the original distance d between them, then add ceil(d/2) to the sum.
+
+But how to compute the sum of ceil(d/2) over all pairs of nodes, where d is the original distance in the tree.
+
+So the original problem is transformed into computing the sum over all pairs (u, v) of the ceiling of their original distance divided by two.
+
+But how to compute this sum efficiently for a tree with n up to 2e5 nodes?
+
+The key is to find for each possible original distance k in the tree, the number of pairs of nodes that have that distance, multiply by ceil(k/2), and sum over all k.
+
+So first, we need to compute the number of pairs of nodes at each possible distance k in the original tree, then multiply each by ceil(k/2) and sum.
+
+So the problem reduces to:
+
+1. For the given tree, compute the distance frequency array: for each possible k, compute the number of node pairs at distance k.
+
+2. Then, compute the sum over all k of (ceil(k/2) * count[k]).
+
+But how to compute the distance frequency array for a tree efficiently.
+
+The standard approach for this is to use a BFS-based method for each node, but that would be O(n^2), which is not feasible for n=2e5.
+
+Alternatively, we can use a centroid decomposition approach or some other O(n) or O(n log n) method to compute the distance frequencies.
+
+But I'm not sure. Let's think.
+
+The sum of all pairs' distances in a tree can be computed in O(n) time using techniques involving BFS and dynamic programming. But here, we need the entire frequency array, which is O(n) in size (since the maximum possible distance in a tree is O(n)).
+
+But for n up to 2e5, even O(n^2) is impossible, so the method must be O(n) or O(n log n).
+
+Wait, but the sum of all pairs of their distances is a known problem. However, here we need not the sum, but the frequency count for each possible distance.
+
+So how to compute the frequency of each distance in a tree.
+
+An approach for this is to use the fact that any tree is a bipartite graph, but I'm not sure how that helps here.
+
+Alternatively, use dynamic programming for trees. Let's think about for a tree rooted at some node, and track the number of nodes at each depth. But the distance between two nodes is the sum of their depths minus twice the depth of their LCA, plus the distance between their LCA. Hmm, but this might not be helpful.
+
+Alternatively, for each edge, compute how many pairs of nodes have their path going through this edge, and then contribute to the distance. But again, not directly applicable.
+
+Alternatively, we can use the approach of splitting the problem into paths of even and odd lengths.
+
+But perhaps there's a mathematical way to model the sum.
+
+Wait, ceil(k/2) can be written as (k +1) // 2. So for each pair, their contribution is (d +1) // 2, where d is their original distance.
+
+So the sum we need is sum_{u < v} (d(u, v) +1) // 2.
+
+But how to compute this sum.
+
+Alternatively, note that (d+1)//2 is equal to the number of even numbers less than or equal to d. For example:
+
+d=1 → (1+1)/2=1.0, floor is 1. So ceil(1/2) =1.
+
+d=2 → (2+1)/2=1.5 → ceil is 1.
+
+d=3 → (3+1)/2=2.
+
+Wait, perhaps this approach isn't helpful.
+
+Another idea: split the sum into even and odd distances.
+
+For even d, ceil(d/2) = d/2.
+
+For odd d, ceil(d/2) = (d+1)/2.
+
+So sum = sum_{d even} (d/2) * count[d] + sum_{d odd} ((d+1)/2) * count[d].
+
+Which can be rewritten as:
+
+sum = sum_{d} ( (d + (d mod 2)) ) / 2 * count[d]
+
+But this doesn't seem to simplify the problem.
+
+Alternatively, we can split the sum into:
+
+sum_{u < v} (d(u, v) // 2 + (1 if d(u, v) is odd else 0)).
+
+Which is sum (d//2) + sum (1 if d is odd) over all pairs.
+
+So the total sum is:
+
+sum_{u <v} (d(u,v) //2) + sum_{u <v} (d(u,v) mod 2).
+
+So if we can compute the total sum of d(u, v) divided by two (integer division), plus the number of pairs with odd distance.
+
+But how?
+
+The first part is sum_{u <v} floor(d/2). The second part is the number of pairs with d odd.
+
+So if we can compute the total sum of all distances in the tree (which is a known problem), then subtract the number of odd pairs, then divide by two, and add the number of odd pairs.
+
+Wait, let's see:
+
+sum_{u<v} floor(d/2) = sum_{u<v} (d - (d mod 2)) / 2.
+
+Which is (sum d)/2 - (sum (d mod 2))/2.
+
+So the total sum we want is:
+
+sum_ceil(d/2) = sum floor( (d +1)/2 ) = sum (d+1) // 2.
+
+Which can be rewritten as (sum d + sum (d mod 1)) ) // 2.
+
+Wait, no. For even d, (d+1)/2 = d/2 + 0.5, but when using integer division, (d+1)//2 = d//2 + (d % 2).
+
+So sum_ceil(d/2) = sum (d//2 + (d % 2)).
+
+Which is sum d//2 + sum (d % 2).
+
+But sum d//2 is equal to (sum d - sum (d mod 2 )) ) / 2.
+
+So sum_ceil(d/2) = (sum d - sum (d mod 2 )) ) / 2 + sum (d mod 2) ) 
+
+Which simplifies to (sum d + sum (d mod 2 )) ) / 2.
+
+So sum_ceil(d/2) = (total_distance + num_odd_pairs) / 2.
+
+Thus, the problem reduces to:
+
+Compute the total distance between all pairs of nodes in the original tree, plus the number of pairs with odd distance, and then divide by two.
+
+So if we can compute the total distance and the number of pairs with odd distance, then we can get the desired sum.
+
+The question now is: how to compute the total distance and the number of pairs with odd distance for a tree.
+
+Computing the total distance for a tree is a classic problem. It can be done with a BFS-based approach for each node, but that's O(n^2), which is not feasible for n=2e5.
+
+But there's a known O(n) approach using post-order traversal and dynamic programming.
+
+For each node, when processing it, we track the number of nodes in its subtree and the sum of distances from all nodes in the subtree to the node. Then, when moving up the tree, we can compute the sum of distances for the parent.
+
+But let me recall the method.
+
+The standard approach to compute the total distance between all pairs in a tree is O(n):
+
+The sum of all pairwise distances is equal to the sum for all edges of (number of nodes on one side of the edge) multiplied by (number of nodes on the other side) multiplied by 2. Because each edge contributes to the distance between every pair of nodes that are on opposite sides of the edge. For example, if an edge splits the tree into two parts of size a and b, then the edge is part of a*(b) pairs' paths, and each such path contributes 1 to the distance. So total contribution is a*b.
+
+But since each pair is counted once (u, v and v, u are the same pair), the sum is the sum over all edges of a*b. So the total sum is sum_{edges} a*b * 2? Wait, no. Because for each edge, the number of pairs that cross it is a*b. Since each pair is counted once, the sum of all distances is sum_{edges} a*b. So for example, in a star tree with center node and three leaves: the three edges each contribute 1 * 3 = 3 (since for each edge, the split is 1 and 3 nodes, but wait, perhaps a and b are the sizes on each side. For the star, each edge has a split of 1 (leaf) and 4-1=3 nodes (the center and other leaves). Wait, no. The total nodes is n. For each edge (u, v), when you remove the edge, the tree is split into two subtrees. The size of one subtree is s, the other is n-s. Then, the number of pairs crossing the edge is s*(n-s). So the total sum of distances is the sum over all edges of s*(n-s) multiplied by the number of times this edge is part of the path between two nodes. Which is exactly s*(n-s). Because each time a pair is split by the edge, the edge is part of their path. So the sum of all distances is the sum over edges of s*(n-s), where s is the size of one part when the edge is removed.
+
+But wait, that's the sum of all distances in the tree. So yes, that's correct.
+
+So for the total distance, we can compute it by, for each edge, splitting the tree into two parts of size s and n-s, and adding s*(n-s) to the sum.
+
+This can be done in O(n) time with a post-order traversal, where for each node, we compute the size of the subtree and accumulate the contribution of the edge to the parent.
+
+So that's manageable.
+
+Now, how to compute the number of pairs with odd distance.
+
+This seems trickier. We need to find the number of unordered pairs (u, v) where the path length between them is odd.
+
+Hmm. Let's think of the tree as a bipartite graph. Because trees are bipartite, the distance between u and v is even if they are in the same partition, and odd if they are in different partitions. Wait, no. Because in a bipartition, the parity of the distance between two nodes depends on their positions in the partitions.
+
+Wait, in a tree, which is a bipartition, you can color the nodes in two colors such that adjacent nodes have different colors. Then, the distance between two nodes is even if they have the same color, and odd if they have different colors.
+
+Yes! Because in a bipartite graph, the parity of the distance between two nodes is determined by their colors. So for example, if two nodes are in the same partition (same color), their distance is even. Otherwise, odd.
+
+So the number of pairs with odd distance is the number of pairs (u, v) where u and v are in different partitions. The number of such pairs is a * b, where a and b are the sizes of the two partitions.
+
+Because the bipartition splits the tree into two color classes. All edges go between the two colors. So the number of pairs with odd distance is a * b.
+
+So the problem reduces to:
+
+- Compute the total distance sum S as explained.
+
+- Compute the size of the two partitions (a and b) in the bipartition of the tree. Then the number of pairs with odd distance is a * b.
+
+Then, the desired sum is (S + a*b) // 2.
+
+Because the formula we derived earlier is sum_ceil(d/2) = (S + a*b)/2.
+
+So this seems manageable.
+
+So the steps are:
+
+1. Compute the total distance sum S via the edge-splitting method.
+
+2. Compute a and b, the sizes of the two partitions in the tree's bipartition.
+
+3. The desired sum is (S + a*b) // 2.
+
+So how to compute a and b.
+
+Since the tree is bipartitioned, we can perform a BFS or DFS and color the nodes in two colors. Then count the number of nodes in each color.
+
+This is O(n) time.
+
+So the plan is:
+
+- Read the tree.
+
+- Compute S: the sum over all edges of s*(n-s), where s is the size of the subtree on one side of the edge.
+
+- Compute a and b via BFS or DFS.
+
+- The answer is (S + a*b) // 2.
+
+Let's test this with the examples.
+
+First example:
+
+Input:
+
+4
+
+Edges 1-2, 1-3, 1-4.
+
+The tree is a star. The bipartition is color 0 for node 1, and color 1 for 2,3,4. So a=1, b=3. a*b=3.
+
+Total distance sum S:
+
+For each edge, compute s*(n-s).
+
+For edge 1-2: when removed, the subtree sizes are 1 (node 2) and 3 (nodes 1,3,4). So contribution is 1*3=3.
+
+Similarly for edges 1-3 and 1-4: each contributes 1*3=3. So S=3+3+3=9.
+
+Then, (S + a*b) // 2 = (9 +3)/2 =12/2=6. Which matches the first example.
+
+Second example:
+
+4 nodes in a chain: 1-2-3-4.
+
+The bipartition colors are 0 for even levels. So:
+
+node 1: color 0.
+
+node 2: color 1.
+
+node 3: color 0.
+
+node 4: color 1.
+
+So a=2 (nodes 1,3), b=2 (nodes 2,4). a*b=4.
+
+Compute S:
+
+Each edge in the chain contributes s*(n-s).
+
+Edge 1-2: when removed, splits into s=1 (node 1) and 3. Contribution 1*3=3.
+
+Edge 2-3: when removed, splits into 2 (nodes 1,2) and 2 (nodes3,4). Contribution 2*2=4.
+
+Edge3-4: splits into 3 (nodes1-3) and 1 (node4). Contribution 3*1=3.
+
+S=3+4+3=10.
+
+Then (10 +4)/2=14/2=7. Which matches the second example.
+
+So this approach works.
+
+So now, the steps are:
+
+Implement code that:
+
+1. Reads the tree.
+
+2. Computes S via the edge-splitting method.
+
+3. Computes a and b via BFS/DFS.
+
+4. Output (S + a*b) // 2.
+
+Now, for the implementation:
+
+First, the edge-splitting requires us to compute for each edge, the size of the subtree when the edge is removed.
+
+To compute this, we can process the tree as an undirected graph, and during a post-order traversal, compute the size of each subtree. For each child of a node, the size of the child's subtree is s. The contribution for the edge between the node and child is s*(n - s). Sum all such contributions to get S.
+
+Yes, this is the standard method.
+
+Second, for the bipartition, we can perform a BFS. The root can be any node (like 1), and we alternate colors. Then count the number of nodes in each color.
+
+So the code steps are:
+
+Read n.
+
+Read the n-1 edges. Build an adjacency list.
+
+Compute the sum S using post-order traversal to compute subtree sizes.
+
+Compute the color counts via BFS.
+
+Calculate (S + a*b) // 2 and output.
+
+Now, handling the tree for S:
+
+We need to build the tree as a rooted tree. So we can choose a root (say, 0 or 1), and then process the tree in a way that each edge is processed once. But in the adjacency list, we need to avoid revisiting the parent.
+
+So, in code:
+
+We can represent the tree as a adjacency list. For each node, during traversal, we visit its children (excluding the parent), and accumulate the subtree sizes.
+
+The code for sum S:
+
+def compute_S(n, adj):
+    visited = [False] * (n+1)
+    total = 0
+
+    def dfs(u, parent):
+        size = 1
+        for v in adj[u]:
+            if v != parent:
+                s = dfs(v, u)
+                size += s
+                total += s * (n - s)
+        return size
+
+    dfs(1, -1)
+    return total
+
+But wait, in the code above, the root is 1, and during the traversal, for each child v of u (the parent is u's parent), we compute s, the size of the subtree rooted at v. The edge between u and v is considered, and the contribution is s*(n-s). Since the edge splits the tree into a part of size s (the subtree) and n-s (the rest). So summing this for all edges gives S.
+
+Yes.
+
+Now, for the bipartition:
+
+def compute_ab(n, adj):
+    from collections import deque
+    color = [-1] * (n+1)
+    q = deque()
+    q.append(1)
+    color[1] = 0
+    a = 1
+    b =0
+    while q:
+        u = q.popleft()
+        for v in adj[u]:
+            if color[v] == -1:
+                color[v] = color[u] ^ 1
+                if color[v] ==0:
+                    a +=1
+                else:
+                    b +=1
+                q.append(v)
+    return a, b
+
+Wait, but initial a is 1 (color 0), and b is 0. Then, for each node processed, we check its color and increment a or b. But this code would start with a=1, then when processing children of 1, their color is 1. So for example, in the first example, after processing 1 (color 0), the children are 2,3,4. Each gets color 1. So a=1, b=3. Which is correct.
+
+Yes.
+
+So combining all of this.
+
+But wait, the code for bipartition may not be correct. Let's see:
+
+In the first example, nodes 2,3,4 are colored 1. So a is 1 (color 0), b is 3 (color 1). So a*b =3.
+
+In the code, after processing node 1 (a=1), each child is processed and added to the queue. For each child, color is set to 0^1=1. So each child increments b. So b becomes 3. So a=1, b=3. Correct.
+
+Yes.
+
+Now, code:
+
+Read n.
+
+Read n-1 edges. Build adj list.
+
+Compute S.
+
+Compute a and b.
+
+Answer is (S + a*b) // 2.
+
+Now, implement this in Python.
+
+But for n up to 2e5, recursion depth may be an issue. The DFS approach for computing S could hit recursion depth limits. Because Python's default recursion depth is around 1e4. For n=2e5, the recursion depth could be up to 2e5, which would cause a stack overflow.
+
+Thus, for the DFS approach, we need to use an iterative post-order traversal to compute the subtree sizes and accumulate the sum S.
+
+So modifying the compute_S function to avoid recursion.
+
+Implement iterative DFS:
+
+def compute_S(n, adj):
+    stack = [(1, None, False)]
+    total =0
+    # For each node, when visited, compute the size of the subtree.
+    # stack entries are (u, parent, visited). If visited is False, we push (u, parent, True) and then all children (v != parent) as (v, u, False)
+    # when visited is True, we compute the size.
+
+    # Maintain a dictionary to track the size of each node.
+    size = [0]*(n+1)
+
+    while stack:
+        u, parent, visited = stack.pop()
+        if not visited:
+            stack.append( (u, parent, True) )
+            for v in adj[u]:
+                if v != parent:
+                    stack.append( (v, u, False) )
+        else:
+            s =1
+            for v in adj[u]:
+                if v != parent:
+                    s += size[v]
+                    total += size[v] * (n - size[v])
+            size[u] = s
+    return total
+
+Yes, this should work. For each node, when popped and not visited, push back as visited, then push children. When popped and visited, compute the size by summing children's sizes (already computed) and add to the total the contributions for each child edge.
+
+Yes.
+
+So now, the code should handle n=2e5.
+
+Testing with the examples:
+
+First example:
+
+n=4.
+
+Adj list for 1: [2,3,4]
+
+Adj list for 2: [1]
+
+Adj list for 3: [1]
+
+Adj list for 4: [1]
+
+Processing the stack:
+
+Start with (1, None, False).
+
+Pop and not visited: push (1, None, True), then push children (2,1,False), (3,1,False), (4,1,False).
+
+Process (4,1,False): since not visited, push (4,1,True). Its children are [1], but 1 is parent, so no more. Pop (4,1,True). Compute size[4] =1. No children (v != parent), so add nothing to total. Total remains 0.
+
+Push back to stack: (4,1,True) is processed. Then, stack has (1, None, True), (3,1,False), (2,1,False).
+
+Process (3,1,False): push (3,1,True). Children are [1], parent, so nothing. Pop (3,1,True). size[3]=1. Add 1*(4-1) =3 to total. Total=3.
+
+Process (2,1,False): similar. Push (2,1,True). Children are [1]. Pop. size=1. Add 1*3=3. Total=6.
+
+Process (1, None, True). For children 2,3,4: sizes are 1,1,1. s=4. For each child, add 1*3=3 three times. So total=6 +3*3=15? Wait, no. Wait, during the processing of node 1:
+
+sum the sizes of children:
+
+s =1 (size of 2) +1 (size of3) +1 (size of4) +1 (the node itself) =4?
+
+Wait, no. The size of node u is 1 plus the sum of the sizes of all its children.
+
+So for node 1, the size is 4 (itself plus children's sizes). Then, for each child (2,3,4), which have size 1 each, the contribution is 1*(4-1) =3 per child. So for three children, the contributions are 3+3+3=9, added to the total. So in the code, during the processing of node 1, the for loop iterates over each child v (2,3,4) which are not the parent (None). For each v in adj[u], if v != parent, then add size[v]*(n - size[v]).
+
+So for node 1, adj[u] is 2,3,4, parent is None. So all are processed. So for each v (2,3,4):
+
+size[v] is 1. So 1*(4-1)=3 per edge. Three edges, sum 9. Added to total.
+
+In the code:
+
+After processing 2,3,4, the total is 3 (from 4) +3 (from3) +3 (from2) =9.
+
+Then, when processing node 1, for each of its children, the code adds 1*3=3 per edge, which is three edges. So 9 added. But the code is adding these during the processing of the children nodes, not the parent. Because when processing each child node, during their post-processing, the edge between the child and parent is considered.
+
+Wait, no. Let me re-express the code:
+
+When processing node 4 (parent 1):
+
+After processing all its children (none), compute size[4]=1. Then, for each child v (none), so nothing. Then, the code adds to the total the size[v] * (n - size[v]) for each child v. But since there are no children, nothing is added.
+
+Wait, no. The code is written as:
+
+for v in adj[u]:
+
+   if v != parent:
+
+       s += size[v]
+
+       total += size[v] * (n - size[v])
+
+So, for node u=4, adj[u] is [1]. Parent is 1, so v=1 is parent. So the for loop does not process any children. So for node 4, the code doesn't contribute to total.
+
+Then, when processing node 3 (parent 1):
+
+adj[u] is [1]. So again, no children except parent. So no contribution.
+
+Same for node 2.
+
+Then, when processing node 1, the adj[u] is [2,3,4]. Parent is None. So for each v in 2,3,4:
+
+v != parent, so s += size[v] (which are 1 each) and total += size[v]*(n - size[v]) =1*3 each. So three times, adding 3 to total each time. So total becomes 0 (initial) +3*3=9.
+
+Thus, S=9.
+
+Which matches the first example.
+
+So the code is correct.
+
+Similarly, the second example.
+
+Thus, the code should work.
+
+Now, the code in Python.
+
+But note that Python's stack can handle the iterative approach, as the stack is managed manually.
+
+So the final code:
+
+Read n.
+
+Read n-1 edges.
+
+Build adjacency list.
+
+Compute S via iterative DFS.
+
+Compute a and b via BFS.
+
+Output (S + a*b) // 2.
+
+Now, implement:
+
+But in Python, for large n (2e5), using a list for adjacency is feasible.
+
+So code:
+
+import sys
+from collections import deque
+
+def main():
+    n = int(sys.stdin.readline())
+    adj = [[] for _ in range(n+1)]
+    for _ in range(n-1):
+        u, v = map(int, sys.stdin.readline().split())
+        adj[u].append(v)
+        adj[v].append(u)
+    
+    # Compute S
+    stack = [ (1, None, False) ]
+    total = 0
+    size = [0]*(n+1)
+    
+    while stack:
+        u, parent, visited = stack.pop()
+        if not visited:
+            stack.append( (u, parent, True) )
+            for v in adj[u]:
+                if v != parent:
+                    stack.append( (v, u, False) )
+        else:
+            s = 1  # current node's size
+            for v in adj[u]:
+                if v != parent:
+                    s_child = size[v]
+                    s += s_child
+                    total += s_child * (n - s_child)
+            size[u] = s
+    
+    # Compute a and b
+    color = [-1]*(n+1)
+    q = deque()
+    q.append(1)
+    color[1] = 0
+    a = 1
+    b = 0
+    while q:
+        u = q.popleft()
+        for v in adj[u]:
+            if color[v] == -1:
+                color[v] = 1 - color[u]
+                if color[v] == 0:
+                    a +=1
+                else:
+                    b +=1
+                q.append(v)
+    
+    ans = (total + a * b) // 2
+    print(ans)
+
+if __name__ == "__main__":
+    main()
+
+Let's test this code with the first example.
+
+Input:
+
+4
+1 2
+1 3
+1 4
+
+Output should be 6.
+
+The code computes S=9 (as per earlier), a=1, b=3. 9 +1*3=12. 12//2=6. Correct.
+
+Second example:
+
+4
+1 2
+2 3
+3 4
+
+S=3+4+3=10. a=2, b=2. 10+4=14. 14//2=7. Correct.
+
+Yes.
+
+So the code should work.
+</think>
+To solve this problem, we need to compute the sum of all pairwise distances between subway stations in an augmented tree where edges are added between nodes that share a common neighbor. The solution involves two main steps: calculating the total distance sum in the original tree and determining the number of node pairs with odd distances.
+
+### Approach
+1. **Total Distance Sum (S):** Calculate the sum of all pairwise distances in the original tree using a post-order traversal to compute subtree sizes and their contributions to the total distance.
+2. **Bipartition Count (a and b):** Use a BFS to color the tree in a bipartite manner, splitting the nodes into two groups. The product of the sizes of these two groups gives the number of node pairs with odd distances.
+3. **Final Calculation:** The result is derived from the formula \((S + a \times b) // 2\), where \(S\) is the total distance sum and \(a \times b\) is the number of node pairs with odd distances.
+
+### Solution Code
+```python
+import sys
+from collections import deque
+
+def main():
+    n = int(sys.stdin.readline())
+    adj = [[] for _ in range(n + 1)]
+    for _ in range(n - 1):
+        u, v = map(int, sys.stdin.readline().split())
+        adj[u].append(v)
+        adj[v].append(u)
+    
+    # Compute the total sum of distances S
+    stack = [(1, None, False)]
+    total = 0
+    size = [0] * (n + 1)
+    
+    while stack:
+        u, parent, visited = stack.pop()
+        if not visited:
+            stack.append((u, parent, True))
+            for v in adj[u]:
+                if v != parent:
+                    stack.append((v, u, False))
+        else:
+            s = 1  # Start with the current node itself
+            for v in adj[u]:
+                if v != parent:
+                    s_child = size[v]
+                    s += s_child
+                    total += s_child * (n - s_child)
+            size[u] = s
+    
+    # Compute bipartition counts a and b
+    color = [-1] * (n + 1)
+    q = deque()
+    q.append(1)
+    color[1] = 0
+    a, b = 1, 0
+    
+    while q:
+        u = q.popleft()
+        for v in adj[u]:
+            if color[v] == -1:
+                color[v] = 1 - color[u]
+                if color[v] == 0:
+                    a += 1
+                else:
+                    b += 1
+                q.append(v)
+    
+    ans = (total + a * b) // 2
+    print(ans)
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Total Distance Sum (S):** Using an iterative post-order traversal, we compute the size of each subtree and accumulate the contribution of each edge to the total distance sum. Each edge's contribution is the product of the sizes of the two subtrees it connects.
+2. **Bipartition Count (a and b):** By performing a BFS, we color the tree nodes alternately, splitting them into two groups. The product of the sizes of these groups gives the number of node pairs with odd distances.
+3. **Final Calculation:** The sum of all pairwise distances in the augmented tree is derived using the formula \((S + a \times b) // 2\), which efficiently combines the total distance sum and the odd distance pairs count to avoid direct computation of all pairwise distances in the augmented graph.
+</bot>

@@ -1,0 +1,660 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Dark Assembly is a governing body in the Netherworld. Here sit the senators who take the most important decisions for the player. For example, to expand the range of the shop or to improve certain characteristics of the character the Dark Assembly's approval is needed.
+
+The Dark Assembly consists of n senators. Each of them is characterized by his level and loyalty to the player. The level is a positive integer which reflects a senator's strength. Loyalty is the probability of a positive decision in the voting, which is measured as a percentage with precision of up to 10%. 
+
+Senators make decisions by voting. Each of them makes a positive or negative decision in accordance with their loyalty. If strictly more than half of the senators take a positive decision, the player's proposal is approved. 
+
+If the player's proposal is not approved after the voting, then the player may appeal against the decision of the Dark Assembly. To do that, player needs to kill all the senators that voted against (there's nothing wrong in killing senators, they will resurrect later and will treat the player even worse). The probability that a player will be able to kill a certain group of senators is equal to A / (A + B), where A is the sum of levels of all player's characters and B is the sum of levels of all senators in this group. If the player kills all undesired senators, then his proposal is approved.
+
+Senators are very fond of sweets. They can be bribed by giving them candies. For each received candy a senator increases his loyalty to the player by 10%. It's worth to mention that loyalty cannot exceed 100%. The player can take no more than k sweets to the courtroom. Candies should be given to the senators before the start of voting.
+
+Determine the probability that the Dark Assembly approves the player's proposal if the candies are distributed among the senators in the optimal way.
+
+Input
+
+The first line contains three integers n, k and A (1 ≤ n, k ≤ 8, 1 ≤ A ≤ 9999).
+
+Then n lines follow. The i-th of them contains two numbers — bi and li — the i-th senator's level and his loyalty.
+
+The levels of all senators are integers in range from 1 to 9999 (inclusive). The loyalties of all senators are integers in range from 0 to 100 (inclusive) and all of them are divisible by 10.
+
+Output
+
+Print one real number with precision 10 - 6 — the maximal possible probability that the Dark Assembly approves the player's proposal for the best possible distribution of candies among the senators.
+
+Examples
+
+Input
+
+5 6 100
+11 80
+14 90
+23 70
+80 30
+153 70
+
+
+Output
+
+1.0000000000
+
+
+Input
+
+5 3 100
+11 80
+14 90
+23 70
+80 30
+153 70
+
+
+Output
+
+0.9628442962
+
+
+Input
+
+1 3 20
+20 20
+
+
+Output
+
+0.7500000000
+
+Note
+
+In the first sample the best way of candies' distribution is giving them to first three of the senators. It ensures most of votes.
+
+It the second sample player should give all three candies to the fifth senator.
+</user>
+<bot>
+<think>
+Okay, let's see. I need to solve this problem where I have to calculate the maximum probability that the Dark Assembly approves the player's proposal by optimally distributing up to k candies to the senators. Each candy increases a senator's loyalty by 10%, up to 100%. The approval can happen either through a majority vote or, if that fails, by killing the opposing senators. So, the plan is to model all possible ways to distribute the candies and compute the best possible probability.
+
+Hmm. Let's break it down. The problem requires considering all possible distributions of the k candies to the senators. For each possible distribution, we calculate the probability that the proposal is approved either through voting or through killing. Then we select the maximum probability among all distributions.
+
+First, the key steps:
+
+1. For each senator, determine how many candies to assign (from 0 to up to what's possible with k and their max loyalty).
+   But since each candy adds 10%, and the initial loyalty is a multiple of 10, each candy gives exactly +10%, capped at 100. So for a senator with current loyalty l, adding c candies would make it min(100, l + 10*c).
+
+2. We need to distribute exactly c1 + c2 + ... + cn ≤ k candies. Wait, no. The problem says "no more than k" candies. So the sum can be up to k. So for each possible distribution of candies (sum <=k), compute the approval probability.
+
+But considering that n and k are up to 8, the number of possible distributions might be manageable. For example, if n=8 and k=8, each senator can get 0-8 candies, but the sum is up to 8. But that's a lot of possibilities. Wait, but with n=8 and k=8, the possible distributions are stars and bars: C(n + k -1, k). For n=8, k=8: C(15,8) = 6435. That's manageable. Because 8 is small.
+
+So the approach is to generate all possible ways to distribute up to k candies among the senators, then for each distribution:
+
+- Compute the new loyalty for each senator (adding 10% per candy, up to 100)
+- Compute the probability of approval through voting (more than half positive votes)
+- If that's not certain, compute the probability of killing the opposing senators and add that scenario's probability.
+
+Wait, the approval can happen in two ways: either the vote passes (strict majority), or the vote fails but the player succeeds in killing the opposing senators. So the total probability is P(vote passes) + P(vote fails) * P(killing succeeds).
+
+So for each distribution, the steps are:
+
+1. For each senator, calculate their new loyalty. Then, for each possible subset of senators that vote yes (each senator votes yes with their loyalty probability), compute the probability of that subset. Then, check if the yes votes are more than half. If so, add that probability. Otherwise, add the probability that the vote failed multiplied by the probability of successfully killing the no voters.
+
+Wait, but that's computationally expensive. Because for n=8, there are 2^8=256 possible voting outcomes. For each outcome, we can compute if the yes votes are a majority (more than n/2). For each such outcome, the probability is the product of each senator's yes/no probability. Then sum all the probabilities where the outcome is a majority yes. Then, for the remaining cases (non-majority), compute the sum of their probabilities multiplied by the kill probability.
+
+But with n up to 8, 256 possibilities per distribution is manageable. So for each distribution, we can iterate through all possible subsets.
+
+So, the plan:
+
+For each possible distribution of candies (sum of c_i ≤k):
+
+   Calculate new loyalty l_i for each senator (min(100, initial l_i + 10*c_i))
+
+   Compute the probability that the proposal is approved via vote.
+
+   Compute the probability that the proposal is approved via killing the opposing senators in case the vote failed.
+
+   The total probability for this distribution is (prob_vote_success) + (1 - prob_vote_success) * prob_kill.
+
+Now, the key is to find the maximum of this total probability over all possible distributions.
+
+So the steps to implement:
+
+1. Generate all possible ways to distribute up to k candies to the n senators. Each senator can receive 0 to (max possible) candies, such that the sum of all candies is ≤k. The max for a senator is min( (100 - l_i)/10, since each candy adds 10% to loyalty. So for a senator with l_i=80, the max candies they can take is 2 (since 80+2*10=100). So for each senator, the maximum possible candies is (100 - l_i) // 10. But since we can assign up to that, but also considering the total k. However, the total sum of all c_i can't exceed k.
+
+But generating all possible combinations of c_i (c_1, c_2, ..., c_n) where 0 ≤ c_i ≤ (100 - l_i_i)/10, and sum c_i ≤k. How to generate all such possible distributions?
+
+This is a problem of enumerating all possible combinations of c_i with those constraints. The standard way to handle this is with a recursive backtracking approach, or using itertools.product with some filtering. But given that n and k are small (up to 8), even a backtracking approach would work.
+
+Alternatively, for each senator, the maximum possible c_i is min( (100 - l_i_i)/10, k), but since sum over all c_i must be <=k. So perhaps for each senator, the possible c_i ranges from 0 to min( (100 - l_i_i)/10, remaining_k ), but how to generate all possibilities efficiently.
+
+Alternatively, for each senator, the possible c_i is from 0 up to the maximum possible ( (100 - l_i_i)/10 ), but the sum across all must be <=k. So, for example, if a senator's maximum possible is m_i, then c_i can be 0 to m_i, but the sum of all c_i must be <=k.
+
+So generating all possible tuples (c_1, c_2, ..., c_n) where for each i, 0 <= c_i <= m_i (m_i = (100 - l_i)//10), and sum(c_i) <=k.
+
+This can be done with a recursive function that builds the list of c_i step by step, considering the possible values for each senator given the remaining candies and the remaining sum.
+
+But in Python, for small n, perhaps using itertools.product for each possible c_i (up to their max and the remaining k) is feasible. But for n=8 and max per c_i up to 10 (if initial loyalty is 0, 10*10=100, so 10 candies), but sum up to 8, the possibilities are manageable. Wait, but if a senator's max possible is higher than the remaining k, then their c_i can only be up to the remaining k.
+
+Alternatively, for each senator in turn, for each possible number of candies they can take (from 0 to their max allowed, and not exceeding the remaining candies), and proceed recursively. This is a backtracking approach.
+
+Yes. So we can implement a recursive backtracking approach where, for each senator, we assign 0 to min(m_i, remaining k) candies, subtract that from the remaining k, and proceed to the next senator.
+
+Once all c_i are assigned, sum up all the c_i and check if it's <=k. Wait, but in the backtracking approach, the remaining k is tracked, so the sum is always <=k. So this way, we can generate all possible valid distributions.
+
+But for n=8 and k=8, and each senator's m_i up to 10, but sum can't exceed k, the number of possibilities would be manageable.
+
+Once all possible distributions are generated, for each one, compute the total probability.
+
+Now, for each distribution, compute the new loyalty l_i for each senator. Then, for each possible subset of yes votes (each senator votes yes with probability l_i percent, no with 1 - l_i percent), compute the probability of that subset and whether it leads to a majority.
+
+So for each possible subset of yes votes, the probability is the product of l_i (if yes) or (1 - l_i) (if no). Then, check if the count of yes votes is > n/2. If yes, add to the vote_success_prob. Else, calculate the sum of the levels of the no voters (B), compute A/(A + B) as the kill probability. Then, the total probability for this scenario is the subset's probability multiplied by (A/(A+B)), and add all those to the kill_contribution.
+
+So the steps for each distribution:
+
+Compute vote_success_prob:
+
+sum over all subsets S of the senate where |S| > n/2:
+
+   product for each senator i: (l_i/100 if i is in S else (100 - l_i)/100 )
+
+Then, the kill_contribution is sum over all subsets S where |S| <=n/2:
+
+   product as above * (A/(A + sum of levels of senators not in S))
+
+Then, the total probability is vote_success_prob + (sum of kill_contributions).
+
+But calculating this directly for all subsets (2^n possibilities) is feasible for n=8 (256 possibilities per distribution), which is manageable.
+
+So for each distribution, iterate through all 2^n possible subsets (each senator votes yes or no), compute the probability of that subset, check if it's a majority. If yes, add to vote_success_prob. If not, compute the kill probability and add the product (subset_prob * kill_prob) to the total.
+
+So for each subset, how to compute:
+
+For each subset S (yes voters), compute the size. If size > n/2: add to vote_success_prob. Else, compute B (sum of levels of no voters, which are the senators not in S) and add (subset_prob * (A/(A + B))) to the total.
+
+Now, for each distribution, the code will loop through all 2^n subsets, compute the product of probabilities for that subset, and accumulate accordingly.
+
+Now, the problem is how to efficiently generate all subsets. For n=8, we can represent each subset as a bitmask (from 0 to 2^8-1=255). For each bitmask, check each bit to see if the senator is in the yes set.
+
+So, in code, for each of the 2^n possible masks:
+
+count_yes = 0
+
+prob = 1.0
+
+for i in 0..n-1:
+
+   if mask has bit i set:
+
+      prob *= l_i[i] / 100.0
+
+      count_yes +=1
+
+   else:
+
+      prob *= (100.0 - l_i[i]) / 100.0
+
+Then, check if count_yes > n/2. If yes, add prob to vote_success. Else, compute B (sum of b_i for senators not in S) and add prob * (A / (A + B)) to kill_contribution.
+
+Yes. So this part is manageable.
+
+So putting it all together:
+
+The code will:
+
+1. Read input: n, k, A.
+
+2. Read n lines of b_i and l_i (level and loyalty).
+
+3. For each possible distribution of candies (c_1, c_2, ..., c_n) where sum(c_i) <=k and for each i, c_i <= (100 - l_i)/10:
+
+   a. Compute new_l_i = l_i + 10 * c_i (capped at 100).
+
+   b. Compute the vote_success_prob and kill_contribution as described.
+
+   c. The total probability is vote_success_prob + kill_contribution.
+
+   d. Track the maximum probability across all distributions.
+
+4. Output the maximum probability with 10^-6 precision.
+
+The critical part is generating all possible distributions of candies efficiently.
+
+Now, how to generate all possible distributions of candies.
+
+Each senator i can take c_i candies, where 0 <= c_i <= m_i (m_i is (100 - l_i_i) // 10), and sum(c_i) <=k.
+
+But for example, if the sum of all m_i is less than or equal to k, then all possible combinations of c_i up to m_i are allowed. Otherwise, some combinations would have sum exceeding k and are invalid.
+
+So the approach is to generate all possible c_i for each senator, considering that the sum must be <=k.
+
+This is a problem of generating all combinations with constraints. So perhaps a backtracking approach.
+
+Implementing a recursive function to generate the possible distributions:
+
+We can represent the current state as:
+
+current_c: list of current c_i for each senator considered so far.
+
+remaining_candies: the number of candies left to distribute.
+
+start_index: the next senator to consider.
+
+For each senator in order, we can try all possible c_i from 0 up to the minimum of (m_i, remaining_candies), and for each choice, proceed to the next senator with the remaining_candies reduced by the chosen c_i.
+
+This way, we can generate all possible valid distributions.
+
+Yes. So for example, for n=3 senators, and k=5:
+
+Start with senator 0. m_0 = (100 - l0) //10.
+
+So possible c0 ranges from 0 to min(m0, 5). For each c0, remaining_candies is 5 - c0.
+
+Then proceed to senator 1, possible c1 is 0 to min(m1, remaining_candies). Then proceed to senator 2, etc.
+
+Once all senators are processed, sum c_i is known (sum_c = sum(current_c)), which is <=k.
+
+But in this approach, the sum is guaranteed to be <=k because each step subtracts the chosen c_i from remaining_candies.
+
+Yes.
+
+So in code, for the backtracking approach:
+
+We can precompute the m_i for each senator (max possible c_i for each senator).
+
+Then, generate all possible combinations via backtracking.
+
+But in Python, recursion might be a bit slow for n=8, but given the small constraints, it's manageable.
+
+Alternatively, use memoization or iterative methods, but recursion is straightforward.
+
+So here's the plan for the code:
+
+Read n, k, A.
+
+Read each senator's b_i and l_i. Compute m_i as (100 - l_i) // 10.
+
+Generate all possible c distributions via backtracking.
+
+For each c distribution:
+
+sum_c = sum(c_i). If sum_c exceeds k, skip (but since we track remaining_candies, this shouldn't happen).
+
+For each senator, compute new_l_i = l_i + 10 * c_i. If new_l_i >100, set to 100.
+
+Then compute the probability as described.
+
+Now, for each possible distribution, compute the total probability.
+
+The maximum of all these is the answer.
+
+So, in code:
+
+Implement the backtracking function to generate all possible c distributions.
+
+But perhaps in Python, using itertools.product for each possible c_i up to their m_i, but then filtering those whose sum exceeds k. But for m_i up to 10 (if initial l_i is 0) and n=8, this would be 11^8 = 214 million possibilities, which is way too much. So that's impossible.
+
+So, backtracking is the way to go. For each senator, we can choose c_i from 0 up to min(m_i, remaining_candies), and proceed recursively.
+
+So here's a sample code structure:
+
+max_prob = 0.0
+
+current_c = [0] * n
+
+def backtrack(senator, remaining_candies):
+    global max_prob, current_c
+    if senator == n:
+        # process this distribution
+        compute new_l_i for each senator.
+        compute the probability for this distribution.
+        if probability > max_prob:
+            max_prob = probability
+        return
+    max_c = min( (100 - l_i[senator]) // 10, remaining_candies )
+    max_c = min(max_c, remaining_candies)
+    for c in 0 to max_c:
+        current_c[senator] = c
+        backtrack(senator + 1, remaining_candies - c)
+
+But wait, (100 - l_i) // 10 may not be accurate. For example, if l_i is 95, then (100-95)//10 is 0.5, which becomes 0. So 0 candies. But that's correct, because adding 0 candies would give 95 +0 =95. But if we allow one candy, then 95+10=105, which is over 100. So the maximum allowed is (100 - l_i) //10.
+
+Yes.
+
+So, for each senator, possible c is from 0 to (100 - l_i) //10, but also cannot exceed the remaining candies.
+
+So in the code:
+
+m_i = (100 - l_i) //10
+
+max_c = min(m_i, remaining_candies)
+
+Then, for c in 0 to max_c (inclusive), assign c to current_c[senator], subtract from remaining_candies, proceed to next senator.
+
+So the backtracking function will generate all possible valid distributions.
+
+Once all distributions are generated, compute the probability for each and track the maximum.
+
+Now, the problem is to compute the probability for a given new_l_i array.
+
+So, for each new_l_i array, compute all possible subsets, as explained before.
+
+Now, for each subset S (yes voters), compute the probability of that subset and whether it's a majority.
+
+But how to generate all subsets?
+
+In Python, for n up to 8, we can loop through all numbers from 0 to 2**n -1. Each number represents a bitmask, where the i-th bit is 1 if the senator i votes yes.
+
+For each mask in 0 to 2**n -1:
+
+count_yes = bin(mask).count('1')
+
+prob = 1.0
+
+sum_b_no = 0
+
+for i in range(n):
+
+    if mask & (1 << i):
+
+        prob *= new_l[i] / 100.0
+
+    else:
+
+        prob *= (100.0 - new_l[i]) / 100.0
+
+        sum_b_no += b[i]
+
+if count_yes > n / 2:
+
+    vote_success += prob
+
+else:
+
+    if sum_b_no ==0:
+
+        # all voted yes, but count_yes is not more than half (unlikely if n is even?)
+
+        # but in that case, sum_b_no is zero. So the kill probability is A/(A+0) =1.0.
+
+        kill_contribution += prob * 1.0
+
+    else:
+
+        kill_contribution += prob * (A / (A + sum_b_no))
+
+total_prob = vote_success + kill_contribution
+
+So, this part is manageable.
+
+Putting all together, the code can be structured as follows.
+
+Now, handling the case where sum_b_no is zero (all senators voted yes, but count_yes is <=n/2). For example, if n=2 and count_yes=1 (n/2 is 1, so not more than half). Then sum_b_no is 0. So the kill probability is A/(A+0) =1.0. So in that case, the kill_contribution is prob *1.0.
+
+So the code needs to handle sum_b_no=0.
+
+So, for each distribution, the code loops through all 2**n masks, calculates the variables as above, and sums the probabilities.
+
+So, the code outline:
+
+Read n, k, A.
+
+b_list = []
+l_list = []
+for _ in range(n):
+    bi, li = map(int, input().split())
+    b_list.append(bi)
+    l_list.append(li)
+
+max_m = [ (100 - li) //10 for li in l_list ]
+
+best_prob = 0.0
+
+# Backtracking approach to generate all possible c distributions.
+
+current_c = [0]*n
+
+def backtrack(senator_idx, remaining_candies):
+    global best_prob, current_c, n, k, A, b_list, l_list, max_m
+    if senator_idx == n:
+        # Compute new_l for each senator
+        new_l = []
+        for i in range(n):
+            new_li = l_list[i] + 10 * current_c[i]
+            if new_li >100:
+                new_li = 100
+            new_l.append(new_li)
+        # Compute the probability for this new_l
+        vote_success = 0.0
+        kill_contribution = 0.0
+        for mask in range(2**n):
+            yes_count = bin(mask).count('1')
+            prob = 1.0
+            sum_b_no = 0
+            for i in range(n):
+                if (mask >> i) & 1:
+                    prob *= new_l[i] / 100.0
+                else:
+                    prob *= (100.0 - new_l[i]) / 100.0
+                    sum_b_no += b_list[i]
+            if yes_count > n//2:
+                vote_success += prob
+            else:
+                if sum_b_no ==0:
+                    # All senators voted yes, but not majority. So kill probability is 1.0
+                    kill_contribution += prob * 1.0
+                else:
+                    kill_contribution += prob * (A / (A + sum_b_no))
+        total = vote_success + kill_contribution
+        if total > best_prob:
+            best_prob = total
+        return
+    # Current senator is senator_idx
+    max_possible = min( (100 - l_list[senator_idx]) //10, remaining_candies )
+    max_possible = min(max_possible, remaining_candies)
+    for c in range(0, max_possible +1):
+        current_c[senator_idx] = c
+        backtrack(senator_idx +1, remaining_candies - c)
+
+backtrack(0, k)
+
+print("{0:.10f}".format(best_prob))
+
+Wait, but in Python, global variables can be a problem. Because current_c is modified in the backtracking. Also, the function uses lists like b_list and l_list, which are read-only. So the code should work.
+
+But wait, in the backtracking function, for each senator_idx, the code assigns current_c[senator_idx] to c. Then, when backtracking proceeds, the current_c is modified in place. So for each recursive call, the current_c is being updated. But this is okay, because the function builds the current_c list step by step, and once all senators are processed (senator_idx ==n), the code processes the current_c as a complete distribution. Then, when backtracking returns, the current_c is modified again for the next c in the loop.
+
+Yes, this should work.
+
+Testing the code with the sample inputs.
+
+Sample Input 1:
+
+5 6 100
+
+11 80
+
+14 90
+
+23 70
+
+80 30
+
+153 70
+
+So m_i for each senator:
+
+Senator 0: (100-80)/10=2 → max 2 candies.
+
+Senator 1: (100-90)/10=1 → max 1.
+
+Senator 2: (100-70)/10=3.
+
+Senator3: (100-30)/10=7.
+
+Senator4: (100-70)/10=3.
+
+Sum of all m_i: 2+1+3+7+3 =16. But k=6. So possible distributions.
+
+The optimal distribution in the first sample is giving 2,1,3,0,0 → sum 6.
+
+But when the code processes this distribution, the new l_i would be 80+2*10=100, 90+1*10=100, 70+3*10=100, 30+0=30, 70+0=70. So the three first senators have 100% loyalty. So when they vote, they will definitely vote yes. The others can vote no.
+
+So for the vote to pass, there are 3 yes votes. n=5, so majority is 3. So yes votes are exactly 3 (from the first three). Then, the remaining two can vote either way. Wait, no. Wait, the first three have 100% loyalty, so they will vote yes always. The fourth has 30% (so 70% no), fifth 70% (30% no). So the vote counts are at least 3 yes (from the first three), and possible more from the fourth and fifth. So in any case, the yes votes are at least 3, which is more than 5/2 (2.5). So the vote will pass with 100% probability. So the total probability is 1.0, which matches the sample output.
+
+So the code should generate this distribution, and compute the probability as 1.0.
+
+Similarly, for other samples.
+
+Another sample input is the third example:
+
+1 3 20
+
+20 20
+
+n=1, k=3, A=20.
+
+Senator's initial loyalty is 20%. Max possible candies is (100-20)/10=8. So up to 3 candies can be assigned (since k=3). So possible c is 0,1,2,3.
+
+Each c adds 10% to loyalty. So:
+
+c=0 → 20% → new_l=20%.
+
+c=1 → 30%.
+
+c=2 →40%.
+
+c=3 →50% (since 20 + 3*10=50).
+
+We need to try all possible c=0,1,2,3.
+
+For each, compute the probability.
+
+For example, when c=3, new_l=50%.
+
+The only senator. So when voting:
+
+Possible outcomes:
+
+Yes (prob 0.5) → count is 1, which is >0.5. So vote_success is 0.5.
+
+No (prob 0.5) → then need to kill the senator (sum_b_no is 20). So kill prob is 20/(20+20) =0.5. So total for this case is 0.5 (vote success) + 0.5 * 0.5 (vote failed and kill) =0.5 +0.25=0.75.
+
+Which is the sample output.
+
+So the code would check all c distributions, and for c=3, the total is 0.75. For other c's, perhaps the total is lower.
+
+So the code would return 0.75.
+
+This matches the sample.
+
+Thus, the code seems correct.
+
+Now, possible edge cases:
+
+- All senators' loyalty is 100%. Then, regardless of the vote, it will pass. So probability is 1.0.
+
+- When the sum of the levels of the no voters is zero (but that's impossible since each no voter has level >=1). So sum_b_no can't be zero unless all voters are yes. But in that case, count_yes is n, which is more than n/2. So that scenario is covered.
+
+Another edge case: when the player's A is very large. For example, A=9999 and sum_b_no is small. Then kill probability is almost 1.0. So even if the vote fails, the kill is almost certain.
+
+Now, the code should handle all these cases.
+
+Potential optimizations:
+
+But for n=8 and 2^8=256 subsets per distribution, and with backtracking generating up to (say) 10^4 distributions, the code could run in reasonable time.
+
+But let's check the first sample.
+
+In the first sample, the backtracking will generate all possible c distributions with sum <=6. For the optimal case, perhaps the code finds the distribution where sum is exactly 6 (2+1+3+0+0=6) and the three first senators have 100% loyalty. The code will compute the probability for this distribution as 1.0, and others as lower. So the maximum is 1.0.
+
+Thus, the code should handle all cases correctly.
+
+So the code as written should work.
+</think>
+To solve this problem, we need to determine the maximum probability that the Dark Assembly approves the player's proposal by optimally distributing up to k candies to the senators. Each candy increases a senator's loyalty by 10%, up to 100%. The proposal can be approved either through a majority vote or, if the vote fails, by killing the opposing senators.
+
+### Approach
+1. **Generate All Possible Candy Distributions**: We use a backtracking approach to generate all valid distributions of up to k candies among the senators. Each senator can receive a number of candies that does not exceed their maximum possible increase (determined by their initial loyalty) and the total number of available candies.
+
+2. **Calculate Approval Probability for Each Distribution**: For each valid distribution of candies:
+   - Compute the new loyalty for each senator.
+   - Determine the probability of the proposal being approved through a majority vote.
+   - If the vote fails, compute the probability of killing the opposing senators and add this to the total probability.
+
+3. **Evaluate All Voting Outcomes**: For each distribution, evaluate all possible voting outcomes (2^n possibilities for n senators). Calculate the probability of each outcome and determine if it results in a majority approval. If not, compute the probability of successfully killing the opposing senators.
+
+### Solution Code
+```python
+import sys
+
+def main():
+    n, k, A = map(int, sys.stdin.readline().split())
+    b = []
+    l = []
+    for _ in range(n):
+        bi, li = map(int, sys.stdin.readline().split())
+        b.append(bi)
+        l.append(li)
+    
+    max_m = [(100 - li) // 10 for li in l]
+    best_prob = 0.0
+    current_c = [0] * n
+
+    def backtrack(senator_idx, remaining_candies):
+        nonlocal best_prob, current_c, n, k, A, b, l, max_m
+        if senator_idx == n:
+            new_l = []
+            for i in range(n):
+                new_li = l[i] + 10 * current_c[i]
+                if new_li > 100:
+                    new_li = 100
+                new_l.append(new_li)
+            
+            vote_success = 0.0
+            kill_contrib = 0.0
+            for mask in range(2 ** n):
+                yes_count = bin(mask).count('1')
+                prob = 1.0
+                sum_b_no = 0
+                for i in range(n):
+                    if (mask >> i) & 1:
+                        prob *= new_l[i] / 100.0
+                    else:
+                        prob *= (100.0 - new_l[i]) / 100.0
+                        sum_b_no += b[i]
+                
+                if yes_count > n // 2:
+                    vote_success += prob
+                else:
+                    if sum_b_no == 0:
+                        kill_contrib += prob * 1.0
+                    else:
+                        kill_contrib += prob * (A / (A + sum_b_no))
+            
+            total = vote_success + kill_contrib
+            if total > best_prob:
+                best_prob = total
+            return
+        
+        max_possible = min(max_m[senator_idx], remaining_candies)
+        for c in range(0, max_possible + 1):
+            current_c[senator_idx] = c
+            backtrack(senator_idx + 1, remaining_candies - c)
+    
+    backtrack(0, k)
+    print("{0:.10f}".format(best_prob))
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Input Handling**: Read the number of senators, maximum candies, and player's strength. Then read each senator's level and initial loyalty.
+
+2. **Backtracking for Candy Distribution**: Recursively generate all valid distributions of candies. For each distribution, compute the new loyalty values for the senators.
+
+3. **Voting and Kill Probability Calculation**: For each distribution, evaluate all possible voting outcomes. Calculate the probability of each outcome contributing to a majority approval or the subsequent kill probability if the vote fails.
+
+4. **Max Probability Tracking**: Track the maximum probability of approval across all valid candy distributions and print the result with the required precision.
+
+This approach efficiently explores all possible candy distributions and calculates the optimal approval probability using a combination of backtracking and exhaustive voting outcome evaluation.
+</bot>

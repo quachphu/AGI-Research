@@ -1,0 +1,2441 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Alexandra has a paper strip with n numbers on it. Let's call them ai from left to right.
+
+Now Alexandra wants to split it into some pieces (possibly 1). For each piece of strip, it must satisfy:
+
+  * Each piece should contain at least l numbers.
+  * The difference between the maximal and the minimal number on the piece should be at most s.
+
+
+
+Please help Alexandra to find the minimal number of pieces meeting the condition above.
+
+Input
+
+The first line contains three space-separated integers n, s, l (1 ≤ n ≤ 105, 0 ≤ s ≤ 109, 1 ≤ l ≤ 105).
+
+The second line contains n integers ai separated by spaces ( - 109 ≤ ai ≤ 109).
+
+Output
+
+Output the minimal number of strip pieces.
+
+If there are no ways to split the strip, output -1.
+
+Examples
+
+Input
+
+7 2 2
+1 3 1 2 4 1 2
+
+
+Output
+
+3
+
+
+Input
+
+7 2 2
+1 100 1 100 1 100 1
+
+
+Output
+
+-1
+
+Note
+
+For the first sample, we can split the strip into 3 pieces: [1, 3, 1], [2, 4], [1, 2].
+
+For the second sample, we can't let 1 and 100 be on the same piece, so no solution exists.
+</user>
+<bot>
+<think>
+Okay, I need to solve this problem where Alexandra wants to split a paper strip into pieces with certain conditions. The goal is to find the minimal number of pieces possible. Let's think through how to approach this.
+
+First, let's understand the problem. Each piece must have at least l numbers. Also, the difference between the max and min in each piece must be at most s. If it's impossible, return -1.
+
+Hmm. So the challenge is to split the array into as few pieces as possible while meeting these two constraints. Let's look at the examples.
+
+In the first example, the array is [1,3,1,2,4,1,2]. The split is into three parts. The first part has three elements (since l is 2, but maybe longer is allowed). The difference in each part is within 2. Like [1,3,1] has max 3 and min 1, difference 2. Then [2,4] has max 4, min 2, difference 2. Then [1,2], difference 1. So all conditions met.
+
+The second example has elements alternating between 1 and 100. Since each adjacent pair has a difference of 99, which is way larger than s=2, each piece can't have two elements. So each piece must be exactly length 1 (since l=2, but that's impossible). So output is -1.
+
+So how do we approach this problem?
+
+Let me think about dynamic programming. Let's define dp[i] as the minimal number of pieces needed to split the first i elements. Then, for each i, we need to check all possible j such that the segment from j+1 to i forms a valid piece (length >= l, max-min <= s). Then, dp[i] = min(dp[j] + 1) for all valid j.
+
+But the problem is the constraints on n (up to 1e5). A naive DP approach would be O(n^2), which is way too slow. So we need an optimized way to compute this.
+
+So, the key is to find for each i, the earliest j where the window j+1..i is valid. Then, among those j's, we can find the minimal dp[j] + 1.
+
+But how to compute the maximum and minimum in sliding windows efficiently?
+
+Sliding window with a data structure like a deque (monotonic queue) to track max and min. Alternatively, using a segment tree or sparse table for range min and max queries. But even with that, for each i, checking all possible j's that form a valid window might not be efficient.
+
+Alternatively, for each i, find the leftmost j where the window [j, i] has max - min <= s. Then, the possible valid pieces ending at i would start from j to i - l + 1 (since the piece needs to have at least l elements). Wait, wait. Wait, the piece must have length >= l, so for a window ending at i, the start can be from j (earliest possible) to (i - l + 1), because the window needs to have length >= l. So the possible starts for valid pieces ending at i are from the earliest possible j to (i - l). Wait, no. Let me think.
+
+If the current window is from k to i, then the length is i - k + 1. We need this to be >= l. So i - k +1 >= l => k <= i - l + 1. So for a valid piece ending at i, the start k must be >= j (the earliest possible start where max-min <= s for k..i) and <= i - l + 1. So the possible start positions are in [j, i - l + 1]. Then, the possible previous positions are k-1, so the previous end is k-1. So for each i, the possible positions j where the piece starts at j and ends at i, and the length is at least l. So for each i, we need to look for all possible j in [leftmost, i - l + 1], and take the minimum dp[j-1] + 1.
+
+But how to efficiently find the leftmost j for each i where the window [j..i] is valid (max-min <=s) and then see if there's any j in that leftmost to (i - l + 1) where the window is valid, and then find the minimal dp[j-1] +1.
+
+So the steps would be:
+
+1. Precompute for each position i the earliest j where [j..i] is a valid window (max - min <=s). This can be done using a sliding window approach with two deques for tracking max and min.
+
+2. For each i, once we have the earliest j, the valid start positions for a piece ending at i are from j to (i - l + 1). So the possible k (start of the piece) is in [j, i - l + 1]. Then, the previous state is dp[k-1], and we need to find the minimal dp[k-1] +1 for those k's.
+
+But the problem is how to compute this range minimum efficiently. Because for each i, the possible k's form a range [a, b], and we need the minimal dp[k-1] in that interval. If we can precompute a segment tree or a sparse table for range minimum queries, then each query would take O(log n) time.
+
+So the plan is:
+
+- Precompute for each i the leftmost j where [j..i] is valid (max - min <=s). This can be done in O(n) time using a sliding window approach.
+
+- For each i, the possible k's (start positions of the current piece) are from j to (i - l + 1). So the interval [j, i - l + 1]. But k must be <= i - l + 1, which implies that the length of the current piece is (i - k + 1) >= l.
+
+- Then, for each i, the minimal dp[k-1] + 1 for k in [j, i - l + 1] is the candidate for dp[i]. If there is any such k, then dp[i] is this minimal value. Else, it's impossible (dp[i] remains infinity or some invalid value).
+
+But how to handle the range queries for the minimum dp[j] in [a, b]?
+
+We can maintain a segment tree that allows us to query the minimum in a range. As we compute dp[i], we can update the segment tree with dp[i] for position i.
+
+But the problem is that for the segment tree, the indices are from 0 to n (since the array is 0-based). Let's see:
+
+Suppose dp[i] represents the minimal number of pieces for the first i elements. Then, for a piece starting at k and ending at i (0-based?), maybe I need to reindex.
+
+Wait, let's clarify the indices. Let's assume the array is 0-based. Then, for each i (current end of the array, 0-based), we want to split the array into a piece ending at i, which starts at k. The piece includes elements from k to i. The length is i - k + 1 >= l. So k <= i - l + 1.
+
+Additionally, the window [k..i] must have max - min <= s.
+
+So for each i, the possible k's are those where:
+
+k >= left[i] (left[i] is the earliest possible start for a valid window ending at i)
+
+and k <= i - l + 1.
+
+But the earliest possible start left[i] is determined by the sliding window approach. So first, compute left[i] for all i.
+
+Once we have left[i], then the possible k's are in [left[i], i - l + 1]. But this interval must have k <= i - l +1 and >= left[i]. Also, since the piece must be at least l elements, i - k +1 >= l → k <= i - l +1.
+
+Now, for each such k, the previous piece ends at k-1, so the minimal number of pieces would be dp[k-1] + 1.
+
+Thus, dp[i] = min(dp[k-1] + 1) for all valid k in [left[i], i-l+1].
+
+If there are no valid k's (i.e., the interval is invalid, left[i] > i - l +1), then dp[i] remains infinity.
+
+So the key steps are:
+
+1. Compute left[i] for each i (earliest k where [k..i] is valid).
+
+2. For each i, compute the interval [a, b] = [left[i], i - l +1]. If a > b, then no valid split here. Else, query the min dp[k-1] in the range [a, b], and set dp[i] = min_val + 1.
+
+Now, the initial dp array. dp[0] = 0 (0 elements require 0 pieces). Then, dp[i] for i from 1 to n.
+
+Wait, perhaps the indices are 1-based. Let's adjust:
+
+Suppose the array is 1-based. So for i in 1..n, we want to compute dp[i], which represents the minimal number of pieces for the first i elements.
+
+Then, the piece ends at i, starts at k. So the piece is from k to i, which is of length i -k +1 >= l → k <= i - l +1.
+
+The left[i] is the earliest k where the window [k..i] is valid.
+
+So for each i, the interval for k is [left[i], i - l +1], and the possible k's must be >=1 (since array is 1-based).
+
+Wait, the array is 1-based. Then, for example, if l is 2 and i is 3, then k can be 2 (since 3-2+1 = 2 elements). So yes, k can be up to i - l +1.
+
+So for each i, the possible k's are in [left[i], i - l +1], and each k must be <= i - l +1 and >= left[i]. So the interval is [max(left[i], 1), i - l +1], but since left[i] is computed as the earliest possible, maybe it's already >=1.
+
+So, to compute left[i], which is the earliest possible k where [k..i] is valid. How to compute this?
+
+We can use a sliding window approach with two deques to track the max and min in the current window. As we iterate i from 1 to n, we move the left end (k) as far right as possible while maintaining the window's max-min <=s. For each i, left[i] is the earliest possible k.
+
+This is done in O(n) time.
+
+Once we have left[i], for each i, the valid k's are in [left[i], i - l +1]. Now, for each i, we need to query the minimal dp[k-1] in this interval. If the interval is invalid (left[i] > i - l +1), then no solution for this i.
+
+The dp array is built as follows:
+
+- dp[0] = 0.
+
+- For i >=1, dp[i] = min{ dp[k-1] + 1 } for all valid k in [left[i], i - l +1].
+
+If there are no valid k's, dp[i] remains infinity.
+
+So, the problem reduces to efficiently querying the minimum in a range [a, b], where a and b can vary for each i.
+
+To do this efficiently, we can use a segment tree that allows range minimum queries and point updates. Each time we compute dp[i], we insert it into the segment tree at position i, so that future queries can access it.
+
+Wait, because for the current i, when we want to find the minimal dp[k-1] + 1 for k in [a, b], then the k-1's are in [a-1, b-1]. So the segment tree should store the dp values, and for a given interval [a, b], the minimal dp value is queried from [a-1, b-1].
+
+Wait, let's see:
+
+Suppose k is in [left[i], i - l +1], then k can be from left[i] to i - l +1. The k-1 is the end of the previous piece, so dp[k-1] is the number of pieces up to k-1. So when we want to compute dp[i], we need to take the minimum of dp[k-1] for k in [left[i], i - l +1]. Which is equivalent to the minimum of dp[j] where j is in [left[i] -1, (i - l +1) -1] = [left[i]-1, i - l].
+
+So for each i, the query is on the range [left[i]-1, i - l] in the dp array.
+
+But for i to have a valid k, the start of the current piece must be <= i - l +1, which implies that the length is i -k +1 >= l. So the end of the previous piece is k-1 = i - l.
+
+Wait, perhaps not. Let's take an example. Suppose i is 5, l is 2. Then i - l +1 is 5-2+1=4. So k can be at most 4. So the current piece is from k=4 to i=5, which is 2 elements. So the previous piece ends at k-1=3. So the query is for j from left[i]-1 to 4-1=3. So the query interval is [left[i]-1, 3].
+
+Wait, no. If i=5, l=2, then the current piece can have k up to 4 (since i - l +1 =4). So the previous piece ends at k-1, which is 3. So the query is for j in [left[i]-1, 3]. So for each i, the query is for j in [left[i]-1, i - l] (since i - l is (i - l +1) -1 = (k_max -1) where k_max is i -l +1).
+
+Therefore, for each i, the query is the minimum of dp[j] in the interval [left[i]-1, i - l].
+
+But how do we get left[i] for each i?
+
+Let's first handle the sliding window to compute left[i] for each i.
+
+Sliding window approach for max and min:
+
+We can maintain two deques, one for max and one for min. For each new element i, we add it to the deques, removing elements from the end that are not larger (for max deque) or not smaller (for min deque) than the current element. Then, we check if the current window (from current left to i) has max - min > s. If yes, we move the left pointer to the right until the window is valid again. The left[i] is the leftmost index for which [left[i], i] is valid.
+
+So for example, in code:
+
+Initialize left = 1. For each i in 1..n:
+
+    while the deque_max is not empty and a[i] > deque_max[-1][0]:
+        deque_max.pop()
+    deque_max.append( (a[i], i) )
+
+    similarly for deque_min.
+
+    then, while the current window [left..i] has max - min > s:
+        move left forward.
+
+    left[i] = left.
+
+But this is O(n) time.
+
+Once left[i] is found, then for each i, the interval for j (the end of the previous piece) is [left[i]-1, i - l].
+
+If i - l < left[i] -1, then the interval is invalid. So no valid splits.
+
+Now, for the segment tree. The segment tree will allow us to query the minimal dp[j] in a range [a, b]. So for each i, after computing the interval [a, b] = [left[i]-1, i - l], if a <= b and a >=0 and b >=0, then we can query the min in that range. Otherwise, no solution.
+
+The dp array is initialized with infinity. dp[0] = 0. For each i from 1 to n:
+
+    if the interval [a, b] is valid:
+        min_val = segment_tree.query_min(a, b)
+        if min_val is not infinity:
+            dp[i] = min_val + 1
+    else:
+        dp[i] remains infinity.
+
+Then, after computing dp[i], we update the segment tree with the value dp[i] at position i.
+
+So the steps are:
+
+1. Read n, s, l.
+
+2. Read the array a of size n.
+
+3. Precompute left[i] for each i (1-based).
+
+4. Initialize the dp array of size n+1 (since dp[0] is 0, and dp[1..n] are to be computed).
+
+5. Initialize a segment tree that can answer range min queries and support point updates.
+
+6. For each i from 1 to n:
+
+   a. Compute a = left[i] -1, b = i - l.
+
+   b. Check if a <= b and a >=0 and b >=0 and i - l >=0.
+
+   c. If yes, query the segment tree for min in [a, b].
+
+   d. If the min is not infinity, then dp[i] = min +1.
+
+   e. Update the segment tree with dp[i] at position i.
+
+7. After processing all i, check dp[n]. If it's infinity, output -1, else output dp[n].
+
+But wait, in the case where l=1, then i - l is i-1. For example, if i=1, l=1, then i-l=0. So a can be left[i]-1 (left[i] could be 1, so a=0). So [a, b] is [0, 0], which is valid. So the code should handle that.
+
+Now, the edge cases.
+
+Case 1: l > n. Then, it's impossible to split into any piece (since each piece must have at least l elements, but n < l). So output -1.
+
+Case 2: s=0. Then all elements in each piece must be the same.
+
+Another edge case is when the entire array can be split into one piece. So check if the entire array's max - min <=s and n >=l. Then answer is 1.
+
+So, for the code:
+
+First, handle the case when l > n: output -1.
+
+Else, proceed.
+
+Now, let's think about the sample input 1.
+
+Sample 1:
+
+7 2 2
+
+1 3 1 2 4 1 2
+
+The left[i] for each i would be:
+
+We need to compute for each i the earliest k where [k..i] has max - min <=2.
+
+For i=1: [1], max=1, min=1. So left[1] =1.
+
+For i=2: elements 1,3. max=3, min=1, difference 2. So left[2]=1.
+
+For i=3: elements 1,3,1. max=3, min=1. Difference 2. left[3]=1.
+
+i=4: elements 1,3,1,2. max=3, min=1. Difference 2. left[4]=1.
+
+i=5: elements 1,3,1,2,4. max is 4, min is 1. difference 3>2. So we need to move left to the right. Let's see:
+
+Initially left is 1. The window is [1..5], which has max 4, min 1, difference 3>2. So move left to 2. The window [2..5] is 3,1,2,4. max 4, min 1. difference 3>2. Move to 3. Window [3..5]: 1,2,4. max 4, min 1. difference 3>2. Move to 4. window [4..5]: 2,4. difference 2. So left[5] =4.
+
+For i=5, left[i] is 4. So a=4-1=3, b=5-2=3. So the interval is [3,3]. So query dp[3]. Then dp[5] would be dp[3]+1.
+
+If dp[3] is 1 (assuming previous steps), then dp[5] is 2.
+
+Then, when i=5, the current piece is from k=4 to 5 (elements 2,4). Which is valid (diff 2, length 2 >= l=2). So the previous step would have dp[3], which is the minimal up to 3 elements.
+
+But I need to track how the dp array is built.
+
+The code will compute this correctly.
+
+Now, the code steps:
+
+Implement sliding window to compute left[i], then the segment tree for range min queries.
+
+But how to implement the sliding window for max and min.
+
+Here's the approach for the sliding window:
+
+Initialize left=1 (for 1-based array), and two deques (max_deque and min_deque). For each i from 1 to n:
+
+   while max_deque is not empty and a[i] > max_deque[-1][0], pop from max_deque.
+
+   add (a[i], i) to max_deque.
+
+   while min_deque is not empty and a[i] < min_deque[-1][0], pop from min_deque.
+
+   add (a[i], i) to min_deque.
+
+   then, while the current window [left..i] has max - min >s:
+
+       move left forward, and remove elements from the deques that are now out of the window.
+
+   left[i] = left.
+
+Wait, but how to get the current max and min from the deques?
+
+The max is the first element of max_deque, the min is first element of min_deque.
+
+So during the process, for the current window [left..i], the max is the first element of max_deque, and the min is the first element of min_deque. If the difference is larger than s, we need to increment left until the window becomes valid.
+
+So, during the loop:
+
+current_max = max_deque[0][0]
+
+current_min = min_deque[0][0]
+
+while current_max - current_min > s:
+
+   left +=1
+
+   while max_deque[0][1] < left:
+
+       max_deque.popleft()
+
+   while min_deque[0][1] < left:
+
+       min_deque.popleft()
+
+   current_max = max_deque[0][0] if max_deque else None
+
+   current_min = min_deque[0][0] if min_deque else None
+
+But this part has to be handled carefully.
+
+Alternatively, the sliding window approach works as follows:
+
+We maintain left as the start of the current valid window. For each i, after adding a[i] to the deques, we check if the window [left..i] is valid. If not, we increment left until it is valid. Then, left[i] = left.
+
+This is the standard approach for sliding window to find the longest subarray ending at i with max-min <=s.
+
+But in our case, we need the earliest possible left for each i.
+
+So code outline:
+
+left = 1
+
+for i from 1 to n:
+
+    # add a[i] to deques
+
+    while max_deque and a[i] > max_deque[-1][0]:
+
+        max_deque.pop()
+
+    max_deque.append( (a[i], i) )
+
+    while min_deque and a[i] < min_deque[-1][0]:
+
+        min_deque.pop()
+
+    min_deque.append( (a[i], i) )
+
+    # adjust left to make window valid
+
+    while True:
+
+        current_max = max_deque[0][0]
+
+        current_min = min_deque[0][0]
+
+        if current_max - current_min > s:
+
+            left +=1
+
+            # remove elements from deques that are no longer in the window
+
+            while max_deque[0][1] < left:
+
+                max_deque.popleft()
+
+            while min_deque[0][1] < left:
+
+                min_deque.popleft()
+
+        else:
+
+            break
+
+    left[i] = left
+
+But wait, this isn't correct. Because even after moving left once, the window [left..i] may still be invalid, so the loop needs to run until it's valid.
+
+So the correct code is:
+
+for i in 1..n:
+
+    ... add to deques ...
+
+    # now adjust left to the right until the window is valid
+
+    while left <= i:
+
+        current_max = max_deque[0][0] if max_deque else a[i]
+
+        current_min = min_deque[0][0] if min_deque else a[i]
+
+        if current_max - current_min > s:
+
+            left +=1
+
+            # remove elements from deques that are left of the new left
+
+            while max_deque and max_deque[0][1] < left:
+
+                max_deque.popleft()
+
+            while min_deque and min_deque[0][1] < left:
+
+                min_deque.popleft()
+
+        else:
+
+            break
+
+    left[i] = left
+
+Wait, no. Because after moving left once, the current_max and current_min may have changed. So the loop must continue until the window [left..i] is valid.
+
+So the code should be:
+
+    # after adding the current element to deques
+
+    while True:
+
+        current_max = max_deque[0][0] if max_deque else a[i]
+
+        current_min = min_deque[0][0] if min_deque else a[i]
+
+        if current_max - current_min > s:
+
+            left +=1
+
+            # remove elements from deques that are now out of the window [left..i]
+
+            while max_deque and max_deque[0][1] < left:
+
+                max_deque.popleft()
+
+            while min_deque and min_deque[0][1] < left:
+
+                min_deque.popleft()
+
+        else:
+
+            break
+
+    left[i] = left
+
+But this may not work, because after moving left once, we need to recheck the new window.
+
+Wait, perhaps the code should be:
+
+    # after adding the current element to deques
+
+    while left <= i:
+
+        current_max = max_deque[0][0] if max_deque else a[i]
+
+        current_min = min_deque[0][0] if min_deque else a[i]
+
+        if current_max - current_min > s:
+
+            left +=1
+
+            # remove elements from deques that are left of the new left
+
+            while max_deque and max_deque[0][1] < left:
+
+                max_deque.popleft()
+
+            while min_deque and min_deque[0][1] < left:
+
+                min_deque.popleft()
+
+        else:
+
+            break
+
+    left[i] = left
+
+Wait, this loop will exit when either left >i (but that's impossible since the window is [left..i], and if left exceeds i, then there's no valid window. But according to the problem statement, the array can have elements. So perhaps the code is incorrect here.
+
+Alternatively, perhaps the left[i] can be set to left even if left >i. But that would mean there is no valid window ending at i. So in such cases, left[i] is set to a value greater than i, which implies that no valid piece can end at i. But according to the problem statement, each element must be part of a piece, so that's impossible. So in such a case, the entire split is impossible.
+
+Wait, but the problem allows the entire array to be split into one piece if possible. So in cases where even the entire array can't be split into a valid piece (like the second sample), then output is -1.
+
+But back to the code. So during the sliding window process, for each i, we compute left[i], which is the earliest possible start of a valid window ending at i. If left[i] > i - l +1, then the window can't be split into a valid piece with length >=l.
+
+So the code for the sliding window is correct.
+
+Now, once left[i] is computed for each i, the next step is to compute for each i the interval [a, b] = [left[i]-1, i - l].
+
+But if i - l <0, then the interval is invalid. So for example, when i < l. So, for i < l, no possible split can form a piece ending at i with length >= l. So dp[i] remains infinity.
+
+So, during the code's processing:
+
+For each i from 1 to n:
+
+   if i < l: 
+
+       a = left[i]-1
+
+       b = i - l --> which is i - l, which is negative.
+
+       So interval is invalid. So dp[i] is infinity.
+
+   else:
+
+       compute a and b.
+
+       if a >b or a <0 or b <0:
+
+           invalid.
+
+       else:
+
+           query the segment tree for min in [a, b]
+
+           dp[i] = min_val +1 if min_val is not infinity.
+
+So, for example, in sample 1, for i=3:
+
+l=2. i=3 >=2. So compute a = left[3]-1=1-1=0. b=3-2=1. So the interval is [0,1]. So query the segment tree for the minimum of dp[0] and dp[1]. If dp[0] is 0 (which it is), then dp[3] is 0+1=1. This would correspond to splitting [1,3,1] as the first piece.
+
+So the code would handle that.
+
+Now, the segment tree needs to handle range queries and point updates.
+
+But since n can be up to 1e5, the segment tree must be efficient.
+
+Implementing a segment tree for range minimum query and point updates is manageable. Alternatively, a binary indexed tree (Fenwick tree) can't be used for range minimum queries, because BIT is designed for prefix sums or point updates and range sums. For range min, a segment tree is the way to go.
+
+So, in Python, implementing a segment tree for 1e5 elements is possible, but may be a bit slow. However, given that Python's speed isn't the fastest, but the code is correct, perhaps with some optimizations (like using a list-based approach), it can pass.
+
+Now, putting it all together.
+
+The code steps:
+
+1. Read input.
+
+   n, s, l = map(int, input().split())
+
+   a = list(map(int, input().split()))
+
+   if l >n:
+
+       print(-1)
+
+       exit()
+
+2. Compute left[i] for each i (1-based) using the sliding window approach.
+
+3. Initialize the dp array.
+
+   dp = [inf] * (n +1)
+
+   dp[0] =0
+
+4. Implement the segment tree for range min queries and point updates.
+
+5. For each i from 1 to n:
+
+   a_i = left[i] -1
+
+   b_i = i - l
+
+   if a_i > b_i or b_i <0:
+
+       continue
+
+   a_i = max(a_i, 0)
+
+   if a_i > b_i:
+
+       continue
+
+   min_val = segment_tree.query(a_i, b_i)
+
+   if min_val != inf:
+
+       if dp[i] > min_val +1:
+
+           dp[i] = min_val +1
+
+   segment_tree.update(i, dp[i])
+
+6. After processing all i, check dp[n]. If it's still inf, output -1. Else, output dp[n].
+
+Now, the segment tree needs to support the following operations:
+
+- Update a position (i) with a value (dp[i]).
+
+- Query the minimum in a range [a, b].
+
+But since the dp array is being built incrementally, and the query for i's interval [a, b] will involve positions up to i-1 (since when processing i, the query is on [a_i, b_i], which are <=i-l <=i-1 (since l >=1)). So the segment tree can be updated as we process each i.
+
+Wait, when processing i, the query is for [a_i, b_i], which is from left[i]-1 to i-l. For example, i=5, l=2: i-l=3. So the query is on positions 0..3, which are previous dp values. So during processing i=5, the segment tree has the values up to i=4. So after processing i=5, we update the segment tree with dp[5].
+
+Thus, the order is correct: for each i, the query is for positions <= i-1 (since i-l <= i-1 when l >=1). So after processing i, we update the segment tree with i's dp value.
+
+So the segment tree can be initialized with size n, and each position i (0-based) corresponds to dp[i], but in our case, the dp is 1-based (since i ranges from 0 to n). Wait, the segment tree is 0-based, and the indices in the segment tree correspond to the indices of the dp array.
+
+So dp[0] is position 0 in the segment tree, dp[1] is position 1, up to dp[n] which is position n.
+
+So the segment tree must have a size of n+1 (assuming 0-based indices 0..n).
+
+Now, implementing the segment tree.
+
+A standard segment tree for range minimum query can be built as follows:
+
+The segment tree is represented as a list. For each node, it holds the minimum of its range.
+
+The build function isn't necessary here, since we start with all values as infinity, and then perform point updates.
+
+Initially, all positions are infinity. We then perform point updates as we compute dp[i].
+
+So the code for the segment tree can be:
+
+class SegmentTree:
+
+    def __init__(self, size):
+
+        self.n = size
+
+        self.size = 1
+
+        while self.size < self.n:
+
+            self.size <<=1
+
+        self.data = [inf] * (2 * self.size)
+
+    def update(self, pos, val):
+
+        pos += self.size  # assuming pos is 0-based, and the leaves start at self.size.
+
+        if self.data[pos] <= val:
+
+            return
+
+        self.data[pos] = val
+
+        pos >>=1
+
+        while pos >=1:
+
+            new_val = min(self.data[2*pos], self.data[2*pos +1])
+
+            if self.data[pos] == new_val:
+
+                break
+
+            self.data[pos] = new_val
+
+            pos >>=1
+
+    def query_range(self, l, r):
+
+        res = inf
+
+        l += self.size
+
+        r += self.size
+
+        while l <= r:
+
+            if l %2 ==1:
+
+                res = min(res, self.data[l])
+
+                l +=1
+
+            if r %2 ==0:
+
+                res = min(res, self.data[r])
+
+                r -=1
+
+            l >>=1
+
+            r >>=1
+
+        return res
+
+But this is a standard implementation of a segment tree for range min queries.
+
+But in Python, this can be slow for large n (like 1e5). However, given that n is up to 1e5, and each query and update is O(log n), the total time is O(n log n), which should be manageable.
+
+Now, integrating all this into code.
+
+But let's test the sample input 1.
+
+Sample 1:
+
+n=7, s=2, l=2.
+
+a = [1,3,1,2,4,1,2]
+
+left[i] for i=1 to 7:
+
+i=1: left=1.
+
+i=2: left=1. (max 3-1=2 <=2).
+
+i=3: left=1. (3-1=2).
+
+i=4: left=1. (3-1=2).
+
+i=5: elements 1,3,1,2,4. max=4, min=1. difference 3>2. So adjust left. After moving left to 4 (since window [4..5] is 2,4. diff 2).
+
+left[5] =4.
+
+i=6: check the window.
+
+elements from left=4 to 6: 4,1,100 (wait no, sample 1 is 1,3,1,2,4,1,2. So i=6 is 1 (a[6]=1). So the window starts at left=4.
+
+elements 2 (i=4), 4 (i=5), 1 (i=6). Max=4, min=1. difference 3>2. So move left to 5: elements 4,1. max=4, min=1. difference 3>2. Move to 6: elements 1. difference 0. So left[6] =6.
+
+i=6: a=6-1=5, b=6-2=4. So 5>4, invalid. So no valid split.
+
+So dp[6] remains infinity.
+
+i=7: elements from left=6 (a[6]=1) and a[7]=2. window [6..7] is 1,2. difference 1 <=2. So left[7] =6.
+
+a =6-1=5, b=7-2=5. interval [5,5]. Query dp[5]. dp[5] is 2 (assuming previous steps). So dp[7] =2+1=3.
+
+Which matches the sample output.
+
+Thus, the code should work.
+
+Now, let's handle the code.
+
+But in Python, the segment tree may be too slow for n=1e5. So perhaps we need a more efficient approach.
+
+Alternative approach: since the queries are ranges [a, b], and the updates are sequential (processing i from 1 to n), perhaps we can use a deque-based approach for the dynamic programming.
+
+But I'm not sure. Another approach is to use a monotonic queue to track the minimal dp[j] in the required intervals.
+
+But I'm not certain. Let's think.
+
+The dynamic programming recurrence is dp[i] = min{ dp[j] } +1 for j in [left[i]-1, i-l].
+
+But each j represents a position that we can transition from. The problem is that the left[i] can vary, and the intervals can overlap.
+
+But perhaps for each i, the interval [left[i]-1, i-l] is a contiguous range. So for each i, we need the minimal in this range.
+
+We can use a sliding window approach for the dynamic programming, similar to how it's done in some range minimum problems.
+
+But this would require that the intervals [a_i, b_i] are non-decreasing in their starting and ending points. Let's see.
+
+For example, as i increases, the left[i] can increase or decrease. But in general, the left[i] is non-decreasing because the window is sliding to the right. Because when you process i+1, the left[i+1] can be >= left[i], since the window is moving right.
+
+Wait, the left[i] (earliest possible start for a valid window ending at i) is a non-decreasing sequence. Because if the window for i+1 starts at a position less than left[i], then the window [k, i+1] would include [k, i], which for i's window would have left[i] as the earliest. So this can't happen. So left[i+1] >= left[i].
+
+So left[i] is a non-decreasing sequence.
+
+Also, for i increasing, i-l is also increasing.
+
+So the intervals [a_i, b_i] = [left[i]-1, i-l] are ranges that start and end in a non-decreasing manner.
+
+If the intervals are [a_1, b_1], [a_2, b_2], ... [a_n, b_n], where a_i <= a_{i+1} and b_i <= b_{i+1}, then we can use a sliding window technique with a deque to track the minimal dp[j] in the current window.
+
+This is possible if the intervals are moving windows with both ends non-decreasing.
+
+In this case, since left[i] is non-decreasing, a_i = left[i]-1 is also non-decreasing. And b_i = i-l is strictly increasing as i increases.
+
+Thus, for each i, the interval [a_i, b_i] is a window that starts at a_i (which >= a_{i-1}) and ends at b_i (which >= b_{i-1}).
+
+Thus, the ranges are expanding or moving forward in a non-decreasing way.
+
+In this case, we can maintain a deque that keeps track of the indices j in the current window [a_i, b_i], sorted in a way that allows us to quickly find the minimal dp[j].
+
+So for each i, the deque contains indices j in the current window [current_a, current_b], and these j's are ordered such that their dp[j] values are in increasing order. The front of the deque is the index with the minimal dp[j].
+
+This is similar to the sliding window minimum technique.
+
+The steps would be:
+
+- Initialize deque.
+
+- For each i from 1 to n:
+
+    compute a_i and b_i.
+
+    add all j from previous_b +1 to current_b (b_i) to the deque, removing elements from the end that have dp[j] >= current dp[j].
+
+    then, remove elements from the front that are less than a_i.
+
+    the front of the deque is the minimal dp[j] in [a_i, b_i].
+
+    if the deque is not empty, dp[i] = deque[0]'s value +1.
+
+So this approach would be O(n) time.
+
+But this depends on the ranges being non-decreasing. Since left[i] is non-decreasing and i-l is increasing, the a_i and b_i are non-decreasing. So the intervals are moving forward in a way that allows the deque to be maintained efficiently.
+
+Let's test this.
+
+For each i, the interval is [a_i, b_i], where a_i >= a_{i-1}, and b_i >= b_{i-1}.
+
+So when processing i, the new interval's a is >= previous a's, and the new b is >= previous b's. So the new interval may include new j's (from previous b +1 to current b), and may exclude some j's that are now before a_i.
+
+So the deque can be maintained as follows:
+
+- When processing i, we first add all j in the range [previous_b +1, current_b] to the deque. For each j, while the deque is not empty and dp[j] <= the last element in the deque, remove the last element. Then append j to the deque.
+
+- Then, remove elements from the front of the deque that are < a_i.
+
+- The front of the deque is the minimal dp[j] in the current window [a_i, current_b].
+
+This way, each j is added to the deque exactly once and removed once. So the total time is O(n).
+
+If this is possible, then we can replace the segment tree with this deque-based approach, which is O(n) time, much faster.
+
+This would make the code efficient enough for n=1e5.
+
+So how to implement this?
+
+Let's see:
+
+Initialize variables:
+
+prev_a = 0
+
+prev_b = -1
+
+deque = deque()
+
+dp[0] = 0
+
+for i in 1 to n:
+
+    a_i = left[i] -1
+
+    b_i = i - l
+
+    if b_i <0 or a_i > b_i:
+
+        dp[i] = inf
+
+        continue
+
+    # add j from prev_b+1 to b_i
+
+    for j in range(prev_b+1, b_i+1):
+
+        if j <0:
+
+            continue
+
+        while deque and dp[j] <= dp[deque[-1]]:
+
+            deque.pop()
+
+        deque.append(j)
+
+    # update prev_b to b_i
+
+    prev_b = b_i
+
+    # remove elements from deque which are < a_i
+
+    while deque and deque[0] < a_i:
+
+        deque.popleft()
+
+    # if deque is not empty, get the min
+
+    if deque:
+
+        dp[i] = dp[deque[0]] +1
+
+    else:
+
+        dp[i] = inf
+
+So, for each i, we expand the previous_b to current b_i, adding new j's. Then, we remove j's that are before a_i. The deque stores the indices j in [a_i, b_i] with dp[j] in increasing order. The front is the minimal.
+
+But this approach requires that the ranges [a_i, b_i] are non-decreasing in a and b. Which they are.
+
+Let's test this with the first sample.
+
+Sample 1:
+
+n=7, l=2.
+
+For i=1:
+
+left[1]=1. a_i=0, b_i=1-2= -1. So invalid.
+
+dp[1] = inf.
+
+For i=2:
+
+left[2]=1. a_i=0. b_i=2-2=0.
+
+prev_b was -1. So new j's are from 0 to 0.
+
+j=0: dp[0]=0.
+
+Add to deque. deque is [0].
+
+Then, a_i=0. Remove elements <0. None.
+
+So deque[0] is 0. dp[2] =0+1=1.
+
+prev_b becomes 0.
+
+For i=3:
+
+b_i =3-2=1.
+
+prev_b is 0. So new j's are 1.
+
+j=1: dp[1] is inf. So deque remains as [0]. Adding j=1:
+
+Compare dp[1] (inf) <= dp[0] (0)? No. So append 1. deque is [0,1].
+
+Then, a_i = left[3]-1 =1-1=0. So we need j >=0.
+
+Deque is [0,1]. front is 0 >=0. So min is 0. dp[3] =0+1=1.
+
+prev_b becomes 1.
+
+For i=4:
+
+b_i=4-2=2.
+
+new j's are 2.
+
+j=2: dp[2] =1.
+
+Compare with deque's end: 1 (dp[1] is inf). So 1 >1? No. So append 2.
+
+deque becomes [0,1,2].
+
+a_i= left[4]-1=1-1=0.
+
+front is 0 >=0. So min is 0. dp[4]=0+1=1.
+
+For i=5:
+
+left[i]=4. a_i=4-1=3. b_i=5-2=3.
+
+prev_b is 2. new j's are 3.
+
+j=3: dp[3]=1.
+
+Compare to deque elements. deque is [0,1,2]. The last element is 2 with dp[j]=1. 1 <=1, so pop 2. Now deque is [0,1]. Then, compare 3's dp[3] (1) <= dp[1] (inf? No). Wait, no. Wait, deque after previous steps is [0,1,2]. Adding j=3:
+
+Check while deque is not empty and dp[3] (1) <= dp[deque[-1]] (dp[2] is 1). So yes, pop 2.
+
+Now deque becomes [0,1]. Now, compare dp[3] (1) <= dp[1] (inf). No. So append 3. deque becomes [0,1,3].
+
+Then, a_i=3. Remove elements from deque <3. The front is 0, which is <3 → remove. deque becomes [1,3]. Next, 1 <3 → remove. deque becomes [3]. So the front is 3. dp[3] is 1. So dp[5] =1 +1=2.
+
+For i=5: prev_b becomes 3.
+
+For i=6: l=2. b_i=6-2=4. But a_i=left[6]-1=6-1=5. b_i=4. So a_i=5>4: invalid. dp[6]=inf.
+
+For i=7:
+
+left[i]=6. a_i=6-1=5. b_i=7-2=5. So interval [5,5].
+
+prev_b is 4. new j's are 5.
+
+j=5: dp[5]=2. Add to deque. The deque after previous steps is [3]. When adding j=5:
+
+Check deque's end. deque is [3]. dp[3] is 1. dp[5] is 2>1. So append 5. deque becomes [3,5].
+
+a_i=5. Remove elements <5. Deque[0] is 3 → remove. Then deque[0] is 5. So min is dp[5]=2. dp[7] =2+1=3.
+
+Which matches the sample.
+
+Thus, this approach works.
+
+This approach is O(n) time, which is much better for Python.
+
+So the code can be optimized by using this deque-based sliding window for the DP transitions.
+
+So the steps to implement this:
+
+Implement the sliding window to find left[i].
+
+Then, use a deque to track the minimal dp[j] in the interval [a_i, b_i].
+
+Thus, the code outline becomes:
+
+Read n, s, l.
+
+Read array a.
+
+Check if l >n: output -1.
+
+Compute left[i] for each i (1-based).
+
+Initialize dp[0] =0, dp[1..n] =inf.
+
+prev_a =0
+
+prev_b =-1
+
+deque = deque()
+
+for i in 1..n:
+
+    a_i = left[i] -1
+
+    b_i = i - l
+
+    if b_i <0 or a_i > b_i:
+
+        dp[i] = inf
+
+        continue
+
+    # add j from prev_b+1 to b_i
+
+    for j in range(prev_b +1, b_i +1):
+
+        if j <0:
+
+            continue
+
+        # add j to deque, maintaining increasing order of dp[j]
+
+        while deque and dp[j] <= dp[deque[-1]]:
+
+            deque.pop()
+
+        deque.append(j)
+
+    prev_b = b_i
+
+    # remove elements from deque that are < a_i
+
+    while deque and deque[0] < a_i:
+
+        deque.popleft()
+
+    # update dp[i]
+
+    if deque:
+
+        dp[i] = dp[deque[0]] +1
+
+    else:
+
+        dp[i] = inf
+
+So, for each i, we process the j's in the new range [prev_b +1, current b_i], add them to the deque.
+
+Then, remove any j's from the front that are < a_i.
+
+Then, the front of the deque is the minimal dp[j] in [a_i, b_i].
+
+This is O(n) time, because each j is added to the deque once and removed once.
+
+Now, implementing this in Python.
+
+But what about when j exceeds the array? For example, j can be up to n (since dp is up to n). But when i is up to n, b_i =n -l. So j can be up to n -l.
+
+But in code, when i is up to n, and l=1, then j can be up to n-1.
+
+So the code is correct.
+
+Now, let's handle the initial case when l=1.
+
+For example, if i=1, l=1:
+
+b_i =1 -1 =0.
+
+a_i = left[1] -1.
+
+If left[1] is 1, a_i=0. So [0,0]. j=0.
+
+Which is added to the deque. So dp[1] = dp[0]+1=1.
+
+So the code handles that.
+
+Another example: when the entire array can be split into one piece.
+
+For example, n=3, l=3, s=0, array [5,5,5]. Then, left[3] =1. a_i=0, b_i=0. So j=0. dp[3] =0+1=1.
+
+Which is correct.
+
+Now, the code for the sliding window to compute left[i]:
+
+Implementing this with deques.
+
+But in code, since Python uses 0-based indexes for lists, but the problem says the array is 1-based. So perhaps we need to adjust the code.
+
+Wait, no. Let's make the code 0-based.
+
+Wait, the input array is given as a list of numbers, which in Python is 0-based. So perhaps it's easier to process the array as 0-based.
+
+So, for the code:
+
+Read n, s, l.
+
+a = list(map(int, input().split()))
+
+Compute left[i] for each i in 0..n-1.
+
+Then, the code uses 0-based indices.
+
+The left[i] represents the earliest k (0-based) such that the window [k..i] is valid.
+
+Then, the DP transitions are:
+
+for each i in 0..n-1:
+
+    the current piece ends at i. The piece starts at k, where k >= left[i], and i -k +1 >= l.
+
+    So k <= i - l +1 + 0-based? Wait, in 0-based terms, the length is i -k +1.
+
+So for the piece to have length >= l:
+
+i -k +1 >= l → k <= i - l +1.
+
+Thus, for a valid k, it must be in [left[i], i - l +1].
+
+The previous piece ends at k-1. So the DP[i] is min(dp[k-1] +1) for k in [left[i], i - l +1].
+
+But in 0-based terms, the initial dp[ -1 ] is not possible. Wait, no. Let's reindex.
+
+Let's make the dp array 1-based. Wait, no. Let's think again.
+
+Let's reindex the problem to 0-based.
+
+The dp array is 0-based, where dp[i] represents the minimal number of pieces to split the first i+1 elements (since indexes are 0-based).
+
+Wait, maybe this is getting too complicated. Let's adjust the code to use 0-based indices.
+
+Let's reindex everything to 0-based.
+
+For the array a, indices 0..n-1.
+
+Compute left[i] for each i in 0..n-1.
+
+For each i, the valid k (start of the current piece) is in [left[i], i - l +1]. Because the length is i -k +1 >= l → k <= i - l +1.
+
+But i - l +1 can be negative. So for i < l-1 (since i starts at 0), i -l +1 = (i+1) -l. For i+1 < l (i < l-1), this is negative. So no valid k.
+
+So for i < l-1, no possible piece. So dp[i] is inf.
+
+For i >= l-1, i -l +1 >=0.
+
+So for each i in 0..n-1:
+
+if i < l-1:
+
+   a_i = left[i] -1 (but no valid k)
+
+else:
+
+   a_i = left[i]
+
+   b_i = i -l +1
+
+   if a_i > b_i:
+
+       no valid k.
+
+   else:
+
+       query the min dp[j] where j is in [a_i -1, b_i -1 -1] ?
+
+Wait, perhaps I'm getting stuck here. Maybe it's better to process everything in 0-based.
+
+Let's try to rework the code.
+
+Compute left[i] for each i (0-based) as the earliest k such that [k..i] is valid.
+
+Then, for each i, the possible k is in [left[i], i - (l-1)] (since the length is i -k +1 >= l → k <= i - l +1. So i - l +1 is the maximum k. Since in 0-based, the maximum k is i - l +1.
+
+For example, i=5 (0-based, which is 6th element), l=2. i -l +1 =5-2+1=4. So k can be up to 4. So the piece would be from k=4 to i=5 (elements 4 and5, length 2).
+
+So for each i, the valid k's are from left[i] to i -l +1, inclusive.
+
+The previous piece ends at k-1. So the minimal number of pieces is dp[k-1] +1.
+
+So the interval for j =k-1 is [left[i] -1, (i -l +1) -1] = [left[i]-1, i -l].
+
+But j must be >=0.
+
+Thus, for each i, the query interval is [a, b] where a = max(left[i]-1, 0) and b = i-l.
+
+If a > b, then no valid k.
+
+Thus, the code becomes:
+
+for i in 0..n-1:
+
+    if i < l-1:
+
+        continue (since i -l +1 <0, no valid k)
+
+    a = left[i] -1
+
+    b = i - l
+
+    if a > b:
+
+        continue
+
+    a = max(a, 0)
+
+    if a >b:
+
+        continue
+
+    # query the min in [a, b]
+
+    min_val = get_min(a, b)
+
+    if min_val is not inf:
+
+        dp[i] = min_val +1
+
+So, the code is now 0-based.
+
+This complicates the initial approach. Perhaps it's better to proceed with 1-based code.
+
+Alternatively, let's proceed with 0-based indices.
+
+Now, implementing the sliding window to compute left[i]:
+
+In 0-based:
+
+Initialize left =0.
+
+For each i in 0..n-1:
+
+    add a[i] to the deques.
+
+    while the current window [left..i] has max - min >s:
+
+        left +=1
+
+        remove elements from deques that are left of the new left.
+
+    left[i] = left.
+
+But in code:
+
+max_deque and min_deque are maintained.
+
+For each i in 0 to n-1:
+
+    while max_deque and a[i] > max_deque[-1][0]:
+
+        max_deque.pop()
+
+    max_deque.append( (a[i], i) )
+
+    while min_deque and a[i] < min_deque[-1][0]:
+
+        min_deque.pop()
+
+    min_deque.append( (a[i], i) )
+
+    # adjust left to make window valid
+
+    while left <=i:
+
+        current_max = max_deque[0][0] if max_deque else a[i]
+
+        current_min = min_deque[0][0] if min_deque else a[i]
+
+        if current_max - current_min >s:
+
+            left +=1
+
+            # remove elements from deques
+
+            while max_deque and max_deque[0][1] < left:
+
+                max_deque.popleft()
+
+            while min_deque and min_deque[0][1] < left:
+
+                min_deque.popleft()
+
+        else:
+
+            break
+
+    left[i] = left
+
+But this is the same as before, but in 0-based.
+
+Once left[i] is computed, proceed.
+
+Then, for the deque-based DP transitions:
+
+prev_b is initialized to -1.
+
+deque is a deque.
+
+For each i in 0..n-1:
+
+    if i < l-1:
+
+        continue
+
+    a_i = left[i] -1
+
+    b_i = i - l
+
+    if b_i <0:
+
+        continue
+
+    if a_i > b_i:
+
+        continue
+
+    # add j from prev_b+1 to b_i
+
+    for j in range(prev_b +1, b_i +1):
+
+        if j <0:
+
+            continue
+
+        # add to deque
+
+        while deque and dp[j] <= dp[deque[-1]]:
+
+            deque.pop()
+
+        deque.append(j)
+
+    prev_b = b_i
+
+    # remove elements < a_i
+
+    while deque and deque[0] < a_i:
+
+        deque.popleft()
+
+    # update dp[i+1] ?
+
+Wait, no. The DP array represents the number of pieces up to i+1 elements. Wait, no.
+
+Wait, in 0-based terms:
+
+dp[i] represents the minimal number of pieces to split the first i+1 elements.
+
+So for example, dp[0] is the first element. dp[0] is 0 if allowed, but according to the initial code, dp[0] is 0 (assuming no elements). So perhaps the indices are getting mixed up.
+
+Alternatively, perhaps the DP array is 0-based, with dp[i] representing the minimal number of pieces to split the first i+1 elements (from index 0 to i).
+
+But this can complicate things.
+
+Alternatively, let's redefine everything in 0-based indices for the array and 1-based for the DP.
+
+For example, the array has elements 0..n-1.
+
+The DP array is 0-based, where dp[i] is the minimal number of pieces to split the first i elements (0..i-1).
+
+So for example, dp[0] =0 (0 elements).
+
+dp[1] is the minimal pieces for the first element (index 0).
+
+Thus, for i in 0..n:
+
+    dp[i] is the minimal pieces for the first i elements.
+
+Thus, when processing the i-th element (array index i-1), we compute dp[i] based on previous entries.
+
+So in this case, for the current element at array index i-1 (for dp[i]), the valid k's are start indices in the array where the current piece starts at k and ends at i-1.
+
+The length of this piece is (i-1) -k +1 = i -k >= l.
+
+So k <= i-1 - l +1 → k <= i - l.
+
+Thus, for each i (1-based DP), the valid k's are in [left[i-1], i - l].
+
+Where left[i-1] is the earliest start for the window ending at i-1.
+
+Thus, the interval for j in the DP is [left[i-1], i - l].
+
+But j represents the number of elements processed before the current piece. So the previous state is dp[j], and the current piece is j+1 to i-1.
+
+Thus, for the DP[i] = min(dp[j] +1) for j in [left[i-1], i-l-1].
+
+Wait, this is getting complicated.
+
+Maybe the code is better written in 1-based for the array and 1-based for the DP.
+
+In this case, the code would look like:
+
+array indices 1-based: a[1..n].
+
+DP[0] =0 (0 elements).
+
+For i in 1..n:
+
+    the current piece is from k to i (array indices k to i).
+
+    length is i -k +1 >= l → k <= i - l +1.
+
+    the window [k..i] must have max -min <=s.
+
+    left[i] is the earliest k for this window.
+
+    then, for j in [left[i], i -l +1]:
+
+        DP[i] = min(DP[j-1] +1)
+
+Thus, the code uses 1-based indices for the array and DP.
+
+This is perhaps easier to manage.
+
+Thus, the code proceeds as follows:
+
+Read n, s, l.
+
+Read a as 1-based.
+
+Compute left[i] for each i in 1..n.
+
+Then, for the DP:
+
+DP[0] =0.
+
+For i in 1..n:
+
+    a_i = left[i]
+
+    b_i = i -l +1
+
+    if b_i < a_i or b_i <1 or a_i >i:
+
+        DP[i] = inf
+
+        continue
+
+    # the valid j's are from a_i to b_i, where j is the start of the piece.
+
+    # the previous state is j-1.
+
+    # thus, query the min of DP[j-1] for j in [a_i, b_i].
+
+    # which is equivalent to query DP[jj] for jj in [a_i-1, b_i-1].
+
+    a_range = a_i -1
+
+    b_range = b_i -1
+
+    if a_range > b_range:
+
+        continue
+
+    min_val = segment_tree.query(a_range, b_range)
+
+    if min_val != inf:
+
+        DP[i] = min_val +1
+
+    segment_tree.update(i-1, DP[i])
+
+So, the DP[i] is min over jj in [a_i-1, b_i-1] of DP[jj] +1.
+
+But I'm not sure.
+
+But regardless, the deque-based approach can be adapted to this.
+
+But perhaps the code is easier to implement in 1-based array and DP.
+
+But given time constraints, I think the best way to proceed is to implement the deque-based approach in code.
+
+Now, putting it all together.
+
+The code will be:
+
+Read n, s, l.
+
+If l >n: print -1.
+
+Read the array as 0-based.
+
+Compute left[i] for each i in 0..n-1 using the sliding window approach.
+
+Initialize dp = [inf]*(n+1)
+
+dp[0] =0
+
+prev_b =-1
+
+from collections import deque
+
+dq = deque()
+
+for i in range(n):
+
+    # current array index is i.
+
+    # the piece ends at i.
+
+    # the start k must be >= left[i], and <= i - l +1 (0-based)
+
+    # j represents the start of the piece.
+
+    # the previous state is k-1.
+
+    # For the current i (0-based), the length of the piece is i -k +1 >= l.
+
+    # So k <= i - l +1.
+
+    # Thus, the valid k's are in [left[i], i - l +1]
+
+    # The previous state is k-1, which must be >=0.
+
+    # So for the dp[i+1], since the first i+1 elements (0..i).
+
+    # So j ranges from k to i - l +1.
+
+    # The previous state is k-1, which is the number of elements before the piece.
+
+    # So the dp[i+1] = min(dp[k-1] +1) for valid k.
+
+    # The valid k's are in [left[i], i - l +1]
+
+    # So the interval for j =k-1 is [left[i] -1, (i - l +1) -1] = [left[i]-1, i - l]
+
+    # and j >=0.
+
+    if (i +1) < l:
+
+        # the current piece is the first i+1 elements, which must be >=l in length.
+
+        # but i+1 < l → no.
+
+        continue
+
+    a_j = left[i] -1
+
+    b_j = i - l
+
+    if a_j <0:
+
+        a_j =0
+
+    if a_j > b_j:
+
+        continue
+
+    # add all j from prev_b +1 to b_j
+
+    for j in range(prev_b +1, b_j +1):
+
+        if j <0:
+
+            continue
+
+        while dq and dp[j] <= dp[dq[-1]]:
+
+            dq.pop()
+
+        dq.append(j)
+
+    prev_b = b_j
+
+    # remove elements < a_j
+
+    while dq and dq[0] < a_j:
+
+        dq.popleft()
+
+    if dq:
+
+        dp[i+1] = dp[dq[0]] +1
+
+    else:
+
+        dp[i+1] = inf
+
+print(dp[n] if dp[n] != inf else -1)
+
+But this code is in 0-based array and 1-based dp.
+
+Let's test sample input 1.
+
+Sample input:
+
+7 2 2
+
+1 3 1 2 4 1 2
+
+0-based array:
+
+indices 0..6: [1,3,1,2,4,1,2]
+
+left[i] for each i:
+
+i=0: left=0
+
+i=1: left=0
+
+i=2: left=0
+
+i=3: left=0
+
+i=4: left=3 (window [3,4] is 2,4. difference 2)
+
+i=5: left=5 (window [5] is 1)
+
+i=6: left=5 (window [5,6] is 1,2. difference 1)
+
+For each i:
+
+i=0: (i+1) =1 < l=2 → skip.
+
+i=1: (i+1=2 >=2. a_j = left[1]-1=0-1= -1 → a_j=0. b_j=1-2= -1. So invalid.
+
+dp[2] remains inf.
+
+i=2: i+1=3 >=2. a_j= left[2]-1=0-1= -1 → 0. b_j=2-2=0. So interval [0,0].
+
+prev_b was -1. add j=0.
+
+dq becomes [0].
+
+remove elements <0: none.
+
+dp[3] =0+1=1.
+
+i=3: i+1=4 >=2.
+
+a_j=left[3]-1=0-1= -1 →0. b_j=3-2=1.
+
+prev_b is 0. add j=1. dp[1] is inf. dq becomes [0,1].
+
+a_j=0: remove elements <0: none. min is 0. dp[4] =0+1=1.
+
+i=4: i+1=5. a_j=left[4]-1=3-1=2. b_j=4-2=2.
+
+prev_b is1. add j=2. dp[2] is inf. dq becomes [0,1,2].
+
+a_j=2. remove elements <2: 0,1. dq becomes [2]. dp[5] =inf +1 → inf.
+
+But left[i]=3 → a_j=3-1=2. i=4, i-l=4-2=2. So j ranges from 2-1=2? Wait, no.
+
+Wait, for i=4 (array index 4, element 4):
+
+The valid k starts are left[4] =3 (array index 3) to i - l +1 =4-2+1=3 (array index 3).
+
+So k=3.
+
+The piece is from array index 3 to 4 (elements 2,4). difference 2.
+
+So the previous state is k-1 =2 (array index 2). dp[2+1] = dp[3] =1.
+
+Thus, dp[5] =1+1=2.
+
+But according to the code:
+
+a_j =3-1=2. b_j=4-2=2. So interval [2,2].
+
+prev_b was 2 (from i=3, b_j=1).
+
+Wait, prev_b was updated to 2.
+
+So adding j=2.
+
+In code, when i=4:
+
+prev_b is 1 (from i=3's processing). So j ranges from 1+1=2 to 2.
+
+So j=2 is added to the deque.
+
+dp[2] is inf. So when adding j=2, the deque is [0,1,2]. But since dp[2] is inf, it's added to the deque.
+
+Then, a_j=2. Remove elements <2 → deque becomes [2]. dp[2] is inf. So dq is [2], but dp[2] is inf. So dp[5] is inf+1=inf.
+
+Which is incorrect.
+
+So the code is not handling this case correctly.
+
+What's wrong here?
+
+Ah, in this case, the valid j is 2 (k-1 =2, which corresponds to k=3). But j=2 is in the interval [2,2], but dp[2] is inf. So no valid transition.
+
+But according to the sample, this should be valid.
+
+So why is dp[2] inf?
+
+Because for array index 2 (element 1), the piece can be split into [1,3,1], which requires l=2. So the previous state is j=0 (dp[0] +1 =1). So dp[3] =1.
+
+For i=4 (array index 4), the valid k is 3. So j=3-1=2. dp[2] is inf, which is a problem.
+
+Wait, why is dp[2] inf?
+
+dp[3] is 1, which is the split for the first 3 elements. For array index 2, i+1=3, which is processed when i=2.
+
+But in the code, when i=2:
+
+i+1=3 >= l=2.
+
+a_j = left[2]-1 =0-1= -1 →0.
+
+b_j=2-2=0.
+
+So j ranges from 0 to0.
+
+prev_b was -1. So add j=0.
+
+dq becomes [0].
+
+a_j=0. So no removal.
+
+dp[3] =0+1=1.
+
+Yes.
+
+But for j=2, which corresponds to k=3 (array index 3), the previous state is j=2 (dp[j] = dp[2], which is the split for first 3 elements. But j=2 is the third element (i+1=3 → j=2).
+
+dp[2] is 1?
+
+No, dp[i] is the number of pieces for the first i elements. So for i=3, dp[3] is 1.
+
+But j=2 is the previous state for k=3. So dp[j] is dp[2].
+
+Wait, no. For k=3 (array index 3), the previous state is k-1=3-1=2 (array index 2, which is first 3 elements). So dp[2] is the number of pieces for the first 2 elements. But wait, this is getting confused with the indices.
+
+This indicates that the code's indices are incorrect.
+
+The problem is with the DP indices and the way the deque is managed.
+
+Thus, perhaps the code should use 1-based indices for the array and the DP.
+
+This would make things clearer.
+
+So, here's the revised approach:
+
+Array is 1-based.
+
+DP is 1-based. dp[i] represents the minimal number of pieces for the first i elements.
+
+For each i in 1..n:
+
+    k is the start of the current piece. The piece ranges from k to i.
+
+    The length is i -k +1 >= l → k <= i -l +1.
+
+    The window [k..i] must have max - min <=s.
+
+    left[i] is the earliest possible k.
+
+    valid k's are in [left[i], i -l +1].
+
+    j =k-1 (the previous state is the first j elements).
+
+    So j ranges from left[i]-1 to (i -l +1) -1 =i -l.
+
+    Thus, the interval for j is [a, b] = [left[i]-1, i-l].
+
+    If a >b or j <0, invalid.
+
+Thus, the code for the deque-based approach in 1-based indices:
+
+Read n, s, l.
+
+if l >n: output-1.
+
+a = list of numbers (1-based).
+
+compute left[i] for each i in 1..n.
+
+initialize dp = [inf]*(n+1)
+
+dp[0] =0.
+
+prev_b =-1
+
+from collections import deque
+
+dq = deque()
+
+for i in 1..n:
+
+    if i < l:
+
+        # cannot form a piece of length >=l.
+
+        continue
+
+    a_j = left[i] -1
+
+    b_j = i -l
+
+    if a_j <0:
+
+        a_j =0
+
+    if a_j > b_j:
+
+        continue
+
+    # add j from prev_b+1 to b_j
+
+    for j in range(prev_b +1, b_j +1):
+
+        if j <0:
+
+            continue
+
+        while dq and dp[j] <= dp[dq[-1]]:
+
+            dq.pop()
+
+        dq.append(j)
+
+    prev_b = b_j
+
+    # remove elements < a_j
+
+    while dq and dq[0] < a_j:
+
+        dq.popleft()
+
+    if dq:
+
+        dp[i] = dp[dq[0]] +1
+
+    else:
+
+        dp[i] = inf
+
+print(dp[n] if dp[n] != inf else -1)
+
+Now, let's test sample input 1.
+
+Sample input 1:
+
+n=7, s=2, l=2.
+
+a[1..7] = [1,3,1,2,4,1,2].
+
+left[i] for i=1..7:
+
+i=1: left[1]=1.
+
+i=2: left[2]=1.
+
+i=3: left[3]=1.
+
+i=4: left[4]=1.
+
+i=5: left[5]=4.
+
+i=6: left[6]=6.
+
+i=7: left[7]=6.
+
+For i=3 (i=3 >= l=2):
+
+a_j = left[3]-1 =1-1=0.
+
+b_j =3-2=1.
+
+prev_b was -1. add j=0,1.
+
+For j=0: dp[0] =0. added to deque.
+
+j=1: dp[1] is inf. added to deque. deque becomes [0,1].
+
+a_j=0. no elements removed. dp[3] =0+1=1.
+
+For i=5 (i=5 >=2):
+
+a_j =4-1=3.
+
+b_j=5-2=3.
+
+prev_b is 1. add j=2,3.
+
+j=2: dp[2] is inf. added to deque. j=3: dp[3]=1. deque becomes [0,1,2,3]. But during the addition of j=2, since dp[2] is inf, which is >= deque[-1] (dp[1] is inf), so deque becomes [0,1,2].
+
+Adding j=3: dp[3] is 1. 1 <= inf. So we pop 2, then 1, then 0. Then append 3. deque becomes [3].
+
+prev_b is 3.
+
+a_j=3. remove elements <3. deque is [3]. dp[5] =1 +1=2.
+
+For i=7 (i=7 >=2):
+
+a_j=6-1=5.
+
+b_j=7-2=5.
+
+prev_b=3. add j=4,5.
+
+j=4: dp[4] =0+1=1 (from earlier steps? Not sure). Let's see:
+
+When i=4, a_j=1-1=0. b_j=4-2=2. j ranges from 0 to2. j=0,1,2. dp[0] is 0, j=0 is added. deque becomes [0]. So dp[4] =0+1=1.
+
+j=4's dp[4] is 1.
+
+Adding j=4 and 5:
+
+j=4: dp[4]=1. deque is initially empty after processing i=6, but for i=7, j starts from 4.
+
+When adding j=4:
+
+deque is empty. append 4.
+
+When adding j=5:
+
+dp[5]=2. 2 <= dp[4]=1? No. So append 5. deque becomes [4,5].
+
+a_j=5. Remove elements <5. deque becomes empty. So dp[7] is inf.
+
+But according to the sample, it should be 3.
+
+Ah, this indicates a problem.
+
+What's wrong here?
+
+For i=7 (array index7, 1-based), left[i]=6. So a_j=6-1=5. b_j=7-2=5.
+
+So j ranges from5 to5.
+
+prev_b was 5 (from i=6's processing).
+
+So add j=5.
+
+dp[5] is2. append to deque.
+
+deque is [5].
+
+a_j=5: remove elements <5. deque is [5].
+
+So dp[7] =2+1=3.
+
+Thus, the code should handle this.
+
+But according to the code, when processing i=7, j ranges from prev_b+1 (5+1=6) to 5, which is nothing. So no j's are added.
+
+Thus, the code fails to add j=5.
+
+The problem is that prev_b is initially set to -1. Then, for each i, when processing j's, we add from prev_b+1 to b_j.
+
+In the case of i=7, prev_b was set to 5 (from i=6's processing).
+
+b_j=5.
+
+So j ranges from 5+1=6 to5 → no j's are added.
+
+Thus, the code doesn't add j=5.
+
+But j=5 is part of the current interval [5,5].
+
+Thus, the code is incorrect.
+
+This is a critical mistake.
+
+The problem is that prev_b is tracked per i, but for each i, the code processes j's from prev_b+1 to b_j.
+
+But for the current i, the valid j's are in [a_j, b_j], but prev_b is the previous i's b_j.
+
+Thus, when i=7, prev_b is 5 (from i=6), and the current b_j is5.
+
+So j's are from 5+1=6 to5 → no j's added.
+
+But j=5 is part of the current interval.
+
+Thus, the code is not adding j=5 to the deque.
+
+Thus, the deque remains empty, leading to dp[7] =inf.
+
+This is why the code fails for this case.
+
+The mistake is in the way prev_b is tracked. prev_b should be the previous maximum j processed, but in this case, the current i's b_j may be lower than previous ones.
+
+But this contradicts the assumption that the intervals are non-decreasing in a and b.
+
+But left[i] is non-decreasing, and i-l is increasing.
+
+Thus, b_j =i-l is non-decreasing.
+
+Thus, prev_b should be the maximum of all previous b_j's.
+
+But if i increases, then b_j increases.
+
+But in this case, i=7's b_j is5, which is larger than previous i=6's b_j=4.
+
+Thus, j's are added from 5 to5.
+
+But prev_b was5 (from i=6's processing).
+
+Wait, no. For i=7, b_j=5. prev_b is5.
+
+So j ranges from 5+1=6 to5. No j's.
+
+Thus, the code fails to add j=5.
+
+But j=5 is within the current interval [5,5].
+
+Thus, the code is incorrect.
+
+The error is that the code assumes that for each i, the current interval [a_j, b_j] is a superset of the previous intervals, which may not be the case. But according to the logic, since left[i] is non-decreasing and i increases, b_j =i-l is non-decreasing.
+
+Wait, i increases by 1 each iteration. So i-l increases by 1 each iteration. So b_j is non-decreasing.
+
+prev_b starts at-1.
+
+For i=5, b_j=5-2=3.
+
+prev_b is 3.
+
+For i=6, b_j=6-2=4.
+
+prev_b is4.
+
+For i=7, b_j=7-2=5.
+
+prev_b is5.
+
+Thus, for i=7, the j's to add are from 5+1=6 to5 → none.
+
+Thus, j=5 is not added.
+
+But j=5 is part of the current interval.
+
+This indicates that the code is incorrect.
+
+The problem is that the code is not adding j's that are within the current interval but were part of previous intervals.
+
+Thus, the deque-based approach is invalid.
+
+Thus, the correct approach is to use a segment tree.
+
+Thus, the initial approach using a segment tree for range min queries and point updates is the way to go.
+
+But in Python, implementing a segment tree for 1e5 elements may be slow. However, given the problem constraints, it's necessary.
+
+Thus, the code will use the segment tree approach.
+
+Now, the code:
+
+Read n, s, l.
+
+if l >n: output-1.
+
+read a as 1-based.
+
+compute left[i] for each i in 1..n.
+
+initialize dp[0] =0.
+
+for i in 1..n:
+
+    a_j = left[i] -1
+
+    b_j =i -l
+
+    if b_j <0 or a_j >b_j:
+
+        dp[i] = inf
+
+        continue
+
+    a_j = max(a_j, 0)
+
+    if a_j >b_j:
+
+        dp[i] = inf
+
+        continue
+
+    min_val = segment_tree.query(a_j, b_j)
+
+    if min_val != inf:
+
+        dp[i] = min_val +1
+
+    segment_tree.update(i, dp[i])
+
+print(dp[n] if dp[n] != inf else -1)
+
+But the segment tree is 0-based for the dp array.
+
+Thus, for the segment tree, the size is n+1.
+
+Now, the code with the segment tree:
+
+class SegmentTree:
+
+    def __init__(self, size):
+
+        self.n = size
+
+        self.size = 1
+
+        while self.size < self.n:
+
+            self.size <<=1
+
+        self.data = [inf] * (2 * self.size)
+
+    def update(self, pos, val):
+
+        pos += self.size
+
+        if self.data[pos] <= val:
+
+            return
+
+        self.data[pos] = val
+
+        pos >>=1
+
+        while pos >=1:
+
+            new_val = min(self.data[2*pos], self.data[2*pos +1])
+
+            if self.data[pos] == new_val:
+
+                break
+
+            self.data[pos] = new_val
+
+            pos >>=1
+
+    def query(self, l, r):
+
+        res = inf
+
+        l += self.size
+
+        r += self.size
+
+        while l <= r:
+
+            if l %2 ==1:
+
+                res = min(res, self.data[l])
+
+                l +=1
+
+            if r %2 ==0:
+
+                res = min(res, self.data[r])
+
+                r -=1
+
+            l >>=1
+
+            r >>=1
+
+        return res
+
+Then, in the code:
+
+n, s, l = map(int, input().split())
+
+a = list(map(int, input().split()))
+
+if l >n:
+
+    print(-1)
+
+    exit()
+
+a = [0] + a  # 1-based.
+
+n = len(a)-1
+
+left = [0]*(n+1)
+
+max_deque = deque()
+
+min_deque = deque()
+
+current_left =1
+
+for i in range(1, n+1):
+
+    # process a[i]
+
+    # maintain max_deque
+
+    while max_deque and a[i] > max_deque[-1][0]:
+
+        max_deque.pop()
+
+    max_deque.append( (a[i], i) )
+
+    # maintain min_deque
+
+    while min_deque and a[i] < min_deque[-1][0]:
+
+        min_deque.pop()
+
+    min_deque.append( (a[i], i) )
+
+    # adjust current_left
+
+    while True:
+
+        current_max = max_deque[0][0] if max_deque else a[i]
+
+        current_min = min_deque[0][0] if min_deque else a[i]
+
+        if current_max - current_min > s:
+
+            current_left +=1
+
+            # remove elements from deques
+
+            while max_deque and max_deque[0][1] < current_left:
+
+                max_deque.popleft()
+
+            while min_deque and min_deque[0][1] < current_left:
+
+                min_deque.popleft()
+
+        else:
+
+            break
+
+    left[i] = current_left
+
+dp = [inf]*(n+1)
+
+dp[0] =0
+
+st = SegmentTree(n+1)
+
+st.update(0, 0)
+
+for i in range(1, n+1):
+
+    a_j = left[i] -1
+
+    b_j = i - l
+
+    if b_j <0 or a_j >b_j:
+
+        continue
+
+    a_j = max(a_j, 0)
+
+    if a_j >b_j:
+
+        continue
+
+    min_val = st.query(a_j, b_j)
+
+    if min_val != inf:
+
+        dp[i] = min_val +1
+
+        st.update(i, dp[i])
+
+print(dp[n] if dp[n] != inf else -1)
+
+This code should handle the sample correctly.
+
+For the sample input 1:
+
+For i=7, left[7]=6.
+
+a_j=6-1=5.
+
+b_j=7-2=5.
+
+st.query(5,5) → which is dp[5].
+
+dp[5] was updated to 2.
+
+Thus, dp[7]=2+1=3.
+
+Which is correct.
+
+Thus, the code should work.
+</think>
+To solve this problem, we need to split a paper strip with `n` numbers into the minimal number of pieces such that each piece has at least `l` numbers and the difference between the maximum and minimum numbers in each piece is at most `s`.
+
+### Approach
+1. **Sliding Window for Valid Segments**: Use a sliding window technique to determine the earliest start index for each end index such that the segment from the start to the end index has a maximum-minimum difference within `s`.
+2. **Dynamic Programming (DP) with Segment Tree**: Use dynamic programming to keep track of the minimum number of pieces required. A segment tree is used to efficiently query the minimum value in a range, which helps in optimizing the DP transitions.
+
+### Solution Code
+```python
+import sys
+from collections import deque
+
+class SegmentTree:
+    def __init__(self, size):
+        self.n = size
+        self.size = 1
+        while self.size < self.n:
+            self.size <<= 1
+        self.data = [float('inf')] * (2 * self.size)
+    
+    def update(self, pos, val):
+        pos += self.size
+        if self.data[pos] <= val:
+            return
+        self.data[pos] = val
+        pos >>= 1
+        while pos >= 1:
+            new_val = min(self.data[2 * pos], self.data[2 * pos + 1])
+            if self.data[pos] == new_val:
+                break
+            self.data[pos] = new_val
+            pos >>= 1
+    
+    def query(self, l, r):
+        res = float('inf')
+        l += self.size
+        r += self.size
+        while l <= r:
+            if l % 2 == 1:
+                res = min(res, self.data[l])
+                l += 1
+            if r % 2 == 0:
+                res = min(res, self.data[r])
+                r -= 1
+            l >>= 1
+            r >>= 1
+        return res
+
+def main():
+    input = sys.stdin.read().split()
+    ptr = 0
+    n = int(input[ptr])
+    ptr += 1
+    s = int(input[ptr])
+    ptr += 1
+    l = int(input[ptr])
+    ptr += 1
+    a = list(map(int, input[ptr:ptr + n]))
+    ptr += n
+    
+    if l > n:
+        print(-1)
+        return
+    
+    # 1-based indexing
+    a = [0] + a
+    left = [0] * (n + 1)
+    max_deque = deque()
+    min_deque = deque()
+    current_left = 1
+    
+    for i in range(1, n + 1):
+        # Maintain max_deque
+        while max_deque and a[i] > max_deque[-1][0]:
+            max_deque.pop()
+        max_deque.append((a[i], i))
+        # Maintain min_deque
+        while min_deque and a[i] < min_deque[-1][0]:
+            min_deque.pop()
+        min_deque.append((a[i], i))
+        
+        # Adjust current_left to ensure the window is valid
+        while True:
+            current_max = max_deque[0][0] if max_deque else a[i]
+            current_min = min_deque[0][0] if min_deque else a[i]
+            if current_max - current_min > s:
+                current_left += 1
+                # Remove elements out of the new window
+                while max_deque and max_deque[0][1] < current_left:
+                    max_deque.popleft()
+                while min_deque and min_deque[0][1] < current_left:
+                    min_deque.popleft()
+            else:
+                break
+        left[i] = current_left
+    
+    dp = [float('inf')] * (n + 1)
+    dp[0] = 0
+    st = SegmentTree(n + 1)
+    st.update(0, 0)
+    
+    for i in range(1, n + 1):
+        a_j = left[i] - 1
+        b_j = i - l
+        if b_j < 0 or a_j > b_j:
+            continue
+        a_j = max(a_j, 0)
+        if a_j > b_j:
+            continue
+        min_val = st.query(a_j, b_j)
+        if min_val != float('inf'):
+            dp[i] = min_val + 1
+            st.update(i, dp[i])
+    
+    print(dp[n] if dp[n] != float('inf') else -1)
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Sliding Window Technique**: This technique is used to determine the earliest start index for each end index where the difference between the maximum and minimum values in the window is within `s`.
+2. **Segment Tree**: This data structure is used to efficiently query the minimum value in a range, which helps in optimizing the DP transitions. The segment tree is updated with the DP values as they are computed.
+3. **Dynamic Programming**: The DP array `dp[i]` stores the minimum number of pieces needed to split the first `i` elements. The value is computed using the segment tree to query the minimum value of previous valid segments and update the current DP value accordingly.
+
+This approach ensures that we efficiently compute the minimal number of pieces while adhering to the constraints, using a combination of sliding window and segment tree techniques for optimal performance.
+</bot>

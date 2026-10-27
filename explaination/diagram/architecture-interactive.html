@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mini-AGI – interactive architecture</title>
+<style>
+:root{
+  --bg:#0f1218; --panel:#171c26; --panel2:#1d2430; --line:#2b3445; --text:#e6e9ef; --muted:#9aa4b5;
+  --blue:#4c9aff; --orange:#ff9f43; --purple:#b388ff; --green:#3ddc97; --pink:#ff6fae; --yellow:#ffd84d; --red:#ff6b6b;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{padding:18px 24px 6px}
+header h1{margin:0;font-size:22px}
+header p{margin:4px 0 0;color:var(--muted)}
+nav{display:flex;flex-wrap:wrap;gap:6px;padding:12px 24px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5}
+nav button{background:var(--panel);color:var(--text);border:1px solid var(--line);padding:8px 14px;border-radius:8px;cursor:pointer;font-size:14px}
+nav button:hover{border-color:var(--blue)}
+nav button.on{background:var(--blue);color:#06101f;border-color:var(--blue);font-weight:600}
+main{padding:18px 24px 60px;max-width:1320px;margin:0 auto}
+section.tab{display:none}
+section.tab.on{display:block}
+h2{margin:0 0 4px;font-size:19px}
+.lead{color:var(--muted);margin:0 0 14px;max-width:980px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.row{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 360px;min-width:300px}
+button.btn{background:var(--panel2);color:var(--text);border:1px solid var(--line);padding:7px 12px;border-radius:8px;cursor:pointer;font-size:14px}
+button.btn:hover{border-color:var(--blue)}
+button.btn.primary{background:var(--blue);color:#06101f;border-color:var(--blue);font-weight:600}
+select,input[type=text],textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:inherit}
+textarea{width:100%;min-height:80px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px}
+code,.mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px}
+code{background:#0b0e14;border:1px solid var(--line);border-radius:5px;padding:1px 5px}
+.small{font-size:13px;color:var(--muted)}
+.pill{display:inline-block;border-radius:999px;padding:2px 10px;font-size:12px;border:1px solid var(--line);margin:2px 4px 2px 0}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:14px}
+.kv b{color:var(--muted);font-weight:500}
+.legend span{display:inline-flex;align-items:center;margin-right:14px;font-size:13px;color:var(--muted)}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px}
+.hint{background:#14202e;border:1px solid #23415f;border-radius:8px;padding:8px 12px;color:#b9d6f7;font-size:13px;margin:10px 0}
+
+/* overview */
+#ovsvg{width:100%;height:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px}
+#ovsvg .node{cursor:pointer}
+#ovsvg .node rect{stroke-width:1.5;transition:opacity .15s, stroke-width .15s}
+#ovsvg .node:hover rect{stroke-width:3}
+#ovsvg .node text{fill:var(--text);font-size:12.5px;pointer-events:none}
+#ovsvg .node.dim, #ovsvg .edge.dim{opacity:.18}
+#ovsvg .node.sel rect{stroke:#fff;stroke-width:3}
+#ovsvg .panel text{font-size:13px;font-weight:700}
+#ovsvg .edge{stroke:#7f8aa0;stroke-width:1.6;fill:none}
+#ovsvg .edge.hl{stroke:var(--yellow);stroke-width:2.6}
+#ovsvg .elabel{fill:var(--muted);font-size:11px}
+#info{position:fixed;left:0;right:0;bottom:0;max-height:38vh;overflow:auto;border-radius:12px 12px 0 0;border-bottom:none;display:none;z-index:9;box-shadow:0 -6px 24px #000a;padding:14px 24px}
+#info.open{display:block}
+#info h3{margin:0 0 6px}
+#info .why{color:#c8d0df}
+#info ul{margin:6px 0 6px 18px;padding:0}
+
+/* tokenizer */
+.chips{display:flex;flex-wrap:wrap;gap:3px;margin-top:8px}
+.chip{border:1px solid var(--line);border-radius:6px;padding:2px 6px;font-family:ui-monospace,monospace;font-size:12px;background:var(--panel2);text-align:center}
+.chip small{display:block;color:var(--muted);font-size:10px}
+.chip.mk{border-color:var(--pink);background:#3a1a2c}
+.chip.mb{border-color:var(--yellow)}
+
+/* model */
+#haltsvg{width:100%;height:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px}
+.stage{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.stage .st{padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);font-size:13px}
+.stage .st.act{border-color:var(--green);background:#12301f}
+
+/* paging */
+#grid{display:grid;grid-template-columns:repeat(30,1fr);gap:2px;max-width:760px}
+#grid div{aspect-ratio:1;border-radius:2px;background:#222a38;position:relative}
+#grid div.ram{background:#2f5f9e}
+#grid div.vram{background:var(--green)}
+#grid div.new{outline:2px solid var(--yellow);z-index:2}
+#grid div.out{outline:2px solid var(--red);z-index:2}
+#votes{display:flex;align-items:flex-end;gap:2px;height:120px;margin-top:8px}
+#votes div{flex:1;background:#4c9aff;min-width:3px;border-radius:2px 2px 0 0}
+#votes div.cut{background:var(--green)}
+.stat{font-size:22px;font-weight:700}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-top:10px}
+.stats .card{padding:8px 10px}
+.stats .small{margin-top:-2px}
+
+/* training */
+.steps{display:flex;flex-direction:column;gap:6px}
+.steps .s{border:1px solid var(--line);border-radius:10px;padding:8px 12px;background:var(--panel);cursor:pointer}
+.steps .s.act{border-color:var(--orange);background:#2a2014}
+.steps .s .n{display:inline-block;width:24px;height:24px;border-radius:50%;background:var(--panel2);text-align:center;line-height:24px;font-size:12px;margin-right:8px}
+.steps .s.act .n{background:var(--orange);color:#201200}
+.steps .body{display:none;margin-top:6px;color:#c8d0df;font-size:14px}
+.steps .s.act .body{display:block}
+.lane{display:inline-block;padding:4px 10px;border-radius:8px;border:1px solid var(--line);margin:3px;background:var(--panel2);font-size:13px}
+.lane.act{background:var(--orange);color:#201200;border-color:var(--orange);font-weight:600}
+.bar{height:14px;background:var(--panel2);border-radius:7px;overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--orange)}
+
+/* forgetting */
+.fg{display:grid;grid-template-columns:240px 1fr;gap:6px 12px;align-items:center;font-size:13px}
+.fgbar{height:16px;border-radius:4px;position:relative}
+.fgbar.neg{background:var(--green)}
+.fgbar.pos{background:var(--red)}
+
+/* adaptation */
+table{border-collapse:collapse;font-size:13px}
+td,th{border:1px solid var(--line);padding:4px 8px;text-align:left}
+th{background:var(--panel2)}
+
+/* files */
+.tree{font-family:ui-monospace,monospace;font-size:13px;line-height:1.7}
+.tree .f{cursor:pointer;padding:0 4px;border-radius:4px}
+.tree .f:hover{background:var(--panel2)}
+.tree .f.on{background:var(--blue);color:#06101f}
+pre.cmd{background:#0b0e14;border:1px solid var(--line);border-radius:8px;padding:10px 12px;overflow:auto;font-size:12.5px;margin:6px 0}
+.copy{float:right;font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>mini-AGI – interactive architecture</h1>
+  <p>Click, slide and press buttons. Numbers come from <code>config.yaml</code>, the code and the README (commit <code>60f7ae3</code>). Demos marked <b>illustrative</b> use made-up values to show the idea.</p>
+</header>
+<nav id="nav"></nav>
+<main>
+
+<!-- ============ 1. OVERVIEW ============ -->
+<section class="tab" id="t-overview">
+  <h2>1 · Whole system</h2>
+  <p class="lead">Five areas: data → training → model → expert pool (disk / RAM / GPU) → serving. <b>Click any box</b> to read what it does, why it exists and where the code is. Use the buttons to light up one path.</p>
+  <div style="margin-bottom:10px" id="pathbtns"></div>
+  <svg id="ovsvg" viewBox="0 0 1260 790"></svg>
+  <div class="small" style="margin-top:6px">The explanation opens at the bottom of the screen when you click a box.</div>
+  <div id="info" class="card"><button class="btn" id="infoclose" style="float:right">✕ close</button><div id="infobody"></div></div>
+</section>
+
+<!-- ============ 2. TOKENS ============ -->
+<section class="tab" id="t-tokens">
+  <h2>2 · Text → numbers (no tokenizer)</h2>
+  <p class="lead">The vocabulary has <b>265</b> characters: the 256 byte values plus 9 markers. Type text. See what the model really reads. Accented letters and emoji use 2–4 bytes. Markers such as <code>&lt;user&gt;</code> use <b>one</b> character.</p>
+  <div class="card">
+    <textarea id="tokin" spellcheck="false">&lt;user&gt;
+What is 17 + 25? Café ☕
+&lt;/user&gt;
+&lt;bot&gt;
+42&lt;/bot&gt;</textarea>
+    <div class="small" style="margin-top:6px">Try: <button class="btn" data-ex="chess">chess</button> <button class="btn" data-ex="think">think</button> <button class="btn" data-ex="emoji">emoji</button></div>
+    <div class="stats" id="tokstats"></div>
+    <div class="chips" id="chips"></div>
+  </div>
+  <div class="hint">Why bytes? The model can read <i>any</i> file. There is no unknown character and no tokenizer to train. The price: long sequences. A 4,096-character window is only about 4 KB of text.</div>
+  <div class="card"><b>Markers (ids 256–264)</b>
+    <div id="mklist" style="margin-top:6px"></div>
+  </div>
+</section>
+
+<!-- ============ 3. MODEL ============ -->
+<section class="tab" id="t-model">
+  <h2>3 · One character through the model</h2>
+  <p class="lead">Each character passes through 2 prelude blocks once. Then <b>one</b> block is used again and again (a <i>row</i>, up to 24). After every row a halting head says "stop now?". Easy characters stop early. Hard characters think longer.</p>
+  <div class="card">
+    <div class="stage" id="stagebar"></div>
+    <div class="row" style="align-items:center">
+      <label>Character difficulty
+        <select id="diff"><option value="4">easy (the 'e' in "th_e")</option><option value="10" selected>medium (a normal letter)</option><option value="18">hard (a digit in a chess move)</option></select></label>
+      <button class="btn primary" id="runrow">▶ Run rows</button>
+      <button class="btn" id="resetrow">Reset</button>
+      <button class="btn" id="samp">Sample a training depth</button>
+      <span class="small" id="sampout"></span>
+    </div>
+    <svg id="haltsvg" viewBox="0 0 900 300" style="margin-top:10px"></svg>
+    <div class="stats" id="haltstats"></div>
+    <div class="hint"><b>Illustrative:</b> the stop probability is λ<sub>n</sub> = sigmoid(0.9·(n − μ)). The real model learns λ with a head on the state. The rules are real: P(stop at row n) = λ<sub>n</sub> · Π(1 − λ<sub>k</sub>); row 24 is forced to stop; inference stops when the sum reaches <b>0.9</b>; training samples a depth of <code>Poisson(12.8)+1</code> rows (maximum 24).</div>
+  </div>
+  <div class="row" style="margin-top:14px">
+    <div class="col card"><h3 style="margin-top:0">What happens inside a row</h3>
+      <ol>
+        <li>The adapter joins the state <code>h</code> and the text encoding <code>x</code>: <code>Linear([h ‖ x])</code>. It starts as <code>[I | I]</code>, so the text is added again every row.</li>
+        <li>Attention reads earlier characters (RoPE positions, KV cache).</li>
+        <li>The router scores all experts. The character takes the <b>top 8</b> of the <b>32</b> admitted ones.</li>
+        <li>The outputs are mixed and added back. The result is the new <code>h</code>.</li>
+        <li>Heads compute next-character logits and the stop probability λ.</li>
+      </ol></div>
+    <div class="col card"><h3 style="margin-top:0">Frozen characters</h3>
+      <p>After a character stops it is <b>frozen</b> (<code>halt_freeze: true</code>). Its state stops changing and it asks for no more experts. Later characters still read its final keys and values in deeper rows. This is the same in training and in writing.</p>
+      <p class="small">Parameter count: one expert = 3×512×2048 = 3,145,728. 397 experts ≈ 1,248.9 M. Core 8.27 M. Routers 0.20 M. Total ≈ <b>1,257 M</b>. On the GPU: 32 experts ≈ 100.7 M.</p></div>
+  </div>
+</section>
+
+<!-- ============ 4. PAGING ============ -->
+<section class="tab" id="t-paging">
+  <h2>4 · Experts and paging – "the text chooses"</h2>
+  <p class="lead">The pool has 397 experts. Only 32 fit in GPU slots. Every character votes for its 8 favourite experts. The 32 experts with the most votes are admitted. This simulator shows how few loads that needs.</p>
+  <div class="card">
+    <div class="row" style="align-items:center">
+      <label>Topic of the text <select id="topic"></select></label>
+      <button class="btn primary" id="readwin">1 · Feed a new text</button>
+      <button class="btn" id="writemore">2 · Continue writing (+20 characters)</button>
+      <button class="btn" id="writelong">+200 characters</button>
+      <button class="btn" id="resetpool">Reset</button>
+    </div>
+    <div class="small" style="margin:8px 0" id="pagingmsg">Press “Feed a new text”. Then switch the topic and press “Continue writing” to see the vote slowly shift.</div>
+    <div class="legend" style="margin:6px 0"><span><i style="background:var(--green)"></i>GPU slot (32)</span><span><i style="background:#2f5f9e"></i>RAM cache (96)</span><span><i style="background:#222a38"></i>disk only</span><span><i style="background:transparent;outline:2px solid var(--yellow)"></i>just loaded</span><span><i style="background:transparent;outline:2px solid var(--red)"></i>just left the GPU</span></div>
+    <div id="grid"></div>
+    <div class="small" style="margin-top:10px">Votes for the top 48 experts (green = admitted, the cut is after rank 32):</div>
+    <div id="votes"></div>
+    <div class="stats" id="pstats"></div>
+    <div class="hint"><b>Illustrative:</b> each topic has "home" experts and the pool has "shared" experts. Real routers learn this by themselves. The real rules are: rank all experts, take the top 8 per character, add the votes since position 0, admit the 32 most-voted, empty slot first then longest-ago admitted, LRU RAM cache of 96, and write back only experts that an optimizer step changed. The README measured an average of about <b>2.4 loads per training step</b> in 15 minutes of real training.</div>
+  </div>
+</section>
+
+<!-- ============ 5. TRAINING ============ -->
+<section class="tab" id="t-training">
+  <h2>5 · Training loop</h2>
+  <p class="lead">Training and reading are the same. The loop never ends. Press <b>Next</b> to go through one step, or click a step.</p>
+  <div class="row">
+    <div class="col">
+      <div style="margin-bottom:8px"><button class="btn" id="prevstep">◀ Prev</button> <button class="btn primary" id="nextstep">Next ▶</button> <button class="btn" id="autostep">Auto-play</button></div>
+      <div class="steps" id="steps"></div>
+    </div>
+    <div class="col">
+      <div class="card">
+        <h3 style="margin-top:0">Lane scheduler (round-robin)</h3>
+        <p class="small">Every subject gets the same reading time. A visit reads 32,768 characters = 16 chunks of 2,048, then the next lane starts. Click to read 1 chunk.</p>
+        <div id="lanes"></div>
+        <div style="margin:10px 0"><button class="btn primary" id="chunk">Read 1 chunk (+2,048 chars)</button> <button class="btn" id="chunk16">Read 16 chunks</button> <button class="btn" id="resetlane">Reset</button></div>
+        <div class="kv" id="lanestats"></div>
+        <div id="lanebars" style="margin-top:8px"></div>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <h3 style="margin-top:0">Loss (one line)</h3>
+        <p class="mono">loss = Σ<sub>rows</sub> p<sub>row</sub>·CE<sub>row</sub> + 0.01·KL(p ‖ geometric prior) + 0.01·router aux + balance</p>
+        <p class="small">Two parameter groups: <b>trunk</b> (embedding, attention, norms, adapter, halting head) learns at <b>0.1×</b>. The <b>pool</b> (experts, gates, routers) learns at 1×. Base rate 3e-4 × plasticity scale. AdamW β=(0.9, 0.95), weight decay 0.1, clip 1.0, bf16.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 6. LEARNING ============ -->
+<section class="tab" id="t-learning">
+  <h2>6 · Not forgetting, and the learning-rate controller</h2>
+  <p class="lead">The author's test: read 1,048,576 characters of a new subject (PG19 novels) and nothing else. How much worse does the model get on the 8 subjects it knew? <b>Real numbers from the README.</b></p>
+  <div class="card">
+    <div class="fg" id="fg"></div>
+    <div class="small" style="margin-top:8px">Green = loss went down (good), red = loss went up on old subjects (forgetting). Scale: 1 bar unit = 0.1 nats. Only 44 of 174 experts got any gradient.</div>
+    <div class="hint">The pool is not what protects old knowledge. The <b>slow trunk learning rate (0.1×)</b> is. The trunk is used by every character and carries about 98 % of the squared gradient norm.</div>
+  </div>
+  <div class="row" style="margin-top:14px">
+    <div class="col card">
+      <h3 style="margin-top:0">Learning-rate controller (<code>plasticity.py</code>)</h3>
+      <p class="small">There is no planned end of training, so no cosine schedule. After each held-out test the controller nudges the rate:</p>
+      <ul>
+        <li>Two weighted line fits of held-out loss: slow (λ 0.97) and fast (λ 0.85).</li>
+        <li>Evidence <code>t = min(t_slow, 45·e_slow, 45·e_fast)</code>.</li>
+        <li>No evidence → slow decay. Clear improvement → hold or rise a little. Worse → faster decay.</li>
+        <li>Range: 0.01 … 1.0 × the base rate.</li>
+        <li>A jump that stays → rate × 2 and a reset ("new material").</li>
+        <li>A reading &gt; 5σ from the fit is held back for one check.</li>
+      </ul>
+      <p class="small">The author's snapshot: scale ≈ <b>0.0515</b> → expert lr ≈ 1.5e-5.</p>
+    </div>
+    <div class="col card">
+      <h3 style="margin-top:0">Growth and pruning</h3>
+      <p class="small">Every 2,000,000 characters (only with <code>--save</code>), one expert is added when <b>all five brakes</b> agree:</p>
+      <div id="brakes"></div>
+      <p class="small" style="margin-top:8px">A new expert takes each of its 2,048 hidden units from one of 16 parents. Its gate starts at 0.001. An expert not admitted for 100 M characters is deleted.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 7. SERVING ============ -->
+<section class="tab" id="t-serving">
+  <h2>7 · Writing a reply, and the anti-loop trace</h2>
+  <p class="lead">Greedy decoding loves loops. <code>serve.py</code> lowers the score of characters used recently. The penalty is <code>2.5 · Σ 0.88<sup>age</sup></code>. No random numbers are used.</p>
+  <div class="row">
+    <div class="col card">
+      <h3 style="margin-top:0">Reply path</h3>
+      <ol>
+        <li>Browser → <code>POST /api/chat</code>.</li>
+        <li><code>build_prompt</code>: <code>&lt;user&gt;…&lt;/user&gt;&lt;bot&gt;</code>, keep the end, ≤ 90 % of context.</li>
+        <li>Prefill in 512-character chunks (fills the KV cache and the expert vote).</li>
+        <li>One forward pass per new character.</li>
+        <li><code>pick_next</code>: argmax of (logits − trace).</li>
+        <li>Stream each character (SSE). Stop at <code>&lt;/bot&gt;</code> or 400 characters.</li>
+        <li>With <code>--no-learn</code> nothing is written. Without it, <code>LiveLearner</code> trains and saves every 8 steps.</li>
+      </ol>
+      <p class="small">README, greedy alone: 73.5 % repeated 8-grams. With a repetition penalty: 59.0 %. With adaptation: <b>11.6 %</b>.</p>
+    </div>
+    <div class="col card">
+      <h3 style="margin-top:0">Try the trace <span class="small">(approximate: age 1 = last character)</span></h3>
+      <textarea id="adin" spellcheck="false">the the the the the the</textarea>
+      <div class="small" style="margin:6px 0">Strength 2.5, decay 0.88, window 64.</div>
+      <div id="adout"></div>
+      <div class="small" style="margin-top:6px">A character that repeats forever tends to a penalty of 2.5 / (1 − 0.88) ≈ <b>20.8</b> logits. No loop survives that.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 8. FILES ============ -->
+<section class="tab" id="t-files">
+  <h2>8 · Files and commands</h2>
+  <div class="row">
+    <div class="col card">
+      <h3 style="margin-top:0">Click a file or folder</h3>
+      <div class="tree" id="tree"></div>
+    </div>
+    <div class="col card" id="fileinfo"><p class="small">Details appear here.</p></div>
+  </div>
+  <h3 style="margin-top:18px">Command cheat sheet</h3>
+  <div id="cmds"></div>
+</section>
+
+</main>
+
+<script>
+/* ---------------- helpers ---------------- */
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+function el(t,a={},h=''){const e=document.createElement(t);for(const k in a)e.setAttribute(k,a[k]);if(h)e.innerHTML=h;return e}
+function esc(s){return s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
+function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+
+/* ---------------- tabs ---------------- */
+const TABS=[["overview","1 Whole system"],["tokens","2 Text → numbers"],["model","3 Model"],["paging","4 Experts & paging"],["training","5 Training"],["learning","6 Learning & growth"],["serving","7 Serving"],["files","8 Files & commands"]];
+const nav=$('#nav');
+TABS.forEach(([id,name])=>{const b=el('button',{'data-t':id},name);b.onclick=()=>show(id);nav.appendChild(b)});
+function show(id){$$('section.tab').forEach(s=>s.classList.toggle('on',s.id==='t-'+id));$$('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===id));location.hash=id;window.scrollTo(0,0)}
+
+/* ---------------- 1. overview diagram ---------------- */
+const COL={A:'#4c9aff',B:'#ff9f43',C:'#b388ff',D:'#3ddc97',E:'#ff6fae',W:'#ffd84d'};
+const PANELS=[
+ {k:'A',x:20,y:20,w:380,h:262,t:'1 · DATA (corpora/)'},
+ {k:'B',x:420,y:20,w:400,h:262,t:'2 · TRAINING (train.py read)'},
+ {k:'W',x:840,y:20,w:380,h:262,t:'3 · weights/ (the model on disk)'},
+ {k:'C',x:20,y:320,w:560,h:285,t:'4 · MODEL (minagi/recur.py)'},
+ {k:'D',x:600,y:320,w:620,h:285,t:'5 · EXPERT POOL (minagi/pool.py, paged.py)'},
+ {k:'E',x:20,y:630,w:1200,h:145,t:'6 · SERVING (serve.py)'}];
+const W=160,H=52;
+const NODES=[
+ // data
+ {id:'A1',k:'A',x:35,y:62,w:170,t:'Sources',s:'HF · Lichess · local .py',
+  info:{what:'Where the training text comes from.',why:'Eight different subjects so the model keeps all skills.',body:['wikipedia, stories (TinyStories), chat (OpenHermes), reasoning (OpenThoughts) are downloaded from Hugging Face.','chess games stream from Lichess.','code is built from the Python files already on your computer.','arithmetic and self-knowledge are generated.'],file:'corpora/fetch.py, reasoning.py, code.py, chess_games.py'}},
+ {id:'A2',k:'A',x:215,y:62,w:170,t:'Corpus builder',s:'python -m corpora all',
+  info:{what:'Runs each lane in its own subprocess and writes text shards of about 200,000 characters.',why:'One lane can fail without stopping the others. A lane that has files is skipped.',body:['Generated lanes write packed .bin files first. expand.py turns them back into text through the tokenizer, so markers survive.','Some records are held back as data/val (held-out text).','Known fault: the self-knowledge lane writes into data/train/chat, so it ends empty.'],file:'corpora/build.py, expand.py'}},
+ {id:'A3',k:'A',x:35,y:170,w:170,t:'8 lanes of text',s:'data/train · data/val',
+  info:{what:'One folder per subject. Many small files.',why:'Training opens a random file at a random offset. Many small files give natural random access.',body:['In our small test: chat 2,215 files (425 MB), reasoning 147 MB, chess 122 MB, code 104 MB, wikipedia 56 MB.','Each lane gets an EQUAL share of reading time, however big it is.'],file:'data/train/<lane>/, data/val/<lane>/'}},
+ {id:'A4',k:'A',x:215,y:170,w:170,t:'Tokenizer',s:'256 bytes + 9 markers',
+  info:{what:'Bytes in, bytes out. Nine markers each count as one character.',why:'No tokenizer to train, and the model can read any file. See tab 2.',body:['ids 0–255 = bytes. ids 256–264 = <think> </think> <user> </user> <bot> </bot> <g> </g> <|endoftext|>.','ingest.collect skips binary files by sampling content.'],file:'minagi/tokenizer.py, ingest.py'}},
+ // training
+ {id:'B1',k:'B',x:435,y:62,w:160,t:'Lane scheduler',s:'round-robin, 32,768 chars',
+  info:{what:'Picks the next subject, a random file and a random offset.',why:'Interleaving subjects is the main protection against forgetting.',body:['A visit = 16 chunks of 2,048 characters.','The random generator is seeded with the number of characters read, so a restart never replays old text.'],file:'train.py (cmd_read, lanes)'}},
+ {id:'B2',k:'B',x:435,y:140,w:160,t:'FileReader',s:'window ≤ 4,096 chars',
+  info:{what:'Builds the training window: the last up-to-4,096 characters ending at the cursor.',why:'The whole window is run forward each step, with no cache, so the gradient reaches all of it.',body:['Input x = window, target y = the same window shifted by one.','Each step brings 2,048 new characters and re-uses the earlier 2,048 (cheap rehearsal).','The window grows 1 character per 100,000 read, while it still helps (up to 4,096).'],file:'minagi/stream.py (FileReader.step)'}},
+ {id:'B3',k:'B',x:625,y:140,w:160,t:'Loss',s:'Σ p·CE + KL + aux',
+  info:{what:'PonderNet expected cross-entropy over rows + 0.01·KL to a geometric prior + 0.01·router aux + balance term.',why:'The stopping probabilities give gradient to the halting head. The KL keeps the mean depth near 13.9 rows.',body:['balance = 3.5e-5, share over the last ~1000 training forwards. Only trains router rows.'],file:'minagi/recur.py, pool.py'}},
+ {id:'B4',k:'B',x:625,y:216-0,w:160,t:'Backward + AdamW',s:'clip 1.0 · trunk 0.1×',
+  info:{what:'Computes gradients, clips the norm to 1.0 and updates parameters.',why:'Trunk at 0.1× is the anti-forgetting mechanism. Adam moments follow the expert, not the slot.',body:['A pre-step hook copies each resident expert\'s own moments into its slot.','Fused AdamW on CUDA. Weights stay fp32. Compute is bf16.'],file:'train.py, minagi/paged.py (_own_moments)'}},
+ {id:'B5',k:'B',x:435,y:216,w:160,t:'Plasticity',s:'learning-rate scale',
+  info:{what:'After each held-out test it nudges the learning-rate scale.',why:'No end date means no cosine schedule. Slow decay unless held-out is clearly improving.',body:['Two weighted line fits (slow 0.97, fast 0.85).','Range 0.01 … 1.0. Snapshot value ≈ 0.0515.'],file:'minagi/plasticity.py'}},
+ // weights
+ {id:'W1',k:'W',x:855,y:62,w:350,t:'manifest · core · routers · optim',s:'the small files',
+  info:{what:'manifest.json (config, step, counters, plasticity), core.npz (embedding, attention, norms, adapter, halting head), routers.npz, optim.npz.',why:'Together with experts/ this folder IS the model.',body:['Weights are fp32. Adam moments are stored as bf16 bits.'],file:'minagi/store.py'}},
+ {id:'W2',k:'W',x:855,y:140,w:350,t:'experts/eNNNNN.npz  × 397',s:'3.15 M parameters · ≈ 25 MB each',
+  info:{what:'One file per expert: w1, w3, w2 + Adam moments. Named by a stable uid.',why:'Pruning never renames files.',body:['The snapshot has 397 files, 9.8 GiB in total.','Growth adds a file. Pruning deletes a file.'],file:'weights/experts/'}},
+ {id:'W3',k:'W',x:855,y:216,w:350,t:'Checkpoint (atomic)',s:'every 5 min · .tmp → rename',
+  info:{what:'Every file is written as .tmp and then renamed.',why:'A crash cannot leave a half-written file. Ctrl-C finishes the chunk, saves and exits.',body:['Resume reads manifest.json and continues from the same step.'],file:'minagi/store.py (save)'}},
+ // model
+ {id:'C1',k:'C',x:40,y:362,t:'Embedding',s:'265 → 512 (tied head)',
+  info:{what:'Turns a character id into 512 numbers. The same table scores the next character at the end.',why:'Tied embeddings save parameters.',body:[],file:'minagi/recur.py'}},
+ {id:'C2',k:'C',x:220,y:362,t:'Prelude × 2',s:'attention + dense SwiGLU',
+  info:{what:'Two ordinary transformer blocks, run once per character.',why:'They build x, "what the text says".',body:['8 heads × 64, RoPE positions (no learned positions, so context can grow), RMSNorm, SwiGLU with hidden size 1408.'],file:'minagi/model.py'}},
+ {id:'C3',k:'C',x:400,y:362,t:'Adapter',s:'Linear [h‖x], init [I|I]',
+  info:{what:'Joins the latent state h with x before every row.',why:'The text is added again every row, so the loop cannot drift away from what is being read. h starts at 0 and is never decoded between rows.',body:[],file:'minagi/recur.py'}},
+ {id:'C4',k:'C',x:400,y:440,t:'Recurrent block',s:'attention + MoE · ≤ 24',
+  info:{what:'ONE block, applied again and again with the same weights. One application = one row.',why:'Depth without storing many sets of weights: 3 distinct blocks, up to 26 applications.',body:['Attention uses a KV cache of earlier characters.','The feed-forward part is a mixture of experts: top 8 of the 32 admitted.'],file:'minagi/recur.py, pool.py'}},
+ {id:'C5',k:'C',x:220,y:440,t:'Halting head',s:'λ = P(stop now)',
+  info:{what:'Gives the probability to stop after each row.',why:'Training: expected loss under the stopping distribution. Inference: stop when the cumulative mass reaches 0.9.',body:['halt_prior 0.072 → mean ≈ 13.9 rows. ponder_beta 0.01.','Stopped characters are frozen (halt_freeze).'],file:'minagi/recur.py'}},
+ {id:'C6',k:'C',x:400,y:520,t:'Output head',s:'265 logits, halting-weighted',
+  info:{what:'Next-character scores, weighted over rows by the halting distribution.',why:'The same weights are used in training and writing.',body:[],file:'minagi/recur.py'}},
+ // pool
+ {id:'D1',k:'D',x:620,y:440,t:'Router + vote',s:'1 row per expert',
+  info:{what:'Every character scores ALL experts (also those on disk) and asks for its top 8.',why:'The text chooses: requests are added over the text since position 0.',body:['Admit the 32 most-voted. If a request is not admitted the character uses its best admitted expert.','select_temperature 0 = deterministic.'],file:'minagi/paged.py (admit)'}},
+ {id:'D2',k:'D',x:800,y:440,t:'GPU slots × 32',s:'w1, w3, w2 [32,…]',
+  info:{what:'The 32 experts that this forward pass may use. About 100.7 M parameters.',why:'Training needs weights, gradients and Adam moments on the card until the step ends.',body:['An expert already in a slot stays there. Newcomers take an empty slot first, then the longest-ago admitted.'],file:'minagi/paged.py'}},
+ {id:'D3',k:'D',x:980,y:440,t:'RAM cache × 96',s:'LRU',
+  info:{what:'Recently used experts in computer memory.',why:'Loading from RAM is much faster than from disk. Hit rate in our test: 0.99.',body:[],file:'minagi/paged.py (ram_cache)'}},
+ {id:'D4',k:'D',x:980,y:520,t:'Disk × 397',s:'eNNNNN.npz files',
+  info:{what:'All experts, always safe.',why:'The model can have 1.25 B parameters while only about 100 M must be on the GPU.',body:['Only experts that an optimizer step changed are written back.'],file:'weights/experts/'}},
+ {id:'D5',k:'D',x:800,y:520,t:'Grow / Prune',s:'every 2 M characters',
+  info:{what:'AutoGrow adds one expert if five brakes agree. Pruning deletes experts that are never admitted for 100 M characters.',why:'The pool grows with the data and disk space. "Dead means unaddressed".',body:['See tab 6.'],file:'minagi/pool.py (AutoGrow), paged.py (prune)'}},
+ {id:'D6',k:'D',x:620,y:520,t:'Moments follow',s:'expert, not slot',
+  info:{what:'Before each optimizer step, each resident expert\'s own Adam moments are copied into its slot.',why:'Otherwise a newcomer would be pushed by the previous occupant\'s momentum.',body:[],file:'minagi/paged.py'}},
+ // serving
+ {id:'E1',k:'E',x:35,y:672,w:170,t:'Browser chat',s:'Flask page',info:{what:'A small chat page.',why:'Only one chat runs at a time (a global lock) because the KV cache is shared.',body:['Default port 8080 in the code; we used 8765 because 8080 was busy.'],file:'serve.py'}},
+ {id:'E2',k:'E',x:235,y:672,w:170,t:'/api/chat (SSE)',s:'also /api/state',info:{what:'POST with the messages. Streams characters back as events.',why:'You see the reply grow character by character, plus "swap" events when experts move.',body:[],file:'serve.py'}},
+ {id:'E3',k:'E',x:435,y:672,w:170,t:'build_prompt',s:'<user>…</user><bot>',info:{what:'Wraps the conversation. Keeps the newest turns within 90 % of the context.',why:'The end matters most: the open <bot> asks for the reply.',body:[],file:'serve.py'}},
+ {id:'E4',k:'E',x:635,y:672,w:170,t:'Prefill + generate',s:'512-char chunks, 1 fwd / char',info:{what:'Reads the prompt into the KV cache, then does one forward pass per new character.',why:'Each character adds its requests to the expert vote, so the card changes only when the vote changes.',body:['If the window fills, the newest half is re-read from position 0.'],file:'minagi/stream.py (stream), recur.py (generate)'}},
+ {id:'E5',k:'E',x:835,y:672,w:170,t:'pick_next',s:'argmax − adaptation trace',info:{what:'Greedy pick after subtracting 2.5·Σ0.88^age for recently used characters.',why:'Stops loops without random numbers.',body:['See tab 7.'],file:'minagi/decode.py'}},
+ {id:'E6',k:'E',x:1035,y:672,w:170,t:'LiveLearner',s:'off with --no-learn',info:{what:'Trains on the chat itself, one step per chunk, and saves every 8 steps.',why:'The model keeps learning while you talk. This CHANGES weights/ on disk.',body:['Chat is a denser diet than documents; the author says the cost is not measured.'],file:'minagi/live.py'}}
+];
+const EDGES=[
+ ['A1','A2'],['A2','A3',{lbl:'text'}],['A3','A4'],
+ ['A4','B1',{pts:[[385,196],[410,196],[410,88],[435,88]],lbl:'text'}],
+ ['B1','B2'],['B2','B3',{pts:[[435,166],[410,166],[410,300],[120,300],[120,362]],lbl:'window → forward'}],
+ ['B3','B4'],['B4','B5',{both:1,lbl:'lr scale'}],
+ ['B4','W3',{pts:[[785,242],[855,242]],lbl:'update + save'}],
+ ['W3','W2'],['W2','W1'],
+ ['C1','C2'],['C2','C3'],['C3','C4'],['C4','C5'],
+ ['C5','C3',{lbl:'no stop: next row',pts:[[300,440],[300,420],[400,395]]}],
+ ['C4','C6'],
+ ['C6','B3',{pts:[[560,546],[610,546],[610,166],[625,166]],lbl:'logits → loss'}],
+ ['C4','D1',{both:1,pts:[[560,466],[620,466]],lbl:'top-8'}],
+ ['D1','D2',{lbl:'admit 32'}],['D3','D2',{pts:[[980,466],[960,466]]}],['D4','D3',{pts:[[1060,520],[1060,492]]}],
+ ['D5','D4'],['D6','D2',{pts:[[780,546],[790,546],[790,480],[800,480]]}],
+ ['W2','D4',{both:1,pts:[[1190,192],[1190,546],[1140,546]]}],
+ ['E1','E2'],['E2','E3'],['E3','E4'],['E4','E5'],['E5','E6'],
+ ['E4','C6',{pts:[[720,672],[720,640],[560,640],[560,572]],lbl:'forward pass'}],
+ ['E6','W1',{pts:[[1205,698],[1232,698],[1232,88],[1205,88]],lbl:'saves'}]
+];
+const PATHS={
+ all:{label:'Show all',n:null},
+ data:{label:'Data path',n:['A1','A2','A3','A4']},
+ train:{label:'Training path',n:['A3','A4','B1','B2','C1','C2','C3','C4','C5','C6','B3','B4','B5','W3','W1','W2','D1','D2','D3','D4','D6']},
+ paging:{label:'Paging path',n:['C4','D1','D2','D3','D4','D5','D6','W2']},
+ chat:{label:'Chat path',n:['E1','E2','E3','E4','E5','E6','C1','C2','C3','C4','C5','C6','D1','D2','D3','D4']}
+};
+(function(){
+ const svg=$('#ovsvg'),NS='http://www.w3.org/2000/svg';
+ const mk=(t,a)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e};
+ svg.innerHTML='<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7f8aa0"/></marker></defs>';
+ PANELS.forEach(p=>{const g=mk('g',{class:'panel'});
+   g.appendChild(mk('rect',{x:p.x,y:p.y,width:p.w,height:p.h,rx:12,fill:COL[p.k],'fill-opacity':.06,stroke:COL[p.k],'stroke-dasharray':'6 5'}));
+   const t=mk('text',{x:p.x+12,y:p.y+22,fill:COL[p.k]});t.textContent=p.t;g.appendChild(t);svg.appendChild(g)});
+ const byId={};NODES.forEach(n=>{n.w=n.w||W;n.h=H;byId[n.id]=n});
+ function auto(a,b){const ac={x:a.x+a.w/2,y:a.y+a.h/2},bc={x:b.x+b.w/2,y:b.y+b.h/2};const dx=bc.x-ac.x,dy=bc.y-ac.y;
+   if(Math.abs(dx)*0.6>Math.abs(dy)){return [[dx>0?a.x+a.w:a.x,ac.y],[dx>0?b.x:b.x+b.w,bc.y]]}
+   return [[ac.x,dy>0?a.y+a.h:a.y],[bc.x,dy>0?b.y:b.y+b.h]]}
+ EDGES.forEach(([f,t,o])=>{o=o||{};const a=byId[f],b=byId[t];let pts=o.pts||auto(a,b);
+   if(pts.length===2&&Math.abs(pts[0][0]-pts[1][0])>1&&Math.abs(pts[0][1]-pts[1][1])>1&&!o.pts){const [p,q]=pts;pts=[p,[(p[0]+q[0])/2,p[1]],[(p[0]+q[0])/2,q[1]],q]}
+   const e=mk('polyline',{points:pts.map(p=>p.join(',')).join(' '),class:'edge','marker-end':'url(#ar)','data-f':f,'data-t':t});
+   if(o.both)e.setAttribute('marker-start','url(#ar)');svg.appendChild(e);
+   if(o.lbl){const m=pts[Math.floor(pts.length/2)],n=pts[Math.floor((pts.length-1)/2)];const tx=mk('text',{x:(m[0]+n[0])/2+4,y:(m[1]+n[1])/2-4,class:'elabel'});tx.textContent=o.lbl;svg.appendChild(tx)}});
+ NODES.forEach(n=>{const g=mk('g',{class:'node','data-id':n.id});
+   g.appendChild(mk('rect',{x:n.x,y:n.y,width:n.w,height:n.h,rx:9,fill:'#10151e',stroke:COL[n.k]}));
+   const t1=mk('text',{x:n.x+10,y:n.y+22,style:'font-weight:700'});t1.textContent=n.t;g.appendChild(t1);
+   const t2=mk('text',{x:n.x+10,y:n.y+40,style:'fill:#9aa4b5;font-size:11px'});t2.textContent=n.s||'';g.appendChild(t2);
+   g.onclick=()=>select(n.id);svg.appendChild(g)});
+ function select(id){const n=byId[id];$$('#ovsvg .node').forEach(g=>g.classList.toggle('sel',g.dataset.id===id));
+   $$('#ovsvg .edge').forEach(e=>e.classList.toggle('hl',e.dataset.f===id||e.dataset.t===id));
+   const i=n.info,c=COL[n.k];$('#info').classList.add('open');
+   $('#infobody').innerHTML=`<h3 style="color:${c}">${esc(n.t)}</h3><p><b>What:</b> ${esc(i.what)}</p><p class="why"><b>Why:</b> ${esc(i.why)}</p>`+(i.body.length?'<ul>'+i.body.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'')+`<p class="small">Code: <code>${esc(i.file)}</code></p>`}
+ const pb=$('#pathbtns');Object.entries(PATHS).forEach(([k,p])=>{const b=el('button',{class:'btn'+(k==='all'?' primary':'')},p.label);b.onclick=()=>{
+   $$('#pathbtns button').forEach(x=>x.classList.remove('primary'));b.classList.add('primary');
+   $$('#ovsvg .node').forEach(g=>g.classList.toggle('dim',!!p.n&&!p.n.includes(g.dataset.id)));
+   $$('#ovsvg .edge').forEach(e=>e.classList.toggle('dim',!!p.n&&!(p.n.includes(e.dataset.f)&&p.n.includes(e.dataset.t))))};pb.appendChild(b)});
+ $('#infoclose').onclick=()=>$('#info').classList.remove('open');
+})();
+
+/* ---------------- 2. tokens ---------------- */
+const SPECIALS=["<think>","</think>","<user>","</user>","<bot>","</bot>","<g>","</g>","<|endoftext|>"];
+(function(){
+ const ta=$('#tokin');
+ ta.value="<user>\nWhat is 17 + 25? Café ☕\n</user>\n<bot>\n42</bot>";
+ $('#mklist').innerHTML=SPECIALS.map((s,i)=>`<span class="pill" style="border-color:var(--pink)">${256+i} = <code>${esc(s)}</code></span>`).join('');
+ const EX={chess:"<g>1700 1-0 1. e4 e5 2. Nf3 Nc6 3. Bb5 a6</g>",think:"<user>\nIs 91 prime?\n</user>\n<bot>\n<think>\n91 = 7 x 13, so no.\n</think>\nNo.</bot>",emoji:"Hello 你好 👋 déjà vu"};
+ $$('[data-ex]').forEach(b=>b.onclick=()=>{ta.value=EX[b.dataset.ex];render()});
+ const enc=new TextEncoder();
+ function toks(s){const out=[];let i=0;while(i<s.length){let hit=null;for(const m of SPECIALS){if(s.startsWith(m,i)){hit=m;break}}
+   if(hit){out.push({id:256+SPECIALS.indexOf(hit),lab:hit,mk:1});i+=hit.length;continue}
+   const cp=String.fromCodePoint(s.codePointAt(i));const by=enc.encode(cp);const multi=by.length>1;
+   by.forEach((b,j)=>out.push({id:b,lab:j===0?cp:'·',mb:multi}));i+=cp.length}return out}
+ function render(){const s=ta.value,t=toks(s);const bytes=enc.encode(s).length;
+   $('#tokstats').innerHTML=[['Characters (model)',t.length],['Bytes if no markers',bytes],['Markers',t.filter(x=>x.mk).length],['Vocabulary',265]].map(([a,b])=>`<div class="card"><div class="stat">${b}</div><div class="small">${a}</div></div>`).join('');
+   $('#chips').innerHTML=t.slice(0,600).map(x=>`<div class="chip ${x.mk?'mk':x.mb?'mb':''}">${esc(x.lab==='\n'?'⏎':x.lab===' '?'␣':x.lab)}<small>${x.id}</small></div>`).join('')+(t.length>600?'<div class="small">… (first 600 shown)</div>':'')}
+ ta.oninput=render;render();
+})();
+
+/* ---------------- 3. model halting ---------------- */
+(function(){
+ const svg=$('#haltsvg'),NS='http://www.w3.org/2000/svg';
+ const mk=(t,a,tx)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(tx!==undefined)e.textContent=tx;return e};
+ const stages=['embed','prelude 1','prelude 2','adapter [h‖x]','attention','top-8 experts','heads (logits, λ)','stop?'];
+ $('#stagebar').innerHTML=stages.map((s,i)=>`<div class="st" data-i="${i}">${i+1}. ${s}</div>`).join('');
+ let shown=0,timer=null,dprob=[],stopRow=0;
+ const sig=x=>1/(1+Math.exp(-x));
+ function compute(){const mu=+$('#diff').value;let notStop=1,cum=0;dprob=[];stopRow=0;
+   for(let n=1;n<=24;n++){const lam=n===24?1:sig(0.9*(n-mu));const p=notStop*lam;notStop*=(1-lam);cum+=p;dprob.push({n,lam,p,cum});if(!stopRow&&cum>=0.9)stopRow=n}}
+ function draw(){svg.innerHTML='';const L=50,B=250,T=20,Wd=830,bw=Wd/24;
+   svg.appendChild(mk('line',{x1:L,y1:B,x2:L+Wd,y2:B,stroke:'#556'}));svg.appendChild(mk('line',{x1:L,y1:T,x2:L,y2:B,stroke:'#556'}));
+   [0,.5,.9,1].forEach(v=>{const y=B-v*(B-T);svg.appendChild(mk('line',{x1:L,y1:y,x2:L+Wd,y2:y,stroke:v===.9?'#ffd84d':'#2b3445','stroke-dasharray':v===.9?'5 4':'2 4'}));svg.appendChild(mk('text',{x:L-6,y:y+4,'text-anchor':'end',fill:v===.9?'#ffd84d':'#9aa4b5','font-size':11},v))});
+   svg.appendChild(mk('text',{x:L+Wd,y:T+(B-T)*0.1-5,'text-anchor':'end',fill:'#ffd84d','font-size':11},'halt_thresh 0.9 (inference stops here)'));
+   const maxp=Math.max(...dprob.map(d=>d.p),0.01);
+   dprob.forEach((d,i)=>{if(i>=shown)return;const x=L+i*bw;const frozen=stopRow&&d.n>stopRow;
+     svg.appendChild(mk('rect',{x:x+3,y:B-d.p/maxp*(B-T-20),width:bw-6,height:d.p/maxp*(B-T-20),fill:frozen?'#445':'#b388ff',opacity:frozen?.5:1}));
+     svg.appendChild(mk('text',{x:x+bw/2,y:B+14,'text-anchor':'middle',fill:'#9aa4b5','font-size':10},d.n));
+     if(d.n===stopRow){svg.appendChild(mk('line',{x1:x+bw/2,y1:T,x2:x+bw/2,y2:B,stroke:'#3ddc97','stroke-width':2}));svg.appendChild(mk('text',{x:x+bw/2+4,y:T+12,fill:'#3ddc97','font-size':12,'font-weight':700},'stops at row '+d.n))}});
+   let pts=dprob.slice(0,shown).map((d,i)=>`${L+i*bw+bw/2},${B-d.cum*(B-T)}`).join(' ');if(shown)svg.appendChild(mk('polyline',{points:pts,fill:'none',stroke:'#ff9f43','stroke-width':2.5}));
+   svg.appendChild(mk('text',{x:L+Wd/2,y:290,'text-anchor':'middle',fill:'#9aa4b5','font-size':12},'row number  ·  purple bars = P(stop exactly here) (scaled)  ·  orange line = cumulative stop probability'));
+   const rowsUsed=stopRow&&shown>=stopRow?stopRow:shown;
+   $('#haltstats').innerHTML=[['Rows run',rowsUsed+' / 24'],['Expert calls (8 per row)',rowsUsed*8],['Cumulative stop mass',shown?dprob[Math.min(shown,24)-1].cum.toFixed(3):'0'],['Blocks applied',shown?(2+rowsUsed)+' of 26 possible':'–']].map(([a,b])=>`<div class="card"><div class="stat">${b}</div><div class="small">${a}</div></div>`).join('');
+   $$('#stagebar .st').forEach((s,i)=>s.classList.toggle('act',shown>0&&shown<(stopRow||99)&&i>=3&&i<=7||(shown>0&&i<=2&&shown<=1)))}
+ function step(){if(shown>=24||(stopRow&&shown>=stopRow)){clearInterval(timer);timer=null;$('#runrow').textContent='▶ Run rows';return}shown++;draw()}
+ $('#runrow').onclick=()=>{if(timer){clearInterval(timer);timer=null;$('#runrow').textContent='▶ Run rows';return}
+   if(stopRow&&shown>=stopRow){shown=0}$('#runrow').textContent='⏸ Pause';timer=setInterval(step,350)};
+ const reset=()=>{clearInterval(timer);timer=null;$('#runrow').textContent='▶ Run rows';shown=0;compute();draw()};
+ $('#resetrow').onclick=reset;$('#diff').onchange=reset;
+ $('#samp').onclick=()=>{ // Poisson(12.8)+1, clipped
+   let L2=Math.exp(-12.8),k=0,p=1;do{k++;p*=Math.random()}while(p>L2);const d=Math.min(24,Math.max(1,k-1+1));
+   $('#sampout').textContent=`Training would run this step for ${d} rows (Poisson(12.8)+1, clipped to 1…24; mean ≈ 13.8).`};
+ reset();
+})();
+
+/* ---------------- 4. paging simulator ---------------- */
+(function(){
+ const N=397,SLOTS=32,RAMC=96,TOPICS=['Python code','Chess games','Children\'s stories','Chat / questions','Wikipedia','Arithmetic'];
+ const r=rng(12345);
+ const perm=()=>{const a=[...Array(N).keys()];for(let i=N-1;i>0;i--){const j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
+ const shared=new Set(perm().slice(0,25));
+ const home=TOPICS.map(()=>new Set(perm().slice(0,42)));
+ const sel=$('#topic');TOPICS.forEach((t,i)=>sel.appendChild(el('option',{value:i},t)));
+ let vram,ram,votes,loads,stats;
+ function reset(){vram=new Set();ram=[];votes=new Float64Array(N);stats={win:0,loadsTot:0,diskReads:0,ramHits:0,last:null,prevLoads:0};render(new Set(),new Set())}
+ function charRequest(topic){ // sample 8 distinct experts, weighted
+   const w=new Float64Array(N);for(let i=0;i<N;i++)w[i]=home[topic].has(i)?3:shared.has(i)?1.4:0.03;
+   const picks=[];for(let k=0;k<8;k++){let tot=0;for(let i=0;i<N;i++)tot+=w[i];let x=r()*tot,c=0,ch=0;for(let i=0;i<N;i++){c+=w[i];if(c>=x){ch=i;break}}picks.push(ch);w[ch]=0}return picks}
+ function addChars(n,topic){for(let c=0;c<n;c++){charRequest(topic).forEach((e,rank)=>votes[e]+=1-rank/10)}}
+ function admit(){const order=[...Array(N).keys()].sort((a,b)=>votes[b]-votes[a]);const top=new Set(order.slice(0,SLOTS));
+   const entered=new Set([...top].filter(e=>!vram.has(e))),left=new Set([...vram].filter(e=>!top.has(e)));
+   let disk=0,hit=0;entered.forEach(e=>{const i=ram.indexOf(e);if(i>=0){hit++}else disk++});
+   // LRU update: admitted experts become most recent
+   top.forEach(e=>{const i=ram.indexOf(e);if(i>=0)ram.splice(i,1);ram.push(e)});
+   while(ram.length>RAMC+SLOTS)ram.shift(); // ram list includes experts resident; keep recent 128 incl. GPU ones
+   vram=top;stats.win++;stats.loadsTot+=entered.size;stats.diskReads+=disk;stats.ramHits+=hit;stats.last={loads:entered.size,disk,hit,left:left.size};
+   render(entered,left)}
+ function render(entered,left){
+   const g=$('#grid');if(!g.children.length){for(let i=0;i<N;i++)g.appendChild(el('div',{title:'expert '+i}))}
+   const inRam=new Set(ram.slice(-RAMC-SLOTS));
+   [...g.children].forEach((d,i)=>{d.className=vram.has(i)?'vram':inRam.has(i)?'ram':'';if(entered.has(i))d.classList.add('new');if(left.has(i))d.classList.add('out')});
+   const order=[...Array(N).keys()].sort((a,b)=>votes[b]-votes[a]).slice(0,48);const mx=Math.max(votes[order[0]],1);
+   $('#votes').innerHTML=order.map((e,k)=>`<div class="${k<SLOTS?'cut':''}" style="height:${Math.max(2,votes[e]/mx*100)}%" title="expert ${e}: ${votes[e].toFixed(1)}"></div>`).join('');
+   const s=stats,l=s.last||{loads:0,disk:0,hit:0,left:0};
+   $('#pstats').innerHTML=[['Loaded to GPU just now',l.loads],['… from RAM',l.hit],['… from disk',l.disk],['Evicted from GPU',l.left],['Windows / forwards',s.win],['Average loads each',s.win?(s.loadsTot/s.win).toFixed(1):'–']].map(([a,b])=>`<div class="card"><div class="stat">${b}</div><div class="small">${a}</div></div>`).join('')}
+ $('#readwin').onclick=()=>{votes=new Float64Array(N);addChars(256,+sel.value);admit();$('#pagingmsg').textContent=`New text about “${TOPICS[+sel.value]}”: the vote starts from zero, so the card follows this topic. (256 characters used for speed; real windows have up to 4,096.)`};
+ $('#writemore').onclick=()=>{addChars(20,+sel.value);admit();const l=stats.last;$('#pagingmsg').textContent=l.loads===0?'No expert moved: the vote did not change enough to change the top 32. Writing costs nothing here.':`${l.loads} expert(s) loaded. The new characters moved the vote enough to change the top 32.`};
+ $('#writelong').onclick=()=>{addChars(200,+sel.value);admit();const l=stats.last;$('#pagingmsg').textContent=l.loads===0?'200 more characters, still no expert moved.':`200 more characters of “${TOPICS[+sel.value]}”: ${l.loads} expert(s) loaded. The vote has shifted toward the new topic.`};
+ $('#resetpool').onclick=reset;reset();
+})();
+
+/* ---------------- 5. training ---------------- */
+const TSTEPS=[
+ ['Start','Collect files, create a model if there is no core.npz, build the paged pool, build AdamW with two groups (trunk 0.1×, pool 1×), measure the held-out loss ("before"), restore the saved state if any, make one lane per folder in data/train.','train.py: cmd_read, build_paged'],
+ ['Pick text','The lane scheduler picks the next lane (round-robin), a random file and a random offset. It reads 32,768 characters from it (16 chunks) before the next lane.','train.py, minagi/stream.py'],
+ ['Build the window','The FileReader takes the last ≤ 4,096 characters ending at the cursor. x = window, y = window shifted by one.','minagi/stream.py: FileReader.step'],
+ ['Set the rate','group.lr = base 3e-4 × plasticity scale (trunk × 0.1 more). Gradients are zeroed.','train.py'],
+ ['Admit experts','Every character ranks all experts and votes for its top 8. The 32 most-voted are admitted and loaded into GPU slots (RAM first, then disk).','minagi/paged.py: admit'],
+ ['Forward','Embedding, 2 prelude blocks, then a sampled number of rows (Poisson(12.8)+1). Each row: adapter, attention, top-8 experts, heads. Halted characters freeze.','minagi/recur.py'],
+ ['Loss and backward','PonderNet expected cross-entropy + KL + router terms. loss.backward() sends the gradient through all rows and the whole window.','minagi/recur.py'],
+ ['Clip and update','Clip the gradient norm to 1.0. A hook puts each resident expert\'s own Adam moments into its slot. AdamW updates the trunk and the pool.','train.py, paged.py: _own_moments'],
+ ['Housekeeping','Held-out test + samples + plasticity update (every --sample-every minutes). Checkpoint every 5 minutes. Context +1 character per 100,000. Every 2 M characters: maybe grow 1 expert, prune the unused. Ctrl-C saves and exits.','train.py, plasticity.py, pool.py']];
+(function(){
+ let cur=0,timer=null;
+ const box=$('#steps');
+ TSTEPS.forEach((s,i)=>{const d=el('div',{class:'s'},`<span class="n">${i+1}</span><b>${s[0]}</b><div class="body">${esc(s[1])}<div class="small" style="margin-top:4px">Code: <code>${esc(s[2])}</code></div></div>`);d.onclick=()=>go(i);box.appendChild(d)});
+ function go(i){cur=(i+TSTEPS.length)%TSTEPS.length;$$('#steps .s').forEach((d,k)=>d.classList.toggle('act',k===cur))}
+ $('#nextstep').onclick=()=>go(cur+1);$('#prevstep').onclick=()=>go(cur-1);
+ $('#autostep').onclick=function(){if(timer){clearInterval(timer);timer=null;this.textContent='Auto-play';return}this.textContent='Stop';timer=setInterval(()=>go(cur+1),2200)};
+ go(0);
+ // lanes
+ const LN=['arithmetic','chat','chess','code','reasoning','stories','wikipedia','self-knowledge'];
+ let chunks,lane,inLane,chars,visits;
+ function lreset(){chunks=LN.map(()=>0);lane=0;inLane=0;chars=0;visits=0;lrender()}
+ function lrender(){$('#lanes').innerHTML=LN.map((l,i)=>`<span class="lane ${i===lane?'act':''}">${l}</span>`).join('');
+   $('#lanestats').innerHTML=`<b>Current lane</b><span>${LN[lane]}</span><b>Chunks in this visit</b><span>${inLane} / 16</span><b>Characters read</b><span>${chars.toLocaleString()}</span><b>Visits finished</b><span>${visits}</span>`;
+   const mx=Math.max(...chunks,1);$('#lanebars').innerHTML=LN.map((l,i)=>`<div class="small" style="display:flex;gap:8px;align-items:center"><span style="width:110px">${l}</span><div class="bar" style="flex:1"><i style="width:${chunks[i]/mx*100}%"></i></div><span style="width:60px;text-align:right">${chunks[i]*2048}</span></div>`).join('')}
+ function one(){chunks[lane]++;chars+=2048;inLane++;if(inLane===16){inLane=0;lane=(lane+1)%LN.length;visits++}lrender()}
+ $('#chunk').onclick=one;$('#chunk16').onclick=()=>{for(let i=0;i<16;i++)one()};$('#resetlane').onclick=lreset;lreset();
+})();
+
+/* ---------------- 6. learning ---------------- */
+(function(){
+ const rows=[['experts frozen, trunk lr = expert lr',-0.2909,1.2663],['swapping experts, trunk lr = expert lr',-0.3106,1.2628],['swapping, trunk at 0.1×  (what the run uses)',-0.4216,0.1297],['interleaved: PG19 as a 9th lane',-0.3124,-0.0065]];
+ let h='<div><b>Configuration</b></div><div><b>New subject (PG19)  ▸  8 old subjects</b></div>';
+ rows.forEach(([n,a,b],i)=>{h+=`<div${i===2?' style="color:var(--green);font-weight:700"':''}>${n}</div><div>
+   <div style="display:flex;align-items:center;gap:8px"><div class="fgbar neg" style="width:${Math.abs(a)*350}px"></div><span>${a.toFixed(4)}</span></div>
+   <div style="display:flex;align-items:center;gap:8px;margin-top:3px"><div class="fgbar ${b>0?'pos':'neg'}" style="width:${Math.max(3,Math.abs(b)*350)}px"></div><span>${b>0?'+':''}${b.toFixed(4)}</span></div></div>`});
+ $('#fg').innerHTML=h;
+ const br=[['ROOM','disk ≤ 10 GB and GPU memory fits'],['USED','dying experts < 35 %'],['EARNING','≥ 35 % of recent births still asked for'],['FITS','≤ 50 experts in their trial'],['HONEST','held-out − train < 0.4']];
+ $('#brakes').innerHTML=br.map(([a,b])=>`<div><span class="pill" style="border-color:var(--green)">${a}</span> ${b}</div>`).join('');
+})();
+
+/* ---------------- 7. adaptation trace ---------------- */
+(function(){
+ const ta=$('#adin');
+ function render(){const s=[...ta.value].slice(-64);const pen={};s.forEach((c,i)=>{const age=s.length-i;pen[c]=(pen[c]||0)+0.88**(age-1)});
+   const rows=Object.entries(pen).map(([c,v])=>[c,2.5*v]).sort((a,b)=>b[1]-a[1]).slice(0,12);
+   $('#adout').innerHTML='<table><tr><th>character</th><th>penalty (logits)</th><th></th></tr>'+rows.map(([c,v])=>`<tr><td><code>${c===' '?'␣':c==='\n'?'⏎':esc(c)}</code></td><td>${v.toFixed(2)}</td><td><div class="bar" style="width:160px"><i style="width:${Math.min(100,v/21*100)}%;background:${v>8?'var(--red)':'var(--yellow)'}"></i></div></td></tr>`).join('')+'</table>'}
+ ta.oninput=render;render();
+})();
+
+/* ---------------- 8. files ---------------- */
+const FILES=[
+ ['config.yaml','Settings: model shape, pool (64 start, top_k 8, 32 resident, ram_cache 96), training (lr 3e-4, trunk_lr_mult 0.1, chunk 2048), growth, prune, decoding. Command-line flags override it.'],
+ ['train.py','Main program. Commands: read (continual training), stream, ponder-probe.'],
+ ['serve.py','Flask chat server: /, /api/chat (SSE), /api/state, /api/prime. Flags: --weights, --no-learn, --port, --prime-chars.'],
+ ['minagi/','The model as a library.'],
+ ['  recur.py','RecurCoder: embedding, prelude, adapter, recurrent rows, halting, generate().'],
+ ['  model.py','RMSNorm, RoPE, attention (flash and blocked fallback), SwiGLU, Block.'],
+ ['  pool.py','Expert pool: routing, dispatch, balance term, AutoGrow brakes.'],
+ ['  paged.py','PagedPool: disk/RAM/GPU tiers, admit, placement, growth, pruning, Adam-moment hook.'],
+ ['  stream.py','FileReader (training windows), FolderEvaluator (held-out), stream() for generation.'],
+ ['  plasticity.py','Learning-rate controller.'],
+ ['  store.py','The weights/ format. python -m minagi.store weights prints a table.'],
+ ['  decode.py','pick_next and the adaptation trace.'],
+ ['  live.py','LiveLearner: learn while chatting.'],
+ ['  tokenizer.py','256 bytes + 9 markers.'],
+ ['  ingest.py','Find files, skip binaries, make streams.'],
+ ['corpora/','python -m corpora all: builds data/train and data/val.'],
+ ['replication/','The forgetting experiment: probe, summary, figures.'],
+ ['weights/','The author\'s snapshot (397 experts, step 914,508). Do not train into it by accident.'],
+ ['weights_mine/','The 6-minute model from our test (66 experts, 2.0 GiB).'],
+ ['runs/','Sample logs and graphs (runs/samples.txt = the author\'s history).'],
+ ['explaination/','This documentation.']];
+(function(){
+ const t=$('#tree');FILES.forEach(([n,d],i)=>{const e=el('div',{class:'f'},esc(n).replace(/^ +/,m=>'&nbsp;'.repeat(m.length*2)));e.onclick=()=>{$$('#tree .f').forEach(x=>x.classList.remove('on'));e.classList.add('on');$('#fileinfo').innerHTML=`<h3 style="margin-top:0"><code>${esc(n.trim())}</code></h3><p>${esc(d)}</p>`};t.appendChild(e)});
+ const CM=[
+  ['Set up the environment',`curl -LsSf https://astral.sh/uv/install.sh | sh\nexport PATH="$HOME/.local/bin:$PATH"\nuv venv --python 3.10 .venv\nuv pip install --python .venv/bin/python torch numpy pyyaml matplotlib flask scipy chess zstandard datasets huggingface_hub`],
+  ['Build a small data set',`.venv/bin/python -m corpora all --limit 5000`],
+  ['Download the author\'s weights',`.venv/bin/python - <<'EOF'\nfrom huggingface_hub import snapshot_download\nsnapshot_download('Volotat/mini-AGI-undertrained', local_dir='hf_snapshot', max_workers=8)\nEOF\nmv hf_snapshot/weights weights\n.venv/bin/python -m minagi.store weights`],
+  ['Chat (read-only)',`.venv/bin/python serve.py --weights weights --no-learn --prime-chars 0 --port 8765`],
+  ['Train your own model',`.venv/bin/python train.py read data/train --save --weights-dir weights_mine \\\n    --held-out data/val --sample-every 10 --sample-log runs/my_samples.txt`],
+  ['Stop cleanly',`kill -INT <pid>      # or Ctrl-C in the terminal`],
+  ['Teach it your own files',`.venv/bin/python train.py read ~/notes                      # dry run\n.venv/bin/python train.py read ~/notes --passes 3 --save --weights-dir weights_mine --lr 5e-5`]];
+ $('#cmds').innerHTML=CM.map(([n,c],i)=>`<div class="card" style="margin-bottom:10px"><b>${n}</b><button class="btn copy" data-i="${i}">Copy</button><pre class="cmd">${esc(c)}</pre></div>`).join('');
+ $$('#cmds .copy').forEach(b=>b.onclick=()=>{navigator.clipboard&&navigator.clipboard.writeText(CM[+b.dataset.i][1]);b.textContent='Copied';setTimeout(()=>b.textContent='Copy',1200)});
+})();
+
+show(TABS.some(t=>t[0]===location.hash.slice(1))?location.hash.slice(1):'overview');
+</script>
+</body>
+</html>

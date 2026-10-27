@@ -1,0 +1,765 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Problem statement
+
+An unusual rally game is popular at KU University. The circuit, which is the setting of this game, has N rest areas and M roads, and the i-th road is between the fi-th rest area and the ti-th rest area. There is one checkpoint on every road, and if you pass the checkpoint on road i, the score of pi will be added by XOR regardless of which direction you pass. It is added by XOR. I said it twice because it's important.
+
+In this game, you can go through the same resting place or road as many times as you like, and even if you reach the goal, you can continue the rally as it is, but you can bypass the checkpoint in the middle of the road and go to another resting place. That is forbidden. Therefore, the reason why it is so popular is that you have to work hard to think about what kind of route you should take to get a high score.
+
+There are Q participants this time, and it seems that the jth participant is supposed to start from the resting place of aj and go to the resting place of bj which is the goal. As a person on the management side, I decided to check the highest score of each participant in advance.
+
+Input format
+
+The input is given in the following format. The rest area number is 0-indexed.
+
+
+N M Q
+f1 t1 p1
+...
+fM tM pM
+a1 b1
+...
+aQ bQ
+
+
+Output format
+
+Output the Q line, and output the maximum score obtained by the route from the ajth resting place to the bjth resting place on the jth line.
+
+Constraint
+
+* 1 ≤ N ≤ 105
+* 0 ≤ M ≤ 2 × 105
+* 1 ≤ Q ≤ 105
+* 0 ≤ fi, ti <N, fi ≠ ti
+* 0 ≤ pi <260
+* 0 ≤ aj, bj <N
+* From any resting place, you can reach any resting place by following the road.
+* There is at most one road connecting the rest areas fi and ti.
+* All input values ​​are integers.
+
+
+
+A group of 60 test cases is set to judge this problem. In addition to the above constraints, the test cases included in this group also meet the following constraints.
+
+* M ≤ 20
+
+
+
+
+
+Examples
+
+Input
+
+5 5 3
+0 1 7
+1 2 22
+2 3 128
+3 4 128
+4 2 128
+0 1
+0 0
+3 4
+
+
+Output
+
+135
+128
+128
+
+
+Input
+
+None
+
+
+Output
+
+None
+</user>
+<bot>
+<think>
+Okay, let's see. I need to solve this problem where the goal is to find the maximum XOR score for each query's start and end points. Hmm. The problem says that each road can be traversed any number of times, and each time you pass a checkpoint on a road, the pi value is XORed into the total score. But the key here is that the XOR is applied every time you pass the checkpoint, regardless of direction. So even if you go back and forth on the same road, each traversal adds pi again via XOR.
+
+But wait, since XOR is its own inverse (since x XOR x = 0), passing the same road an even number of times cancels out. So the maximum score path probably involves finding some cycle that can be added to the path, which contributes some XOR value. But since we can traverse cycles multiple times, maybe the optimal path is to take the shortest path (in terms of XOR) and then add in any possible cycles that can contribute a higher value.
+
+Wait, but how do cycles contribute? Because the XOR of the cycle's edges must form a value that can be added (via XOR) any number of times. But since adding a cycle twice would cancel out (as XORing with the cycle's value twice is equivalent to XORing with zero), the optimal is to take the path's XOR value and then XOR it with the maximum possible combination of cycles' XOR values that can be applied once.
+
+So, the approach here is similar to the problem where the maximum XOR path between two nodes is the XOR of the path from a to b, combined with any subset of the cycles in the graph. Because each cycle can be added once, and since XOR is commutative, the order doesn't matter.
+
+In that case, the problem reduces to finding the XOR from a to b, then combining it with all possible cycle basis elements to maximize the total. So first, we need to compute the basis for all cycles in the graph. Once we have that basis, for each query (a, b), we can compute the initial XOR from a to b, and then find the maximum possible XOR by combining this initial value with any subset of the basis vectors.
+
+So the steps are:
+
+1. Find the XOR from each node to a root (using BFS or DFS, since the graph is connected). Let's call this the xor_to_root array. For any edge between u and v with weight p, the xor from u to v is xor_to_root[u] XOR p. But since the graph is undirected (since roads are bidirectional), we can model this as a tree with parents and track the xor distances.
+
+2. Once we have the xor_to_root array, the XOR between a and b is xor_to_root[a] XOR xor_to_root[b]. Because the path from a to root to b gives that value, but any actual path from a to b will have the same XOR as this value plus some cycles (which are accounted for in the basis).
+
+3. Then, find all the cycles in the graph. Each cycle can be represented as the XOR of the edges along the cycle. These cycle values form a basis for the possible XOR additions. To find the basis, we can use Gaussian elimination over GF(2).
+
+4. Once the basis is found, for each query, take the initial a-b path XOR and then find the maximum possible XOR by combining this value with the basis vectors. The way to do this is to apply the standard algorithm for finding the maximum XOR using a basis.
+
+So putting it all together:
+
+- Compute the xor_to_root for each node using BFS or DFS. For each node, when we visit it, we track the xor value from the root. When we find a back edge (an edge to an already visited node that's not the parent), we compute the cycle's XOR (xor_to_root[u] XOR xor_to_root[v] XOR p) and add this to the basis.
+
+- Once the basis is built, for each query (a, b), compute the initial XOR as xor_to_root[a] XOR xor_to_root[b]. Then use the basis to find the maximum possible XOR value by combining this initial value with any subset of basis vectors.
+
+But wait, the problem constraints for some test cases have M up to 2e5. However, the second part of the problem's constraints (for the 60 test cases) says M ≤ 20. So the main solution might need to handle M up to 2e5, but for the 60 test cases, M is small, so perhaps the approach is feasible even for larger M as long as the basis is manageable.
+
+But the cycle basis for a graph can have up to (M - N + 1) elements, which could be up to 1e5 for M=2e5 and N=1e5. But Gaussian elimination over 1e5 elements is O(60*1e5) which could be acceptable? Wait, no. The time complexity for Gaussian elimination over k vectors of 60 bits is O(k * 60^2), which for k=1e5 would be O(1e5 * 3600) = 3.6e8 operations. That's probably too slow. So we need a way to handle this.
+
+But the problem says that all test cases in the 60 group have M <=20, which implies that the cycle basis size is manageable. For M=20, the maximum number of cycles is O(2^20), but that's not feasible. Wait, no. The cycle basis size is (M - N + 1). Since N can be up to 1e5, but M is up to 20, then (M - N +1) would be negative. That can't be. Wait, perhaps the graph is connected. The problem statement says that the graph is connected. So the number of edges M must be >= N-1. So for connected graphs, the cycle basis size is (M - (N-1)).
+
+So for M up to 2e5 and N up to 1e5, the cycle basis can be up to 1e5+1. But again, Gaussian elimination on 1e5 vectors is not feasible. So this approach might only work for the 60 test cases where M is small (like up to 20), leading to cycle basis size up to 20 - (N-1) +1? Wait, if N is 5 and M is 5, then the cycle basis size is 5 -4 =1. So in the first sample input, there's 5 edges and 5 nodes. So 5 - (5-1) =1 cycle basis vector. That makes sense, because the sample's cycles can all be formed by combining the basis cycle.
+
+But for the 60 test cases, M is up to 20, which implies that the cycle basis size is up to 20 - (N-1). But if N is 1e5, then that's 20 - (1e5-1) which is negative. Wait, no. Because in a connected graph, the minimum number of edges is N-1. So M can't be less than N-1. So the cycle basis size is M - (N-1). So when M is 20 and N is 1e5, that would imply M is less than N-1, which is impossible. So perhaps the 60 test cases have M up to 20 but N is small. Or perhaps they are connected, so M >= N-1. Wait, the problem statement says that the graph is connected. So for the 60 test cases, M can be up to 20, but N can be up to 1e5. But then M - (N-1) can be negative, which is impossible. So perhaps the 60 test cases have N <= M +1. So M is up to 20, so N can be up to 21.
+
+Wait, but the problem says that all test cases (including the 60) meet the original constraints. The original constraints include that the graph is connected, so M must be >= N-1. So for the 60 test cases, M is <=20. So N-1 <= M <=20. So N can be up to 21. Because if M is 20, then N can be up to 21 (since 21-1 =20). So in these cases, the cycle basis size is M - (N-1) =20 -20 =0. Wait, that's not possible. Wait, no. For example, if M=20, N=21: then the graph is a tree (since M=N-1=20). So cycle basis size is zero. But if M=21 and N=21, then cycle basis is 1. So for the 60 test cases, the cycle basis size can be up to (20 - (N-1)), but if N is small enough, like say N=5 and M=5 (like the first sample input), then the cycle basis size is 5-4=1. So in these cases, the cycle basis is small. So Gaussian elimination is feasible.
+
+So the plan is:
+
+For each test case:
+
+1. Compute the xor_to_root array using BFS or DFS.
+
+2. Collect all the cycles by checking for edges that create a loop (non-tree edges). For each such edge, compute the cycle's XOR value (xor_to_root[u] XOR xor_to_root[v] XOR p), and add this to the list of potential basis elements.
+
+3. Perform Gaussian elimination on these values to get a basis for the cycle space.
+
+4. For each query (a, b), compute the initial XOR (xor_to_root[a] XOR xor_to_root[b]).
+
+5. Then, use the basis to find the maximum possible XOR by combining the initial value with any subset of the basis vectors. The way to do this is to apply each basis vector in order of highest bit to lowest, and if adding the current basis vector to the result increases the maximum, we include it.
+
+So the steps are:
+
+Implement the Gaussian elimination for the basis vectors. Then, for each query, take the initial value and apply the basis to maximize it.
+
+Now, implementing this in Python, considering the constraints.
+
+But wait, the main problem is that for large N (up to 1e5), but in the 60 test cases, M is up to 20. So the cycle basis is small, so even for N=1e5, the number of basis vectors is M - (N-1). But if N is 1e5 and M is 20, then N-1 would be 99999, which is bigger than M=20, which can't be. Because the graph is connected. So the only way M can be 20 and the graph is connected is if N is 21 (since 21-1=20 edges is a tree). So in that case, there are no cycles. So the cycle basis is zero.
+
+Wait, this is conflicting. The problem statement says that in all test cases, the graph is connected. So M must be >= N-1. So for the 60 test cases where M <=20, N must be <=21. Because if N is 22, then N-1=21, but M is 20, which is less than N-1, making the graph disconnected, which is invalid. So in the 60 test cases, N can't be more than 21. So for those test cases, N is small (<=21) and M is up to 20. So the cycle basis size is M - (N-1) which can be up to 20 - (21-1) =0. Wait, no. If N=21 and M=20, then M=N-1=20, which is a tree, so cycle basis size is zero. If N=5 and M=5, then cycle basis size is 5 -4=1.
+
+So the 60 test cases are all small, and the code can process them efficiently.
+
+But the problem requires handling N up to 1e5 and M up to 2e5. How can we handle that? Because for M=2e5 and N=1e5, the cycle basis size can be 1e5+1, which is impossible to handle with Gaussian elimination. But perhaps the problem expects that the code works correctly for all test cases, but with optimizations that make it feasible for the 60 test cases. For the other test cases, perhaps the code is not efficient enough, but the problem is only concerned with passing those 60.
+
+Alternatively, maybe the problem has a general solution that works for all cases. Let's think again.
+
+But wait, when you have a graph, the maximum XOR path from a to b is equal to the XOR of the path from a to b (any path) XORed with the maximum possible subset of the cycle basis. So the approach is:
+
+- Find the initial XOR from a to b (using a BFS/DFS to compute the XOR from a root to each node).
+
+- Then, for each query, compute the XOR between a and b (xor_a ^ xor_b) and then combine this with the basis vectors to get the maximum possible XOR.
+
+So the key steps are:
+
+1. Compute the initial XOR for all nodes from a root (say, node 0).
+
+2. Find all the cycles in the graph and build the basis.
+
+3. For each query, compute the initial XOR and then use the basis to maximize it.
+
+So the code must:
+
+- Perform BFS/DFS to compute the XOR from root to each node.
+
+- Collect all the cycle values (from non-tree edges) and build the basis.
+
+- For each query, compute the initial value and then apply the basis.
+
+Now, the problem is, for large N and M, how to collect the cycles. But for a connected graph, the number of non-tree edges is M - (N-1). Each non-tree edge contributes a cycle. So if M is 2e5 and N is 1e5, then the number of non-tree edges is 2e5 - 1e5 +1 = 1e5+1, which is 100,001 cycles. That's way too many to process with Gaussian elimination (each step is O(60) per cycle). So for such cases, the code would be too slow.
+
+But the problem statement says that in the 60 test cases, M is up to 20. So for those, M - (N-1) would be up to 20 - (some small N-1), but given that M can be up to 20 and N can be up to 21 (since M >= N-1), then M - (N-1) can be up to 20 - (21-1) =0 (for N=21, M=20). So in those cases, the cycle basis size is small (like up to 20- (N-1) which could be 1, 2, etc.). So the code would be feasible for those.
+
+But how to handle the general case where M is up to 2e5?
+
+The problem is that the code may not pass the general case, but perhaps the problem expects that the code is written to pass the 60 test cases and that the code is correct for the problem, but not optimized for the general case.
+
+But the problem requires a correct solution that works for all test cases. So perhaps there's a smarter way.
+
+Alternative approach: since the graph is connected, any cycle can be represented as a combination of cycles found by the BFS/DFS. So during the BFS/DFS, each time a back edge is found, a cycle is added. These cycles form the basis. So the code can process all such cycles and build the basis.
+
+But for large M and N, the number of cycles can be very large, making Gaussian elimination take O(k * 60^2) steps, which is not feasible for k=1e5.
+
+So perhaps this approach is only feasible when the number of cycles is small, such as in the 60 test cases. But the problem's constraints say that M can be up to 2e5 in other test cases, which would require handling up to 2e5 cycles, which is impossible.
+
+Therefore, perhaps the problem expects the code to work correctly for all test cases, but in practice, the code would only pass the 60 test cases where M is small. However, the problem requires the code to be generated, which must be correct for all possible inputs.
+
+But how can we handle the general case?
+
+Wait, perhaps there's a smarter way to compute the basis. Because each cycle is built from the back edges, and each back edge contributes one cycle. The Gaussian elimination can be performed incrementally. For each cycle, add it to the basis, performing the elimination step. The maximum size of the basis is 60, because each basis vector has up to 60 bits (since pi is up to 2^60). So even if there are 1e5 cycles, the basis can't have more than 60 elements. Because each new cycle is either added to the basis (if it's linearly independent of the current basis) or discarded. So the basis size is limited by the number of bits (60), which is manageable.
+
+Wait, that's a crucial point. The Gaussian elimination for a binary basis (each element is a 60-bit vector) can have at most 60 basis vectors, regardless of the number of input cycles. Because each basis vector is responsible for a certain bit position. So even if you have a million cycles, after processing them all, the basis size is at most 60. So the Gaussian elimination step is O( (M - (N-1)) * 60 ), which is manageable even for M=2e5, as 2e5 * 60 is 1.2e7 operations.
+
+Ah, this is the key insight. Because the XOR basis can have at most 60 vectors (since each pi is a 60-bit number), the Gaussian elimination can process all cycles in O(M * 60) time, which is acceptable.
+
+So the steps would be:
+
+1. Perform BFS/DFS to compute the xor_to_root array.
+
+2. For each back edge (u, v, p) in the BFS/DFS tree, compute the cycle's XOR as (xor_to_root[u] XOR xor_to_root[v] XOR p), and add this to the basis via Gaussian elimination.
+
+3. Once the basis is built, for each query (a, b), compute the initial XOR as xor_to_root[a] XOR xor_to_root[b], and then combine it with the basis to get the maximum possible XOR.
+
+This approach is feasible for all test cases, regardless of M and N.
+
+So now, the code can be written as follows:
+
+First, implement the BFS or DFS to compute the xor_to_root array. Then, collect all the back edges (non-tree edges) and compute their cycle's XOR. Then, perform Gaussian elimination to build the basis. Then, for each query, compute the initial XOR and use the basis to find the maximum.
+
+Let's think about implementing the BFS.
+
+We can represent the graph as an adjacency list. For each node u, we'll have a list of (v, p) pairs. We start from a root node (say, 0) and track the xor_to_root for each node. We use a queue (for BFS) or a stack (for DFS), and for each node, when we visit it, we process all its edges. For each edge (u, v, p), if v is not visited, we set xor_to_root[v] = xor_to_root[u] XOR p, mark it as visited, and proceed. If v is already visited and is not the parent of u, then this edge is a back edge, and the cycle's XOR is (xor_to_root[u] XOR xor_to_root[v] XOR p). This is added to the basis.
+
+So during BFS, for each node u, when we process an edge (u, v, p), we check if v is already visited. If it's visited and is not the parent, then it's a back edge. However, to avoid processing the same back edge twice (once in each direction), we can process each edge only once. For example, in the adjacency list, each edge is stored once. But the problem statement says that there's at most one road between any two rest areas, so each edge is unique. So during BFS, when processing u's edges, each edge is considered once. So for each such edge (u, v, p), if v is visited and is not the parent of u, then we compute the cycle's XOR and add it to the basis.
+
+But in the BFS, the parent tracking is needed. So each node u has a parent, which is the node it came from. So for each edge (u, v, p) in the adjacency list of u, if v is the parent, we skip it (since it's the tree edge). Otherwise, if v is visited, then it's a back edge, and we compute the cycle's XOR.
+
+So the BFS code would look like:
+
+Initialize xor_to_root as a list of 0s (if root is 0). Then, set xor_to_root[0] = 0. Mark all nodes as unvisited. Create a queue and enqueue the root. For each node u dequeued, iterate through its edges. For each (v, p):
+
+- If v is not visited: set parent[v] = u, xor_to_root[v] = xor_to_root[u] ^ p, mark as visited, enqueue.
+
+- Else if parent[u] != v: then this is a back edge. Compute cycle_xor = xor_to_root[u] ^ xor_to_root[v] ^ p. Add this to the basis.
+
+But wait, in this case, when u and v are connected via this edge, which is not the parent, but v has already been visited. So this is a back edge, which forms a cycle. The cycle's XOR is the XOR of the path from u to root, then the path from root to v, plus this edge. So the XOR is (xor_to_root[u] XOR (xor_to_root[v] XOR p)). Because the path u -> v via this edge is p, so the cycle's XOR is (xor_to_root[u] XOR (xor_to_root[v] XOR p)) = xor_to_root[u] XOR xor_to_root[v] XOR p.
+
+So the code correctly captures the cycle's XOR.
+
+Once all back edges are processed, the basis is built.
+
+Then, the basis is used to maximize the initial XOR for each query.
+
+The Gaussian elimination for the basis works as follows:
+
+We maintain a list of basis vectors, each of which is as large as possible (with a leading 1 in a unique bit position). For each new number, we XOR it with the basis vectors to reduce it. If it becomes non-zero, we add it to the basis in the position corresponding to its highest set bit.
+
+The code for this is:
+
+basis = []
+for number in cycle_xors:
+    x = number
+    for b in basis:
+        x = min(x, x ^ b)
+    if x != 0:
+        basis.append(x)
+        basis.sort(reverse=True)  # Or, better, insert in the correct position.
+
+But this is not efficient. The correct way is to process each bit from highest to lowest. For each bit from 59 down to 0:
+
+For each number, check if it has a set bit at position i. If there is no basis vector with that bit set, then this number becomes part of the basis. Otherwise, XOR the number with that basis vector to eliminate the bit. If after processing all higher bits, the number is not zero, it is added to the basis.
+
+An optimized way to perform this is:
+
+for x in cycle_xors:
+    current = x
+    for i in reversed(range(60)):  # assuming 60-bit numbers
+        if (current >> i) & 1:
+            if basis[i] == 0:
+                basis[i] = current
+                break
+            else:
+                current ^= basis[i]
+    # If current is zero, it's redundant.
+
+But we need to initialize the basis as a list of 60 zeros. Then, for each cycle_xor, we process it.
+
+So the code for Gaussian elimination would be:
+
+basis = [0] * 60
+
+for x in cycle_xors:
+    current = x
+    for i in reversed(range(60)):
+        if (current >> i) & 1:
+            if basis[i]:
+                current ^= basis[i]
+            else:
+                basis[i] = current
+                break
+
+Once the basis is built, to compute the maximum XOR for a given initial value:
+
+max_xor = initial_xor
+
+for i in reversed(range(60)):
+    if (max_xor ^ basis[i]) > max_xor:
+        max_xor ^= basis[i]
+
+But wait, the correct way is to iterate through the basis vectors in order from highest bit to lowest, and for each, if XORing the current max with the basis vector increases the max, then do it.
+
+But the basis may not be sorted. So for the basis array, where each element is the basis vector with the highest bit at position i, the code would be:
+
+max_val = initial
+for i in reversed(range(60)):
+    if basis[i] and (max_val ^ basis[i]) > max_val:
+        max_val ^= basis[i]
+
+This is because each basis[i] has the highest set bit at position i. So we process each bit in order, starting from the highest, and see if XORing with the basis vector increases the current maximum.
+
+So putting it all together:
+
+Compute xor_to_root via BFS/DFS.
+
+Collect all cycle_xors from back edges.
+
+Build the basis.
+
+For each query a, b:
+
+initial = xor_to_root[a] ^ xor_to_root[b]
+
+max_val = initial
+
+for i in reversed(range(60)):
+    if basis[i] and (max_val ^ basis[i]) > max_val:
+        max_val ^= basis[i]
+
+print(max_val)
+
+Now, implement this in Python.
+
+But what about the BFS? For N up to 1e5, using BFS is feasible as the adjacency lists can be built. For M up to 2e5, the adjacency list would have 2e5 entries (since each edge is stored in both directions? Wait, the problem says that there's at most one road between any two rest areas. So each edge is stored once. So the code will need to read M edges, each as (f, t, p), and add them to the adjacency list of f and t.
+
+So the adjacency list is built as:
+
+adj = [[] for _ in range(N)]
+for each edge (f, t, p):
+    adj[f].append( (t, p) )
+    adj[t].append( (f, p) )
+
+Then, during BFS, each edge is processed once (for each direction).
+
+Wait, but during BFS, when processing node u, we look at all adjacent edges. For example, if u is connected to v via an edge with p, then when processing u's adjacency list, we'll process (v, p). But when processing v's adjacency list, we'll process (u, p). So each edge is stored in both directions. So the BFS parent check is necessary to prevent processing the parent edge again.
+
+But the code for BFS should work as follows:
+
+parent = [-1] * N
+xor_to_root = [0] * N
+visited = [False] * N
+
+queue = deque()
+root = 0
+queue.append(root)
+visited[root] = True
+
+while queue:
+    u = queue.popleft()
+    for (v, p) in adj[u]:
+        if not visited[v]:
+            visited[v] = True
+            parent[v] = u
+            xor_to_root[v] = xor_to_root[u] ^ p
+            queue.append(v)
+        else:
+            if parent[u] != v:  # back edge
+                cycle_xor = xor_to_root[u] ^ xor_to_root[v] ^ p
+                # add cycle_xor to the list of cycle_xors
+
+But wait, this would process each back edge twice. Because when u is processed, and the edge (u, v) is checked, if v is visited and not the parent, then we add the cycle_xor. But when v is processed, and the edge (v, u) is checked (since it's in the adjacency list), we would again check if u is visited and not the parent of v. So this could lead to adding the same cycle_xor twice. For example, the edge (u, v) is processed when u is dequeued, and then again when v is dequeued. So the cycle_xor would be computed once for each direction.
+
+But the cycle_xor is the same in both directions. For example, u to v is p, but in the reverse direction it's also p. So the cycle_xor is (xor_u ^ xor_v ^ p) regardless of the direction. So adding it twice would mean adding the same cycle_xor twice. But in the Gaussian elimination, adding the same value twice would not change the basis. Because when you process it the second time, the current would become zero after XORing with the existing basis vector.
+
+So the code may process each back edge twice, but this is harmless. However, to avoid redundant processing, perhaps we can track which edges have already been processed. But that could be complicated. Alternatively, since the code for Gaussian elimination handles duplicates, it's acceptable to process each cycle_xor twice. Because the basis would not change after the first insertion.
+
+So the code can proceed without checking for duplicate edges. The cycle_xor is added each time a back edge is found, even if it's the same edge. But since Gaussian elimination is idempotent, this is okay.
+
+So the code for collecting cycle_xors is:
+
+cycle_xors = []
+
+parent = [-1] * N
+visited = [False] * N
+
+queue = deque([0])
+visited[0] = True
+
+while queue:
+    u = queue.popleft()
+    for (v, p) in adj[u]:
+        if not visited[v]:
+            visited[v] = True
+            parent[v] = u
+            xor_to_root[v] = xor_to_root[u] ^ p
+            queue.append(v)
+        else:
+            if parent[u] != v:
+                cycle_xor = xor_to_root[u] ^ xor_to_root[v] ^ p
+                cycle_xors.append(cycle_xor)
+
+But wait, the initial value of xor_to_root is set for the root (0). So when processing the root's edges, if the root's parent is -1, then any edge from root to a visited node (other than parent) will trigger a cycle. For example, in the first sample input:
+
+5 nodes, 5 edges. The BFS starts at 0. The edges are:
+
+0-1 (7)
+
+1-2 (22)
+
+2-3 (128)
+
+3-4 (128)
+
+4-2 (128)
+
+The BFS processes 0's edge to 1 (unvisited), then 1's edge to 0 (visited, parent is 0's parent is -1, so parent[u] (which is 1's parent is 0) != v (0). So this would trigger a cycle? Wait, when processing u=1, and edge (v=0, p=7). Since v=0 is visited and parent[1] is 0, so parent[u] (0) == v (0). So this edge is the parent edge, so no cycle. So no cycle is added here.
+
+But the cycle between 2-3-4-2 is found when processing edge 4-2. Let's see:
+
+After processing 0, 1, 2, 3, 4:
+
+Parent pointers:
+
+0's parent is -1.
+
+1's parent is 0.
+
+2's parent is 1.
+
+3's parent is 2.
+
+4's parent is 3.
+
+Then, when processing node 4, its edges are 3 and 2. The edge to 3 is parent (3's parent is 2, but 4's parent is 3). So when processing (4, 2, 128) edge:
+
+v is 2. parent[4] is 3. So parent[u] (3) != v (2). So this is a back edge. So cycle_xor is xor_to_root[4] ^ xor_to_root[2] ^ 128.
+
+xor_to_root[4] is 0^7^22^128^128 = 7^22 = 29 (since 7 is 0x111, 22 is 10110, 7^22 = 11001 (25), wait, 7 XOR 22 is 17. Let me calculate:
+
+0 XOR 7 is 7 (0→1).
+
+7 XOR 22 is 25 (1→2).
+
+25 XOR 128 is 153 (2→3).
+
+153 XOR 128 is 25 (3→4).
+
+So xor_to_root[4] is 25.
+
+xor_to_root[2] is 7^22 = 25.
+
+So cycle_xor is 25 XOR 25 XOR 128 = 0 XOR 128 = 128.
+
+This is added to the cycle_xors. So the basis will include 128 and 22 (maybe other cycles? Let's see.)
+
+But how many cycles are there in the first sample? Let's see.
+
+The first sample input has edges:
+
+0-1 (7)
+
+1-2 (22)
+
+2-3 (128)
+
+3-4 (128)
+
+4-2 (128)
+
+The BFS tree is 0→1→2→3→4. So the edges not in the tree are 4-2 (128). This adds a cycle when processing node4's edge to 2.
+
+So cycle_xor is 128. Then, during the BFS, when processing node2's edge to 4 (which is in the adjacency list), but node4 is already visited. parent[2] is 1, so when processing edge 2→4, since parent is 1, and 4 is visited and parent[4] is 3, so parent[u] != v. So cycle_xor is 25 (xor_to_root[2] is 25) XOR xor_to_root[4] (25) XOR 128 → 25^25=0 → 0^128=128. So this is added again. So cycle_xor is added twice. But Gaussian elimination will process both, but they are the same, so the second one will not affect the basis.
+
+So the basis would include 128, but when added again, it would be processed but not added.
+
+So the code works even if the same cycle is added multiple times.
+
+Once the basis is built, the queries are processed as follows.
+
+For example, the first query is 0→1.
+
+The initial xor is xor_to_root[0] (0) XOR xor_to_root[1] (7) → 7.
+
+The basis has 128. So the maximum XOR is 7 XOR 128 = 135.
+
+Which matches the sample output.
+
+The second query is 0→0. The initial xor is 0. Then, XOR with 128 gives 128, which is higher than 0. So output is 128.
+
+Third query is 3→4. The initial xor is xor_to_root[3] (7+22+128= 7^22=25, 25^128=153) XOR xor_to_root[4] (25). 153 XOR25 is 128. Then XOR with basis 128 gives 0. But since 128 is higher than 0, the maximum is 128.
+
+Which matches the sample.
+
+So the code works for the sample.
+
+Now, coding this in Python.
+
+But for large N (up to 1e5), we need to use adjacency lists efficiently. Python can handle that.
+
+Implementing BFS with deque.
+
+Handling the cycle_xors correctly.
+
+Then building the basis.
+
+Then processing each query.
+
+So the code structure is:
+
+Read N, M, Q.
+
+Read M edges, build adjacency list.
+
+Read Q queries.
+
+Run BFS to compute xor_to_root and collect cycle_xors.
+
+Build basis using Gaussian elimination.
+
+For each query, compute initial_xor, then compute max_xor using basis.
+
+Output max_xor.
+
+Now, code in Python.
+
+But the problem says that the function should read stdin, process, and print to stdout. So the code must read input via stdin, compute, and output.
+
+But for N=1e5, using standard BFS with deque may be slow. But Python's deque is efficient enough.
+
+But let's proceed.
+
+Sample code:
+
+import sys
+from sys import stdin
+from collections import deque
+
+def main():
+    input = sys.stdin.read().split()
+    ptr = 0
+    N = int(input[ptr])
+    ptr +=1
+    M = int(input[ptr])
+    ptr +=1
+    Q = int(input[ptr])
+    ptr +=1
+
+    adj = [[] for _ in range(N)]
+    for _ in range(M):
+        f = int(input[ptr])
+        ptr +=1
+        t = int(input[ptr])
+        ptr +=1
+        p = int(input[ptr])
+        ptr +=1
+        adj[f].append( (t, p) )
+        adj[t].append( (f, p) )
+
+    # BFS to compute xor_to_root and collect cycle_xors
+    xor_to_root = [0] * N
+    visited = [False] * N
+    parent = [-1] * N
+    cycle_xors = []
+
+    q = deque()
+    root = 0
+    visited[root] = True
+    q.append(root)
+
+    while q:
+        u = q.popleft()
+        for (v, p) in adj[u]:
+            if not visited[v]:
+                visited[v] = True
+                parent[v] = u
+                xor_to_root[v] = xor_to_root[u] ^ p
+                q.append(v)
+            else:
+                if parent[u] != v:
+                    cycle = xor_to_root[u] ^ xor_to_root[v] ^ p
+                    cycle_xors.append(cycle)
+
+    # Build basis
+    basis = [0] * 60  # index 59 is highest bit (2^59)
+    for x in cycle_xors:
+        current = x
+        for i in reversed(range(60)):
+            if (current >> i) & 1:
+                if basis[i]:
+                    current ^= basis[i]
+                else:
+                    basis[i] = current
+                    break
+
+    # Process queries
+    for _ in range(Q):
+        a = int(input[ptr])
+        ptr +=1
+        b = int(input[ptr])
+        ptr +=1
+        res = xor_to_root[a] ^ xor_to_root[b]
+        # Apply basis to maximize res
+        for i in reversed(range(60)):
+            if basis[i] and (res ^ basis[i]) > res:
+                res ^= basis[i]
+        print(res)
+
+main()
+
+But wait, the code has a problem. The parent array is initialized to -1, and parent[u] is the parent of u in the BFS tree. But when processing an edge (u, v), if u's parent is v, then it's a tree edge and should be skipped. However, the code checks if parent[u] != v to detect back edges. But parent[u] is the parent of u, not v's parent. So for example, when processing an edge from u to v, where v is visited and is the parent of u, then this is a tree edge (since u's parent is v), so we should not process it. But the code checks if parent[u] != v. If parent[u] is v, then the edge is the tree edge and is skipped. Otherwise, it's a back edge.
+
+Yes. Because, during BFS, when u is processed, and we look at an edge to v. If v is not visited, then it's a tree edge. Otherwise, if v is visited and is not the parent of u, then it's a back edge.
+
+So the code correctly adds cycle_xor for back edges.
+
+Testing this code with the first sample input:
+
+Sample input:
+
+5 5 3
+0 1 7
+1 2 22
+2 3 128
+3 4 128
+4 2 128
+0 1
+0 0
+3 4
+
+The BFS starts at 0. Visits 0, then processes edges. The first edge is 0-1 (7), which is unvisited. So parent[1] =0, xor_to_root[1] =7. Then, process edges of 0. Next, 1 is dequeued. Process edges:
+
+0-1 (already visited, parent of 1 is 0, so parent[1] == 0 == v (0) → no cycle.
+
+Edge 1-2 (22), v=2 unvisited. Set parent[2]=1, xor_to_root[2] =7^22= 25. Continue.
+
+Then 2 is dequeued. Process edges:
+
+1-2 (visited, parent is 1. So no cycle.
+
+2-3 (128), v=3 unvisited. Parent[3] =2, xor_to_root[3] =25^128=153.
+
+Then 3 is dequeued. Process edges:
+
+2-3 (parent is 2, no cycle.
+
+3-4 (128), v=4 unvisited. Parent[4] =3. xor_to_root[4] =153^128= 25.
+
+4 is dequeued. Process edges:
+
+3-4 (parent is 3, no cycle.
+
+4-2 (128). v=2 is visited. parent[4] is 3. So parent[4] (3) != v (2). So this is a back edge. Compute cycle_xor: xor_to_root[4] (25) ^ xor_to_root[2] (25) ^128 → 0 ^128 → 128. Add to cycle_xors.
+
+Then, when processing 4's edge to 2, the code adds the cycle_xor=128.
+
+Other edges: 2 is already visited, but when processing 2's edge to 4 (which is in the adjacency list), but 2's parent is 1. So when processing 2's edge to 4, v=4 is visited, parent[2] is 1 !=4. So cycle_xor is xor_to_root[2] (25) ^ xor_to_root[4] (25) ^128 → 0^128=128. This is added again. So cycle_xors will have two entries of 128. But during basis building, both will be processed, but the basis will only include 128 once.
+
+The basis for the first sample will have basis[7] =128 (since 128 is 2^7 + ... but wait, 128 is 2^7 is 128. So the highest bit is 7.
+
+So during basis building, the first 128 is added to basis[7]. The next 128 is processed: current is 128. For i=59 down to 0:
+
+At i=7, current has bit 7 set. basis[7] is 128. So current XOR= 128 ^128=0. So this cycle_xor is redundant and not added.
+
+So the basis for the first sample is [0,0,..., 128 at position 7, ...].
+
+Then, for each query:
+
+First query: a=0, b=1. initial_xor is 0^7=7. Applying basis: check 128. 7 XOR128 is 135, which is higher than 7, so the result is 135.
+
+Second query: a=0, b=0. initial_xor is 0. XOR with 128 is 128.
+
+Third query: a=3, b=4. initial_xor is 153 ^25 = 128. XOR with basis[7] is 0. So the maximum is 128.
+
+Thus, the code outputs the correct sample.
+
+Now, the code should handle all test cases correctly.
+
+But what about when M is zero? But the problem says the graph is connected. So M can't be zero if N>=2. But when N=1, M=0 is allowed, but according to the problem statement, the road connects two different rest areas, so M=0 is allowed when N=1. But in that case, the code's BFS would process nothing, and xor_to_root[0] is zero. The queries would all be from 0 to 0, and the initial XOR is zero, with no basis. So the output is zero.
+
+Thus, the code should handle all cases correctly.
+</think>
+To solve this problem, we need to determine the maximum XOR score for each participant traveling from a starting rest area to a goal rest area in a graph where each road contributes a specific score when traversed. The solution involves leveraging graph traversal techniques and Gaussian elimination to handle XOR operations efficiently.
+
+### Approach
+1. **Graph Representation**: Represent the graph using an adjacency list to store each road's endpoints and their respective scores.
+2. **Breadth-First Search (BFS)**: Use BFS to compute the XOR score from a root node (chosen as node 0) to all other nodes. This helps in determining the initial XOR score for any path between two nodes.
+3. **Cycle Detection**: During BFS, detect cycles by checking back edges. The XOR value of each cycle is computed and stored.
+4. **Gaussian Elimination**: Construct a basis for the cycle XOR values using Gaussian elimination over GF(2). This basis allows us to combine the initial path XOR with cycle values to maximize the result.
+5. **Query Processing**: For each query, compute the initial XOR score between the start and end nodes. Use the basis vectors to determine the maximum possible XOR score by combining the initial value with the cycle basis.
+
+### Solution Code
+```python
+import sys
+from collections import deque
+
+def main():
+    input = sys.stdin.read().split()
+    ptr = 0
+    N = int(input[ptr])
+    ptr += 1
+    M = int(input[ptr])
+    ptr += 1
+    Q = int(input[ptr])
+    ptr += 1
+
+    adj = [[] for _ in range(N)]
+    for _ in range(M):
+        f = int(input[ptr])
+        ptr += 1
+        t = int(input[ptr])
+        ptr += 1
+        p = int(input[ptr])
+        ptr += 1
+        adj[f].append((t, p))
+        adj[t].append((f, p))
+
+    xor_to_root = [0] * N
+    visited = [False] * N
+    parent = [-1] * N
+    cycle_xors = []
+
+    q = deque([0])
+    visited[0] = True
+
+    while q:
+        u = q.popleft()
+        for (v, p) in adj[u]:
+            if not visited[v]:
+                visited[v] = True
+                parent[v] = u
+                xor_to_root[v] = xor_to_root[u] ^ p
+                q.append(v)
+            else:
+                if parent[u] != v:
+                    cycle_xor = xor_to_root[u] ^ xor_to_root[v] ^ p
+                    cycle_xors.append(cycle_xor)
+
+    basis = [0] * 60
+    for x in cycle_xors:
+        current = x
+        for i in reversed(range(60)):
+            if (current >> i) & 1:
+                if basis[i]:
+                    current ^= basis[i]
+                else:
+                    basis[i] = current
+                    break
+
+    output = []
+    for _ in range(Q):
+        a = int(input[ptr])
+        ptr += 1
+        b = int(input[ptr])
+        ptr += 1
+        res = xor_to_root[a] ^ xor_to_root[b]
+        for i in reversed(range(60)):
+            if basis[i] and (res ^ basis[i]) > res:
+                res ^= basis[i]
+        output.append(str(res))
+    print('\n'.join(output))
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Graph Traversal (BFS)**: The BFS starts from node 0, marking nodes as visited and computing the XOR score from the root to each node. This helps in determining the shortest path XOR values.
+2. **Cycle Detection**: While traversing, back edges (non-tree edges) are identified. The XOR value of each cycle formed by these edges is computed and stored.
+3. **Gaussian Elimination**: The cycle XOR values are processed to form a basis using Gaussian elimination. This basis allows efficient combination of XOR values to find the maximum possible result.
+4. **Query Processing**: For each query, the initial XOR between the start and end nodes is computed. Using the basis vectors, the maximum possible XOR is determined by combining the initial value with the basis vectors in a way that maximizes the result.
+
+This approach efficiently handles the constraints and provides the optimal solution using graph traversal and linear algebra techniques over GF(2).
+</bot>

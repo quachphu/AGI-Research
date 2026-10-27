@@ -1,0 +1,705 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.You are given a sequence A_1, A_2, ..., A_N and an integer K.
+
+Print the maximum possible length of a sequence B that satisfies the following conditions:
+
+* B is a (not necessarily continuous) subsequence of A.
+* For each pair of adjacents elements of B, the absolute difference of the elements is at most K.
+
+Constraints
+
+* 1 \leq N \leq 300,000
+* 0 \leq A_i \leq 300,000
+* 0 \leq K \leq 300,000
+* All values in input are integers.
+
+Input
+
+Input is given from Standard Input in the following format:
+
+
+N K
+A_1
+A_2
+:
+A_N
+
+
+Output
+
+Print the answer.
+
+Example
+
+Input
+
+10 3
+1
+5
+4
+3
+8
+6
+9
+7
+2
+4
+
+
+Output
+
+7
+</user>
+<bot>
+<think>
+Okay, I need to solve this problem. Let's read the problem statement carefully. So, we have a sequence A of N elements, and we need to find the maximum possible length of a subsequence B. The condition for B is that every pair of adjacent elements in B has an absolute difference at most K. And B is a subsequence of A, meaning the elements have to appear in order but not necessarily consecutively.
+
+Hmm. The key here is that the elements in B must be in order, and each consecutive pair in B can't differ by more than K. The question is to find the longest possible such subsequence.
+
+Let's think about dynamic programming. For each element in A, maybe we can track the longest possible subsequence ending with that element. So, for position i in A, dp[i] represents the maximum length of such a subsequence ending at A[i]. Then, to compute dp[i], we look at all previous elements j where the absolute difference between A[i] and A[j] is <= K, and take the maximum dp[j] + 1. If there's no such j, then dp[i] is 1 (just itself).
+
+But wait, if N is up to 3e5, then a naive DP approach where for each i we check all previous j's is O(N^2), which is way too slow. So that's not going to work. We need a smarter approach.
+
+So, how can we optimize this? Let's think about the possible values of A[i]. The elements are up to 3e5. Maybe we can use some kind of segment tree or binary indexed tree (Fenwick tree) to track the maximum dp value in certain ranges.
+
+For example, when processing A[i], we need to find the maximum dp value among all elements A[j] where A[j] is in [A[i]-K, A[i]+K]. Then, dp[i] = max_value_in_range + 1. Then, we need to update our data structure with the new dp[i] at the position A[i].
+
+This seems plausible. Because for each element, we can query the maximum in a range of values and then update accordingly. The key is to map the possible A[i] values into a structure that allows efficient range maximum queries and updates.
+
+But A[i] can be up to 3e5, and K can also be up to 3e5. So the range [A[i] - K, A[i] + K] could span from 0 to 6e5. But 3e5 is manageable with a segment tree. Let's see.
+
+So, the plan is:
+
+1. Initialize a segment tree that can handle range maximum queries and point updates.
+
+2. For each element in A in order:
+
+   a. For the current A[i], compute the range [A[i] - K, A[i] + K].
+
+   b. Query the segment tree for the maximum value in this range. Let this be 'max_len'.
+
+   c. The dp[i] is max_len + 1. If the range has no elements (all previous elements outside the range), then max_len is 0, so dp[i] is 1.
+
+   d. Update the segment tree at position A[i] with the new dp[i] if it's larger than the current value stored there.
+
+3. The maximum dp[i] across all i is the answer.
+
+This approach should be O(N log M), where M is the maximum possible value of A[i], which is up to 3e5. Since N is 3e5, 3e5 * log(3e5) is acceptable.
+
+Wait, but what if there are multiple elements with the same value? For example, if two elements have the same value, say 5, then when the next element is processed and K allows it to use 5, it can take the maximum dp value from all previous 5's and similar.
+
+But the segment tree approach would track the maximum value at each A[i], regardless of their order, but since we process elements in order, each update is for a particular value, and the segment tree keeps the maximum possible dp value for each value. Because when a new element is processed, its value may allow higher dp values for the same value in future elements.
+
+Wait, no. Because the segment tree is storing for each value x, the maximum dp[j] where A[j] = x. So when a new element comes with x, we check the range [x-K, x+K], find the maximum dp[j] in that range, add 1, and then if the current dp[i] is larger than the existing maximum for x, we update it. So even if there are multiple elements with the same x, the segment tree will keep track of the maximum possible dp value for that x up to the current point.
+
+Yes, that makes sense. Because for any future element, when they look into x's range, they can take the maximum of all previous x's, which is stored as the maximum in the segment tree. So this approach correctly tracks the best possible previous values.
+
+So, the steps are:
+
+- Initialize the segment tree with all zeros. The size of the segment tree needs to cover all possible A[i] values. Since A[i] can be up to 3e5, and K can add 3e5 to that, the maximum possible upper bound is 3e5 + 3e5 = 6e5. So the segment tree needs to cover the range from 0 to 6e5. Wait, no. Because when K is 3e5 and A[i] is 3e5, then the upper bound would be 3e5 + 3e5 = 6e5. So the maximum required value is 6e5. So the segment tree's size should be 6e5 + 1. But maybe some elements are negative? No, the problem statement says all A_i are integers between 0 and 3e5. So the possible values are non-negative.
+
+Therefore, the segment tree should cover from 0 to 6e5 to handle any possible [x-K, x+K] range. But if x is 0, x-K could be negative, but since all A[j] are >=0, the lower bound can be 0. So the actual lower bound for any query is max(0, x-K), and upper bound is min(6e5, x+K). Wait, but the elements can't exceed 3e5. So the maximum x is 3e5. x+K can be up to 3e5 + 3e5 = 6e5. So the segment tree should be built for the range 0 to 6e5, but since all elements in A are up to 3e5, the segment tree's nodes beyond 3e5 may not be used except for queries. But during updates, we only update positions up to 3e5.
+
+Wait, but when processing a value x, we update the segment tree at x. So for example, if x is 5, and K is 3, then the next elements can be in 2-8. But in the segment tree, the x is 5, so the update is at 5. So even if a query is made for 8 (which may not have any elements yet), the segment tree would return 0, but if there are elements in that range, then the maximum would be considered.
+
+Therefore, the segment tree's size must cover up to 6e5. Let's confirm:
+
+The maximum possible x is 3e5, and K can be 3e5, so x + K = 6e5. So any query for a value x would need to check up to 6e5. So the segment tree must cover 0 to 6e5.
+
+But 6e5 is 600,000. So building a segment tree for that range is manageable.
+
+But building a segment tree of size 6e5+1 might be a bit memory-intensive. For example, each node would have two children. The number of nodes is about 4*(6e5+1) which is about 2.4e6, which is acceptable.
+
+Alternatively, a Binary Indexed Tree (Fenwick Tree) can be used for range max queries? Wait, but BIT is typically used for prefix sums and point updates, but for range maximum queries, it's not straightforward. So perhaps a segment tree is better here.
+
+So, the plan is to use a segment tree that can handle range max queries and point updates.
+
+So the steps are:
+
+For each element x in A:
+
+1. Compute low = max(0, x - K)
+
+2. high = x + K
+
+3. Query the segment tree for the maximum in [low, high]
+
+4. current_max = query_result + 1
+
+5. Update the segment tree at position x to be the maximum between the current value stored at x and current_max.
+
+6. Keep track of the global maximum answer as we process each element.
+
+The initial segment tree is all zeros. So for the first element x, low = x-K (but at least 0), high = x+K. The query returns 0, so current_max is 1. Then, we update x with 1. The global max becomes 1.
+
+For subsequent elements, the same logic applies. The segment tree allows us to efficiently find the best possible previous value in the allowed range.
+
+This approach should work.
+
+Now, the challenge is to implement a segment tree with range max queries and point updates efficiently.
+
+But implementing a segment tree for 6e5 elements is manageable, but in Python, recursion may not be efficient. So better to implement it iteratively or use a list-based approach.
+
+Alternatively, we can note that the elements can be compressed. But since K can be up to 3e5, the ranges are up to 6e5, and since A[i] can be up to 3e5, coordinate compression may not help here unless the number of unique values is small, which it's not. So coordinate compression is probably not applicable here.
+
+So, let's proceed with the segment tree approach.
+
+Now, the code outline is:
+
+Read N and K.
+
+Read the list A.
+
+Initialize a segment tree for the range 0 to 6e5.
+
+Initialize answer as 0.
+
+For each x in A:
+
+    low = max(0, x - K)
+
+    high = x + K
+
+    current_max = segment_tree.query_max(low, high)
+
+    new_val = current_max + 1
+
+    current_answer = new_val
+
+    if current_answer > answer:
+
+        answer = current_answer
+
+    # Update the segment tree at x with new_val if it's larger than existing
+
+    segment_tree.update(x, new_val)
+
+Print answer.
+
+But wait, how does the segment tree handle the updates? Because for the same x, if there are multiple elements, we need to keep track of the maximum value at x. So when we process x again, the update is to take the maximum between the existing value at x and new_val.
+
+Yes. Because, for example, if two elements have the same x, the second one can form a longer subsequence by taking the maximum possible from the first x's range. But the update for x would store the maximum possible value for x so far.
+
+So the segment tree needs to support point updates where for a position x, we set it to the maximum between the current value and the new_val.
+
+So the update function for the segment tree should take a position and a value, and set the position's value to the maximum of the current value and the new value.
+
+So the segment tree must support:
+
+- Range maximum query.
+
+- Point update (set to the maximum of current and new value).
+
+Now, implementing the segment tree.
+
+In Python, implementing a segment tree for 6e5 can be done with a list. Let's see. The size of the segment tree is typically 4 * (n), where n is the number of leaves. But since the maximum x can be up to 6e5, but the actual elements are up to 3e5, perhaps the leaves need to cover 0 to 6e5. Wait, the queries can be up to x + K = 6e5, so the leaves need to represent all possible positions up to 6e5.
+
+So the number of leaves needed is 6e5 + 1. To make the size a power of two, perhaps find the next power of two greater than or equal to 6e5 +1.
+
+Alternatively, use a non-binary heap structure. But in practice, for Python, a dynamic approach may be challenging.
+
+Alternatively, since 6e5 is manageable, let's precompute the size.
+
+But perhaps the easiest way is to use a list-based segment tree, where each node stores the maximum for its range.
+
+But building a segment tree with 6e5+1 elements is possible.
+
+But considering that 6e5+1 is 600001, the next power of two is 2^19 = 524288, which is less than 6e5. Wait, 2^19 is 524,288, 2^20 is 1,048,576. So for 600,001 elements, the next power of two is 1,048,576. That's a lot of nodes, but in Python, a list of 2^20 * 2 would be 2 million elements, which is manageable in terms of memory.
+
+Alternatively, perhaps using a non-binary-based segment tree. But perhaps the iterative segment tree approach is better.
+
+Alternatively, using a list-based approach where the tree is built for the maximum required x (6e5). So the maximum index in the tree is 6e5.
+
+But in any case, implementing a segment tree for 0 to 6e5.
+
+Alternatively, we can note that the maximum value of x is 3e5, but the query can go up to 3e5 + 3e5 = 6e5. So the segment tree must be able to query up to 6e5. So the size of the segment tree must be at least 6e5 +1.
+
+So here's an outline of the iterative segment tree implementation.
+
+The segment tree will have each node represent a range [l, r], and the tree is built for the range [0, max_value], where max_value is 6e5.
+
+Each node stores the maximum value in its interval.
+
+For the query, given a range [a, b], we need to find the maximum in that range.
+
+For the update, given a position pos, set the value at pos to the maximum between its current value and the new value.
+
+Implementing this in Python.
+
+But for large ranges, using a list-based approach might be slow. However, given that the operations are O(log M), with M up to 6e5, and N up to 3e5, the total operations would be 3e5 * log (6e5) which is acceptable.
+
+Alternatively, use a binary indexed tree (Fenwick tree) for the maximum. But Fenwick trees are not suitable for range max queries.
+
+So, back to the segment tree.
+
+Implementing an iterative segment tree for range max and point updates.
+
+The code for the segment tree could be as follows:
+
+The size of the segment tree is 1 << (ceil(log2(M)) + 1), where M is 6e5 +1.
+
+But how to compute M?
+
+Wait, the maximum possible x in the query is 6e5. So the segment tree must cover 0 to 6e5.
+
+So M = 6e5 +1 = 600001.
+
+But 600001 is not a power of two. So the next power of two is 1 << 19 is 524,288 (which is less than 6e5+1). 1 << 20 is 1,048,576 which is larger. So the size of the segment tree would be 1 << 20, which is 1,048,576 leaves. So the total nodes would be 2*1,048,576 = 2,097,152. But for a segment tree, the size is 2^(ceil(log2(M))) * 2. So perhaps 1,048,576 leaves, each representing a value from 0 to 1,048,575. But our M is 6e5+1, which is 600,001. So 1,048,576 is larger than that, but we can have the leaves up to 600,000 and the rest up to 1,048,575 can be ignored. Wait, no. Because when we build the segment tree, all leaves must be considered. But perhaps, in the code, for any position beyond 6e5, the value is 0, since all elements in A are up to 3e5, and K is up to 3e5, so the maximum query is 3e5+3e5=6e5.
+
+Wait, but when K is 3e5 and x is 3e5, then the upper bound is 6e5. So the segment tree must include up to 6e5.
+
+But in the code, the leaves for the segment tree are from 0 to (size of the tree -1), where size is the next power of two. But that may include positions beyond 6e5, but those positions are never queried. However, when a query is for a range up to 6e5, which is within the leaves of the segment tree. So the code can proceed as such.
+
+But perhaps it's easier to build the segment tree with size 1 << 20, which is sufficient to cover up to 6e5.
+
+Alternatively, let's compute the required size.
+
+Compute the next power of two greater than or equal to M, where M is 6e5 +1. Let's calculate:
+
+6e5 is 600,000. 6e5 +1 is 600,001. The next power of two is 1,048,576 (2^20). So M_padded = 1,048,576.
+
+But then, the segment tree for 0 to M_padded-1 (1,048,575) would have leaves for all positions up to that. But when we query up to 6e5, the code should correctly return the maximum in that range.
+
+So, the code for the segment tree would be as follows:
+
+class SegmentTree:
+    def __init__(self, size):
+        self.n = 1
+        while self.n < size:
+            self.n <<=1
+        self.size = self.n
+        self.tree = [0] * (2 * self.n)
+    
+    def update(self, pos, value):
+        pos += self.n
+        if self.tree[pos] < value:
+            self.tree[pos] = value
+            pos >>=1
+            while pos >=1:
+                new_val = max(self.tree[2*pos], self.tree[2*pos+1])
+                if self.tree[pos] == new_val:
+                    break
+                self.tree[pos] = new_val
+                pos >>=1
+    
+    def query_max(self, l, r):
+        res = 0
+        l += self.n
+        r += self.n
+        while l <= r:
+            if l %2 ==1:
+                res = max(res, self.tree[l])
+                l +=1
+            if r %2 ==0:
+                res = max(res, self.tree[r])
+                r -=1
+            l >>=1
+            r >>=1
+        return res
+
+Wait, but in this implementation, the 'size' is self.n, which is a power of two. The leaves are from self.n to 2*self.n -1. Each position pos in the original array is mapped to pos + self.n. So, for example, if the size is 1 << 20, then the leaves are from 1 << 20 to (1 << 21) -1.
+
+But when we have a position x (up to 6e5), we add self.n (which is 1 << 20) to x to get the leaf node. But if x is up to 6e5, which is 600,000, then 600,000 + 1,048,576 = 1,648,576. But the tree is initialized with 2*self.n elements, which is 2*1,048,576 = 2,097,152. So the indices are valid.
+
+But when we query a range [l, r], the code checks the leaves in l and r. So, for example, if the original l is 0 and r is 6e5, then the code will traverse the tree and find the maximum.
+
+This should work.
+
+Now, testing this code.
+
+For example, when initializing the segment tree with size 6e5 +1, but in code, the 'size' parameter to the SegmentTree is 6e5 +1. Wait, in the code above, the size parameter is passed to the SegmentTree, and then the code finds the next power of two greater than or equal to that size. So, for example, if the size is 600,001, the next power of two is 1,048,576. So the code initializes the tree with 2*1,048,576 elements.
+
+But when we call update with x=5, it will be mapped to 5 + 1,048,576 = 1,048,581. The tree size is 2,097,152, so this is within the range.
+
+The query for [0,6e5] would correctly check all positions up to 6e5.
+
+But in the code, when we call query_max(l, r), l and r are in the original (unpadded) coordinates. So for example, l=0, r=6e5. The code adds self.n (1,048,576) to l and r, then processes the leaves.
+
+Yes.
+
+So this code should handle the required updates and queries.
+
+Now, let's test with the example input.
+
+Sample Input:
+
+10 3
+
+1
+
+5
+
+4
+
+3
+
+8
+
+6
+
+9
+
+7
+
+2
+
+4
+
+Sample Output: 7
+
+Let's see how the code would process this.
+
+Initialize the segment tree for size 6e5+1. But in the code, the actual size would be up to 1,048,576.
+
+Processing each element:
+
+1. x = 1. K=3. low = max(0, 1-3)=0. high=1+3=4. query the range [0,4]. Initially, all are 0. So current_max = 0. new_val = 1. Update x=1 to 1. Answer is 1.
+
+2. x=5. low=5-3=2. high=5+3=8. query [2,8]. All previous elements are 0. So new_val=1. Update 5 with 1. Answer remains 1.
+
+Wait, no. Wait, first element was 1. Now, the second element is 5. The query is [5-3=2, 5+3=8]. The existing elements are 1. But 1 is in [2,8]? No. So the maximum in [2,8] is 0. So new_val is 1. Update x=5 to 1. The answer is still 1.
+
+But the current maximum is 1.
+
+Third element: x=4.
+
+low = 4-3=1. high=4+3=7. Query [1,7]. The existing elements are 1 (x=1, value 1) and 5 (value 1). So in the range [1,7], the maximum is 1. new_val=2. Update x=4 to 2. Answer is 2.
+
+Fourth element: x=3. low=0, high=6. Query [0,6]. Existing elements are 1 (value 1), 5 (1), 4 (2). So the max in this range is 2 (from x=4). new_val=3. Update x=3 to 3. Answer becomes 3.
+
+Fifth element: x=8. low=5, high=11. Query [5,11]. Existing elements in this range: x=5 (value 1). So new_val=2. Update x=8 to 2. Answer remains 3.
+
+Wait, but 8+3=11. The existing elements up to now are 1,5,4,3. So the query for [5,11] would find x=5 (value 1). So new_val is 1+1=2. So the new value for x=8 is 2. The answer remains 3.
+
+Sixth element: x=6. low=3, high=9. Query [3,9]. Existing elements in this range: x=3 (3), x=4 (2), x=5 (1), x=8 (2). The maximum is 3. So new_val=4. Update x=6 to 4. Answer becomes 4.
+
+Seventh element: x=9. low=6, high=12. Query [6,12]. Existing elements in this range: x=6 (4), x=8 (2). The maximum is 4. new_val=5. Update x=9 to 5. Answer becomes 5.
+
+Eighth element: x=7. low=4, high=10. Query [4,10]. Existing elements: x=4 (2), x=5 (1), x=6 (4), x=7 (so far no), x=8 (2), x=9 (5). So maximum is 5 (from x=9). new_val=6. Update x=7 to 6. Answer becomes 6.
+
+Ninth element: x=2. low= max(0, 2-3)=0. high=5. Query [0,5]. Existing elements: 1 (1), 3 (3), 4 (2), 5 (1). Max is 3 (x=3). new_val=4. Update x=2 to 4. Answer becomes 6 (since 4 is less than 6).
+
+Tenth element: x=4. low=1, high=7. Query [1,7]. Existing elements in this range: 1 (1), 2 (4), 3 (3),4 (2),5 (1),6 (4),7 (6). So the maximum is 6 (x=7). new_val=7. Update x=4 to max(current value (2) and 7, so 7. So the new value for x=4 is 7. Answer becomes 7.
+
+So the final answer is 7, which matches the sample output.
+
+So the code should work.
+
+Now, the code in Python.
+
+But in Python, for large N (3e5), using a SegmentTree class as above may be too slow. Because each update and query requires O(log M) operations, and for N=3e5, log M is 20 (since M is up to 6e5). So 3e5 * 20 operations for updates and queries each, which is 6e6 * 2 = 1.2e7 operations. Python can handle that.
+
+But the implementation of the segment tree must be efficient.
+
+Alternatively, using a binary indexed tree (Fenwick Tree) for this problem is possible but I don't think it's applicable here because Fenwick Tree is good for prefix sums but not for range max queries.
+
+Thus, the code outline is:
+
+Read N and K.
+
+Read the array A.
+
+Initialize the segment tree with size up to 6e5.
+
+max_val = 0.
+
+For x in A:
+
+    low = max(0, x - K)
+
+    high = x + K
+
+    current_max = segment_tree.query_max(low, high)
+
+    new_val = current_max + 1
+
+    if new_val > max_val:
+
+        max_val = new_val
+
+    segment_tree.update(x, new_val)
+
+print(max_val)
+
+So, the code.
+
+Now, implementing the SegmentTree class.
+
+But the code for the SegmentTree class may need to be optimized. For example, the update function loops while pos >=1, updating the tree. The query function uses a standard iterative approach.
+
+But in Python, the code may be slow for N=3e5. So perhaps some optimizations are needed.
+
+Alternatively, use a list-based approach with preallocated size.
+
+Another possible optimization is to note that all A[i] are up to 3e5, so when K is 0, the query for [x, x], but the code still works.
+
+But let's proceed.
+
+Now, the code:
+
+class SegmentTree:
+    def __init__(self, max_val):
+        self.n = 1
+        while self.n < max_val + 1:
+            self.n <<= 1
+        self.tree = [0] * (2 * self.n)
+    
+    def update(self, idx, value):
+        idx += self.n
+        if self.tree[idx] >= value:
+            return
+        self.tree[idx] = value
+        while idx > 1:
+            idx >>= 1
+            new_val = max(self.tree[2*idx], self.tree[2*idx+1])
+            if self.tree[idx] == new_val:
+                break
+            self.tree[idx] = new_val
+    
+    def query(self, l, r):
+        res = 0
+        l += self.n
+        r += self.n
+        while l <= r:
+            if l % 2 == 1:
+                res = max(res, self.tree[l])
+                l += 1
+            if r % 2 == 0:
+                res = max(res, self.tree[r])
+                r -= 1
+            l >>= 1
+            r >>= 1
+        return res
+
+But the max_val passed to the SegmentTree is 6e5. Because when K is 3e5 and x is 3e5, the high is 6e5.
+
+Wait, but the code initializes the SegmentTree with max_val = 6e5. So the n is the next power of two greater than 6e5 +1. So the code can handle queries up to 6e5.
+
+Now, the code:
+
+Read N and K.
+
+Read N lines as A.
+
+Create the segment tree with max_val = 6e5.
+
+Then process each x in A.
+
+So the code:
+
+import sys
+
+class SegmentTree:
+    def __init__(self, max_val):
+        self.n = 1
+        while self.n < max_val + 1:
+            self.n <<= 1
+        self.tree = [0] * (2 * self.n)
+    
+    def update(self, idx, value):
+        idx += self.n
+        if self.tree[idx] >= value:
+            return
+        self.tree[idx] = value
+        while idx > 1:
+            idx >>= 1
+            new_val = max(self.tree[idx * 2], self.tree[idx * 2 + 1])
+            if self.tree[idx] == new_val:
+                break
+            self.tree[idx] = new_val
+    
+    def query(self, l, r):
+        res = 0
+        l += self.n
+        r += self.n
+        while l <= r:
+            if l % 2 == 1:
+                res = max(res, self.tree[l])
+                l += 1
+            if r % 2 == 0:
+                res = max(res, self.tree[r])
+                r -= 1
+            l >>= 1
+            r >>= 1
+        return res
+
+def main():
+    import sys
+    input = sys.stdin.read().split()
+    ptr = 0
+    N = int(input[ptr])
+    ptr +=1
+    K = int(input[ptr])
+    ptr +=1
+    A = []
+    for _ in range(N):
+        A.append(int(input[ptr]))
+        ptr +=1
+    max_x = 600000
+    st = SegmentTree(max_x)
+    max_len = 0
+    for x in A:
+        low = max(0, x - K)
+        high = x + K
+        current_max = st.query(low, high)
+        new_val = current_max +1
+        if new_val > max_len:
+            max_len = new_val
+        st.update(x, new_val)
+    print(max_len)
+
+if __name__ == '__main__':
+    main()
+
+Wait, but in the code, the SegmentTree is initialized with max_val = 600000. So the code creates a segment tree for 0 to 600,000. But when K is 3e5 and x is 3e5, the high is 6e5. So the code will query up to 6e5, which is covered.
+
+But the max_val passed is 6e5. So the code should be correct.
+
+Testing this code with the sample input.
+
+Sample input:
+
+10 3
+
+1
+
+5
+
+4
+
+3
+
+8
+
+6
+
+9
+
+7
+
+2
+
+4
+
+The code should output 7.
+
+Another test case: when K=0. For example, the answer is the maximum frequency of any number. So if all elements are the same, the answer is N.
+
+For example:
+
+Input:
+
+5 0
+
+2
+
+2
+
+2
+
+2
+
+2
+
+Output:5.
+
+The code should process this correctly.
+
+Now, considering the constraints. For N=3e5, the code should process each element in O(log (6e5)) time.
+
+Potential optimizations:
+
+- Precomputing the maximum required x as 3e5 + K. But K can be up to 3e5. So the maximum x is 3e5, and K can be 3e5, making x+K=6e5. So the code is correct.
+
+Another possible optimization: use the maximum x in A plus K to set the max_val for the segment tree, but in Python, the code uses 6e5, which is the maximum possible.
+
+But for the given problem, this is correct.
+
+Thus, the code should work.
+</think>
+To solve this problem, we need to find the longest subsequence from a given sequence such that the absolute difference between any two adjacent elements in the subsequence is at most K. The solution involves using a segment tree to efficiently compute the maximum length of such a subsequence.
+
+### Approach
+1. **Dynamic Programming with Segment Tree**: We use dynamic programming (DP) where `dp[i]` represents the maximum length of a valid subsequence ending at element `A[i]`. For each element `A[i]`, we need to find the maximum length of subsequences ending at previous elements that are within the range `[A[i] - K, A[i] + K]`. This range query and update operation can be efficiently handled using a segment tree.
+
+2. **Segment Tree for Range Queries**: The segment tree is used to maintain the maximum length of valid subsequences ending at each possible value. For each element `A[i]`, we query the segment tree to find the maximum value in the range `[A[i] - K, A[i] + K]`, then update the segment tree with the new value at `A[i]`.
+
+3. **Efficient Updates and Queries**: The segment tree allows us to perform both range maximum queries and point updates in logarithmic time, making the solution efficient even for large input sizes.
+
+### Solution Code
+```python
+import sys
+
+class SegmentTree:
+    def __init__(self, max_val):
+        self.n = 1
+        while self.n < max_val + 1:
+            self.n <<= 1
+        self.tree = [0] * (2 * self.n)
+    
+    def update(self, idx, value):
+        idx += self.n
+        if self.tree[idx] >= value:
+            return
+        self.tree[idx] = value
+        while idx > 1:
+            idx >>= 1
+            new_val = max(self.tree[idx * 2], self.tree[idx * 2 + 1])
+            if self.tree[idx] == new_val:
+                break
+            self.tree[idx] = new_val
+    
+    def query(self, l, r):
+        res = 0
+        l += self.n
+        r += self.n
+        while l <= r:
+            if l % 2 == 1:
+                res = max(res, self.tree[l])
+                l += 1
+            if r % 2 == 0:
+                res = max(res, self.tree[r])
+                r -= 1
+            l >>= 1
+            r >>= 1
+        return res
+
+def main():
+    input = sys.stdin.read().split()
+    ptr = 0
+    N = int(input[ptr])
+    ptr += 1
+    K = int(input[ptr])
+    ptr += 1
+    A = []
+    for _ in range(N):
+        A.append(int(input[ptr]))
+        ptr += 1
+    max_x = 600000  # Since K and A_i can each be up to 3e5, x+K can be up to 6e5
+    st = SegmentTree(max_x)
+    max_len = 0
+    for x in A:
+        low = max(0, x - K)
+        high = x + K
+        current_max = st.query(low, high)
+        new_val = current_max + 1
+        if new_val > max_len:
+            max_len = new_val
+        st.update(x, new_val)
+    print(max_len)
+
+if __name__ == '__main__':
+    main()
+```
+
+### Explanation
+1. **Reading Input**: The input is read from standard input, parsed into integers for N (number of elements), K (maximum allowed difference), and the sequence A.
+
+2. **Segment Tree Initialization**: The segment tree is initialized to handle values up to 600,000, which is the maximum possible value after considering the constraints (3e5 for elements and 3e5 for K).
+
+3. **Processing Each Element**: For each element in the sequence, compute the valid range `[A[i] - K, A[i] + K]`, query the segment tree for the maximum subsequence length in this range, update the current element's subsequence length, and update the segment tree.
+
+4. **Updating Result**: Track the maximum length of valid subsequences found during the process and print it as the result.
+
+This approach efficiently handles the constraints using a segment tree, ensuring logarithmic time complexity for both updates and queries, leading to an overall time complexity of O(N log M), where M is the maximum possible value in the range.
+</bot>

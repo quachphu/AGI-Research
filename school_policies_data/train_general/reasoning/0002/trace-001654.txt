@@ -1,0 +1,653 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.n hobbits are planning to spend the night at Frodo's house. Frodo has n beds standing in a row and m pillows (n ≤ m). Each hobbit needs a bed and at least one pillow to sleep, however, everyone wants as many pillows as possible. Of course, it's not always possible to share pillows equally, but any hobbit gets hurt if he has at least two pillows less than some of his neighbors have. 
+
+Frodo will sleep on the k-th bed in the row. What is the maximum number of pillows he can have so that every hobbit has at least one pillow, every pillow is given to some hobbit and no one is hurt?
+
+Input
+
+The only line contain three integers n, m and k (1 ≤ n ≤ m ≤ 109, 1 ≤ k ≤ n) — the number of hobbits, the number of pillows and the number of Frodo's bed.
+
+Output
+
+Print single integer — the maximum number of pillows Frodo can have so that no one is hurt.
+
+Examples
+
+Input
+
+4 6 2
+
+
+Output
+
+2
+
+
+Input
+
+3 10 3
+
+
+Output
+
+4
+
+
+Input
+
+3 6 1
+
+
+Output
+
+3
+
+Note
+
+In the first example Frodo can have at most two pillows. In this case, he can give two pillows to the hobbit on the first bed, and one pillow to each of the hobbits on the third and the fourth beds.
+
+In the second example Frodo can take at most four pillows, giving three pillows to each of the others.
+
+In the third example Frodo can take three pillows, giving two pillows to the hobbit in the middle and one pillow to the hobbit on the third bed.
+</user>
+<bot>
+<think>
+Okay, let's try to figure out this problem. The task is to find the maximum number of pillows Frodo can have on his bed, given that all the hobbits must have at least one pillow, and no one has at least two pillows less than any neighbor. Also, all pillows must be distributed.
+
+So, the constraints are:
+
+- n beds (hobbits), m pillows (n <= m)
+- Each gets at least 1.
+- For any two adjacent hobbits, their pillows can't differ by 2 or more. So, if a neighbor has x pillows, the current can have x-1, x, x+1. Wait, no. Wait the condition is that a hobbit is hurt if he has at least two pillows less than some neighbor. So, for each neighbor, the difference must be less than 2. So, for any adjacent, if A is on the left of B, then B can't have A's count + 2 or more. So, the maximum allowed difference is 1. So, the arrangement must be non-decreasing or non-increasing in such a way that each step is at most 1. Wait, no. Wait, the condition is that no one has at least two less than a neighbor. So, for any two adjacent, the difference must be <=1 in either direction. So, for example, if left neighbor has 3, then current can have 2,3,4. Because if current is 2, the neighbor is 3: 3-2=1, which is okay. But if current is 1, then 3-1=2, which would make the current (1) have two less than the neighbor (3), which is not allowed.
+
+So, the arrangement must be such that each adjacent pair differs by at most 1. But how can we model this to find the maximum possible for Frodo's position?
+
+The problem is to assign pillows such that:
+
+1. All have at least 1.
+2. Adjacent differences <=1 in absolute value.
+3. Sum of all is m.
+4. We want to maximize the value at position k (1-based or 0-based? The problem says the k-th bed. The examples suggest 1-based. For example, in the first example, 4 6 2, Frodo is in bed 2, and the distribution is 2,2,1,1. So the second position is Frodo's.)
+
+So, the approach is to model the pillows as a sequence where each element is at least 1, and each element's difference from adjacent is at most 1. And we need to maximize the value at position k.
+
+But how to model this? Well, the optimal arrangement would be a "pyramid" where Frodo's position is the peak, and the values decrease by 1 as we move left and right from the peak. But depending on the positions near the ends (like if the peak is near the start or end), the left or right side might not be able to decrease all the way.
+
+So, the maximum possible for Frodo is determined by the minimal number of steps required to reach the edges. For example, if Frodo is at position k, then the left side can have a run of (k-1) positions, each decreasing by 1 from Frodo's. Similarly, the right side can have (n - k) positions, each decreasing by 1. So the minimal required number of steps would be the minimum between the left and right possible. Wait, but perhaps the actual maximum possible for Frodo is determined by how much we can "grow" the peak such that the required pillows don't exceed m.
+
+This sounds like a problem where we can model the minimal number of pillows required for a given Frodo's value x. Then, we can perform a binary search over possible x values (starting from 1 up) to find the maximum x where the total required pillows is <= m.
+
+Yes, that's probably the way to go. So the steps would be:
+
+1. Binary search on x (Frodo's pillows). The lower bound is 1 (but since we need to have all at least 1, and Frodo's is x, the minimal x is 1, but given that sum of all is >=n and m >=n, but we need to find the maximum x where sum is <=m).
+
+Wait, but Frodo's x is part of the sum. So for a given x, calculate the minimal total pillows required. If that sum is <=m, then x is possible, and we can try higher. Otherwise, we need to try lower.
+
+So how to compute the sum of pillows required for a given x?
+
+The sum for x would be x (Frodo's) plus the sum of the left side and the sum of the right side.
+
+For the left side (positions 1 to k-1):
+
+Each position i (from k-1 downto 1) should be x - (k - i). But if x - (k - i) is less than 1, then it's clamped to 1. Similarly for the right side.
+
+Wait, let's think: For the left side, the maximum possible value for each position is x-1, x-2, etc., but can't be less than 1. So the left side would be a sequence starting from x-1, x-2, ..., down to 1, but only for (k-1) positions. However, if x-1 is greater than the number of positions on the left (k-1), then the sequence can't decrease all the way. For example, if Frodo's x is 5, and he's at position 3 (so left has 2 positions), then the left sequence is 4,3. But if x is 2 and left has 3 positions, then the left sequence would be 1,1,1.
+
+Similarly for the right side.
+
+So the sum for the left is the sum of a sequence that starts at x-1, decreases by 1 each step, but can't go below 1. The same for the right.
+
+So the sum for the left can be calculated as follows:
+
+The left has (k-1) positions. Let's let a = x-1, which is the starting value for the left. The number of elements in the left that can decrease by 1 each step until 1 is min(k-1, a). The remaining positions (if any) would be filled with 1.
+
+So the sum for the left is:
+
+sum_left = sum of the arithmetic sequence from (x-1) down to (x - (k-1)), but if x-1 is larger than the number of positions on the left. Wait, perhaps it's easier to model as follows:
+
+The left sequence can have a length l = k-1. The maximum possible that the left sequence can decrease is until 1. Let's compute how many steps can be taken before hitting 1.
+
+The first element (left adjacent to Frodo) is x-1, next x-2, etc. The minimal possible in the left sequence is 1. The number of elements that are part of the decreasing sequence is t = min(x-1, l). So for example, if x-1 is larger than l, then the left sequence is x-1, x-2, ..., x-l. Sum is (x-1 + x - l) * l / 2. If x-1 is less than l, then the sum is the sum of 1+2+...+(x-1) plus (l - (x-1)) *1. Because after x-1 steps down, the remaining positions are 1.
+
+Similarly for the right.
+
+So the formula for sum_left:
+
+t_left = min(x-1, l) where l = k-1.
+
+sum_left = (x-1 + x - t_left) * t_left // 2 + max(0, (k-1 - t_left)) * 1.
+
+Wait, wait. Let's think again. Suppose x is 5, l (k-1) is 3. Then the left sequence is 4,3,2. Sum is 4+3+2=9. Here t_left = 3. So sum is (4 + 2)*3/2 = 6*3/2 =9. Correct.
+
+If x is 3, l is 4. Then t_left = min(2,4) =2. So the sequence is 2,1,1,1. Sum is (2+1)*2/2 + (4-2)*1 =3 + 2=5.
+
+So for sum_left:
+
+sum_left = ( (x-1) + (x - t_left) ) * t_left / 2 + ( (k-1) - t_left ) * 1.
+
+But (x-1) - (t_left -1) steps, since t_left is the number of terms. So x-1 - (t_left -1) = x - t_left. So the first term is the sum of the arithmetic series from (x-1) down to (x - t_left), which is ( (x-1) + (x - t_left) ) * t_left / 2.
+
+But when t_left = x-1, then x - t_left = x - (x-1) =1, so the series goes from x-1 down to 1. That's correct.
+
+So sum_left can be calculated as:
+
+t_left = min(x-1, l) where l = k-1.
+
+sum_left_part1 = ( (x-1) + (x - t_left) ) * t_left // 2
+
+sum_left_part2 = ( (k-1) - t_left ) * 1
+
+sum_left = sum_left_part1 + sum_left_part2
+
+Similarly for sum_right:
+
+r = n - k (number of positions to the right of Frodo)
+
+t_right = min(x-1, r)
+
+sum_right_part1 = ( (x-1) + (x - t_right) ) * t_right // 2
+
+sum_right_part2 = ( r - t_right ) * 1
+
+sum_right = sum_right_part1 + sum_right_part2
+
+Total sum is sum_left + sum_right + x (Frodo's pillows).
+
+If this total is <= m, then x is possible. We need to find the maximum x where this is true.
+
+So the plan is to binary search x between 1 and some upper bound. The upper bound can be m - (n-1) +1. Because each of the other n-1 hobbits must have at least 1, so Frodo can have up to (m - (n-1)) pillows. But maybe there's a tighter upper bound. For example, the maximum possible x is when all other are as small as possible (so 1 each), but the adjacent constraints must hold. Wait, no. Because if Frodo's x is high, but the adjacent constraints require that his neighbors are at least x-1, and their neighbors x-2, etc. So the maximum possible x is when the distribution is as such: Frodo's x, and the left and right form sequences that decrease by 1 until the ends. But the sum of such a sequence must be <=m.
+
+But perhaps the upper bound can be determined by considering the maximum x where even if the left and right are fully extended (so all positions are part of the decreasing sequence), the sum would be up to m.
+
+But regardless, binary search is feasible. The binary search will check x starting from low=1 to high= possible maximum. Let's see:
+
+The minimal sum for x=1 would be n (each gets 1). But since m >=n, x can be higher. The maximum possible x could be up to (m - (n-1) * 1) (if all others are 1 and Frodo takes the rest). But due to the constraints, this maximum is not achievable unless the arrangement allows it. For example, in the third sample input:
+
+n=3, m=6, k=1. So, the maximum x is 3. The distribution is 3,2,1. Sum is 6. Which matches. So for x=3, sum is 3+2+1=6. So that's possible.
+
+But for example, if k is in the middle, the sum for x would be x + sum of left and right, which are each x-1, x-2, etc. So the upper bound for x can be up to m - (sum of left and right when x is very large). But how?
+
+Alternatively, for the binary search, the upper bound can be x_max = m - (n-1) +1. Because even if all others take 1, but due to the constraints, this might not be possible, but binary search will handle it. Because when x is higher than possible, the sum would exceed m, and the binary search will adjust.
+
+So the binary search steps would be:
+
+Initialize low = 1, high = m - (n-1) + 1. Because the sum when x is (m - (n-1)) would be x (for Frodo) + (n-1) * 1 (others), which is m. But that's only possible if the constraints allow. So high could be m - (n-1) +1. Wait, but maybe m is very large, like 1e9, so x can be up to 1e9. But the binary search can handle large values efficiently.
+
+Wait, the minimal sum for a given x is:
+
+sum_left + sum_right + x.
+
+But how to compute the sum_left and sum_right as explained before.
+
+So the binary search will find the maximum x where sum_left + sum_right + x <= m.
+
+So the steps are:
+
+- Compute the required sum for a given x.
+
+- If the sum is <= m, try higher x.
+
+- Else, try lower.
+
+Now, the challenge is to compute sum_left and sum_right efficiently for large x, n, k.
+
+But given that n and m can be up to 1e9, we need O(1) per computation.
+
+So the formula for sum_left and sum_right can be computed in O(1) time.
+
+Let's formalize the sum_left calculation.
+
+sum_left is the sum of the first (k-1) positions, each at least 1, and each can be up to x-1, x-2, etc.
+
+But when x is small:
+
+If x-1 <=0, then all positions on the left are 1.
+
+But x starts at 1. So when x=1, sum_left is (k-1)*1.
+
+But according to the formula:
+
+t_left = min(x-1, k-1). x-1 is 0. So t_left is 0. Then sum_left_part1 is 0, and sum_left_part2 is (k-1 - 0) *1 =k-1.
+
+Which is correct.
+
+So the formula works.
+
+So for a given x, sum_left is:
+
+t_left = min(x-1, k-1)
+
+sum_left_part1 = ( (x-1) + (x - t_left) ) * t_left // 2
+
+sum_left_part2 = ( (k-1) - t_left ) * 1
+
+sum_left = sum_left_part1 + sum_left_part2
+
+Similarly for sum_right:
+
+t_right = min(x-1, n -k )
+
+sum_right_part1 = ( (x-1) + (x - t_right) ) * t_right // 2
+
+sum_right_part2 = ( (n -k ) - t_right ) *1
+
+sum_right = sum_right_part1 + sum_right_part2
+
+So the total sum is sum_left + sum_right + x.
+
+If this sum <=m, then x is possible.
+
+So the binary search proceeds as follows:
+
+Initialize low =1, high= possible_max. What's possible_max? Well, the maximum possible x is when sum_left and sum_right are as large as possible. Let's see.
+
+But the maximum x can be such that sum_left + sum_right +x = m.
+
+But how high can x be? For example, when the left and right are fully filled, meaning that the left has k-1 steps and the right has (n -k) steps, then the sum_left is sum of x-1 + x-2 + ... + (x - (k-1)) ), but only if x-1 >=k-1. So in that case, sum_left is ( (x-1 + x - (k-1) )) * (k-1) /2 = (2x -k ) * (k-1)/2.
+
+Similarly for sum_right: sum_right is (2x - (n -k +1 )) * (n -k ) /2.
+
+Then sum_total = sum_left + sum_right + x = (2x -k )*(k-1)/2 + (2x - (n -k +1 )) * (n-k)/2 + x.
+
+But if x is very large, this sum could exceed m. So the binary search will find the maximum x that allows sum <=m.
+
+So the high can be set to something like x_initial where the sum is just over m. But for binary search purposes, high can be set to, say, 1e18, as the binary search will handle it in logarithmic steps.
+
+But in practice, since m can be up to 1e9, and each step is O(1), even 1e18 is manageable.
+
+So the steps for the code would be:
+
+Read n, m, k.
+
+Compute the required sum for a given x, and perform binary search between low and high.
+
+Now, let's test the examples.
+
+First example:
+
+Input: 4 6 2.
+
+n=4, m=6, k=2.
+
+We need to find the maximum x.
+
+Let's try x=2.
+
+sum_left: left has k-1=1 positions.
+
+sum_left_part1: t_left = min(1,1) =1. sum_part1 = (1 + (2-1 )) *1 /2 = (1+1)*1/2=1. sum_part2=0. sum_left=1.
+
+sum_right: right has 4-2=2 positions.
+
+t_right= min(1,2) =1.
+
+sum_part1=(1 + (2-1 )) *1 /2 = (1+1)*1/2=1.
+
+sum_part2= (2-1)*1=1. sum_right=1+1=2.
+
+Total sum=1+2+2=5 <=6. So x=2 is possible.
+
+Check x=3.
+
+sum_left: t_left= min(2,1) =1.
+
+sum_part1=(2 +3-1) *1 /2 ? Wait, no:
+
+Wait, for x=3, sum_left_part1 = (3-1) + (3 - t_left) ) * t_left /2.
+
+t_left is min(2,1) =1.
+
+So (3-1) is 2, and (3 -1)=2.
+
+sum_part1 = (2 +2) *1/2=4*1/2=2.
+
+sum_part2 = (1-1) *1=0. sum_left=2.
+
+sum_right: t_right = min(2, 2) =2.
+
+sum_part1 = (2 + (3 -2 )) *2 /2 = (2+1)*2/2 =3*2/2=3.
+
+sum_part2 = (2-2)*1=0. sum_right=3.
+
+Total sum=2+3+3=8>6. So x=3 is not possible.
+
+Thus, maximum x is 2.
+
+Second example:
+
+3 10 3.
+
+n=3, m=10, k=3.
+
+We need to find x.
+
+Possible x could be 4.
+
+sum_left: k-1=2 positions. sum_left: since x=4, t_left = min(3, 2) =2. sum_part1: (3 + (4-2 )) *2 /2 → (3+2)*2/2=5*2/2=5. sum_part2: (2-2)*1=0. sum_left=5.
+
+sum_right: n-k=0 → sum_right=0.
+
+sum_total=5+0+4=9 <=10. So x=4 is possible.
+
+Check x=5.
+
+sum_left: t_left=min(4,2)=2. sum_part1= (4 +5-2) *2 /2 → (4+3)*2/2=7*2/2=7. sum_part2=0. sum_left=7.
+
+sum_right=0.
+
+sum_total=7+0+5=12>10. So x=5 is invalid.
+
+But wait, what's the actual sum when x=4. The distribution would be 3,3,4. Sum is 3+3+4=10. So x=4 is correct.
+
+Third example:
+
+3 6 1.
+
+n=3, m=6, k=1.
+
+sum_left is 0 (since k=1).
+
+sum_right: n-k=2.
+
+x=3.
+
+t_right= min(2,2)=2.
+
+sum_part1 = (2 + (3 -2 )) *2/2 → (2+1)*2/2=3*2/2=3. sum_part2=0. sum_right=3.
+
+sum_total=0+3+3=6.
+
+So x=3 is possible.
+
+So binary search works.
+
+Now, let's code this.
+
+The code will:
+
+Read n, m, k.
+
+Compute the function f(x) which returns the sum for x.
+
+Perform binary search between low and high to find the maximum x where f(x) <=m.
+
+But we have to be careful with handling very large numbers (up to 1e18) but the binary search is O(log(high)), which is manageable.
+
+Now, the code.
+
+First, implement the sum calculation.
+
+def calculate_sum(x, n, k):
+    left = k -1
+    right = n -k
+
+    # sum left
+    t_left = min(x-1, left)
+    sum_left_part1 = ( (x-1) + (x - t_left) ) * t_left // 2
+    sum_left_part2 = (left - t_left) * 1
+    sum_left = sum_left_part1 + sum_left_part2
+
+    # sum right
+    t_right = min(x-1, right)
+    sum_right_part1 = ( (x-1) + (x - t_right) ) * t_right // 2
+    sum_right_part2 = (right - t_right) * 1
+    sum_right = sum_right_part1 + sum_right_part2
+
+    total = sum_left + sum_right + x
+    return total
+
+Then, binary search:
+
+low =1
+
+high = m  # since m >=n, but let's see. Wait, the minimal sum for x=1 is n, which is <=m. The maximum x could be m - (n-1) +1? Not sure. But setting high to a large enough value like 1e18 is safe.
+
+Wait, when x is large enough, the sum would be:
+
+sum_left = (x-1 + x - (k-1))*(k-1)//2, assuming x-1 >=k-1.
+
+Similarly sum_right. So sum_total can be O(x^2), which for x up to 1e18 would be impossible to compute. But the binary search will not take that long. Wait, but in the binary search, the high can be set to m. Because the sum for x is at least x (since sum of others is at least (k-1)*1 + (n-k)*1 + x = (n-1) +x. So x <= m - (n-1). So the maximum possible x is m - (n-1). But perhaps that's not achievable due to constraints, but the binary search will handle it.
+
+But let's think: For example, when k is 1, and n=3, m=6. Then x=3 is possible. x=3 is 3, others are 2 and 1. Sum 6. So m is 6, x is 3. m - (n-1) is 6-2=4. So x is 3 which is less than 4.
+
+So the upper bound can't be m - (n-1), but the binary search can still find it.
+
+Alternatively, the high can be set to m, but perhaps even higher. But to avoid overflow, perhaps set high to m. Or m + something.
+
+But in code, let's proceed as follows:
+
+We can start with low=1, high= m.
+
+Because sum for x=m would be:
+
+sum_left: (k-1) positions. x=m. So sum_left could be m-1 + m-2 + ... but only if k-1 allows. So sum could be very large. So high can be m, but the binary search will adjust.
+
+Wait, but for x=m, the sum will be at least m (since sum is x plus others' sum). So if x=m, sum >=m. But m >=n (given in input). So sum for x=1 is n <=m. So binary search between 1 and possible higher x.
+
+But in the code, the binary search can start with low=1, high= m.
+
+Now, the binary search:
+
+n, m, k = map(int, input().split())
+
+low = 1
+
+high = m
+
+ans = 1
+
+while low <= high:
+
+    mid = (low + high) //2
+
+    current_sum = calculate_sum(mid, n, k)
+
+    if current_sum <= m:
+
+        ans = mid
+
+        low = mid +1
+
+    else:
+
+        high = mid -1
+
+print(ans)
+
+Wait, but for the first example, when x=2, sum is 5. m=6. So x=2 is possible, but maybe x=3 is possible. But in that example, sum for x=3 is 8>6. So binary search would find 2.
+
+Yes.
+
+Testing this code for the first example:
+
+n=4, m=6, k=2.
+
+low=1, high=6.
+
+mid=3. sum is 8>6 → high=2.
+
+mid= (1+2)/2=1.5 → 1. So mid=1.
+
+sum is 1 (sum_left for x=1: k-1=1 → sum_left=1*1=1. sum_right: n-k=2 → x=1: sum_right_part1: t_right=0. sum_part2=2*1=2. sum_total=1+2+1=4 <=6. So ans=1, but then low becomes 2.
+
+mid=2. sum is 5<=6 → ans=2, low=3.
+
+Now low=3, high=2 → loop ends. ans=2.
+
+Which is correct.
+
+Second example:
+
+n=3, m=10, k=3.
+
+high=10.
+
+mid=5. sum is:
+
+left=2 positions. x=5.
+
+sum_left: t_left= min(4,2)=2.
+
+sum_left_part1=(4 + (5-2 )) *2/2 → (4+3)*2/2=7*1=7. sum_part2=0. sum_left=7.
+
+sum_right=0.
+
+sum_total=7+0+5=12>10 → high=4.
+
+mid= (1+4)/2=2.5 → 2.
+
+sum for x=2:
+
+left=2 positions. t_left= min(1, 2) =1.
+
+sum_left_part1= (1+ (2-1 )) *1/2 → (1+1)*1/2=1. sum_part2=1*1=1. sum_left=2.
+
+sum_right=0. sum_total=2+0+2=4<=10 → ans=2. low=3.
+
+mid= (3+4)/2=3.5 →3.
+
+sum for x=3:
+
+sum_left_part1= (2 + (3-2 )) *2/2 → (2+1)*2/2=3. sum_left=3.
+
+sum_total=3 +0+3=6 <=10 → ans=3. low=4.
+
+mid=4. sum is 5 (left sum) +0 +4=9 <=10 → ans=4. low=5.
+
+mid=5. sum is 7+0+5=12>10 → high=4. loop ends. ans=4.
+
+Which is correct.
+
+Third example:
+
+n=3, m=6, k=1.
+
+high=6.
+
+mid=3. sum is sum_left=0 (k=1), sum_right=2. sum_part1 for right: x-1=2. t_right=min(2,2)=2. sum_part1= (2+1)*2/2=3. sum_part2=0. sum_right=3. sum_total=0+3+3=6<=6 → ans=3. low=4.
+
+mid=4. sum_right: t_right=min(3,2) → 2. sum_part1= (3+4-2)*2/2 → (3+2)*2/2=5*1=5. sum_part2=0. sum_right=5. sum_total=0+5+4=9>6 → high=3. loop ends. ans=3.
+
+Which is correct.
+
+So the code works.
+
+But now, the code needs to handle large numbers. For example, when n=1e9, m=1e18, k=5e8. The calculate_sum function needs to compute the sum without loops.
+
+But the formula is O(1), so it's okay.
+
+Now, code in Python:
+
+But note that in Python, integer division with // is okay.
+
+So the code:
+
+Read the input, then binary search.
+
+So the code would be:
+
+def calculate_sum(x, n, k):
+    left = k - 1
+    right = n - k
+
+    # sum left
+    t_left = min(x-1, left)
+    sum_left_part1 = ( (x-1) + (x - t_left) ) * t_left // 2
+    sum_left_part2 = (left - t_left) * 1
+    sum_left = sum_left_part1 + sum_left_part2
+
+    # sum right
+    t_right = min(x-1, right)
+    sum_right_part1 = ( (x-1) + (x - t_right) ) * t_right // 2
+    sum_right_part2 = (right - t_right) * 1
+    sum_right = sum_right_part1 + sum_right_part2
+
+    return sum_left + sum_right + x
+
+def main():
+    import sys
+    n, m, k = map(int, sys.stdin.readline().split())
+    low = 1
+    high = m
+    ans = 1
+    while low <= high:
+        mid = (low + high) // 2
+        current_sum = calculate_sum(mid, n, k)
+        if current_sum <= m:
+            ans = mid
+            low = mid + 1
+        else:
+            high = mid - 1
+    print(ans)
+
+if __name__ == "__main__":
+    main()
+
+Now, testing this code with the examples.
+
+This should handle all cases.
+
+So the code is correct.
+</think>
+To solve this problem, we need to determine the maximum number of pillows Frodo can have on his bed while ensuring that no hobbit feels hurt. This means each hobbit must have at least one pillow, and no hobbit can have at least two fewer pillows than any of their neighbors. 
+
+### Approach
+1. **Problem Analysis**:
+   - Each hobbit must have at least one pillow.
+   - The number of pillows on adjacent beds can differ by at most 1.
+   - We need to maximize the number of pillows on Frodo's bed (k-th position) while distributing all pillows such that the total does not exceed m.
+
+2. **Key Insight**:
+   - The optimal distribution of pillows around Frodo's bed forms a "pyramid" structure, where the number of pillows decreases by 1 as we move away from Frodo's bed until reaching the minimum of 1 pillow per bed.
+
+3. **Binary Search**:
+   - Use binary search to determine the maximum number of pillows Frodo can have. For each candidate number of pillows, calculate the minimum total required to maintain the pyramid structure and check if it does not exceed m.
+
+4. **Sum Calculation**:
+   - For a given number of pillows on Frodo's bed (x), compute the required pillows for the left and right neighbors using arithmetic series, ensuring each bed has at least 1 pillow.
+
+### Solution Code
+```python
+def calculate_sum(x, n, k):
+    left = k - 1
+    right = n - k
+
+    # Calculate sum for left side
+    t_left = min(x - 1, left)
+    sum_left_part1 = ((x - 1) + (x - t_left)) * t_left // 2
+    sum_left_part2 = (left - t_left) * 1
+    sum_left = sum_left_part1 + sum_left_part2
+
+    # Calculate sum for right side
+    t_right = min(x - 1, right)
+    sum_right_part1 = ((x - 1) + (x - t_right)) * t_right // 2
+    sum_right_part2 = (right - t_right) * 1
+    sum_right = sum_right_part1 + sum_right_part2
+
+    return sum_left + sum_right + x
+
+def main():
+    import sys
+    n, m, k = map(int, sys.stdin.readline().split())
+    low = 1
+    high = m
+    ans = 1
+    while low <= high:
+        mid = (low + high) // 2
+        current_sum = calculate_sum(mid, n, k)
+        if current_sum <= m:
+            ans = mid
+            low = mid + 1
+        else:
+            high = mid - 1
+    print(ans)
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+- **Binary Search**: The binary search is used to efficiently find the maximum number of pillows Frodo can have. The search range is between 1 and m (the total number of pillows).
+- **Sum Calculation**: For each candidate number of pillows (mid) during the binary search, we calculate the total required pillows by considering the arithmetic series sum for the left and right neighbors of Frodo's bed. This ensures that the distribution adheres to the constraints of adjacent differences and minimum pillows per bed.
+- **Efficiency**: The binary search operates in O(log m) time, and each sum calculation is done in O(1) time, making the solution efficient even for large input values up to 10^9.
+</bot>

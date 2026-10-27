@@ -1,0 +1,829 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.There is a function f(x), which is initially a constant function f(x) = 0.
+
+We will ask you to process Q queries in order. There are two kinds of queries, update queries and evaluation queries, as follows:
+
+* An update query `1 a b`: Given two integers a and b, let g(x) = f(x) + |x - a| + b and replace f(x) with g(x).
+* An evaluation query `2`: Print x that minimizes f(x), and the minimum value of f(x). If there are multiple such values of x, choose the minimum such value.
+
+
+
+We can show that the values to be output in an evaluation query are always integers, so we ask you to print those values as integers without decimal points.
+
+Constraints
+
+* All values in input are integers.
+* 1 \leq Q \leq 2 \times 10^5
+* -10^9 \leq a, b \leq 10^9
+* The first query is an update query.
+
+Input
+
+Input is given from Standard Input in the following format:
+
+
+Q
+Query_1
+:
+Query_Q
+
+
+See Sample Input 1 for an example.
+
+Output
+
+For each evaluation query, print a line containing the response, in the order in which the queries are given.
+
+The response to each evaluation query should be the minimum value of x that minimizes f(x), and the minimum value of f(x), in this order, with space in between.
+
+Examples
+
+Input
+
+4
+1 4 2
+2
+1 1 -8
+2
+
+
+Output
+
+4 2
+1 -3
+
+
+Input
+
+4
+1 -1000000000 1000000000
+1 -1000000000 1000000000
+1 -1000000000 1000000000
+2
+
+
+Output
+
+-1000000000 3000000000
+</user>
+<bot>
+<think>
+Okay, let's tackle this problem. Hmm. So the task is to process a bunch of queries where each query either updates the function f(x) or asks for the minimum x and the minimum value of f(x). The function starts as zero, and each update adds a term that's the absolute value of (x - a) plus b. 
+
+Wait, so each update is modifying f(x) by adding |x - a| + b. But since absolute value functions are involved, the overall function f(x) is a sum of these absolute values plus the sum of all the b's. The key here is to track the parameters of the function in a way that allows us to quickly compute the minimum x and the minimal value when evaluation queries come in.
+
+Let me think. The sum of absolute value functions is a piecewise linear function. The minimum of such a function occurs where the slope changes from negative to positive. The slope is determined by the sum of the derivatives of each absolute term. For each |x - a_i| term, the derivative is -1 when x < a_i, 0 at x = a_i (but not differentiable there), and +1 when x > a_i. So, the overall slope is the number of terms where x > a_i minus the number of terms where x < a_i. The minimum occurs where the slope changes from non-positive to non-negative. That's the median of all the a_i's when the number of terms is odd. Wait, but maybe even when even? Let me think again. 
+
+Wait, for the sum of absolute values, the minimal x is the median of all the a_i's. Because each absolute value term contributes a V-shape, and their sum's minimum is achieved at the median of the a_i's. So, if we can track the median of the a's, along with the sum of the b's and the sum of the absolute differences from the median (for the minimal value), that would work. 
+
+So here's the plan: for each update query, we add a new a_i to a list, and track the sum of b's. Then, when an evaluation query comes, we compute the median of the a_i's and calculate the sum of |median - a_i| for all i, plus the sum of b's. 
+
+But wait, how to efficiently track the median when there are up to 2e5 updates? Because each evaluation query requires the median, and updates can be O(1) if we maintain the list sorted. But inserting into a sorted list is O(n) time, which would be too slow for 2e5 operations. 
+
+So we need a data structure that allows us to insert elements and find the median in O(1) or O(log n) time. The standard approach is to use two heaps: a max-heap for the lower half and a min-heap for the upper half. The median is then the top of the max-heap (if the total count is odd) or the smaller of the two tops (if even? Wait, but in our problem, when there are even numbers, the median can be any value between the two middle points, but the problem states that if there are multiple x's that minimize f(x), we choose the smallest x. So in the case of even number of a's, the minimal x is the lower median. For example, if a's are sorted as [1,3], then the minimal x is 1, because any x between 1 and 3 will give the same sum. But the problem requires choosing the smallest x. So the median should be the lower median when there are even elements. 
+
+So the two heaps approach: the max-heap (lower) contains the first half of the sorted elements, and the min-heap (upper) contains the second half. The lower heap can have at most one more element than the upper heap. So, when inserting a new a, we first compare it to the max of the lower heap. If it's smaller, add to lower. Then balance the heaps so that the lower heap's size is either equal to or one more than the upper. 
+
+This way, the median is always the top of the lower heap. Because when the count is odd, the lower heap has one more element. When even, the lower and upper have the same size. Wait, no. Wait, in the two heaps approach, if the total elements are even, the lower and upper heaps are of equal size. The median would be the max of the lower heap. Because when you have, say, 4 elements: the lower has two, upper has two. The median is the second element, which is the max of the lower heap. So, in all cases, the median is the max of the lower heap.
+
+So the key is to maintain the lower heap as the set of the first half (rounded up) elements, and the upper heap as the second half. Then the median is the top of the lower heap. 
+
+So for each update query, we insert the a into the appropriate heap and balance. Then, for evaluation queries, the median is the top of the lower heap. 
+
+Now, the other part is the sum of b's. Each update adds a new b_i, so we can keep a variable sum_b that accumulates all b's. That's easy. 
+
+But for the sum of |x - a_i| when x is the median. How do we compute that efficiently? Because each evaluation query requires the sum of absolute differences between the current median and all a's. 
+
+Wait, but each time we add an a, the sum of absolute differences depends on the current median. But when the median changes as new a's are added, how do we track the sum efficiently?
+
+Hmm. That's a problem. Because the sum of absolute differences depends on the current median, which could change with each insertion. So we need a way to track the sum of absolute differences between each a_i and the current median. 
+
+But how? Let's think. Let's say that the median is m. Then the sum is sum_{a_i <= m} (m - a_i) + sum_{a_i > m} (a_i - m). 
+
+But when we insert a new a, and the median changes, how do we update the sum? 
+
+This seems tricky. Because the sum depends on all a's and the current median. But the median can change after each insertion. So maintaining the sum in real-time as the median changes is challenging. 
+
+Alternative approach: the sum of absolute differences is minimized at the median. So whenever we have the list of a's sorted, the sum is the sum of absolute differences from the median. But to compute this sum, we need to know how many a's are below the median, the sum of a's below the median, the sum of a's above the median, etc. 
+
+So perhaps we can track the following parameters:
+
+- The current median m (from the two heaps).
+- The sum of a's in the lower half (sum_low): sum of a_i <= m.
+- The sum of a's in the upper half (sum_high): sum of a_i >= m.
+- The count of elements in each half (cnt_low and cnt_high). 
+
+Wait, but the lower heap is a max heap. So sum_low would be the sum of all elements in the lower heap (since they are <= m). The upper heap is a min heap, so sum_high is the sum of elements in the upper heap (since they are >= m). 
+
+Then, the sum of |x - a_i| when x is m is:
+
+sum_low = sum of (m - a_i) for a_i in lower heap (since m >= a_i here) → sum_low is the sum of a_i's in lower heap, but each term is m - a_i. So the total for the lower heap is (m * cnt_low) - sum_lower_heap.
+
+sum_high = sum of (a_i - m) for a_i in upper heap → sum_high is sum_upper_heap - m * cnt_high.
+
+So overall sum_abs = (m * cnt_low - sum_lower) + (sum_upper - m * cnt_high). 
+
+Which can be rewritten as m*(cnt_low - cnt_high) + (sum_upper - sum_lower).
+
+But how to track sum_lower and sum_upper?
+
+So, each time we insert an a into the heaps, we can track the sum of the lower and upper heaps. 
+
+So the plan is:
+
+- Maintain two heaps: lower (max heap), upper (min heap).
+- Also track sum_lower (sum of elements in lower) and sum_upper (sum of elements in upper).
+- For each insertion:
+   - Insert into the appropriate heap (if a <= current median, insert into lower; else upper). Then balance the heaps so that lower's size is either equal to or one more than upper.
+   - Update sum_lower and sum_upper accordingly.
+- For evaluation queries:
+   - m is the top of lower heap.
+   - cnt_low = len(lower), cnt_high = len(upper)
+   - sum_abs = m * cnt_low - sum_lower + sum_upper - m * cnt_high
+   - sum_total = sum_abs + sum_b
+   - Output m and sum_total
+
+But how to handle inserting into the heaps and balancing them while tracking the sums?
+
+Wait, but inserting into a heap is O(log n) time. For each insertion, the steps would be:
+
+1. Compare the new a with the current median (which is the top of the lower heap, if lower is not empty). Wait, but the initial state is empty. Hmm. Wait, the first query is an update query, per the constraints. So the first query is always an update. So the initial function is f(x) = 0. So first query is adding |x -a| +b. So the first a is added to lower or upper. But perhaps initially, lower is empty. Wait, but the two heaps approach requires that lower can be populated first. Let's see.
+
+For the first insertion, a is added to the lower heap. Because the median is that a. So when we add the first element, lower has one element, upper has zero. 
+
+Then, for subsequent insertions:
+
+When inserting a new element, compare it with the current median (m). If a <= m, add to lower. Otherwise, add to upper. Then, balance the heaps so that the size of lower is either equal to or one more than upper. 
+
+But to add to the lower heap (which is a max heap), we need to use a max-heap structure. However, Python's heapq module only implements min-heaps. So to implement a max-heap, we can store the negative values. 
+
+So for the lower heap (max heap), each element is stored as -a. So when we pop, we get the smallest (which is the negative of the max). 
+
+Similarly, the upper heap is a min-heap, which is straightforward with heapq.
+
+So steps for insertion:
+
+For example, current lower has elements, and upper has some elements.
+
+When inserting a new a:
+
+If the lower heap is not empty, the current median is the top of the lower heap (but since we store negatives in lower, we need to take -lower[0] to get the actual max).
+
+Compare a with the current median.
+
+If a <= current median, we add it to the lower heap (as -a). Else, add to the upper heap.
+
+Then, check the sizes. We need to ensure that the size of lower is either equal to or one more than upper.
+
+So after insertion, if lower has more than one element than upper:
+
+We need to pop the max from lower (which is -lower[0]), and push it to upper. 
+
+Or if upper's size exceeds lower's size:
+
+We pop the min from upper and push to lower.
+
+But during this balancing, we need to track the sum_lower and sum_upper. So each time we move an element from lower to upper, subtract it from sum_lower and add to sum_upper. Similarly for moving from upper to lower.
+
+So the steps for insertion:
+
+1. Insert the new a into either lower or upper.
+
+   - If lower is empty (only possible for first insertion), add a to lower as -a. sum_lower += a.
+
+   Else:
+
+      current_median = -lower[0]
+
+      if a <= current_median:
+
+          heappush(lower, -a)
+
+          sum_lower += a
+
+      else:
+
+          heappush(upper, a)
+
+          sum_upper += a
+
+2. Balance the heaps:
+
+   While len(lower) > len(upper) + 1:
+
+       # move from lower to upper
+
+       val = -heappop(lower)
+
+       sum_lower -= val
+
+       heappush(upper, val)
+
+       sum_upper += val
+
+   While len(upper) > len(lower):
+
+       # move from upper to lower
+
+       val = heappop(upper)
+
+       sum_upper -= val
+
+       heappush(lower, -val)
+
+       sum_lower += val
+
+So in this way, after each insertion and balancing, the sum_lower and sum_upper are correctly maintained. 
+
+Once this is done, during evaluation queries, the median is -lower[0], and the sum_abs is calculated as:
+
+sum_abs = (median * len(lower) - sum_lower) + (sum_upper - median * len(upper))
+
+And the total is sum_abs + sum_b.
+
+So the steps for handling queries are:
+
+For each query:
+
+If it's an update (1 a b):
+
+   add a to the heaps as per the above insertion steps.
+
+   add b to sum_b.
+
+If it's an evaluation (2):
+
+   m = -lower[0]
+
+   cnt_low = len(lower)
+
+   cnt_high = len(upper)
+
+   sum_abs = m * cnt_low - sum_lower + sum_upper - m * cnt_high
+
+   total = sum_abs + sum_b
+
+   output m and total.
+
+This approach should handle all queries efficiently, with each insertion being O(log n) time and evaluation O(1) time. For Q up to 2e5, this should be acceptable.
+
+Now, let's test this logic against the sample inputs.
+
+Sample Input 1:
+
+4
+
+1 4 2 → update a=4, b=2. sum_b = 2.
+
+After this, the a=4 is inserted. Since lower was empty, added to lower. sum_lower =4. 
+
+Then, query 2. median is 4. sum_abs is (4*1 -4) + (0) = 0. sum_abs + sum_b is 0+2=2. Output 4 2. Correct.
+
+Next, query 1 1 -8 → a=1, b=-8. sum_b becomes 2-8=-6.
+
+Insert a=1. Current median is 4. Since 1 <=4, add to lower. 
+
+Now lower has [4,1] (but stored as -4 and -1 in the max-heap, which is a min-heap of negatives). Wait, wait. Wait, the lower heap is a max-heap implemented as a min-heap with negatives. So inserting a=1 (<=4) is pushed as -1. So the lower heap now contains -4 and -1. When we heapify, the smallest is -4 (so the max is 4). Then the size of lower is 2, upper is 0. 
+
+But after inserting, we check the balance. len(lower) is 2, len(upper) is 0. So lower is two more than upper. We need to move one element to upper. 
+
+So pop from lower (the max is 4, stored as -4). So we take 4, add to upper (sum_upper +=4, sum_lower -=4). Now lower has sum_lower =4 (after inserting 1, sum was 4+1=5. After subtracting 4, sum_lower is 1). 
+
+Then upper now has 4. Lower has -1 (so 1 is the new max). 
+
+So after balancing, lower has size 1 (with 1) and upper has size 1 (with 4). 
+
+Then, during evaluation query 2:
+
+median is 1 (current lower's max).
+
+sum_abs is (1*1 -1) → from lower, and (4 -1*1) → from upper. 
+
+sum_abs = (1*1 -1) + (4 -1*1) → (0) + (3) =3. sum_b is -6. 3-6=-3. So output 1 -3. Which matches the sample.
+
+So the logic works for the sample.
+
+Another sample:
+
+Input:
+
+4
+
+1 -1000000000 1e9
+
+Same a is added three times, each time with b=1e9. So sum_b is 3e9.
+
+For the a's: all are -1e9. 
+
+After first insertion: lower has one element (-1e9). median is -1e9. sum_lower= -1e9, sum_upper=0. 
+
+Second insertion: a=-1e9. current median is -1e9. a <= median, so added to lower. 
+
+Now lower has two elements. But then after insertion, len(lower) is 2, upper 0. So we need to move one to upper. 
+
+After moving, lower has 1 element (-1e9), upper has 1 element (-1e9). 
+
+Third insertion: a=-1e9. current median is -1e9 (from lower's top). a <= median. Add to lower. Now lower has two elements again. len(lower)=2, upper=1. 
+
+Check balance: len(lower) - len(upper) =1, which is allowed. 
+
+So during evaluation:
+
+median is -1e9. sum_abs is (sum of lower: (-1e9)*2, sum_lower = 2*(-1e9) → ( -1e9 * 2 )? Wait no. sum_lower is the sum of the elements in the lower heap. The lower heap, after three insertions, after balancing, let's track step by step.
+
+First insertion: a=-1e9 added to lower as 1e9 (since stored as -a). sum_lower is -1e9.
+
+Second insertion: a=-1e9 added to lower (since a <= current median of -1e9). sum_lower becomes -2e9. Now lower has two elements. Then, during balance, we move one element (the max of lower, which is -1e9, stored as 1e9 in the heap). So after moving, lower has one element (sum_lower is -1e9), upper has one element (sum_upper is -1e9).
+
+Third insertion: a=-1e9. Since current median is -1e9 (lower's top is 1e9, so m is -1e9). a <= m (yes). Add to lower. sum_lower becomes -1e9 + (-1e9) = -2e9. Now lower has two elements. Then balance: len(lower) is 2, upper is 1. The difference is 1, which is allowed. So no need to balance. So sum_lower is -2e9, sum_upper is -1e9.
+
+So during evaluation, m is the max of lower, which is the first element (the largest in lower). The lower heap has two elements: the max is the larger of the two a's. Wait, but in the lower heap, which is a max heap (stored as min heap of negatives), the max is -lower[0]. So for lower heap containing, say, two elements: after inserting two a's of -1e9, the heap is [-1e9, -1e9], but stored as their negatives? Wait, no. Let me re-express:
+
+Each element in lower is stored as -a. So when a is -1e9, the stored value is 1e9. So inserting a=-1e9 into lower is stored as 1e9. So the lower heap is a min-heap of 1e9 and 1e9. The smallest is 1e9. So when you pop, you get 1e9, which is the smallest stored value, but corresponds to the largest a (since stored as -a). Wait, this is confusing.
+
+Wait, the lower heap is a max heap of a's. But since Python's heapq is a min-heap, to simulate a max-heap, we store -a. So the smallest stored element in the heap is the largest a. So for example, if the a's are -1e9, stored as 1e9. So the heap has [1e9]. Then, inserting another a=-1e9 would push 1e9 into the heap. Now the heap has two 1e9s. The smallest (top) is 1e9. So the max a in the lower heap is -1e9 (since stored as 1e9). So the median is -1e9. 
+
+But after inserting three a's of -1e9:
+
+First insertion: lower is [1e9], sum_lower is -1e9.
+
+Second insertion: add to lower (stored as 1e9). sum_lower is -2e9. Now lower has two elements. Then, balance: since len(lower) is 2 and upper is 0, move one to upper. So pop from lower (1e9), add to upper as 1e9. sum_lower becomes -2e9 - (-1e9) → -1e9? Wait, no. Wait, sum_lower was -2e9 (sum of two a's: -1e9 each). When we pop the max a (which is -1e9, stored as 1e9 in the heap), we subtract that a from sum_lower. So sum_lower was -2e9, subtract (-1e9) → sum_lower becomes -1e9. Then add to upper sum_upper (sum_upper += -1e9). 
+
+Then, after third insertion: a is -1e9 again. Compare to current median (which is -1e9). a <= median, so add to lower. So lower's stored as 1e9. sum_lower is -1e9 + (-1e9) = -2e9. 
+
+Now, lower has two elements (sum_lower is -2e9), upper has one. len(lower) is 2, upper is 1. The difference is 1, which is allowed. 
+
+So during evaluation:
+
+m = -lower[0] (the stored value is the top of the lower heap, which is 1e9 → m is -1e9.
+
+sum_abs = (m * cnt_low) - sum_lower + (sum_upper - m * cnt_high).
+
+cnt_low is 2, sum_lower is -2e9. sum_upper is -1e9. cnt_high is 1.
+
+sum_abs = (-1e9 * 2) - (-2e9) → (-2e9 + 2e9) → 0.
+
+sum_upper part: (-1e9) - (-1e9 * 1) → (-1e9 +1e9) → 0.
+
+sum_abs is 0 +0=0. sum_b is 3e9. So total is 3e9. Which matches the sample output.
+
+So the logic works.
+
+Now, the next step is to implement this in Python. 
+
+But in Python, implementing the two heaps with sum tracking.
+
+We need to use heapq for the lower (max heap) as a min-heap storing negatives, and the upper as a min-heap. 
+
+But also track sum_lower and sum_upper. 
+
+So the variables would be:
+
+lower = [] → stored as max-heap (using negatives)
+
+upper = [] → stored as min-heap
+
+sum_lower = 0
+
+sum_upper = 0
+
+sum_b = 0
+
+Then, for each query:
+
+If it's an update query:
+
+   a, b = ... 
+
+   sum_b += b
+
+   if lower is empty or a <= (-lower[0]):
+
+       heappush(lower, -a)
+
+       sum_lower += a
+
+   else:
+
+       heappush(upper, a)
+
+       sum_upper += a
+
+   Then balance the heaps:
+
+   while len(lower) > len(upper) +1:
+
+       # move from lower to upper
+
+       val = -heappop(lower)
+
+       sum_lower -= val
+
+       heappush(upper, val)
+
+       sum_upper += val
+
+   while len(upper) > len(lower):
+
+       # move from upper to lower
+
+       val = heappop(upper)
+
+       sum_upper -= val
+
+       heappush(lower, -val)
+
+       sum_lower += val
+
+For evaluation:
+
+   m = -lower[0]
+
+   cnt_low = len(lower)
+
+   cnt_high = len(upper)
+
+   sum_abs = (m * cnt_low - sum_lower) + (sum_upper - m * cnt_high)
+
+   total = sum_abs + sum_b
+
+   print(m, total)
+
+This should work.
+
+Now, handling large numbers (like 1e9) is fine in Python. 
+
+Now, testing the code for the first sample:
+
+Sample 1:
+
+After first query 1 4 2:
+
+sum_b=2.
+
+Insert a=4. lower is empty → add to lower. sum_lower=4. lower has [-4]. upper empty.
+
+No balancing needed.
+
+Then, after second query (evaluation):
+
+m is 4.
+
+sum_abs: (4*1 -4) + (0-4*0) =0. sum_b=2 → total 2. Output 4 2.
+
+Third query: 1 1 -8 → a=1, b=-8. sum_b becomes 2-8=-6.
+
+Check current median is 4. a=1 <=4 → add to lower. sum_lower +=1 → sum_lower=5.
+
+lower now has [-4, -1] (since stored as -a. So when inserted as -1, the heap is a min-heap. So elements are -4 and -1, but the heap structure will have the smaller first. Wait, heapq in Python doesn't automatically re-heapify after each insertion. So after pushing -1, the heap is not a valid heap. But heappush maintains the heap invariant. So when we push elements into lower (which is a max-heap implemented as a min-heap of negatives), each insertion maintains the heap property.
+
+So after inserting 4 and then 1:
+
+lower is a heap with elements -4, -1. The heap structure ensures that the smallest is first. So after insertion, the heap is a min-heap of [-4, -1], so the first element is -4. So heappop would return -4. But the max a is 4. 
+
+Wait, no. The lower heap is a max heap, which is implemented by storing the negatives. So when you push -a, the heap is a min-heap of the stored values, which corresponds to a max-heap of the original a's. 
+
+So for example, inserting a=4 → stored as -4. The heap is [-4]. Then inserting a=1 → stored as -1. The heap is now [-4, -1]. The heappush maintains the heap property, which for a min-heap means that the parent is <= children. So the heap becomes [-4, -1], and the smallest stored element is -4, which is at index 0. So the max a is 4. 
+
+But when we have two elements in the lower heap, after inserting a=1 (stored as -1), the heap is [-4, -1], which is a valid min-heap. 
+
+So after inserting 4 and 1, the lower heap's elements are [-4, -1]. The sum_lower is 4+1=5. 
+
+Now, we check the balance. len(lower) is 2, upper is 0. 2 > 0 +1 → yes. So move one element to upper. 
+
+We pop from lower → -4. The stored value is -4, which represents a=4. 
+
+sum_lower -=4 → 5-4=1. 
+
+Add to upper → push 4. sum_upper +=4 → sum_upper=4.
+
+Now, lower has [-1] → which represents a=1. Upper has [4]. 
+
+So during evaluation query, m is 1. 
+
+sum_abs = (1*1 -1) + (4 -1*1) → (0) +3=3. sum_b is -6. total 3-6=-3. Output 1 -3. Correct.
+
+So code works.
+
+Now, implement this in Python.
+
+But need to read Q queries, each of which is processed as above.
+
+Edge cases:
+
+- All a's are the same. Then median is that a. sum_abs is zero (if even number of elements) or something. 
+
+But in code, sum_abs would be computed correctly.
+
+Another edge case: multiple a's, some in lower and upper. 
+
+But the code should handle all cases.
+
+Now, code:
+
+Read Q from input.
+
+Then read Q lines.
+
+Initialize lower, upper, sum_lower, sum_upper, sum_b.
+
+For each query:
+
+   split into parts.
+
+   if starts with 1 → update.
+
+   else → evaluation.
+
+But since Q can be up to 2e5, need to read input efficiently. So using sys.stdin.
+
+So the code:
+
+import heapq
+import sys
+
+def main():
+    import sys
+    input = sys.stdin.read().split()
+    ptr = 0
+    Q = int(input[ptr])
+    ptr +=1
+    
+    lower = [] # max-heap (stored as min-heap with negatives)
+    upper = [] # min-heap
+    sum_lower = 0
+    sum_upper =0
+    sum_b =0
+    
+    for _ in range(Q):
+        query = input[ptr]
+        ptr +=1
+        if query == '1':
+            a = int(input[ptr])
+            ptr +=1
+            b = int(input[ptr])
+            ptr +=1
+            sum_b += b
+            if not lower or a <= (-lower[0]):
+                heapq.heappush(lower, -a)
+                sum_lower += a
+            else:
+                heapq.heappush(upper, a)
+                sum_upper += a
+            # Balance the heaps
+            # Ensure len(lower) is either equal to or one more than upper
+            while len(lower) > len(upper) +1:
+                # move from lower to upper
+                val = -heapq.heappop(lower)
+                sum_lower -= val
+                heapq.heappush(upper, val)
+                sum_upper += val
+            while len(upper) > len(lower):
+                # move from upper to lower
+                val = heapq.heappop(upper)
+                sum_upper -= val
+                heapq.heappush(lower, -val)
+                sum_lower += val
+        else:
+            # evaluation
+            m = -lower[0]
+            cnt_low = len(lower)
+            cnt_high = len(upper)
+            sum_abs = (m * cnt_low - sum_lower) + (sum_upper - m * cnt_high)
+            total = sum_abs + sum_b
+            print(m, total)
+            
+if __name__ == '__main__':
+    main()
+
+Let me test this code with the sample input 1.
+
+Sample Input 1:
+
+4
+
+1 4 2
+
+2
+
+1 1 -8
+
+2
+
+The code should output:
+
+4 2
+
+1 -3
+
+Yes. As in the first case.
+
+Another sample:
+
+Sample Input 2:
+
+4
+
+1 -1000000000 1000000000
+
+1 -1000000000 1000000000
+
+1 -1000000000 1000000000
+
+2
+
+The output should be -1000000000 3000000000.
+
+In code:
+
+First three updates:
+
+Each a is -1e9, b=1e9. sum_b becomes 3e9.
+
+After each insertion:
+
+First a=-1e9:
+
+lower is empty → added to lower. sum_lower +=-1e9.
+
+lower is [-1e9 (stored as 1e9)], upper empty. Balance not needed.
+
+Second a=-1e9:
+
+current median is 1e9? Wait, no. Wait, lower[0] is 1e9 (since stored as -a → a is -1e9, stored as 1e9). So current median is -1e9. 
+
+a=-1e9 <= -1e9 → added to lower. sum_lower +=-1e9 → sum_lower =-2e9.
+
+Now lower has two elements. Check balance: len(lower) is 2, upper is 0. 2>0+1 → yes. Move one element to upper.
+
+Pop from lower → 1e9 (stored as -1e9 → a is -1e9). sum_lower -= (-1e9) → sum_lower =-2e9 +1e9 =-1e9.
+
+Push to upper → 1e9 (sum_upper += -1e9? Wait, no. Wait, val is the a, which is -1e9. Wait, when popped from lower, val is -a is popped. Wait, wait:
+
+lower is a max heap stored as min-heap of negatives. So when we pop from lower, we get the smallest stored value, which is the largest a. 
+
+Wait, when lower has elements stored as negatives of a's. So when you heappop, you get the smallest stored value, which is the largest a. For example, if a's are 3 and 5, stored as -3 and -5. The heap would be [-5, -3], but heapq's heappop would return -5 (smallest stored value), which corresponds to a=5. 
+
+So in the first step, after inserting two a=-1e9, the lower heap is [1e9, 1e9] (stored as -a → a is -1e9, stored as 1e9). So heappop would return 1e9 (the smallest stored value, which is the first element). Then, val = 1e9 → a is -1e9? Wait no. Because the stored value is -a. So when we pop from lower, we get the stored value (negative of a). So val is stored as -a. So val = -a → a = -val. 
+
+Wait, perhaps I made a mistake in the code. Let's re-express:
+
+When we push a into lower, we push -a. So for a=4, stored as -4. 
+
+When popping from lower, we get -4, which is the stored value. So val = -4 → the original a is 4. 
+
+So in the code, when moving from lower to upper:
+
+val = -heappop(lower) → no. Wait, in the code, when we pop from lower, the stored value is popped (which is -a). So val is the popped stored value. So for example, when lower has elements stored as -a, popping gives the smallest stored value (since it's a min-heap). So for example, a=4 and a=5 in the lower heap are stored as -4 and -5. So the heap would have -5 and -4. The heappop gives -5 (smallest), which is stored as the negative of a. So val = -5 → a=5. 
+
+Wait, no. Wait, stored as -a. So if a is 4, stored as -4. So popping gives -4 (the stored value). val is that stored value. So original a is 4. 
+
+Wait, no. Let me get this right. 
+
+If a is 4, stored in the lower heap as -4. 
+
+When you push into lower, you do heappush(lower, -a). So for a=4, stored as -4.
+
+When you pop from lower, you get the smallest stored value. For example, if you have two elements, -5 and -4 (stored in the heap as such), the heappop would return -5, which is the smallest. So val = -5 → the original a is 5. 
+
+So in code, when moving from lower to upper:
+
+val = -heappop(lower) → no. Wait, no. Because the stored value is -a. So popping gives us the stored value, which is -a. So val = stored_value = -a. So a = -val. 
+
+So to get the original a, we need to do a = - stored_value. 
+
+So code:
+
+when popping from lower:
+
+stored_val = heappop(lower) → stored_val is -a.
+
+so original a is -stored_val.
+
+so val = -stored_val → a is val.
+
+Wait, no. stored_val is -a. So a = - stored_val. 
+
+So code:
+
+val = - stored_val → val = a.
+
+So in code, when we pop from lower:
+
+stored_val = heappop(lower)
+
+val = - stored_val → this is the original a.
+
+Yes.
+
+So in the code, when moving from lower to upper:
+
+val = - heappop(lower) → which is the original a.
+
+Then, push this a into upper. 
+
+So in the second sample, after the first two insertions, the code moves one element from lower to upper. 
+
+Original a's are -1e9 and -1e9.
+
+First insertion: a=-1e9 → pushed into lower as 1e9. sum_lower is -1e9.
+
+Second insertion: a=-1e9, compare to current median (which is -1e9). a <= median → pushed into lower. sum_lower is -2e9.
+
+Now, lower has two elements: stored as 1e9 and 1e9. 
+
+Then, balance: lower's size is 2, upper's is 0. So move one to upper.
+
+val = - heappop(lower) → stored_val is 1e9. val is -1e9 → which is the original a. 
+
+sum_lower -= val → sum_lower was -2e9 → subtract (-1e9) → sum_lower becomes -1e9.
+
+Push val (which is -1e9) into upper. sum_upper +=-1e9. 
+
+Now lower has one element (stored as 1e9 → a is -1e9), upper has one element (-1e9). 
+
+Third insertion: a=-1e9. current median is -1e9 (from lower's stored as 1e9). a <= median → pushed into lower. sum_lower becomes -1e9 + (-1e9) = -2e9.
+
+Balance: len(lower) is 2, upper is 1. len(lower) - len(upper) =1 → allowed. 
+
+So during evaluation:
+
+m = -lower[0] → lower's stored as 1e9, so m is -1e9.
+
+sum_abs = (-1e9 * 2 - (-2e9)) → ( -2e9 +2e9 =0) + (sum_upper is -1e9 (from the one element in upper) - (-1e9 *1) → -1e9 +1e9=0. So sum_abs is 0. sum_b=3e9. So total is 3e9. 
+
+Which matches the sample.
+
+Thus, the code should work correctly.
+</think>
+To solve this problem, we need to efficiently handle two types of queries on a function that starts as a constant zero. The function is modified by adding absolute value terms and constants through update queries, and we need to determine the minimum value of the function and the corresponding x value for evaluation queries.
+
+### Approach
+1. **Data Structures**: Use two heaps to maintain the median of the values efficiently. The lower half of values is stored in a max-heap (using a min-heap with negative values), and the upper half is stored in a min-heap.
+2. **Tracking Sums**: Maintain the sum of all constants added to the function and the sums of the values in the lower and upper heaps to quickly compute the sum of absolute differences.
+3. **Balancing Heaps**: After each insertion, ensure the heaps are balanced such that the lower heap has at most one more element than the upper heap. This ensures the median is always at the top of the lower heap.
+4. **Efficient Queries**: For evaluation queries, compute the median from the lower heap and use the precomputed sums to determine the minimum function value.
+
+### Solution Code
+```python
+import heapq
+import sys
+
+def main():
+    input = sys.stdin.read().split()
+    ptr = 0
+    Q = int(input[ptr])
+    ptr += 1
+
+    lower = []  # max-heap implemented as min-heap with negatives
+    upper = []  # min-heap
+    sum_lower = 0
+    sum_upper = 0
+    sum_b = 0
+
+    for _ in range(Q):
+        query = input[ptr]
+        ptr += 1
+        if query == '1':
+            a = int(input[ptr])
+            ptr += 1
+            b = int(input[ptr])
+            ptr += 1
+            sum_b += b
+
+            if not lower or a <= -lower[0]:
+                heapq.heappush(lower, -a)
+                sum_lower += a
+            else:
+                heapq.heappush(upper, a)
+                sum_upper += a
+
+            # Balance the heaps
+            while len(lower) > len(upper) + 1:
+                val = -heapq.heappop(lower)
+                sum_lower -= val
+                heapq.heappush(upper, val)
+                sum_upper += val
+            while len(upper) > len(lower):
+                val = heapq.heappop(upper)
+                sum_upper -= val
+                heapq.heappush(lower, -val)
+                sum_lower += val
+        else:
+            m = -lower[0]
+            cnt_low = len(lower)
+            cnt_high = len(upper)
+            sum_abs = (m * cnt_low - sum_lower) + (sum_upper - m * cnt_high)
+            total = sum_abs + sum_b
+            print(m, total)
+
+if __name__ == '__main__':
+    main()
+```
+
+### Explanation
+1. **Heaps for Median Tracking**: The lower heap (max-heap) and upper heap (min-heap) are used to maintain the median efficiently. The median is always the top element of the lower heap.
+2. **Sum Tracking**: By maintaining sums of the elements in each heap and the sum of constants added, we can quickly compute the sum of absolute differences when needed.
+3. **Balancing Heaps**: After each insertion, the heaps are rebalanced to ensure the lower heap's size is either equal to or one more than the upper heap's size. This allows efficient median computation.
+4. **Efficiency**: Each insertion and balancing operation runs in O(log n) time, and each evaluation query runs in O(1) time, making the solution efficient for large input sizes up to 200,000 queries.
+</bot>

@@ -1,0 +1,571 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Valera runs a 24/7 fast food cafe. He magically learned that next day n people will visit his cafe. For each person we know the arrival time: the i-th person comes exactly at hi hours mi minutes. The cafe spends less than a minute to serve each client, but if a client comes in and sees that there is no free cash, than he doesn't want to wait and leaves the cafe immediately. 
+
+Valera is very greedy, so he wants to serve all n customers next day (and get more profit). However, for that he needs to ensure that at each moment of time the number of working cashes is no less than the number of clients in the cafe. 
+
+Help Valera count the minimum number of cashes to work at his cafe next day, so that they can serve all visitors.
+
+Input
+
+The first line contains a single integer n (1 ≤ n ≤ 105), that is the number of cafe visitors.
+
+Each of the following n lines has two space-separated integers hi and mi (0 ≤ hi ≤ 23; 0 ≤ mi ≤ 59), representing the time when the i-th person comes into the cafe. 
+
+Note that the time is given in the chronological order. All time is given within one 24-hour period.
+
+Output
+
+Print a single integer — the minimum number of cashes, needed to serve all clients next day.
+
+Examples
+
+Input
+
+4
+8 0
+8 10
+8 10
+8 45
+
+
+Output
+
+2
+
+
+Input
+
+3
+0 12
+10 11
+22 22
+
+
+Output
+
+1
+
+Note
+
+In the first sample it is not enough one cash to serve all clients, because two visitors will come into cafe in 8:10. Therefore, if there will be one cash in cafe, then one customer will be served by it, and another one will not wait and will go away.
+
+In the second sample all visitors will come in different times, so it will be enough one cash.
+</user>
+<bot>
+<think>
+Okay, I need to solve this problem where Valera's cafe requires a certain number of cash registers so that every customer is served. The key is that at any moment, the number of active cash registers must be at least the number of customers present. Since each customer arrives in chronological order and leaves immediately if there's no cash available, I need to track how many customers are overlapping in time and find the maximum number of overlapping customers at any point. That maximum will be the minimum number of cashiers needed.
+
+First, the input gives the arrival times of each customer in chronological order. So the list is sorted. Each customer is served in less than a minute, but the exact time isn't specified. But since each takes less than a minute, the next customer's arrival time is crucial. For example, if two customers arrive at the same time, you need two cashiers. If a customer arrives exactly when the previous one's service is finishing (like 8:00 and 8:00:59), then the first cashier is free again. So the approach is to group customers that arrive within the same minute (but perhaps not exactly the same time) and see how many are in each group. But wait, maybe even within the same minute, if there are multiple customers, their arrival times could be such that their service times overlap. But the problem states that the serving time is less than a minute. So for a customer arriving at time t, the cashier is busy until t + 0:59 (since less than a minute). So any customer arriving before that time would require another cashier.
+
+Wait, but the serving takes less than a minute. So suppose a customer arrives at 8:00. They are served in, say, 0:59 seconds. So their service ends at 8:00:59. If another customer arrives at 8:00:59, then the first cashier is free again. But if the next arrives at 8:00:30, then during their arrival, the first cashier is busy, so a new cashier is needed.
+
+But how are the times given? The input is in hours and minutes. So each customer's arrival time is given in minutes. So if two customers have the same hi and mi, they arrive in the same minute. However, the problem says that all times are given in chronological order, so the list is sorted.
+
+So the main idea is that for each customer, their arrival time is t (converted to minutes since midnight, perhaps), and they will occupy a cashier until t + 1 (since less than a minute, but adding 1 minute to their arrival time). So any other customer arriving before that end time would need to check if there's a cashier available.
+
+Wait, but how do we model the overlapping? Because each customer's service time is from t to t+1 (exclusive). So the start is t, end is t + 1. So any customer arriving at t' where t' < t + 1 will have their service time overlapping with the first customer. So for all customers, we need to track the times when their service is active and find the maximum number of overlapping intervals.
+
+But since the customers are given in chronological order, we can process them in order. For each customer, we need to check which cashiers are available. A cashier is available if the current customer's arrival time is after or equal to the cashier's available time.
+
+Wait, perhaps the right approach is to keep track of when each cashier becomes available. For each new customer, check all cashiers and see if any have available time <= current customer's arrival time. If so, assign that cashier to this customer (update the available time to the customer's arrival time + 1 minute). If none are available, then we need to add a new cashier.
+
+But with n up to 1e5, this approach would be O(nk), where k is the number of cashiers, which could be up to n in the worst case. That's O(n^2), which would be too slow for n=1e5.
+
+So we need a more efficient approach.
+
+Alternative idea: Since the customers are sorted in chronological order, perhaps we can track the number of overlapping service intervals. The maximum number of overlaps at any time is the answer.
+
+Each service interval is [t, t+1) in minutes. So for a customer arriving at time t, their interval is from t to t+1. We need to find the maximum number of overlapping intervals at any point.
+
+To compute this efficiently, we can process all the start and end times. Then, sort all events (start and end) and scan them, keeping track of the current number of active intervals and the maximum.
+
+But how to model the start and end events. For each customer, their start is t (in minutes), end is t + 1.
+
+So for all customers, collect all start times and end times. Then, create a list of events where each event is a time point and a delta (start adds +1, end adds -1). Then sort these events in order, and as we process them, track the current number of active intervals. The maximum value during this processing is the answer.
+
+But since the customers are given in order, their start times are non-decreasing. But their end times (t + 1) may be in any order, depending on how close the arrival times are.
+
+Wait, but if we process each customer's start and end in the order of the time, the sorted list of events would allow us to compute the overlaps correctly.
+
+But for example:
+
+Customer 1: t=0 → ends at 1.
+
+Customer 2: t=0 → ends at 1.
+
+So events are: (0, +1), (0, +1), (1, -1), (1, -1). The maximum active is 2.
+
+Which is correct.
+
+Another example: customer 1 arrives at 8:00 (480 minutes), ends at 481. Customer 2 arrives at 8:10 (490), ends at 491. Then the maximum is 1. So the events are 480:+1, 490:+1, 481:-1, 491:-1. The active count goes up to 1 at 480, then back to 0 at 481, then up again at 490, etc. So maximum is 1.
+
+But wait, in the first sample input:
+
+4 customers:
+
+8:00 → t=480
+
+8:10 → t=490
+
+8:10 → t=490
+
+8:45 → t=525.
+
+Each has intervals [480,481), [490,491), [490,491), [525,526).
+
+The events are:
+
+480: +1
+
+490: +1
+
+490: +1
+
+525: +1
+
+Then ends at 481: -1, 491: -1, 491: -1, 526: -1.
+
+Processing all events in order:
+
+Time 480: +1 → current is 1. Max is 1.
+
+Time 490: +1 → current 2. Then another +1 → current 3. Max becomes 3?
+
+But the sample output is 2. Wait that's a problem. Because according to this approach, the maximum would be 3, but the correct answer is 2.
+
+Wait wait, what's the actual scenario here.
+
+Wait in the first sample, two customers arrive at 8:10. So the intervals are [490, 491). Both start at 490. So between 490 and 491, there are two intervals active. So the maximum overlap is 2. So why would the events approach compute 3?
+
+Wait no, the first sample input is:
+
+4 customers. The first arrives at 8:00. Then three others. The second and third arrive at 8:10. So the first customer's interval is 480-481. The second and third are 490-491. The fourth is 525-526. So when the second and third are processed, their start is 490. So the events would be:
+
++1 (480), then +1 (490), +1 (490), +1 (525). Then the ends are 481, 491, 491, 526.
+
+So the events sorted would be:
+
+480: +1
+
+481: -1
+
+490: +1
+
+490: +1
+
+491: -1
+
+491: -1
+
+525: +1
+
+526: -1
+
+So processing in this order:
+
+At 480: current=1 (max=1).
+
+At 481: current=0.
+
+At 490: current=1, then +1 again → current=2. Max is now 2.
+
+At 491: current=1, then 0.
+
+So the maximum is 2. Which matches the sample. So the problem must be in how the events are sorted.
+
+Ah, right. Because when events have the same time, the order of processing is important. For example, a customer's end event (t+1) must be processed before a new customer's start event if they have the same time. Because the end of the first customer happens at t+1, and the next customer's arrival is at t+1, which would be allowed to take the same cashier.
+
+So, in the events, when two events have the same time, the end events (-1) should be processed before the start events (+1). Because, for example, if a customer leaves at time t, and another arrives at time t, the leaving frees up a cashier, which can then be used by the arriving customer.
+
+So the way to sort the events is: for events with the same time, process the end events first, then the start events.
+
+So the event list for the first sample would be sorted as:
+
+480: +1 → but wait, no. Let's recheck:
+
+Original events:
+
+Start times: 480, 490, 490, 525.
+
+End times: 481, 491, 491, 526.
+
+So the events are:
+
+480:+1
+
+481:-1
+
+490:+1
+
+490:+1
+
+491:-1
+
+491:-1
+
+525:+1
+
+526:-1
+
+But sorted by time. However, the events with the same time (like 490 and 490 starts) are all starts. So they are ordered as they are. But if there's an end and a start at the same time, the end comes first.
+
+In the first sample, all the events at the same time are either all starts or all ends. So the order between them doesn't matter. But in cases where there are both starts and ends at the same time, ends should be processed first.
+
+So, the approach is:
+
+1. Convert all arrival times into minutes since midnight.
+
+2. For each customer, create a start event (time = t, type +1) and an end event (time = t + 1, type -1).
+
+3. Sort all events in increasing order of time. When times are equal, end events (-1) come before start events (+1).
+
+4. Then, process the events in order, keeping track of the current number of active customers (current). The maximum current during processing is the answer.
+
+This should correctly calculate the maximum number of overlapping intervals at any time, which is the required number of cashes.
+
+So how to implement this.
+
+First, read n.
+
+Then for each of the next n lines, read hi and mi, convert to t = hi*60 + mi.
+
+For each t, add a start event (t, +1) and an end event (t+1, -1).
+
+Then collect all events, sort them with the key: for an event, the key is (time, type). Since end events (-1) have type 0 and start events have type 1, so that when times are equal, end events are processed first.
+
+Wait, perhaps. Let's see: for two events at the same time, we want the end events to come first. So the key for sorting is (time, type), where type is 0 for end events (since when sorted, 0 comes before 1). Wait, the events are a list of tuples. For each start event, the tuple is (time, +1), and for end events (time+1, -1). So when we sort the events, we can sort by time, and for events with the same time, the end event (which is -1) should be processed before the start events (which are +1). So, the key for each event is (time, delta), where delta is -1 or +1. So when two events have the same time, the one with delta=-1 comes first. Because when sorted, a tuple (t, -1) comes before (t, +1).
+
+So the events are sorted as per their time, and for same time, end events (delta -1) come first.
+
+So, the code steps:
+
+Read n.
+
+Read n lines, each with hi, mi → compute t = hi * 60 + mi.
+
+For each t, add (t, +1) and (t+1, -1) to the events list.
+
+Sort the events list with a custom key. The key for each event is (time, delta). But since delta can be +1 or -1, we need to order such that for the same time, events with delta -1 come before those with +1. Because when two events have the same time, the end event (delta -1) should be processed before the start event (delta +1).
+
+Wait, wait. Let's see. For example, two events at time t:
+
+Event1: (t, -1) → end event.
+
+Event2: (t, +1) → start event.
+
+When sorted, event1 comes before event2. Because when you sort tuples in Python, (t, -1) is considered less than (t, +1) because -1 is less than 1.
+
+Yes. Because when comparing tuples, the first elements are compared, and if equal, the second elements are. So (t, -1) < (t, 1) is True.
+
+So the events list can be sorted by their (time, delta) tuples.
+
+Once sorted, process each event in order. For each event, add delta to the current count. Keep track of the maximum current count.
+
+The maximum current count is the required answer.
+
+So, code:
+
+n = int(input())
+
+events = []
+
+for _ in range(n):
+
+    h, m = map(int, input().split())
+
+    t = h * 60 + m
+
+    events.append( (t, 1) )
+
+    events.append( (t + 1, -1) )
+
+events.sort()
+
+current = 0
+
+max_cash = 0
+
+for time, delta in events:
+
+    current += delta
+
+    if current > max_cash:
+
+        max_cash = current
+
+print(max_cash)
+
+Wait, but let's test this with the first sample input.
+
+Sample input 1:
+
+4
+
+8 0 → 480
+
+8 10 → 490
+
+8 10 →490
+
+8 45 →525
+
+So events are:
+
+For first customer:
+
+(480, 1), (481, -1)
+
+Second:
+
+(490,1), (491, -1)
+
+Third: same as second.
+
+Fourth: (525,1), (526,-1)
+
+So events list after adding all is:
+
+[ (480,1), (481,-1), (490,1), (491,-1), (490,1), (491,-1), (525,1), (526,-1) ]
+
+But when sorted, the order will be sorted by time first. For same times, sorted by delta. So let's see:
+
+Time 480:
+
+events (480,1), (481,-1) → wait no, the first customer's end is at 481. So the events for the first customer are (480, 1) and (481, -1). Then the second customer's events are (490,1), (491,-1). Third same as second. Fourth is (525,1), (526,-1).
+
+So all events are:
+
+480,1
+
+481,-1
+
+490,1
+
+490,1 → third customer's start event.
+
+491,-1 → second's end.
+
+491,-1 → third's end.
+
+525,1
+
+526,-1
+
+So when sorted:
+
+The events are ordered by time. For time 490, the two (490,1) events are present. Since their delta is 1, they will be ordered after any events at 490 with delta -1, but in this case, there are none. So the events list sorted will be:
+
+480,1
+
+481,-1
+
+490,1
+
+490,1
+
+491,-1
+
+491,-1
+
+525,1
+
+526,-1
+
+So processing these:
+
+current starts at 0.
+
+At 480, delta 1 → current 1. Max is 1.
+
+At 481, delta -1 → current 0.
+
+At 490, delta 1 → current 1. Then another delta 1 → current 2. Max becomes 2.
+
+Then 491, delta -1 → current 1. Again delta -1 → current 0.
+
+Then 525, 1 → current 1. Then 526, -1 → 0.
+
+So the max is 2, which matches the first sample.
+
+Sample 2:
+
+Input:
+
+3
+
+0 12 → 12 minutes.
+
+10 11 → 10*60 +11= 611+11= wait 10*60=600 +11=611.
+
+Wait, 0*60 +12=12.
+
+10:11 is 10*60+11=611.
+
+22:22 is 22*60+22=1342.
+
+Each customer's time is:
+
+12 → end 13.
+
+611 → end 612.
+
+1342 → end 1343.
+
+So events are:
+
+(12,1), (13,-1), (611,1), (612,-1), (1342,1), (1343,-1).
+
+Sorted by time.
+
+Processing:
+
+At 12: current 1 → max 1.
+
+At 13: current 0.
+
+At 611: current 1 → max remains 1.
+
+At 612: 0.
+
+At 1342: 1.
+
+At 1343: 0.
+
+So the maximum is 1. Correct.
+
+So this approach works.
+
+Another test case where two customers arrive at the same time. For example, two at time t. Then events are (t,1), (t,1), (t+1,-1), (t+1,-1). When sorted, the two (t,1) events are ordered after any events at t with -1. But since there are none, the two (t,1) are next. So processing them in order:
+
+current +=1 → 1.
+
+current +=1 →2. Max is 2.
+
+Then the end events subtract 2.
+
+So the maximum is 2, which is correct.
+
+Another test case where a customer arrives at t and another at t+0. So their service intervals are [t, t+1) and [t+0, t+0+1) → which is [t+0, t+1). So overlapping. So maximum 2.
+
+But let's see how the events are handled. The events are (t,1), (t+1,-1), (t,1), (t+1,-1). Sorted as (t,1), (t,1), (t+1,-1), (t+1,-1). Processing:
+
+t: current 1 then 2 → max 2.
+
+t+1: current 1 then 0.
+
+So correct.
+
+Another case where a customer arrives at t, and another arrives at t+0:59. Wait, but the times are given in minutes. So the arrival time is in minutes. So if a customer arrives at t, and another at t + 0.59 minutes (which would be in the same minute as t). But the input is given in hi and mi, so the times are in whole minutes. So customers' arrival times are in whole minutes. So the service time is from t to t+1 minute. So any customer arriving at the same t will have overlapping service intervals.
+
+So the approach of converting each arrival to a start event and end event, then sorting them with end events first when same time, and then tracking the current number of overlaps is correct.
+
+So the code should work.
+
+Now, the code needs to read n, read n lines, process each into t, create events, sort, then process.
+
+But wait, for the code I wrote earlier, the events are generated for each customer as (t, 1) and (t+1, -1). Then sorted, and the current is incremented by delta for each event. The maximum current is tracked.
+
+Yes.
+
+But let's check again.
+
+Sample input 1:
+
+4
+
+8 0 → 480
+
+8 10 → 490
+
+8 10 →490
+
+8 45 →525
+
+So events:
+
+(480,1), (481,-1), (490,1), (491,-1), (490,1), (491,-1), (525,1), (526,-1).
+
+When sorted, the order is:
+
+480,1
+
+481,-1
+
+490,1
+
+490,1
+
+491,-1
+
+491,-1
+
+525,1
+
+526,-1.
+
+Processing:
+
+current starts at 0.
+
+After first event (480,1) → current 1. Max 1.
+
+Second (481,-1) → 0.
+
+Third (490,1) →1.
+
+Fourth (490,1) →2. Max becomes 2.
+
+Then two -1 events: current 1, then 0.
+
+Then 525: 1.
+
+526: 0.
+
+So maximum is 2. Correct.
+
+Yes. So the code works.
+
+Now, the code's time complexity is O(n log n) because of the sorting step, which is acceptable for n up to 1e5.
+
+Thus, the Python function is as follows.
+</think>
+To solve this problem, we need to determine the minimum number of cash registers required in Valera's cafe to ensure that all customers are served without any customer leaving due to unavailability of a cash register. The key is to track the maximum number of customers present in the cafe at any given time, as this will dictate the number of cash registers needed.
+
+### Approach
+1. **Convert Arrival Times to Minutes**: Convert each customer's arrival time from hours and minutes into total minutes since midnight. This simplifies time calculations.
+2. **Track Service Intervals**: Each customer's service time starts at their arrival time and ends one minute later (since service takes less than a minute). Create events for the start and end of each customer's service interval.
+3. **Sort Events**: Sort these events by time. If two events occur at the same time, process end events before start events to ensure correct overlap counting.
+4. **Count Overlaps**: Traverse the sorted events, adjusting the count of active customers (cash registers in use). Track the maximum number of active customers at any point, which gives the minimum number of cash registers needed.
+
+### Solution Code
+```python
+n = int(input())
+events = []
+
+for _ in range(n):
+    h, m = map(int, input().split())
+    t = h * 60 + m
+    events.append((t, 1))
+    events.append((t + 1, -1))
+
+events.sort()
+
+current = 0
+max_cash = 0
+
+for time, delta in events:
+    current += delta
+    if current > max_cash:
+        max_cash = current
+
+print(max_cash)
+```
+
+### Explanation
+1. **Reading Input**: The input is read and converted into total minutes since midnight for each customer's arrival time.
+2. **Creating Events**: For each customer, two events are created: one when they start being served (arrival time) and one when they finish (arrival time + 1 minute).
+3. **Sorting Events**: Events are sorted by time. If two events have the same time, end events (cashier becoming free) are processed before start events (customer arriving) to ensure accurate overlap counting.
+4. **Processing Events**: By iterating through the sorted events, we maintain a count of active customers. The maximum value of this count during the iteration gives the required number of cash registers.
+
+This approach efficiently tracks overlaps using a sorted list of events, ensuring an optimal solution with a time complexity of O(n log n) due to the sorting step, which is suitable for large inputs up to 100,000 customers.
+</bot>

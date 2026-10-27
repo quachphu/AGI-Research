@@ -1,0 +1,1131 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.As Sherlock Holmes was investigating a crime, he identified n suspects. He knows for sure that exactly one of them committed the crime. To find out which one did it, the detective lines up the suspects and numbered them from 1 to n. After that, he asked each one: "Which one committed the crime?". Suspect number i answered either "The crime was committed by suspect number ai", or "Suspect number ai didn't commit the crime". Also, the suspect could say so about himself (ai = i).
+
+Sherlock Holmes understood for sure that exactly m answers were the truth and all other answers were a lie. Now help him understand this: which suspect lied and which one told the truth?
+
+Input
+
+The first line contains two integers n and m (1 ≤ n ≤ 105, 0 ≤ m ≤ n) — the total number of suspects and the number of suspects who told the truth. Next n lines contain the suspects' answers. The i-th line contains either "+ai" (without the quotes), if the suspect number i says that the crime was committed by suspect number ai, or "-ai" (without the quotes), if the suspect number i says that the suspect number ai didn't commit the crime (ai is an integer, 1 ≤ ai ≤ n).
+
+It is guaranteed that at least one suspect exists, such that if he committed the crime, then exactly m people told the truth.
+
+Output
+
+Print n lines. Line number i should contain "Truth" if suspect number i has told the truth for sure. Print "Lie" if the suspect number i lied for sure and print "Not defined" if he could lie and could tell the truth, too, depending on who committed the crime.
+
+Examples
+
+Input
+
+1 1
++1
+
+
+Output
+
+Truth
+
+
+Input
+
+3 2
+-1
+-2
+-3
+
+
+Output
+
+Not defined
+Not defined
+Not defined
+
+
+Input
+
+4 1
++2
+-3
++4
+-1
+
+
+Output
+
+Lie
+Not defined
+Lie
+Not defined
+
+Note
+
+The first sample has the single person and he confesses to the crime, and Sherlock Holmes knows that one person is telling the truth. That means that this person is telling the truth.
+
+In the second sample there are three suspects and each one denies his guilt. Sherlock Holmes knows that only two of them are telling the truth. Any one of them can be the criminal, so we don't know for any of them, whether this person is telling the truth or not.
+
+In the third sample the second and the fourth suspect defend the first and the third one. But only one is telling the truth, thus, the first or the third one is the criminal. Both of them can be criminals, so the second and the fourth one can either be lying or telling the truth. The first and the third one are lying for sure as they are blaming the second and the fourth one.
+</user>
+<bot>
+<think>
+Okay, let's tackle this problem. Hmm, the problem is about determining for each suspect whether they must be telling the truth, lying, or it's not defined based on the given m (number of truthful statements) and the statements themselves.
+
+So the key here is to find all possible criminals that satisfy the condition: if that suspect is the criminal, then exactly m statements are truthful. Then, for each suspect's statement, determine if in all possible valid scenarios (criminals that fit m), their statement is always a truth or a lie. If it varies, then it's Not defined.
+
+First step: For each possible suspect x (from 1 to n), compute how many statements are truthful if x is the criminal. Because the real criminal must be such that this count equals m. We need to collect all x where the count is exactly m. These are the possible candidates for the criminal.
+
+Once we have the list of possible x's, for each suspect i, we check whether their statement is always true, always false, or depends on the x. So:
+
+For each i:
+- Check for all x in the possible list, whether the statement of i is true when x is the criminal. If all are true → Truth. If all are false → Lie. Otherwise → Not defined.
+
+But how to efficiently compute this?
+
+Let's think about how to calculate for a given x, how many truthful statements there are.
+
+Each suspect's statement is either "+a" (they say a did it) or "-a" (they say a didn't do it).
+
+If the criminal is x:
+- For a "+a" statement from i: the statement is true if a == x. So if i says "+a", then their statement is truthful iff x == a.
+- For a "-a" statement from i: the statement is true if a != x. So if i says "-a", then their statement is truthful iff x != a.
+
+So for each x, we can compute the number of truthful statements by checking each of the n statements against x.
+
+But n can be up to 1e5. So for each x in 1..n, checking all n statements would be O(n^2), which is 1e10 operations. That's way too slow.
+
+So we need a way to compute, for each x, the count of truthful statements in O(1) or O(k) time, where k is the number of possible x's that could satisfy the m condition.
+
+Wait, but how many x's could possibly have a truthful count of m? It depends on the data, but in the worst case, it could be O(n). So even if we have O(n) x's to check, each taking O(1) time, that's manageable.
+
+So the plan is:
+
+1. Preprocess the statements. For each x, compute the number of truthful statements. But how?
+
+Alternative approach: For each possible x, the truthful count is the sum of:
+
+- The number of "+a" statements where a == x.
+
+- The number of "-a" statements where a != x.
+
+So if we can precompute these two numbers for each x, then the total truthful count is the sum.
+
+Yes! Let's see.
+
+Let’s create two dictionaries (or arrays) for each x:
+
+count_plus[x] = number of "+a" statements where a = x.
+
+count_minus[x] = number of "-a" statements where a != x. Wait, but a is fixed in each "-a" statement. For each "-a" statement, it contributes to count_minus[x] for all x != a. Hmm, no, that's not correct.
+
+Wait, no. For each "-a" statement (from some suspect i), the statement is true if x != a. So for x, this statement is true if x != a. So for each "-a" statement, it contributes 1 to the truthful count of every x except when x = a.
+
+So the total truthful count for x is:
+
+count_plus[x] (number of "+a" statements where a=x) plus the number of "-a" statements where a != x.
+
+But how to compute the second part efficiently?
+
+Let's think: the total number of "-a" statements where a != x is equal to (total number of "-a" statements) minus the number of "-a" statements where a == x.
+
+So let's:
+
+total_minus = number of "-" statements.
+
+count_minus_a[x] = number of "-a" statements where a = x.
+
+Then, for x, the number of "-a" statements that are true is total_minus - count_minus_a[x].
+
+So total_truthful[x] = count_plus[x] + (total_minus - count_minus_a[x]).
+
+Yes! So this can be computed in O(1) per x.
+
+So first, we can precompute:
+
+- count_plus[x] for all x: how many "+a" statements where a is x.
+
+- count_minus_a[x] for all x: how many "-a" statements where a is x.
+
+- total_minus is the total number of "-" statements.
+
+Then for each x, the truthful count is count_plus[x] + (total_minus - count_minus_a[x]).
+
+Once we can compute this, we can iterate over all x in 1..n and collect those x where the truthful count is m. These are the possible criminals.
+
+Once we have the possible x's (let's call them candidates), we need to check for each suspect i whether their statement is always true, always false, or depends on the x.
+
+So for each i, their statement is either +a or -a.
+
+For each candidate x (possible criminal), we can check if the statement of i is true in that scenario.
+
+If for all candidates x, the statement of i is true → output Truth.
+
+If for all candidates x, the statement is false → output Lie.
+
+Else → Not defined.
+
+So for each i, we need to check all candidate x's and see the consistency of their statement's truthfulness.
+
+But the candidates can be up to O(n) in the worst case, and for each i, checking all of them is O(n) per i, leading to O(n^2) time again. Which is not acceptable for n=1e5.
+
+Hmm, so we need a smarter way.
+
+Alternative idea: For each i's statement, we can precompute the conditions under which it is true.
+
+Case 1: The statement is "+a". Then, it's true if x == a. So, for all x in candidates where x == a, the statement is true. Else, false.
+
+Case 2: The statement is "-a". Then, it's true if x != a. So, for all x in candidates where x != a, the statement is true. Else, false.
+
+So for each i, we can determine the possible x in the candidates where their statement is true.
+
+Then, the possible situations for i are:
+
+- If all x in candidates are in the true condition → Truth.
+
+- If all x in candidates are in the false condition → Lie.
+
+- Otherwise → Not defined.
+
+So, for each i:
+
+If the statement is "+a_i":
+
+Check if all candidates are equal to a_i. If yes → Truth.
+
+Else, check if all candidates are not equal to a_i → Lie.
+
+If there are candidates both equal and not equal → Not defined.
+
+Similarly for "-a_i":
+
+Check if all candidates are not equal to a_i → Truth.
+
+Check if all candidates are equal to a_i → Lie.
+
+Else → Not defined.
+
+So the problem reduces to, for each i, checking the candidates' x values in relation to a_i.
+
+But how to check for all candidates x whether they are equal to a_i (for "+" case) or not?
+
+Let's see.
+
+Suppose the candidates are stored in a set or a list. For each i's a_i (the a in their statement), we need to see if:
+
+In the "+" case:
+
+All x in candidates are a_i → then the statement is always true.
+
+If any x in candidates is not a_i → but some may be a_i. So if there's at least one x in candidates that is a_i and at least one that is not, then Not defined.
+
+Wait, no. For the "+" statement, the statement is true when x is a_i, else false. So, if in the candidates set there are some x that are a_i and others that are not, then for those x's where x is a_i, the statement is true; else, false. So for i's statement, sometimes it's true, sometimes false. Hence, Not defined.
+
+So for the "+" case, the possible outcomes are:
+
+- All candidates x are a_i → Truth.
+
+- None of the candidates x are a_i → Lie.
+
+- Some are a_i and some are not → Not defined.
+
+Similarly for the "-" case:
+
+Statement is true when x != a_i.
+
+So:
+
+If all candidates x are not a_i → Truth.
+
+If all candidates x are a_i → Lie.
+
+Else → Not defined.
+
+So how can we check these conditions efficiently?
+
+We need to, for each a_i in the statements, know how many candidates are equal to a_i, and how many are not.
+
+But for each i, a_i can be any value from 1 to n. So if the candidates are stored in a set, for each i, we can check if a_i is in the candidates (for "+" case) and also check the count of candidates where x is a_i versus total candidates.
+
+Wait, perhaps precompute a frequency map for the candidates.
+
+But first, collect all candidates x where total_truthful[x] == m. Let's collect them into a list or a set.
+
+Once we have the list of candidates, we can create a frequency dictionary (like a Counter) that counts how many times each x appears. But since the candidates are the x's themselves, the frequency for each x is 1 (since x is considered once), unless the same x is added multiple times (which it's not, since x is unique in the list). Wait, no. Each x is either in the list once or not. So the candidates list is a set of x's where total_truthful[x] = m.
+
+Wait, no. Because for each x, if total_truthful[x] = m, then x is a candidate. So candidates is a list (or a set) of x's where x is a possible criminal.
+
+So, for each i:
+
+If the statement is "+a":
+
+Check if all x in candidates are a. So, if the candidates set is non-empty, and all elements in the set are equal to a.
+
+How to check this? For example, if the candidates set is {a}, then yes. Otherwise, if there are any elements not equal to a, then no.
+
+Similarly, if the statement is "-a", check if all x in candidates are not equal to a. So, if the candidates set is empty (but according to the problem statement, there's at least one candidate), or all elements in the candidates set are not a.
+
+So for each i's a_i (the a in their statement), we need to check:
+
+For "+a_i":
+
+if a_i is in the candidates, and there are no other candidates. So, the size of candidates is equal to the count of a_i in the candidates. Since each x is unique, this is equivalent to the candidates being exactly {a_i}.
+
+So, for "+a_i" statement:
+
+if len(candidates) == 1 and a_i in candidates → then Truth.
+
+Wait, no. Because even if there are multiple candidates, but all of them are a_i (but that's impossible since the candidates are distinct x's). Wait, no, x is the possible criminal. So each candidate is a unique x. Wait, no. For example, if x can be 3 and 3 again, but since x is in 1..n, each x is considered once. So the candidates are a set of unique x's.
+
+So the candidates are a set, not a list. So each x can appear at most once.
+
+So for "+a_i" case:
+
+If all x in candidates are a_i. So, the candidates set must be exactly {a_i}.
+
+So, the statement is Truth if candidates is {a_i}, else:
+
+if any x in candidates is a_i, but there are others → Not defined.
+
+If no x in candidates is a_i → Lie.
+
+So how can we check this?
+
+We can check:
+
+count = number of candidates where x == a_i.
+
+If count == len(candidates) → all are a_i → Truth.
+
+If count == 0 → none are a_i → Lie.
+
+Else → some are a_i → Not defined.
+
+Similarly, for "-a_i" case:
+
+count = number of candidates where x != a_i.
+
+But since the candidates are all possible x's, count is len(candidates) - (number of x in candidates that are a_i).
+
+So for "-a_i" case:
+
+If len(candidates) - count_of_a_i == len(candidates) → all x != a_i → Truth.
+
+Which is equivalent to count_of_a_i == 0 → because len(candidates) - count_of_a_i = len(candidates) → count_of_a_i = 0.
+
+Yes.
+
+So for "-a_i" statement:
+
+If count_of_a_i == 0 → all x in candidates are not a_i → Truth.
+
+Else if count_of_a_i == len(candidates) → all x in candidates are a_i → Lie.
+
+Else → Not defined.
+
+So the steps for each i are:
+
+1. For the statement type (plus or minus) and a_i.
+
+2. Compute how many candidates x are a_i (count_in_candidates).
+
+3. For plus:
+
+   if count_in_candidates == len(candidates) → Truth.
+
+   elif count_in_candidates == 0 → Lie.
+
+   else → Not defined.
+
+   Wait, no. Because for plus, the statement is true only when x == a_i. So if there are any x in candidates where x == a_i, then in some scenarios, the statement is true, else false. So:
+
+   For plus, if the candidate set includes a_i and also other values, then the statement could be true or false depending on the candidate. So the result is Not defined.
+
+   So for plus:
+
+   Truth if all candidates are a_i.
+
+   Lie if none are a_i.
+
+   Else Not defined.
+
+   For minus:
+
+   Truth if none of the candidates are a_i.
+
+   Lie if all are a_i.
+
+   Else Not defined.
+
+So how to compute this?
+
+We can precompute a dictionary that for each a, tells how many candidates have x == a.
+
+So, create a frequency map: freq_candidate = Counter(candidates).
+
+Then for each i's a_i:
+
+count_in_candidates = freq_candidate.get(a_i, 0)
+
+So for "+a_i" statement:
+
+if count_in_candidates == len(candidates):
+
+   Truth
+
+elif count_in_candidates == 0:
+
+   Lie
+
+else:
+
+   Not defined
+
+For "-a_i" statement:
+
+if count_in_candidates == 0:
+
+   Truth
+
+elif count_in_candidates == len(candidates):
+
+   Lie
+
+else:
+
+   Not defined
+
+So this approach can be done efficiently.
+
+Now, putting it all together.
+
+The steps are:
+
+1. Read n and m.
+
+2. Read each of the n statements, store them as a list. For each statement, parse whether it's +a or -a, and the a.
+
+3. Precompute count_plus (array where count_plus[x] is the number of +a statements with a=x).
+
+   Also compute total_minus (the number of - statements).
+
+   And compute count_minus_a (array where count_minus_a[x] is the number of -a statements with a=x).
+
+4. Compute for each x in 1..n, the truthful count as count_plus[x] + (total_minus - count_minus_a[x]).
+
+5. Collect all x where this count is equal to m → these are the candidate criminals.
+
+6. If there are no candidates, but the problem says there is at least one, so this can't happen. So proceed.
+
+7. For each candidate x, store in a set or list.
+
+8. Create a frequency map (a Counter) for the candidates. Or, since candidates is a list (possibly with duplicates?), but since x can't be duplicated, we can just check if a_i is in the set of candidates.
+
+Wait, the candidates are a list of x where x is a possible criminal. Each x is unique. So the candidates can be stored as a set.
+
+So for the frequency map, it's just a set. So checking a_i in the set gives whether any x is a_i.
+
+But in our case, the count_in_candidates is 1 or 0, because each x is unique. So for a_i, if a_i is in the candidates, count_in_candidates is 1; else 0.
+
+Wait no. Because for example, if there are multiple x in candidates that are equal to a_i. But since x is the criminal (and each is unique), then candidates is a list of distinct x's. So for x in candidates, each x is unique. So for any a_i, the count_in_candidates is 1 if a_i is in the candidates, else 0.
+
+Wait, no. Because x is the criminal. So each x is a possible criminal. The candidates are the x's where total_truthful[x] = m. So each x is considered once. So the count_in_candidates for a_i is either 0 or 1. Because either a_i is in the candidates, or not.
+
+Wait, no. For example, a_i could be 3, and the candidates could be [3,5,7]. Then count_in_candidates is 1 (only 3 is a_i). Or if a_i is 5, count is 1.
+
+So the count_in_candidates can be 0 or 1. Because each x is unique.
+
+Wait, that's only possible if the same a_i can't be in the candidates more than once. Which is true because each candidate is a unique x. So for any a_i, count_in_candidates can be 0 or 1. Because x can't appear multiple times in the candidates.
+
+Wait, no. For example, if a_i is 3, and the candidates are [3,3,5], but that's impossible because x is unique. Because the candidates are the x's where total_truthful[x] = m, and each x is unique (since it's in 1..n). So the candidates are a list of distinct x's. So for any a_i, the count_in_candidates is either 0 or 1.
+
+Wait, that's a mistake. Because x can be any of the possible suspects. So if x=3 is a candidate, then in the candidates list, x=3 is present once. So for any a_i, count_in_candidates is 0 or 1.
+
+So in the previous analysis, for each i's a_i, the count_in_candidates is either 0 or 1.
+
+But how can len(candidates) be equal to count_in_candidates (which can be 0 or 1). So for the "+a_i" case:
+
+If count_in_candidates is 1 and len(candidates) is 1 → all candidates are a_i → Truth.
+
+If count_in_candidates is 1 and len(candidates) > 1 → some are a_i → Not defined.
+
+If count_in_candidates is 0 → Lie.
+
+Similarly for the "-a_i" case:
+
+If count_in_candidates is 0 → all candidates are not a_i → Truth.
+
+If count_in_candidates is 1 and len(candidates) is 1 → all are a_i → Lie.
+
+If count_in_candidates is 1 and len(candidates) > 1 → Not defined.
+
+So, how can we handle this?
+
+Let's re-examine the logic for each case.
+
+For "+a_i" statement:
+
+We need to check if all candidates x are equal to a_i. But len(candidates) can be any number. For example, if candidates are [3,5], and a_i is 3 → then not all are a_i. So in that case, the count_in_candidates is 1 (only x=3 is a_i), and len(candidates) is 2. So count_in_candidates (1) is not equal to len(candidates) (2), so the statement is Not defined.
+
+If a_i is in the candidates and len(candidates) is 1 → all are a_i → Truth.
+
+If a_i is not in the candidates → all are not a_i → Lie.
+
+So for "+a_i" statement:
+
+if a_i is in candidates:
+
+   if len(candidates) == 1 → Truth.
+
+   else → Not defined.
+
+else:
+
+   Lie.
+
+For "-a_i" statement:
+
+if a_i is not in any candidate → all x are not a_i → Truth.
+
+elif all candidates are a_i → Lie.
+
+else → Not defined.
+
+But how to check if all candidates are a_i. That's possible only if len(candidates) is 1 and a_i is in the candidates. Because if there are multiple candidates, then they can't all be a_i, since they are unique.
+
+Wait, no. If a_i is in the candidates, then count_in_candidates is 1. So len(candidates) could be 1, and a_i is in it → then all candidates are a_i. Else, if len(candidates) >1 and a_i is in it → then some are a_i and others are not.
+
+Wait, no. For example, if the candidates are [3,5], and a_i is 3 → count_in_candidates is 1, len(candidates) is 2. So the "-a_i" statement (x != a_i) would be true for x=5 and false for x=3. So for the candidates [3,5], the "-3" statement is true for x=5 and false for x=3. So the statement's truth varies → Not defined.
+
+So for the "-a_i" statement:
+
+if a_i not in candidates → all x are not a_i → Truth.
+
+else if len(candidates) ==1 → all x are a_i → Lie.
+
+else → Not defined.
+
+So the logic can be simplified as:
+
+For "+a_i" case:
+
+if a_i in candidates:
+
+   if len(candidates) == 1 → Truth.
+
+   else → Not defined.
+
+else → Lie.
+
+For "-a_i" case:
+
+if a_i not in candidates → Truth.
+
+elif len(candidates) == 1 → Lie.
+
+else → Not defined.
+
+Wait, but what if len(candidates) >1 and a_i is in the candidates? Then for x in candidates, the statement is false if x is a_i, true otherwise. So if the candidates include a_i and other elements, then the statement's truth depends on which x is considered. Hence, Not defined.
+
+So for "-a_i" case:
+
+if a_i is in candidates and len(candidates) >1 → Not defined.
+
+Because some x in candidates are a_i (so statement is false) and others are not (statement is true).
+
+So the logic is:
+
+For each i:
+
+statement = statement_type (plus or minus) and a_i.
+
+if statement is plus:
+
+   if a_i in candidates:
+
+       if len(candidates) == 1:
+
+           output Truth.
+
+       else:
+
+           output Not defined.
+
+   else:
+
+       output Lie.
+
+else:  # minus
+
+   if a_i not in candidates:
+
+       output Truth.
+
+   else:
+
+       if len(candidates) ==1:
+
+           output Lie.
+
+       else:
+
+           output Not defined.
+
+Yes! This is a much simpler way to handle it.
+
+So the steps are:
+
+After collecting the candidates into a set:
+
+For each i's statement:
+
+if it's "+a_i":
+
+   if a_i is in candidates:
+
+       if len(candidates) == 1 → Truth.
+
+       else → Not defined.
+
+   else → Lie.
+
+elif it's "-a_i":
+
+   if a_i not in candidates → Truth.
+
+   else:
+
+       if len(candidates) ==1 → Lie.
+
+       else → Not defined.
+
+This approach is O(n) for processing all i's, since for each i, the checks are O(1) (assuming the candidates are stored in a set for O(1) lookups).
+
+So the overall steps are:
+
+1. Preprocess all statements, collect count_plus, count_minus_a, total_minus.
+
+2. For each x in 1..n, compute the truthful count as count_plus[x] + (total_minus - count_minus_a[x]).
+
+3. Collect all x where the truthful count equals m into candidates set.
+
+4. For each i's statement, determine the output based on the above logic.
+
+So the key is to compute the candidates efficiently.
+
+Now, let's see how to implement this.
+
+First, the code structure.
+
+Read n and m.
+
+Then, for each of n lines:
+
+parse the statement into (type, a), where type is '+' or '-', and a is an integer.
+
+We can store them as a list of tuples.
+
+Then, compute:
+
+count_plus = [0] * (n+1)  # since a ranges from 1 to n.
+
+count_minus_a = [0] * (n+1)
+
+total_minus = 0
+
+for each statement in the list:
+
+   if type is '+':
+
+       count_plus[a] += 1
+
+   else:
+
+       count_minus_a[a] += 1
+
+       total_minus +=1
+
+Then, for each x in 1..n:
+
+   truthful_count = count_plus[x] + (total_minus - count_minus_a[x])
+
+   if truthful_count == m → add x to candidates.
+
+Once the candidates are collected, then for each i's statement:
+
+if the statement is '+a':
+
+   a = statement's a
+
+   if a in candidates:
+
+       if len(candidates) == 1:
+
+           print("Truth")
+
+       else:
+
+           print("Not defined")
+
+   else:
+
+       print("Lie")
+
+elif the statement is '-a':
+
+   a = statement's a
+
+   if a not in candidates:
+
+       print("Truth")
+
+   else:
+
+       if len(candidates) ==1:
+
+           print("Lie")
+
+       else:
+
+           print("Not defined")
+
+This should work.
+
+Now, let's test this logic against the examples.
+
+First example:
+
+Input:
+
+1 1
+
++1
+
+Processing:
+
+count_plus[1] =1
+
+count_minus_a is 0 for all.
+
+total_minus =0.
+
+For x=1:
+
+truthful_count =1 + (0 - 0) =1 → equal to m=1. So candidates = {1}
+
+For the single statement:
+
+type is '+1', a=1.
+
+a is in candidates (yes). len(candidates) is 1 → Truth. Output is Truth. Correct.
+
+Second example:
+
+3 2
+
+-1
+
+-2
+
+-3
+
+Processing:
+
+Each statement is '-a' where a is 1, 2, 3.
+
+So count_plus is all 0.
+
+count_minus_a[1] =1, count_minus_a[2]=1, count_minus_a[3]=1.
+
+total_minus=3.
+
+For each x in 1,2,3:
+
+truthful_count = 0 + (3 - count_minus_a[x]).
+
+For x=1: 3-1=2 → 0+2=2 → m=2 → yes. So x=1 is a candidate.
+
+x=2: 3-1=2 → yes.
+
+x=3: 3-1=2 → yes.
+
+So candidates = {1,2,3}.
+
+For each statement (all are '-a'):
+
+i=0: statement is -1.
+
+a=1.
+
+Check if a is in candidates → yes.
+
+len(candidates) is 3>1 → Not defined.
+
+Similarly for i=1 and i=2.
+
+All outputs are Not defined. Which matches the sample.
+
+Third example:
+
+4 1
+
++2
+
+-3
+
++4
+
+-1
+
+Processing:
+
+statements:
+
+1: +2 → count_plus[2] +=1 → count_plus[2] =1.
+
+2: -3 → count_minus_a[3] +=1 → total_minus=1.
+
+3: +4 → count_plus[4] +=1 → count_plus[4] =1.
+
+4: -1 → count_minus_a[1] +=1 → total_minus=2.
+
+count_plus is: [0, 0,1,0,1]
+
+count_minus_a: [0,1,0,1,0]
+
+total_minus=2.
+
+For each x:
+
+truthful_count = count_plus[x] + (2 - count_minus_a[x]).
+
+Compute for x=1:
+
+count_plus[1] is 0.
+
+2 - count_minus_a[1] is 2-1=1.
+
+0+1=1 → m=1 → candidate. So x=1 is a candidate.
+
+x=2:
+
+count_plus[2] =1.
+
+count_minus_a[2] =0 → 2-0=2.
+
+1+2=3 → m=1 → no.
+
+x=3:
+
+count_plus[3] =0.
+
+count_minus_a[3] =1 → 2-1=1.
+
+0+1=1 → yes. So x=3 is a candidate.
+
+x=4:
+
+count_plus[4] =1.
+
+count_minus_a[4] =0 → 2-0=2. 1+2=3 → no.
+
+So candidates are {1,3}.
+
+Now process each statement.
+
+Statement 0: +2.
+
+a=2. Check if 2 is in candidates? candidates are {1,3} → no. So output Lie.
+
+Statement 1: -3.
+
+a=3. Check if 3 is in candidates → yes. len(candidates) is 2>1 → output Not defined.
+
+Statement 2: +4. a=4. Check if in candidates → no → output Lie.
+
+Statement 3: -1. a=1. Check if in candidates → yes. len(candidates) is 2>1 → output Not defined.
+
+Which matches the sample output: Lie, Not defined, Lie, Not defined.
+
+So this logic works.
+
+Now, coding this.
+
+But note that for n=1e5, the candidates list can be up to O(n) in size. So we need to manage it efficiently.
+
+In Python, using a set for candidates and checking membership is O(1).
+
+So the code steps:
+
+Read n and m.
+
+Then read n lines, storing each as (type, a).
+
+Compute count_plus, count_minus_a, total_minus.
+
+Compute for each x in 1..n:
+
+   truthful = count_plus[x] + (total_minus - count_minus_a[x])
+
+   if truthful == m → add to candidates set.
+
+Once candidates are built.
+
+For each statement in the list:
+
+   type, a = statement.
+
+   if type is '+':
+
+       if a in candidates:
+
+           if len(candidates) ==1:
+
+               print("Truth")
+
+           else:
+
+               print("Not defined")
+
+       else:
+
+           print("Lie")
+
+   else:  # '-'
+
+       if a not in candidates:
+
+           print("Truth")
+
+       else:
+
+           if len(candidates) ==1:
+
+               print("Lie")
+
+           else:
+
+               print("Not defined")
+
+Yes.
+
+Now, code in Python.
+
+But for n=1e5, the code should be efficient. Using lists for count_plus and count_minus_a is manageable.
+
+Implementing this:
+
+But note that in Python, for 1e5 elements, the lists will be of size 1e5+1 (since a can be up to n, which is 1e5).
+
+So the code:
+
+n, m = map(int, input().split())
+
+statements = []
+
+count_plus = [0] * (n+1)  # 1-based indexing
+count_minus_a = [0] * (n+1)
+total_minus =0
+
+for _ in range(n):
+
+    s = input().strip()
+
+    type_ = s[0]
+
+    a = int(s[1:])
+
+    statements.append( (type_, a) )
+
+    if type_ == '+':
+
+        count_plus[a] +=1
+
+    else:
+
+        count_minus_a[a] +=1
+
+        total_minus +=1
+
+# Find candidates
+
+candidates = set()
+
+for x in range(1, n+1):
+
+    truthful = count_plus[x] + (total_minus - count_minus_a[x])
+
+    if truthful == m:
+
+        candidates.add(x)
+
+# Process each statement
+
+for type_, a in statements:
+
+    if type_ == '+':
+
+        if a in candidates:
+
+            if len(candidates) ==1:
+
+                print("Truth")
+
+            else:
+
+                print("Not defined")
+
+        else:
+
+            print("Lie")
+
+    else: # '-'
+
+        if a not in candidates:
+
+            print("Truth")
+
+        else:
+
+            if len(candidates) ==1:
+
+                print("Lie")
+
+            else:
+
+                print("Not defined")
+
+This code should work.
+
+Testing the third example:
+
+Candidates are 1 and 3.
+
+For the first statement (+,2):
+
+a=2 not in candidates → Lie.
+
+Second statement (-3):
+
+a=3 is in candidates. len(candidates) is 2 → Not defined.
+
+Third statement (+,4):
+
+a=4 not in candidates → Lie.
+
+Fourth statement (-1):
+
+a=1 is in candidates. len(candidates) is 2 → Not defined.
+
+So outputs are Lie, Not defined, Lie, Not defined. Correct.
+
+Yes, this code should handle all cases correctly.
+
+Now, the edge cases.
+
+Another example: when m=0. All statements are lies. So for each x, the truthful count must be 0. Which implies that for x to be the criminal, all statements are lies. So for each statement, the statement's truth is false when x is the criminal.
+
+So for example:
+
+n=3, m=0.
+
+statements:
+
++1
+
++1
+
++1
+
+So, for x to be the criminal, each statement is a lie. So each statement of +1 must be false → x !=1. So x can be 2 or 3.
+
+So for x=2, the truthful count is the number of +1 where x=2 (0) plus the number of '-' statements (0 here) → 0. So x=2 is a candidate. Similarly for x=3. So candidates are {2,3}.
+
+For each statement (all are +1):
+
+a=1. For x=2 and 3, which are in the candidates. So a=1 is not in the candidates (candidates are 2 and3). So for each +1 statement, since a=1 is not in candidates → output Lie.
+
+So all outputs are Lie.
+
+Another example: n=2, m=0.
+
+statements: -1 and -2.
+
+So for each x:
+
+count_plus[x] is 0.
+
+total_minus is 2.
+
+count_minus_a[1] is 1, count_minus_a[2] is 1.
+
+For x=1:
+
+truthful count =0 + (2 -1) =1 → not 0.
+
+x=2: 0 + (2-1) =1 → not 0.
+
+x=3 is invalid.
+
+So no candidates → but the problem says there's at least one. So this case is impossible. So the input is invalid. But according to the problem statement, the input is guaranteed to have at least one candidate. So we don't need to handle this.
+
+So the code should work.
+</think>
+To solve this problem, we need to determine which suspects are telling the truth, lying, or if their status is undefined based on the given number of truthful statements and the statements made by each suspect. 
+
+### Approach
+1. **Parse Input**: Read the number of suspects and the number of truthful statements, followed by each suspect's statement.
+2. **Preprocess Statements**: Track the number of times each suspect is accused by others and the number of times each suspect is defended by others.
+3. **Identify Candidates**: Determine which suspects could be the criminal such that exactly the given number of truthful statements are made.
+4. **Determine Truthfulness**: For each suspect's statement, check if it must be true, false, or if it's undefined based on the possible criminals.
+
+### Solution Code
+```python
+n, m = map(int, input().split())
+
+statements = []
+count_plus = [0] * (n + 1)
+count_minus_a = [0] * (n + 1)
+total_minus = 0
+
+for _ in range(n):
+    s = input().strip()
+    type_ = s[0]
+    a = int(s[1:])
+    statements.append((type_, a))
+    if type_ == '+':
+        count_plus[a] += 1
+    else:
+        count_minus_a[a] += 1
+        total_minus += 1
+
+candidates = set()
+for x in range(1, n + 1):
+    truthful = count_plus[x] + (total_minus - count_minus_a[x])
+    if truthful == m:
+        candidates.add(x)
+
+for type_, a in statements:
+    if type_ == '+':
+        if a in candidates:
+            if len(candidates) == 1:
+                print("Truth")
+            else:
+                print("Not defined")
+        else:
+            print("Lie")
+    else:
+        if a not in candidates:
+            print("Truth")
+        else:
+            if len(candidates) == 1:
+                print("Lie")
+            else:
+                print("Not defined")
+```
+
+### Explanation
+1. **Input Parsing**: The input is read and parsed into the number of suspects and the number of truthful statements. Each suspect's statement is stored along with whether they accused or defended another suspect.
+2. **Preprocessing**: Arrays `count_plus` and `count_minus_a` are used to track how many times each suspect is accused or defended. `total_minus` counts the total number of defensive statements.
+3. **Candidate Identification**: For each suspect, we calculate the number of truthful statements if they were the criminal. If this number matches the given number of truthful statements, the suspect is added to the list of candidates.
+4. **Determine Truthfulness**: For each statement, we check if the accused or defended suspect is in the list of candidates. Based on the presence and number of candidates, we determine if the statement must be true, false, or is undefined.
+
+This approach efficiently narrows down possible criminals and evaluates each statement's validity, ensuring optimal performance even for large inputs.
+</bot>

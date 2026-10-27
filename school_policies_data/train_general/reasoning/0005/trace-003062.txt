@@ -1,0 +1,738 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Constraints
+
+* 1 ≤ |V| ≤ 1000
+* 0 ≤ |E| ≤ 2000
+* -10000 ≤ di ≤ 10000
+* There are no parallel edges
+* There are no self-loops
+
+Input
+
+An edge-weighted graph G (V, E) and the source r.
+
+
+|V| |E| r
+s0 t0 d0
+s1 t1 d1
+:
+s|E|-1 t|E|-1 d|E|-1
+
+
+|V| is the number of vertices and |E| is the number of edges in G. The graph vertices are named with the numbers 0, 1,..., |V|-1 respectively. r is the source of the graph.
+
+si and ti represent source and target vertices of i-th edge (directed) and di represents the cost of the i-th edge.
+
+Output
+
+If the graph contains a negative cycle (a cycle whose sum of edge costs is a negative value) which is reachable from the source r, print
+
+
+NEGATIVE CYCLE
+
+
+in a line.
+
+Otherwise, print
+
+
+c0
+c1
+:
+c|V|-1
+
+
+The output consists of |V| lines. Print the cost of the shortest path from the source r to each vertex 0, 1, ... |V|-1 in order. If there is no path from the source to a vertex, print "INF".
+
+Examples
+
+Input
+
+4 5 0
+0 1 2
+0 2 3
+1 2 -5
+1 3 1
+2 3 2
+
+
+Output
+
+0
+2
+-3
+-1
+
+
+Input
+
+4 6 0
+0 1 2
+0 2 3
+1 2 -5
+1 3 1
+2 3 2
+3 1 0
+
+
+Output
+
+NEGATIVE CYCLE
+
+
+Input
+
+4 5 1
+0 1 2
+0 2 3
+1 2 -5
+1 3 1
+2 3 2
+
+
+Output
+
+INF
+0
+-5
+-3
+</user>
+<bot>
+<think>
+Okay, I need to solve this problem where I have to determine the shortest paths from a source in a graph that might have negative edges and possibly detect a negative cycle. The constraints are up to 1000 vertices and 2000 edges. Hmm. Let's think about the approach.
+
+First, the problem requires checking if there's a negative cycle reachable from the source. If such a cycle exists, output "NEGATIVE CYCLE". Otherwise, output the shortest path costs for each vertex, with "INF" if unreachable.
+
+The standard algorithm for this scenario is the Bellman-Ford algorithm. Because Dijkstra's algorithm doesn't work with negative weights, Bellman-Ford is the way to go here. Bellman-Ford can detect negative cycles by running an extra iteration after relaxing all edges |V|-1 times. If during that iteration any distance can be updated, there's a negative cycle.
+
+But wait, the problem says the negative cycle has to be reachable from the source. So even if there's a negative cycle somewhere in the graph, but it's not reachable from r, then we don't need to output "NEGATIVE CYCLE". So the detection is only for cycles that are on a path starting from the source.
+
+So the plan is:
+
+1. Run Bellman-Ford from the source r for |V| - 1 iterations to relax all possible edges.
+2. Then, run one more iteration (the |V|th iteration) and check if any edge can be relaxed. If any edge can be relaxed, and the destination of that edge is reachable from the source (i.e., its distance is not INF), then there's a negative cycle reachable from the source.
+
+Wait, but how do we track if a node is reachable? Because if a node's distance is INF, then even if there's a negative cycle in a part of the graph that isn't connected to the source, it's irrelevant.
+
+So during Bellman-Ford, we first need to find all nodes reachable from r. Then, when checking for the negative cycle in the |V|th iteration, we need to see if any of those nodes can be updated again, which would indicate a negative cycle.
+
+But how do we track reachable nodes? Alternatively, when we run Bellman-Ford, the initial distances are INF except the source which is 0. Then, during the relaxation steps, edges can propagate the reachability. For example, if there's a path from the source to a node u, then u's distance will be updated to a finite value. But if there's no path, it remains INF.
+
+So during the |V|th iteration, if an edge (u, v) with weight w can relax the distance to v, but only if u's distance is not INF. Because if u is not reachable, then even if u can reach v via some path, but since u is not reachable from the source, this edge can't contribute to a cycle that's reachable from the source.
+
+Wait, no. Because if there's a cycle in a part of the graph not connected to the source, then those nodes' distances are INF. So during the |V|th iteration, if any edge can be relaxed where u's distance is not INF, that implies that the cycle is reachable from the source. Because u is part of a path from the source. So for example, if there's a cycle that's reachable from the source, then during the |V|th iteration, some edge in that cycle would be able to relax, because you can loop around the cycle any number of times, and each loop decreases the total distance.
+
+Therefore, the algorithm steps:
+
+Initialize a distance array where distance[r] = 0 and others are INF.
+
+Relax all edges |V| - 1 times.
+
+Then, relax all edges once more. For each edge (u, v) with weight w, check if distance[u] + w < distance[v]. If so, and if distance[u] is not INF (since if u is not reachable, then even if there's a cycle in u's component, it's not reachable from r), then there's a reachable negative cycle. So once we find such a case, we can immediately return that there's a negative cycle.
+
+Otherwise, compute the shortest paths.
+
+So the steps are:
+
+1. Read the input: number of vertices, edges, source.
+
+2. Read all edges.
+
+3. Initialize the distance array.
+
+4. Run Bellman-Ford for |V| - 1 iterations, relaxing each edge.
+
+5. After |V| -1 iterations, check for each edge (u, v) in the graph again. If distance[u] + w < distance[v], and distance[u] is not INF, then there's a negative cycle reachable from r. Because even after |V| -1 iterations, which is enough to find all shortest paths in a graph without negative cycles, a further relaxation implies a negative cycle exists on a path from the source.
+
+But how to handle the reachability here? Because if u is reachable, then v becomes reachable via u. So, during the |V|th iteration, if u is reachable and can relax v, then v is part of a path that includes a negative cycle. So even if v was not reachable before, this edge could now make it reachable. But since we are in the |V|th iteration, which is beyond the necessary |V| -1 steps, any relaxation here indicates a negative cycle.
+
+But since the negative cycle is reachable from the source, any node that can be updated in the |V|th iteration must be part of a cycle that's reachable from the source.
+
+So the detection is: during the |V|th iteration, if any edge (u, v) can be relaxed (distance[u] + w < distance[v]), and distance[u] is not INF (since u is reachable from the source), then the graph contains a negative cycle reachable from the source.
+
+So the code steps:
+
+Implement Bellman-Ford:
+
+- Read all edges.
+
+- Initialize distance array.
+
+- For i in 0 to |V| -1:
+
+   For each edge (u, v, w) in edges:
+
+      if distance[u] is not INF and distance[v] > distance[u] + w:
+
+          distance[v] = distance[u] + w (but during the |V| -1 iterations, we do this as part of the standard process)
+
+- After |V| -1 iterations, make a copy of the distance array (prev_distances) to compare after the next iteration.
+
+- Then, do one more iteration:
+
+   for each edge (u, v, w):
+
+       if prev_distances[u] is not INF and prev_distances[u] + w < prev_distances[v]:
+
+           Then, this indicates that v can be relaxed even after |V| -1 steps, which implies a negative cycle.
+
+           But even if this is the case, we need to check if u is reachable from the source. Because if prev_distances[u] is INF, then even though u can't be used to update v, but if u was updated in this iteration, then maybe u's distance is now finite. Wait, no. Because in this iteration, prev_distances is the state after |V| -1 iterations. So during this check, prev_distances[u] is the distance after |V| -1 steps. So if u was reachable (prev_distances[u] is not INF) and adding the edge (u, v, w) allows a shorter path, then this is part of a cycle reachable from the source.
+
+Therefore, in the |V|th iteration, if any edge (u, v, w) satisfies prev_distances[u] + w < prev_distances[v], and prev_distances[u] is not INF, then there's a negative cycle reachable from the source.
+
+So in code:
+
+After |V| -1 iterations, save the distance array into a copy. Then, run another iteration, check for any edge where u's distance is not INF, and the new distance would be less than the old one. If any such edge exists, return NEGATIVE CYCLE.
+
+Otherwise, output the distances, replacing INF with "INF" as required.
+
+But how to handle the reachable nodes during the Bellman-Ford? Because, for example, if the source is r=1, and in the graph there is no path from 1 to 0, then 0's distance remains INF. So in the output, we print INF for that.
+
+So the code outline is:
+
+Read |V|, |E|, r.
+
+edges = list of all edges.
+
+Initialize dist = [INF] * |V|, dist[r] = 0.
+
+for i in 0 to |V| -1:
+
+    for each edge (u, v, w):
+
+        if dist[u] is not INF and dist[v] > dist[u] + w:
+
+            dist[v] = dist[u] + w
+
+Make a copy of dist into prev_dist.
+
+Then, do another iteration over all edges:
+
+    for each edge (u, v, w):
+
+        if prev_dist[u] is not INF and prev_dist[u] + w < prev_dist[v]:
+
+            Then, there's a negative cycle. So return NEGATIVE CYCLE.
+
+If no such edge found, then output the distances, replacing INF with "INF".
+
+But wait, in the code, during the |V|th iteration, even if the new distance is updated, but since we are not actually updating the dist array (we just check against prev_dist), so even if in the |V|th iteration, there's a possible relaxation, but the node is not reachable (prev_dist[u] is INF), then it's not considered.
+
+So the code logic for detecting the negative cycle is:
+
+has_negative_cycle = False
+
+prev_dist = dist.copy()
+
+for each edge in edges:
+
+    u, v, w = edge
+
+    if prev_dist[u] != INF and prev_dist[u] + w < prev_dist[v]:
+
+        has_negative_cycle = True
+
+        break
+
+if has_negative_cycle:
+
+    print("NEGATIVE CYCLE")
+
+else:
+
+    for each node in 0..|V|-1:
+
+        if dist[node] is INF:
+
+            print("INF")
+
+        else:
+
+            print(dist[node])
+
+But wait, even if the edge (u, v) can be relaxed, but v was not reachable (prev_dist[v] is INF), then if u is reachable, then after relaxation, v's distance becomes prev_dist[u] + w, which is finite. But in the |V|th iteration, even if this is possible, it indicates a negative cycle? Or not necessarily.
+
+Wait, in the case where u is reachable, and there's a negative cycle somewhere else. For example, suppose the source is r, and there's a path from r to u, which then connects to a node v with a negative cycle. But during the |V|th iteration, u can relax v's distance, even though v's distance was INF. But that would imply that there's a way to reach v through u and then possibly through some edges. However, since we are in the |V|th iteration, which is after |V| -1 iterations, which would have already found the shortest paths if there were no negative cycles. So if in the |V|th iteration, you can still find a shorter path, then that indicates that there's a cycle in the path from u to v.
+
+But perhaps the problem is that the edge (u, v) could be part of a cycle that is reachable from the source. For example, imagine that u is reachable, and the edge u->v with w = -100. But v is part of a cycle that allows going back to u. Then, after |V| -1 iterations, maybe the distance to v is some value, and in the |V|th iteration, it can be relaxed further, indicating a cycle.
+
+But in the code, during the |V|th iteration, we check if prev_dist[u] (the distance after |V| -1 steps) can relax prev_dist[v]. If so, then it's a sign of a negative cycle. Because in a graph without negative cycles, after |V| -1 steps, all possible relaxations would have been done. So any further relaxation must be due to a negative cycle.
+
+Therefore, the code's approach is correct. So, even if v was not reachable before, but u is reachable and after the |V|th iteration, u can relax v, that implies that there's a path that loops around a negative cycle to reach v. Because the |V|th iteration's relaxation would only be possible if there's a cycle that allows for arbitrarily shorter paths.
+
+Therefore, the code's logic of checking for any edge (u, v) in the |V|th iteration where u is reachable (prev_dist[u] is not INF) and the edge can be relaxed implies that there's a negative cycle reachable from the source.
+
+So now, the code can be written in Python.
+
+But there's a possible issue here: when |V| is 0? Wait, no. The constraints say 1 ≤ |V| ≤ 1000, so |V| is at least 1.
+
+Another edge case: when the source has no outgoing edges. Then, the distance to itself is 0, others are INF, unless there are edges leading to other nodes.
+
+So the code steps:
+
+Read |V|, |E|, r.
+
+Read |E| edges. Each edge is s, t, d.
+
+Then, initialize the distance array as [INF] * |V|, and set dist[r] = 0.
+
+For i in 0 to |V| -1:
+
+    for each edge in edges:
+
+        u, v, w = edge
+
+        if dist[u] != INF and dist[v] > dist[u] + w:
+
+            dist[v] = dist[u] + w
+
+Make a copy of dist to prev_dist.
+
+Then, check for any edge (u, v, w) in edges:
+
+    if prev_dist[u] != INF and prev_dist[u] + w < prev_dist[v]:
+
+        return "NEGATIVE CYCLE"
+
+Else:
+
+    for each node in 0 to |V| -1:
+
+        if dist[node] == INF:
+
+            print("INF")
+
+        else:
+
+            print(dist[node])
+
+Wait, but in Python, how do we represent INF? Since the maximum possible |V| is 1000, and the maximum possible edge weight is up to 10000, the maximum possible path length is 1000 * 10000 = 1e7, but with negative edges. So using a large number like 1e18 would be safe.
+
+So in Python, initialize dist as [float('inf')] * |V|, then set dist[r] = 0.
+
+But in the code, after the |V| -1 iterations, for each edge, if the previous distance (after |V| -1 steps) can be improved, then it's a negative cycle.
+
+So code:
+
+import sys
+
+def main():
+
+    input = sys.stdin.read().split()
+
+    ptr = 0
+
+    V = int(input[ptr]); ptr +=1
+
+    E = int(input[ptr]); ptr +=1
+
+    r = int(input[ptr]); ptr +=1
+
+    edges = []
+
+    for _ in range(E):
+
+        s = int(input[ptr]); ptr +=1
+
+        t = int(input[ptr]); ptr +=1
+
+        d = int(input[ptr]); ptr +=1
+
+        edges.append( (s, t, d) )
+
+    INF = float('inf')
+
+    dist = [INF] * V
+
+    dist[r] = 0
+
+    for i in range(V-1):
+
+        updated = False
+
+        for (u, v, w) in edges:
+
+            if dist[u] != INF and dist[v] > dist[u] + w:
+
+                dist[v] = dist[u] + w
+
+                updated = True
+
+        if not updated:
+
+            break  # no more updates, can exit early
+
+    # Check for negative cycles
+
+    has_negative_cycle = False
+
+    # Make a copy of the current distances
+
+    prev_dist = dist.copy()
+
+    for (u, v, w) in edges:
+
+        if prev_dist[u] != INF and prev_dist[u] + w < prev_dist[v]:
+
+            has_negative_cycle = True
+
+            break
+
+    if has_negative_cycle:
+
+        print("NEGATIVE CYCLE")
+
+    else:
+
+        for d in dist:
+
+            if d == INF:
+
+                print("INF")
+
+            else:
+
+                print(d)
+
+if __name__ == "__main__":
+
+    main()
+
+Wait, but in the example input 2, the output is NEGATIVE CYCLE. Let's see why.
+
+In example 2:
+
+4 6 0
+
+Edges:
+
+0 1 2
+
+0 2 3
+
+1 2 -5
+
+1 3 1
+
+2 3 2
+
+3 1 0
+
+So the edges are 6. The source is 0.
+
+After running Bellman-Ford for V-1=3 iterations:
+
+Let's see:
+
+Initially, dist[0] =0.
+
+First iteration (i=0):
+
+Check all edges:
+
+0->1, dist[1] becomes 0+2=2.
+
+0->2, dist[2] becomes 3.
+
+1->2 with -5: dist[1] is 2, so 2-5 =-3 < 3. So dist[2] becomes -3.
+
+1->3: 2+1=3.
+
+2->3: -3+2=-1.
+
+3->1: 0.
+
+So after first iteration, dist[3] is -1?
+
+Wait, let's track each step:
+
+First iteration (i=0) over all edges:
+
+Processing each edge:
+
+u, v, w = 0,1,2: dist[0] is 0, so v=1's dist becomes 2.
+
+u=0, v=2, 3: dist[2] is 3.
+
+u=1, v=2, -5: dist[1] is 2, so 2 + (-5) = -3 < 3. So dist[2] becomes -3.
+
+u=1, v=3,1: 2 +1=3. So dist[3] is 3.
+
+u=2, v=3,2: -3 +2= -1 <3. So dist[3] becomes -1.
+
+u=3, v=1, 0: dist[3] is -1. So 3's distance is -1. So dist[1] can be updated to -1 +0 = -1 < previous 2. So after this edge, dist[1] becomes -1.
+
+So after first iteration, dist is:
+
+0:0, 1:-1, 2:-3, 3:-1.
+
+Second iteration (i=1):
+
+Check all edges again.
+
+0->1: 0+2=2 vs current -1: no change.
+
+0->2: 0+3=3 vs -3: no.
+
+1->2: -1 + (-5) =-6 < current -3? No. So no change.
+
+1->3: -1 +1=0 vs current -1: no.
+
+2->3: -3 +2 =-1, same as current.
+
+3->1: -1 (dist[3] is -1) +0= -1 vs current -1: no change.
+
+No updates in this iteration? So after second iteration, the distances are same as before.
+
+But wait, perhaps in the first iteration, after processing 3->1, dist[1] becomes -1. Then, in the next edges, for example, in the same iteration, if another edge can take advantage of this new dist[1], then further updates can happen.
+
+Wait, the Bellman-Ford in each iteration (i) processes all edges in the list. So during iteration 0 (the first iteration), after updating dist[1] to -1, subsequent edges in the same iteration can use this new value.
+
+But in the code above, during each iteration, all edges are processed in order. So when processing 3->1, if after processing 1->3 which came earlier, then the next edges in the same iteration can use the updated values.
+
+So in the first iteration, after processing 3->1, the dist[1] is updated to -1. Then, in the same iteration, when processing edges after that (if any), they can use the updated dist[1].
+
+But in example 2, the edges are processed in the order given. So in iteration 0, after processing 3->1, which comes last in the edges list, any edges after that (but there are no more edges in the list) would see the updated dist[1]. So in iteration 0, after processing all 6 edges, the dist becomes as above.
+
+Then in iteration 1 (second iteration), when processing edges again:
+
+0->1: 0+2=2 vs current -1: no change.
+
+0->2: 0+3=3 vs -3: no.
+
+1->2: -1-5 =-6 < -3? Yes. So dist[2] becomes -6.
+
+Then 1->3: -1+1=0 vs current -1: no.
+
+2->3: -6+2=-4 vs current -1: no.
+
+3->1: -1 (dist[3] is -1) +0 =-1 vs current -1: no change.
+
+So after iteration 1, dist[2] becomes -6.
+
+Then in iteration 2 (third iteration):
+
+Check edges again.
+
+0->1: 0+2=2 vs -1: no.
+
+0->2: 3 vs -6: no.
+
+1->2: -1-5=-6 vs current -6: no.
+
+1->3: 0 vs -1: no.
+
+2->3: -6+2=-4 < current -1: yes. So dist[3] becomes -4.
+
+3->1: -4 (dist[3] is now -4) +0 =-4 < current -1. So dist[1] becomes -4.
+
+So after iteration 2, dist is:
+
+0:0, 1:-4, 2:-6, 3:-4.
+
+Then, check edges again in the fourth iteration (since V=4, V-1=3 iterations).
+
+Wait, in the code, the loop runs for V-1 iterations (i from 0 to V-2). So in the example, V=4, so 3 iterations (i=0,1,2).
+
+After these three iterations, the code then checks for the negative cycle.
+
+In this case, after three iterations, the dist array is [0, -4, -6, -4].
+
+Then, in the check for the negative cycle:
+
+We loop through all edges again, using the prev_dist (copy of dist after three iterations).
+
+For example, take the edge 3->1 with w=0:
+
+prev_dist[3] is -4. prev_dist[1] is -4.
+
+-4 +0 = -4, which is not less than prev_dist[1] (-4). So no.
+
+But let's look for other edges. For example, after the three iterations:
+
+For edge 3->1: prev_dist[3] is -4. prev_dist[1] is -4. 3->1's weight is 0. So -4 +0 =-4 equals prev_dist[1], so no change.
+
+But what about edge 1->2 with w=-5. prev_dist[1] is -4. So -4 + (-5) =-9. prev_dist[2] is -6. So -9 < -6. So this edge would trigger the condition.
+
+Because in the |V|th iteration check, this edge (u=1, v=2, w=-5) would have prev_dist[u] =-4, which is not INF. prev_dist[v] is -6. So -4 + (-5) =-9 < -6. So this condition is true. So the code will detect a negative cycle, and output "NEGATIVE CYCLE".
+
+Which is correct, because example 2's output is indeed NEGATIVE CYCLE.
+
+So the code works for example 2.
+
+In example 1:
+
+After processing, the code doesn't detect any edges that can be relaxed in the |V|th iteration. So the output is the distances.
+
+So the code seems correct.
+
+Now, let's test another edge case.
+
+Edge case where there is a cycle, but it's not reachable from the source. For example:
+
+3 3 0
+
+0 1 1
+
+1 2 2
+
+2 1 -5
+
+This creates a cycle between 1 and 2. But the source is 0. The cycle is reachable from 0 (since 0->1). So the code should detect it.
+
+In the |V|th iteration check:
+
+prev_dist for 2 is, after 2 iterations (since V=3, |V|-1=2):
+
+Let's see:
+
+Initialization: dist[0] =0, others INF.
+
+Iteration 0:
+
+Process edges:
+
+0->1: 0+1=1. So dist[1] becomes 1.
+
+1->2: 1+2=3. So dist[2] becomes 3.
+
+2->1: 3 + (-5) =-2 < 1. So dist[1] becomes -2.
+
+Iteration 1:
+
+Process edges again:
+
+0->1: 0+1=1 > -2: no change.
+
+1->2: -2+2=0 <3: dist[2] becomes 0.
+
+2->1: 0 + (-5) =-5 < -2: dist[1] becomes -5.
+
+After iteration 1 (second iteration), the distances are [0, -5, 0].
+
+Now, in the check for negative cycles:
+
+prev_dist is [0, -5, 0].
+
+Check edges:
+
+2->1 with w=-5: prev_dist[2] is 0. 0 + (-5) =-5. prev_dist[1] is -5. So -5 < -5? No. So no.
+
+But 1->2: prev_dist[1] is -5, w=2: -5 +2 =-3 <0 (prev_dist[2] is 0). So yes. So this edge would trigger the condition, hence negative cycle is detected.
+
+So the code correctly outputs NEGATIVE CYCLE.
+
+Another test case: the source is r=0, and there's a cycle but not connected to the source.
+
+For example:
+
+3 2 0
+
+0 1 1
+
+1 2 2
+
+The other edges are 2 and 3 edges, but let's say there's a cycle between nodes 3 and 4 (but since |V|=3, maybe another example).
+
+Wait, perhaps:
+
+V=3, E=2, source=0.
+
+Edges:
+
+0 1 1.
+
+1 2 2.
+
+So the code would process these edges. There's no cycle, so no negative cycle.
+
+Another example where there's a negative cycle not reachable from the source:
+
+V=4, E=3, r=0.
+
+Edges:
+
+1 2 -1.
+
+2 3 -2.
+
+3 1 -3.
+
+So the cycle is 1->2->3->1, sum is -6. But source is 0. Since there's no edge from 0 to 1, the cycle is not reachable from the source. So the code should output INF for 1, 2, 3, and 0 for 0.
+
+In this case:
+
+After |V| -1=3 iterations, the distance array is [0, INF, INF, INF].
+
+In the check for negative cycles, all edges u=1,2,3. prev_dist[u] is INF, so no edge will trigger the condition. So the code outputs the distances, which are all INF except 0.
+
+So the code handles this case correctly.
+
+Therefore, the code should be correct.
+</think>
+To solve this problem, we need to determine the shortest paths from a given source vertex in a directed graph that may contain negative edge weights. Additionally, we must detect if there exists a negative cycle that is reachable from the source vertex. If such a cycle exists, we should output "NEGATIVE CYCLE"; otherwise, we should output the shortest path costs from the source to each vertex, or "INF" if a vertex is unreachable.
+
+### Approach
+1. **Bellman-Ford Algorithm**: This algorithm is suitable for finding shortest paths in graphs with negative edge weights. It can also detect negative cycles by performing an additional relaxation pass after the standard |V| - 1 iterations.
+2. **Relaxation Process**: For each vertex, we relax all edges |V| - 1 times. If we can still relax an edge in the |V|th iteration, it indicates the presence of a negative cycle.
+3. **Reachability Check**: Only consider cycles that are reachable from the source vertex. If a vertex's distance remains INF (infinity), it means it is unreachable from the source, and thus any cycle involving that vertex is irrelevant.
+
+### Solution Code
+```python
+import sys
+
+def main():
+    input = sys.stdin.read().split()
+    ptr = 0
+    V = int(input[ptr]); ptr += 1
+    E = int(input[ptr]); ptr += 1
+    r = int(input[ptr]); ptr += 1
+
+    edges = []
+    for _ in range(E):
+        s = int(input[ptr]); ptr += 1
+        t = int(input[ptr]); ptr += 1
+        d = int(input[ptr]); ptr += 1
+        edges.append((s, t, d))
+
+    INF = float('inf')
+    dist = [INF] * V
+    dist[r] = 0
+
+    # Relax edges up to V-1 times
+    for i in range(V - 1):
+        updated = False
+        for (u, v, w) in edges:
+            if dist[u] != INF and dist[v] > dist[u] + w:
+                dist[v] = dist[u] + w
+                updated = True
+        if not updated:
+            break  # Early exit if no more updates
+
+    # Check for negative cycles
+    has_negative_cycle = False
+    prev_dist = dist.copy()
+    for (u, v, w) in edges:
+        if prev_dist[u] != INF and prev_dist[u] + w < prev_dist[v]:
+            has_negative_cycle = True
+            break
+
+    if has_negative_cycle:
+        print("NEGATIVE CYCLE")
+    else:
+        for d in dist:
+            print(d if d != INF else "INF")
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Reading Input**: The input is read and parsed into vertices, edges, and the source vertex. Each edge is stored as a tuple (source, target, weight).
+2. **Initialization**: The distance array is initialized with infinity (INF) except for the source vertex, which is set to 0.
+3. **Relaxation Process**: The algorithm relaxes each edge up to |V| - 1 times. If no updates occur in an iteration, we exit early to optimize performance.
+4. **Negative Cycle Detection**: After |V| - 1 iterations, we check if any edge can still be relaxed. If so, it indicates a negative cycle reachable from the source.
+5. **Output**: If a negative cycle is detected, "NEGATIVE CYCLE" is printed. Otherwise, the shortest path distances are printed, with "INF" for unreachable vertices.
+
+This approach efficiently handles the problem constraints and ensures correctness by leveraging the properties of the Bellman-Ford algorithm to detect negative cycles and compute shortest paths.
+</bot>

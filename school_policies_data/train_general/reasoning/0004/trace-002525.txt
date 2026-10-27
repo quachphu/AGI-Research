@@ -1,0 +1,778 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.In a long narrow forest stretching east-west, there are N beasts. Below, we will call the point that is p meters from the west end Point p. The i-th beast from the west (1 ≤ i ≤ N) is at Point x_i, and can be sold for s_i yen (the currency of Japan) if captured.
+
+You will choose two integers L and R (L ≤ R), and throw a net to cover the range from Point L to Point R including both ends, [L, R]. Then, all the beasts in the range will be captured. However, the net costs R - L yen and your profit will be (the sum of s_i over all captured beasts i) - (R - L) yen.
+
+What is the maximum profit that can be earned by throwing a net only once?
+
+Constraints
+
+* 1 ≤ N ≤ 2 × 10^5
+* 1 ≤ x_1 < x_2 < ... < x_N ≤ 10^{15}
+* 1 ≤ s_i ≤ 10^9
+* All input values are integers.
+
+Input
+
+Input is given from Standard Input in the following format:
+
+
+N
+x_1 s_1
+x_2 s_2
+:
+x_N s_N
+
+
+Output
+
+When the maximum profit is X yen, print the value of X.
+
+Examples
+
+Input
+
+5
+10 20
+40 50
+60 30
+70 40
+90 10
+
+
+Output
+
+90
+
+
+Input
+
+5
+10 2
+40 5
+60 3
+70 4
+90 1
+
+
+Output
+
+5
+
+
+Input
+
+4
+1 100
+3 200
+999999999999999 150
+1000000000000000 150
+
+
+Output
+
+299
+</user>
+<bot>
+<think>
+Okay, let's see. The problem is about finding the maximum profit by choosing a net that covers some beasts. The profit is the sum of their s_i minus the cost, which is R-L. So, I need to select L and R such that as many high-value beasts as possible are included, but the cost (R-L) doesn't eat up the gains.
+
+Hmm. The key here is to model this as a problem where each possible interval [L, R] gives a profit, and we need the maximum. But with N up to 2e5, brute-forcing all possible intervals is impossible. So, there must be a smarter way.
+
+Let me think about how to represent the profit. For a given interval, the profit is sum(s_i for x_i in [L, R]) - (R - L). But how can we efficiently compute this for all possible intervals?
+
+Wait, maybe we can rephrase the profit in terms of the positions. Let's consider each beast as contributing (s_i) to the profit. Then, the cost is (R-L). So, for each beast in the interval, we add s_i, but subtract (R-L). But R and L are variables here. How can this be optimized?
+
+Alternatively, perhaps we can model this as a dynamic programming problem. Let's think of processing the beasts in order and keeping track of some optimal values.
+
+Another idea: For each beast at position x_i, consider including it in the interval. The optimal interval that includes x_i might start at some L and end at some R, where x_i is between L and R. But how to find the best L and R around x_i?
+
+Alternatively, perhaps the optimal interval's L and R are determined by the positions of some beasts. Because the beasts are already sorted in increasing order of x_i, maybe the best interval is between two of their positions.
+
+Wait, let's think of the interval [x_j, x_k]. For such an interval, the cost is x_k - x_j. The sum of s_i for all beasts between j and k. So the profit would be (sum s_i from j to k) - (x_k - x_j). But maybe expanding beyond x_j and x_k could be better? Like, if there's a beast at x_j-1 with a high s, but then including that would require L to be x_j-1, increasing the cost. Not sure.
+
+Alternatively, maybe the optimal interval is a single point, but that would have cost zero, so profit is sum of s_i where x_i equals that point. But since all x_i are unique and in order, each x_i is unique. So in that case, the maximum possible for a single point is s_i. But maybe including neighboring points gives higher profit.
+
+But the sample input 1 shows that the output is 90. Let's look at that:
+
+Sample Input 1:
+5
+10 20
+40 50
+60 30
+70 40
+90 10
+
+So the positions are 10,40,60,70,90. The output is 90. Let's compute possible intervals.
+
+Suppose the interval is from 40 to 70. The sum of s is 50 +30 +40 = 120. The cost is 70-40=30. Profit 90. Which matches the sample. So that's the best here.
+
+Another option: if the interval is 60-70. Sum is 30+40=70. Cost 10. Profit 60. Less than 90.
+
+So in this case, the best is the sum of three beasts minus cost.
+
+But how to model this efficiently.
+
+Hmm. Let's think of each interval as starting at x_j and ending at x_k, j <=k. For each such interval, the profit is sum_{i=j}^k s_i - (x_k -x_j). We need to find the maximum over all j and k.
+
+But the problem is that there are O(N^2) possible intervals, which is 4e10 when N is 2e5. So we need a way to compute this in O(N) or O(N log N) time.
+
+So, how can we find this maximum efficiently?
+
+Another approach: Let's reorganize the profit for interval [j, k] as (sum s_i from j to k) + (x_j - x_k). Because (sum s_i) - (x_k - x_j) = sum s_i + (x_j - x_k). So the profit is sum s_i + (x_j - x_k) for j<=k.
+
+Wait, that's equivalent. So maybe we can model this as for each k, find the best j <=k such that (sum from j to k of s_i) + (x_j - x_k) is maximized.
+
+But sum from j to k of s_i can be represented as prefix_sum[k] - prefix_sum[j-1], where prefix_sum is the cumulative sum of s_i.
+
+So the profit is (prefix_sum[k] - prefix_sum[j-1]) + (x_j - x_k) = prefix_sum[k] - x_k + (x_j - prefix_sum[j-1]).
+
+Let me denote for each j, the value (x_j - prefix_sum[j-1]) as a term. Then for each k, the maximum profit up to k would be (prefix_sum[k] - x_k) + (maximum (x_j - prefix_sum[j-1]) for j <=k).
+
+Because for each k, the term (prefix_sum[k] -x_k) is fixed, and then we add the maximum (x_j - prefix_sum[j-1]) where j is up to k.
+
+So, if we can keep track of the maximum (x_j - prefix_sum[j-1]) as we process each k, then for each k, we can compute the candidate profit as (prefix_sum[k] - x_k) + max_value_so_far, where max_value_so_far is the maximum of (x_j - prefix_sum[j-1]) for j from 1 to k.
+
+But wait, for each k, the j can be from 1 to k. So for each k, we compute the best j up to k, and take that plus the current (prefix_sum[k] - x_k).
+
+But this would give us the maximum possible profit for intervals ending at x_k. Then, the overall maximum would be the maximum of all these values for each k.
+
+Wait, let's see. Let me re-express the profit for interval [x_j, x_k] as:
+
+sum_{i=j}^k s_i - (x_k -x_j) = sum_{i=j}^k s_i + x_j - x_k.
+
+Which can be written as sum_{i=1}^k s_i - sum_{i=1}^{j-1} s_i + x_j - x_k.
+
+Which is (prefix_sum[k] - x_k) - (prefix_sum[j-1] - x_j).
+
+Wait, that's (prefix_sum[k] -x_k) - (prefix_sum[j-1] -x_j). So the profit is (prefix_sum[k] -x_k) - (prefix_sum[j-1] -x_j). To maximize this, for each k, we need to minimize (prefix_sum[j-1] -x_j) for j <=k.
+
+Because (prefix_sum[k] -x_k) is fixed for a given k, and subtracting the minimal (prefix_sum[j-1] -x_j) gives the maximum value.
+
+Wait, that makes sense. So for each k, the maximum profit for intervals ending at k is (prefix_sum[k] -x_k) - min_{j <=k} (prefix_sum[j-1] -x_j). So if we track the minimum of (prefix_sum[j-1] -x_j) up to each k, then for each k, compute (prefix_sum[k] -x_k) - min_val, and take the maximum over all k.
+
+Ah, this seems promising. Because this can be computed in O(N) time.
+
+Let me verify this.
+
+Let's define for each j >=1, the term a_j = prefix_sum[j-1] - x_j.
+
+Then the profit for interval [j, k] is (prefix_sum[k] -x_k) - a_j.
+
+So for each k, the maximum profit over all possible j (<=k) is (prefix_sum[k] -x_k) - min_{j=1..k} a_j.
+
+So the maximum profit overall is the maximum of (prefix_sum[k] -x_k - min_a) for all k, where min_a is the minimum of a_1 to a_k.
+
+But wait, the j can be any from 1 to k. So, yes. So the approach is:
+
+1. Precompute prefix_sum array, where prefix_sum[0] = 0, prefix_sum[1] = s_1, prefix_sum[2] = s_1 + s_2, etc.
+
+2. For each j from 1 to N, compute a_j = prefix_sum[j-1] - x_j.
+
+3. For each k from 1 to N, compute (prefix_sum[k] - x_k) - (minimum a_j from j=1 to k).
+
+4. The maximum of all such values across k is the answer.
+
+Additionally, we should also consider intervals that start before j=1? Wait, no. Because the beasts are ordered, and x_1 is the first. So the interval starts at L, which can be any real number. But according to the problem statement, the interval [L, R] is such that all beasts in that interval are captured. However, the problem allows L and R to be any integers (or perhaps real numbers? The problem statement says "two integers L and R (L ≤ R)", wait, looking back:
+
+The problem says "You will choose two integers L and R (L ≤ R), and throw a net to cover the range from Point L to Point R including both ends, [L, R]."
+
+Ah, so L and R are integers. Wait, no, the problem says "two integers L and R (L ≤ R)". So L and R must be integers. But the x_i could be non-integers? No, the input says "x_i" are integers. Because in the input format, each x_i and s_i are integers.
+
+So x_1, x_2, ..., x_N are integers in increasing order.
+
+So the interval [L, R] is such that L and R are integers. But since the x_i are also integers, the interval [L, R] must include x_i that are between L and R, inclusive.
+
+But how does that affect our approach? Because in our previous model, we considered intervals between x_j and x_k, but perhaps the optimal L and R can be between two x_i's.
+
+Wait, for example, maybe the best interval is [L, R] where L is between x_j and x_{j+1}, and R is between x_k and x_{k+1}, such that all captured beasts are from x_{j+1} to x_k. Then the cost is R-L, but the sum is the same as if L was x_{j+1} and R was x_k. Because the captured beasts are the same. So in that case, the profit would be (sum s) - (R-L). However, since R-L is larger than x_k -x_{j+1}, the profit is smaller. So choosing L and R outside the existing x_i's would only increase the cost, which is bad. Therefore, the optimal intervals must start and end at some x_j and x_k. Because otherwise, we can adjust L to the next x_i to the left, and R to the next x_i to the right, thereby reducing the cost and keeping the sum the same.
+
+Therefore, the optimal intervals are those where L is x_j and R is x_k for some j <=k. So our previous approach of considering all intervals [x_j, x_k] is valid.
+
+So this approach should work.
+
+Now, let's test this approach with the sample input.
+
+Sample Input 1:
+
+N=5
+
+x_1=10, s=20
+
+x_2=40, s=50
+
+x_3=60, s=30
+
+x_4=70, s=40
+
+x_5=90, s=10
+
+Compute prefix_sum:
+
+prefix_sum[0] = 0
+
+prefix_sum[1] = 20
+
+prefix_sum[2] = 20+50=70
+
+prefix_sum[3] = 70+30=100
+
+prefix_sum[4] = 100+40=140
+
+prefix_sum[5] = 140+10=150
+
+a_j for j=1 to 5:
+
+a_1 = prefix_sum[0] -x_1 = 0 -10 = -10
+
+a_2 = prefix_sum[1] -x_2 =20-40= -20
+
+a_3 = prefix_sum[2]-x_3=70-60=10
+
+a_4=100-70=30
+
+a_5=140-90=50
+
+Now, for each k from 1 to 5:
+
+Compute (prefix_sum[k] - x_k) - min_a_j up to k.
+
+For k=1:
+
+prefix_sum[1] -x_1 =20-10=10. min_a up to 1 is -10. So 10 - (-10) =20.
+
+For k=2: prefix_sum[2] -x_2=70-40=30. min_a up to 2 is min(-10,-20) =-20. So 30 - (-20) =50.
+
+For k=3: prefix_sum[3]-x_3=100-60=40. min_a up to 3 is min(-10,-20,10) =-20. 40 - (-20) =60.
+
+For k=4: prefix_sum[4]-x_4=140-70=70. min_a up to4 is -20. 70 - (-20)=90.
+
+For k=5: prefix_sum[5]-x_5=150-90=60. min_a up to5 is still -20. 60 - (-20)=80.
+
+So the maximum is 90, which matches the sample.
+
+Great. So this approach works for sample 1.
+
+Sample Input 2:
+
+5
+
+10 2
+
+40 5
+
+60 3
+
+70 4
+
+90 1
+
+prefix_sum:
+
+0, 2,7,10,14,15.
+
+a_j:
+
+a1=0-10=-10.
+
+a2=2-40=-38.
+
+a3=7-60= -53.
+
+a4=10-70= -60.
+
+a5=14-90= -76.
+
+Wait, but wait:
+
+Wait j ranges from 1 to N.
+
+So for j=1, a_1 = prefix_sum[0] -x_1=0-10=-10.
+
+j=2: prefix_sum[1]=2, x_2=40. a=2-40=-38.
+
+j=3: prefix_sum[2]=7, x_3=60. a=7-60=-53.
+
+j=4: prefix_sum[3]=10, x_4=70. a=10-70=-60.
+
+j=5: prefix_sum[4]=14, x_5=90. a=14-90=-76.
+
+For each k:
+
+k=1: (2-10) - (-10) = (2-10) is -8. minus (-10) gives 2.
+
+k=2: (7-40) = -33. Min a up to 2 is min(-10,-38) =-38. -33 - (-38) =5.
+
+k=3: prefix_sum[3] (10) -x_3 (60) is -50. Min a up to3 is -53. So -50 - (-53) =3.
+
+k=4: prefix_sum[4] (14) -70= -56. min a up to4 is -60. So -56 - (-60) =4.
+
+k=5: prefix_sum[5] (15) -90= -75. min a up to5 is -76. So -75 - (-76)=1.
+
+So the maximum is 5, which matches sample 2.
+
+So this approach works.
+
+Sample Input 3:
+
+4
+
+1 100
+
+3 200
+
+999999999999999 150
+
+1000000000000000 150
+
+prefix_sum:
+
+0, 100, 300, 450, 600.
+
+a_j:
+
+j=1: 0 -1= -1.
+
+j=2:100 -3=97.
+
+j=3:300 - 999999999999999 = 300 - 1e15- (well, but 999999999999999 is 10^15-1? Let's see: 1e15 is 1 followed by 15 zeros. 999999999999999 is 15 9's, which is 1e15-1.
+
+So a_3=300 - (1e15-1) = -999999999999699.
+
+a_4:450 - 1e15 = -999999999999550.
+
+For each k:
+
+k=1: 100-1=99. min a is -1. 99 - (-1)=100.
+
+k=2:300-3=297. min a is min(-1,97) =-1. 297 - (-1)=298.
+
+k=3:450 - (1e15-1) = (450 -1e15 +1) = (451 -1e15). Then subtract the min a up to3, which is min(-1,97, -999999999999699) = -999999999999699. So (451-1e15) - (-999999999999699) =451-1e15 +999999999999699 = (451+999999999999699) -1e15. 1e15 is 10^15, which is 1 followed by 15 zeros. 451 + (1e15 - 301) = 1e15 +150. So 1e15 +150 -1e15=150. So the value here is 150. 
+
+k=4:600 -1e15. Min a up to4 is the same as up to3. So 600 -1e15 - (-999999999999699) = 600-1e15 +999999999999699 = 600 + (999999999999699 -1e15) =600-301=299. So this gives 299.
+
+So the maximum is 299, which matches sample 3.
+
+So the approach works.
+
+Thus, the solution is to compute for each k the value (prefix_sum[k] - x_k) - min_a_upto_k, and take the maximum over all k.
+
+Now, the problem is how to compute this efficiently.
+
+So the steps are:
+
+1. Compute the prefix sum array.
+
+2. Compute a_j for each j.
+
+3. For each k, track the minimum a_j from j=1 to j=k.
+
+But since we process k in order, we can keep track of the current minimum. For example, as we process each j from 1 to N, we can keep a variable min_so_far. For each j, a_j is computed, then min_so_far is the minimum between the current min_so_far and a_j. Then, for k = j, the min_so_far is the minimum up to j. Wait, but k and j are the same here. Because when we process j, that's the current k. So, for each j (which is k in the previous notation), we compute the current value as (prefix_sum[j] - x_j) - min_so_far. Then, update the min_so_far with a_j (since a_j is for j).
+
+Wait, wait, maybe there's confusion between j and k here. Let's clarify:
+
+The a_j is computed for each j as (prefix_sum[j-1] - x_j).
+
+Then, for each j (which is the current k in the previous analysis), when considering the interval ending at j, the minimum a_i (i ranges from 1 to j) is needed. So for j=1, the minimum is a_1. For j=2, it's min(a_1, a_2), etc.
+
+So, during processing, we can track the minimum a_j up to the current j. So, for each j from 1 to N:
+
+- Compute a_j = prefix_sum[j-1] - x_j.
+
+- Update the current minimum: current_min = min(current_min, a_j).
+
+- Compute the current profit candidate: (prefix_sum[j] - x_j) - current_min.
+
+Wait, wait. Wait, the prefix_sum[j] is the sum up to j. Because for k = j, the interval [j, j] would have sum s_j. But according to the previous approach, the profit for interval [x_j, x_j] is s_j - 0 (since R-L=0). But according to the formula, (prefix_sum[j] -x_j) is sum s_i (from 1 to j) minus x_j. But that's not correct. Wait, perhaps I made a mistake in the variable substitution.
+
+Let me re-examine:
+
+Original profit for interval [x_j, x_k] is (sum s_i from j to k) - (x_k - x_j).
+
+Which can be rewritten as (sum s_i from 1 to k) - (sum s_i from 1 to j-1) + x_j - x_k.
+
+Which is (prefix_sum[k] - prefix_sum[j-1]) + x_j - x_k.
+
+Which equals prefix_sum[k] - x_k + x_j - prefix_sum[j-1].
+
+Which can be written as (prefix_sum[k] - x_k) + (x_j - prefix_sum[j-1]).
+
+Ah! So this is the same as (prefix_sum[k] - x_k) + (x_j - prefix_sum[j-1]).
+
+Thus, for a given k, the maximum over j <=k of this expression.
+
+So for each k, we need to find the maximum (x_j - prefix_sum[j-1]) for j <=k, and add it to (prefix_sum[k] - x_k).
+
+But (x_j - prefix_sum[j-1]) is the same as (prefix_sum[j-1] - x_j) multiplied by -1, but with a negative sign. Wait:
+
+x_j - prefix_sum[j-1] = -(prefix_sum[j-1] - x_j) = -a_j.
+
+So the profit is (prefix_sum[k] -x_k) + (-a_j) = (prefix_sum[k] -x_k) -a_j.
+
+So the maximum profit for a given k is (prefix_sum[k] -x_k) minus the minimum a_j for j<=k.
+
+Wait, because the maximum of (-a_j) is the same as the minimum of a_j multiplied by -1. For example, if a_j is minimal, then (-a_j) is maximal.
+
+So for each k, the maximum profit when the interval ends at x_k is (prefix_sum[k] -x_k) - (min a_j for j <=k).
+
+So, yes, the approach is correct.
+
+Therefore, the steps are:
+
+- Compute prefix_sum.
+
+- For each j, compute a_j = prefix_sum[j-1] - x_j.
+
+- For each k, compute (prefix_sum[k] -x_k) minus the minimum a_j up to k.
+
+- The maximum of all these values is the answer.
+
+So, the code can be structured as follows:
+
+Read N.
+
+Read the N x_i and s_i.
+
+Compute prefix_sum as a list where prefix_sum[0] = 0, prefix_sum[1] = s_1, etc.
+
+Compute a_j for each j from 1 to N: a_j = prefix_sum[j-1] - x_j.
+
+Initialize current_min to a_1 (since the first j is 1), and max_profit to (prefix_sum[1] -x_1) - current_min (which would be (s_1 -x_1) - (a_1) = (s_1 -x_1) - (prefix_sum[0] -x_1) = (s_1 -x_1) - (0 -x_1) = s_1 -x_1 +x_1 = s_1. Which makes sense, for the interval [x_1, x_1], the profit is s_1 - 0 = s_1.)
+
+Then, iterate j from 2 to N:
+
+current_min = min(current_min, a_j)
+
+current_profit = (prefix_sum[j] -x_j) - current_min
+
+max_profit = max(max_profit, current_profit)
+
+Wait, but wait, for j=2, a_2 is prefix_sum[1] -x_2.
+
+current_min after j=2 would be min(a_1, a_2).
+
+Then, current_profit is (prefix_sum[2] -x_2) - current_min.
+
+Which is (sum s_1+s_2 -x_2) - min(a_1, a_2).
+
+But a_1 is prefix_sum[0] -x_1 =0 -x_1 = -x_1.
+
+a_2 is prefix_sum[1] -x_2 =s_1 -x_2.
+
+So the code needs to track the current_min as the minimum of a_j up to current j.
+
+Thus, the code can be written as follows:
+
+Initialize:
+
+prefix_sum = [0]
+
+current_sum =0
+
+x_list = []
+
+s_list = []
+
+for each x_i, s_i:
+
+    x_list.append(x_i)
+
+    s_list.append(s_i)
+
+    current_sum += s_i
+
+    prefix_sum.append(current_sum)
+
+Then, compute a_j for j from 1 to N:
+
+a_j = prefix_sum[j-1] - x_list[j-1]
+
+Wait, because in Python, list indices start at 0. So x_list[0] is x_1, etc.
+
+So for j from 1 to N:
+
+a_j = prefix_sum[j-1] - x_list[j-1]
+
+Then, for each j in 1..N, compute (prefix_sum[j] - x_list[j-1]) - current_min (which is the min a_j up to j).
+
+But to track the current_min, we can initialize current_min as a_1, then for each j from 1 to N:
+
+compute a_j.
+
+update current_min to be the minimum of current_min and a_j.
+
+Then compute current_profit as (prefix_sum[j] -x_list[j-1]) - current_min.
+
+Wait, but j starts at 1. Let's see:
+
+Initialize:
+
+current_min = a_1 (j=1)
+
+max_profit = (prefix_sum[1] - x_1) - current_min.
+
+Wait, but prefix_sum[1] is s_1, so (s_1 - x_1) - (a_1) = (s_1 -x_1) - (0 -x_1) = s_1 -x_1 +x_1 = s_1. Which is correct for j=1.
+
+Then, for j=2:
+
+a_2 = prefix_sum[1] -x_2.
+
+current_min = min(a_1, a_2)
+
+current_profit = (prefix_sum[2] -x_2) - current_min.
+
+Which is (s_1 +s_2 -x_2) - min(a_1, a_2).
+
+So the code would be:
+
+max_profit = -infinity
+
+current_min = infinity
+
+for j in 1..N:
+
+    a_j = prefix_sum[j-1] - x_list[j-1]
+
+    current_min = min(current_min, a_j)
+
+    current_profit = (prefix_sum[j] - x_list[j-1]) - current_min
+
+    if current_profit > max_profit:
+
+        max_profit = current_profit
+
+So the code initializes current_min to infinity. For j=1:
+
+a_1 = prefix_sum[0] -x_1 =0 -x_1.
+
+current_min is min(inf, a_1) = a_1.
+
+current_profit = (prefix_sum[1] -x_1) - a_1 = (s_1 -x_1) - (0 -x_1) = s_1 -x_1 +x_1 = s_1.
+
+max_profit becomes s_1.
+
+For j=2:
+
+a_2 = prefix_sum[1] -x_2 =s_1 -x_2.
+
+current_min = min(a_1, a_2).
+
+current_profit = (prefix_sum[2] -x_2) - current_min.
+
+Which is (s_1+s_2 -x_2) - min(a_1, a_2).
+
+So this works.
+
+So, the code can be written as follows:
+
+Read N.
+
+Then read N lines, storing x and s in lists.
+
+Compute prefix_sum.
+
+Compute a_j for each j.
+
+Initialize current_min to a_1, but wait, the first j is 1, but in code, the loop starts from j=1 to N.
+
+So, during the loop:
+
+current_min starts as a_1 (for j=1).
+
+Then, for j=2, a_2 is computed, current_min is updated to min(a_1, a_2).
+
+But perhaps the code can track current_min as follows:
+
+Initialize current_min to a_1.
+
+max_profit = (prefix_sum[1] -x_1) - current_min.
+
+Then, for j from 2 to N:
+
+    a_j = prefix_sum[j-1] -x_list[j-1]
+
+    current_min = min(current_min, a_j)
+
+    current_profit = (prefix_sum[j] -x_list[j-1]) - current_min
+
+    if current_profit > max_profit:
+
+        max_profit = current_profit
+
+Alternatively, perhaps the code can be written with the loop starting from j=1, and for each j, compute a_j, then update current_min and compute current_profit.
+
+But how?
+
+Let me think in code:
+
+n = int(input())
+
+x = []
+
+s = []
+
+for _ in range(n):
+
+    xi, si = map(int, input().split())
+
+    x.append(xi)
+
+    s.append(si)
+
+prefix_sum = [0]*(n+1)
+
+for i in range(n):
+
+    prefix_sum[i+1] = prefix_sum[i] + s[i]
+
+max_profit = -float('inf')
+
+current_min = float('inf')
+
+for j in range(1, n+1):
+
+    a_j = prefix_sum[j-1] - x[j-1]
+
+    current_min = min(current_min, a_j)
+
+    current_profit = (prefix_sum[j] - x[j-1]) - current_min
+
+    if current_profit > max_profit:
+
+        max_profit = current_profit
+
+print(max_profit)
+
+Wait, this code may work.
+
+Let's test sample input 1.
+
+Sample 1:
+
+prefix_sum[1] =20, x[0]=10.
+
+j=1:
+
+a_j = prefix_sum[0] (0) -x[0] (10) = -10.
+
+current_min is min(inf, -10) =-10.
+
+current_profit = (20 -10) - (-10) =10+10=20.
+
+max_profit is 20.
+
+j=2:
+
+a_j =prefix_sum[1] (20) -x[1] (40) =-20.
+
+current_min is min(-10, -20) =-20.
+
+current_profit= (70 -40) - (-20) =30 +20=50. max becomes 50.
+
+j=3:
+
+a_j =70 -60=10.
+
+current_min remains -20.
+
+current_profit=100-60=40 - (-20) →40+20=60. Max becomes 60.
+
+j=4: a_j=100-70=30. current_min still -20.
+
+current_profit=140-70=70 - (-20) →90. Max becomes 90.
+
+j=5: a_j=140-90=50. current_min still -20.
+
+current_profit=150-90=60 - (-20) →80. Max remains 90.
+
+So the code returns 90.
+
+Yes.
+
+Sample 3:
+
+After processing the first two elements:
+
+j=1: a_j=0-1=-1. current_min=-1. current_profit=100-1 - (-1) →99 +1=100. Max is 100.
+
+j=2: a_j=100-3=97. current_min is min(-1,97) →-1.
+
+current_profit=300-3=297 - (-1) →298. Max is 298.
+
+j=3: x is 999999999999999, s=150.
+
+prefix_sum[3] = 300+150=450.
+
+a_j =300 - 999999999999999 = 300 - (1e15 -1) →-999999999999699.
+
+current_min is min(-1, -999999999999699) →-999999999999699.
+
+current_profit=450 - 999999999999999 (x[2]) →450 - (1e15-1) = 451 -1e15.
+
+current_profit - current_min → (451 -1e15) - (-999999999999699) =451 -1e15 +999999999999699 = 451 + (999999999999699 -1e15) = 451 -301 →150. Max becomes 298.
+
+j=4: a_j=450 -1e15 (x[3] is 1e15). So 450 -1e15 = -999999999999550.
+
+current_min is min(-999999999999699, -999999999999550) →-999999999999699.
+
+current_profit =600 -1e15 - (-999999999999699) → (600 -1e15) +999999999999699 → (999999999999699 -1e15) is -301. 600-301=299. So current_profit is 299. Max becomes 299.
+
+So code returns 299.
+
+Yes.
+
+Thus, this code should work.
+
+Now, the problem is handling large numbers, but in Python, integers can be arbitrarily large.
+
+So the code is correct.
+</think>
+To solve this problem, we need to determine the maximum profit that can be earned by throwing a net once in a forest where beasts are positioned at specific points. The profit is calculated as the sum of the values of the captured beasts minus the cost of the net, which is the length of the interval covered by the net.
+
+### Approach
+1. **Problem Analysis**: The key challenge is to efficiently find the optimal interval [L, R] that maximizes the profit. The profit for an interval [L, R] is the sum of the values of the beasts in that interval minus the length of the interval (R - L). Given the constraints, a brute-force approach is infeasible, so we need an optimized solution.
+
+2. **Key Insight**: For each beast at position `x_k`, we consider intervals ending at `x_k` and find the best starting point `x_j` such that the profit is maximized. This can be transformed into a problem of tracking the minimum value of a specific term as we iterate through the positions.
+
+3. **Algorithm**:
+   - **Prefix Sum Array**: Compute the cumulative sum of the values of the beasts up to each position.
+   - **Tracking Minimum Value**: For each position, compute a term that allows us to track the minimum value encountered so far, which helps in determining the optimal starting point for the interval ending at the current position.
+
+### Solution Code
+```python
+n = int(input())
+x = []
+s = []
+for _ in range(n):
+    xi, si = map(int, input().split())
+    x.append(xi)
+    s.append(si)
+
+prefix_sum = [0] * (n + 1)
+for i in range(n):
+    prefix_sum[i + 1] = prefix_sum[i] + s[i]
+
+max_profit = -float('inf')
+current_min = float('inf')
+
+for j in range(1, n + 1):
+    a_j = prefix_sum[j - 1] - x[j - 1]
+    current_min = min(current_min, a_j)
+    current_profit = prefix_sum[j] - x[j - 1] - current_min
+    if current_profit > max_profit:
+        max_profit = current_profit
+
+print(max_profit)
+```
+
+### Explanation
+1. **Reading Input**: The input is read and stored in lists `x` (positions) and `s` (values of the beasts).
+
+2. **Prefix Sum Calculation**: A prefix sum array `prefix_sum` is computed where each element at index `i` represents the sum of the values of the first `i` beasts. This helps in quickly calculating the sum of values for any interval.
+
+3. **Tracking Minimum Value**: As we iterate through each position, we compute a term `a_j` which is the difference between the prefix sum up to the previous position and the current position. This term helps in tracking the minimum value encountered so far, which is crucial for determining the optimal starting point for the interval ending at the current position.
+
+4. **Max Profit Calculation**: For each position, the profit is calculated using the prefix sum and the tracked minimum value. The maximum profit encountered during the iteration is updated accordingly.
+
+This approach ensures that we efficiently compute the maximum possible profit in linear time, making it suitable for large input sizes as specified in the problem constraints.
+</bot>

@@ -1,0 +1,759 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Peter is a senior manager of Agile Change Management (ACM) Inc., where each employee is a member of one or more task groups. Since ACM is agile, task groups are often reorganized and their members frequently change, so membership management is his constant headache.
+
+Peter updates the membership information whenever any changes occur: for instance, the following line written by him means that Carol and Alice are the members of the Design Group.
+
+
+design:carol,alice.
+
+
+The name preceding the colon is the group name and the names following it specify its members.
+
+A smaller task group may be included in a larger one. So, a group name can appear as a member of another group, for instance, as follows.
+
+
+development:alice,bob,design,eve.
+
+
+Simply unfolding the design above gives the following membership specification, which is equivalent to the original.
+
+
+development:alice,bob,carol,alice,eve.
+
+
+In this case, however, alice occurs twice. After removing one of the duplicates, we have the following more concise specification.
+
+
+development:alice,bob,carol,eve.
+
+
+Your mission in this problem is to write a program that, given group specifications, identifies group members.
+
+Note that Peter's specifications can include deeply nested groups. In the following, for instance, the group one contains a single member dave.
+
+
+one:another.
+another:yetanother.
+yetanother:dave.
+
+
+
+
+Input
+
+The input is a sequence of datasets, each being in the following format.
+
+n
+group1:member1,1,...,member1,m1.
+.
+.
+.
+groupi:memberi,1,...,memberi,mi.
+.
+.
+.
+groupn:membern,1,...,membern,mn.
+
+
+The first line contains n, which represents the number of groups and is a positive integer no more than 100. Each of the following n lines contains the membership information of a group: groupi (1 ≤ i ≤ n) is the name of the i-th task group and is followed by a colon (:) and then the list of its mi member s that are delimited by a comma (,) and terminated by a period (.).
+
+Those group names are mutually different. Each mi (1 ≤ i ≤ n) is between 1 and 10, inclusive. A member is another group name if it is one of group1, group2,..., or groupn. Otherwise it is an employee name.
+
+There are no circular (or recursive) definitions of group(s). You may assume that mi member names of a group are mutually different.
+
+Each group or employee name is a non-empty character string of length between 1 and 15, inclusive, and consists of lowercase letters.
+
+The end of the input is indicated by a line containing a zero.
+
+Output
+
+For each dataset, output the number of employees included in the first group of the dataset, that is group1, in a line. No extra characters should occur in the output.
+
+Example
+
+Input
+
+2
+development:alice,bob,design,eve.
+design:carol,alice.
+3
+one:another.
+another:yetanother.
+yetanother:dave.
+3
+friends:alice,bob,bestfriends,carol,fran,badcompany.
+bestfriends:eve,alice.
+badcompany:dave,carol.
+5
+a:b,c,d,e.
+b:c,d,e,f.
+c:d,e,f,g.
+d:e,f,g,h.
+e:f,g,h,i.
+4
+aa:bb.
+cc:dd,ee.
+ff:gg.
+bb:cc.
+0
+
+
+Output
+
+4
+1
+6
+4
+2
+</user>
+<bot>
+<think>
+Okay, let's tackle this problem. So, the task is to determine the number of unique employees in the first group after expanding all nested groups. Hmm. Let's think about how to approach this.
+
+First, the input consists of multiple datasets. Each dataset starts with n groups. Each group can have members that are either employees or other groups. We need to process group1 and find all the employees it includes, even those nested in subgroups.
+
+The key here is to handle the expansion of groups recursively. For each group, when we encounter a member that is another group, we need to replace it with its members. But since groups can be nested, we need to do this recursively until all members are either employees or groups that have already been expanded.
+
+Wait, but how do we avoid infinite loops? Oh right, the problem states that there are no circular definitions. So we don't have to worry about that. That's a relief.
+
+So the plan is:
+
+1. Parse the input groups into a data structure where each group name maps to its list of members.
+2. For group1, recursively expand all subgroups, replacing each group name with its members, until all are employees.
+3. Collect all unique employee names and count them.
+
+But how to efficiently do this? Let's think in terms of a helper function that, given a group name, returns the set of all employees in that group, including those from subgroups.
+
+Yes. So, for each group, when we process it, we check each member. If the member is a group (exists in our mapping), then we recursively get its employees. If not, it's an employee and we add it to the set.
+
+But we need to memoize or cache the results to avoid redundant computations. For example, if group A includes group B, which includes group C, we don't want to recompute group B and C every time they are referenced.
+
+So perhaps we can use a dictionary to store the resolved employee sets for each group. That way, once a group's employees are computed, we can just look it up instead of recalculating.
+
+Wait, but the groups are processed in the order given. However, group1 might reference groups defined after it. For example, in the sample input 2:
+
+design is the second group, but development (group1) references it. So we need to process group1 even if the groups it references haven't been processed yet. Wait, no. The input order is n groups, and each group is given. So when building the data structure, we can map all group names to their members. Then, when resolving group1, we can process its members, looking up other groups even if they were defined later. Because the groups are all defined in the dataset, so the order in which they are listed doesn't matter. The problem statement says that there's no circularity, so any group referenced is defined in the dataset.
+
+So the steps for each dataset:
+
+- Read n groups, storing each group's name and its member list (split into a list).
+- For group1, compute all employees by expanding all subgroups recursively.
+- Count the unique employees in group1.
+
+Now, to implement this, here's how I can approach it:
+
+1. Read the input dataset for each case until 0 is encountered.
+
+For each dataset:
+
+a. Read n, then read the next n lines. Each line is a group definition. Split each line into group name and members. For example, "development:alice,bob,design,eve." is split into group "development" and members ["alice", "bob", "design", "eve"]. Note the trailing period: we need to remove that. So, split the line after the colon, then split the part before the colon as the group name, and the part after (excluding the final .) as the comma-separated members.
+
+So for parsing:
+
+group_line = line.strip().split(':')
+group_name = group_line[0]
+members_str = group_line[1].rstrip('.')  # remove the ending period
+members = members_str.split(',')
+
+Then, store in a dictionary: groups = {group_name: members_list}
+
+Once all groups are stored, process group1.
+
+To process group1:
+
+We need a function that, given a group name, returns the set of all employees in that group (including subgroups). Let's call this get_employees(group). The function works as:
+
+def get_employees(group, groups, memo):
+    if group in memo:
+        return memo[group]
+    employees = set()
+    for member in groups[group]:
+        if member in groups:  # if it's a group, recurse
+            employees.update(get_employees(member, groups, memo))
+        else:  # it's an employee
+            employees.add(member)
+    memo[group] = employees
+    return employees
+
+But wait, memo is a dictionary that caches the employee sets for each group. So for each group, once computed, we store it in memo to avoid recomputing. This ensures that each group is processed once, which is efficient.
+
+So the steps:
+
+- Initialize memo as an empty dictionary.
+- For the first group (group1), call get_employees, which builds the set.
+- The size of this set is the answer.
+
+But wait, how do we get group1? The first group in the input is group1. So in the input order, the first group after the n line is group1, then group2, etc. Wait, the problem statement says "the first group of the dataset is group1". So the first line after n is group1. So the order in which the groups are stored in the groups dictionary doesn't matter, except that group1 is the first one in the input.
+
+So in code:
+
+When reading the groups for a dataset, the first group is group1. So for each dataset, after reading n, read n lines. The first of those lines is group1's definition.
+
+Wait, the problem says "the first group of the dataset" is group1. So in each dataset, the first line after n is group1. So group1's name is the first group in the list.
+
+So in the code, after reading n, read n lines. The first line is group1. So when building the groups dictionary, the order isn't important, but when processing, the first group in the input is the one to process.
+
+Wait, no. The groups are stored in a dictionary, and group1 is the first group in the input lines. So in the code:
+
+groups = {}
+group1_name = None
+for i in range(n):
+    line = input().strip()
+    group_part, members_part = line.split(':')
+    group_name = group_part
+    members = members_part.rstrip('.').split(',')
+    groups[group_name] = members
+    if i == 0:
+        group1_name = group_name
+
+So group1 is the first group in the input lines.
+
+Yes. Then, the code would process group1_name, which is the key in the groups dictionary.
+
+So in code, for each dataset:
+
+Read n.
+
+If n is 0, stop.
+
+Then read n lines. The first line is group1.
+
+Store all groups in a dict, then process group1.
+
+So the main steps are:
+
+For each dataset:
+
+- Read n.
+
+- Read n group lines, parse into a dictionary.
+
+- Get group1's name (the first group in the input).
+
+- Compute all employees in group1.
+
+- The size of the employees set is the output.
+
+Now, the helper function get_employees can be written recursively with memoization.
+
+But in Python, recursion might hit stack limits if the nesting is deep. However, given that n is up to 100, and no circular references, the maximum nesting depth is probably manageable.
+
+Alternatively, we can use an iterative approach with memoization.
+
+But for the problem constraints, recursion should be okay.
+
+Testing with the sample inputs:
+
+Sample Input 1:
+
+2
+
+development:alice,bob,design,eve.
+
+design:carol,alice.
+
+Group1 is development. Its members are alice, bob, design, eve.
+
+Processing design: its members are carol, alice. So expanding design, development's members become alice, bob, carol, alice, eve. Removing duplicates gives 4 employees.
+
+So the output is 4.
+
+Sample Input 2:
+
+3
+
+one:another.
+
+another:yetanother.
+
+yetanother:dave.
+
+Group1 is one. Members are another. Which expands to yetanother, which expands to dave. So total 1.
+
+Sample Input 3:
+
+3
+
+friends:alice,bob,bestfriends,carol,fran,badcompany.
+
+bestfriends:eve,alice.
+
+badcompany:dave,carol.
+
+Group1 is friends. Members are alice, bob, bestfriends (which is a group), carol, fran, badcompany (group).
+
+Expanding bestfriends: eve, alice.
+
+Expanding badcompany: dave, carol.
+
+So all employees in friends are alice, bob, carol, fran, eve, dave. Total 6.
+
+Sample Input 4:
+
+5
+
+a:b,c,d,e.
+
+b:c,d,e,f.
+
+c:d,e,f,g.
+
+d:e,f,g,h.
+
+e:f,g,h,i.
+
+Group1 is a. Members are b, c, d, e.
+
+b's members are c, d, e, f. c's members are d, e, f, g. d's members are e, f, g, h. e's members are f, g, h, i.
+
+So expanding all:
+
+a includes b (which includes c, d, e, f). Then c includes d, e, f, g. d includes e, f, g, h. e includes f, g, h, i.
+
+So when expanding a, it's a chain of groups. The employees after expanding would be all the leaves. Let's see:
+
+b's members are c, d, e, f.
+
+Wait, but each of those except f is a group. So expanding b:
+
+c's members: d, e, f, g. Then d's: e, f, g, h. Then e's: f, g, h, i. So all the way down, the employees are f, g, h, i, etc.
+
+Wait, but perhaps the code will correctly accumulate all employees. Let's see.
+
+a's members are b, c, d, e.
+
+Processing each member:
+
+- b is a group. So get_employees(b) will process its members: c, d, e, f.
+
+Processing each in b's members:
+
+c is a group. So get_employees(c) → members d, e, f, g.
+
+d is group. get_employees(d) → e, f, g, h.
+
+e is group. get_employees(e) → f, g, h, i.
+
+f is an employee.
+
+So for group a:
+
+The employees from b are:
+
+Processing c (from b's members):
+
+c's members are d, e, f, g.
+
+d's members: e, f, g, h. → which are groups except for the e in d's members (but e is a group). Then e's members are f, g, h, i. Which includes f (employee), etc.
+
+This seems complicated. Let's see the output for this sample is 4. Wait, the sample output is 4 for this case. How?
+
+Maybe the code, when expanding all groups, collects all employees. So group a's members are b, c, d, e.
+
+Each of those groups, when expanded, may add their own employees.
+
+But perhaps the code would collect all the employees in all the subgroups. But in the end, the only employees are those that are not groups.
+
+So for group a:
+
+The members are b, c, d, e.
+
+Each of these is a group. So when expanding, each of their members are processed.
+
+But in this setup, the groups form a chain: a → b → c → d → e. Each group's members include the next group and some others.
+
+But group e's members are f, g, h, i. These are employees. So when expanding e, the employees are f, g, h, i.
+
+Similarly, d's members are e (group), f (employee?), wait, group d's members are e, f, g, h. So e is a group, the rest are employees?
+
+Wait, no. Wait, group d's definition is:
+
+d:e,f,g,h.
+
+So in the code, when processing group d, the members are e, f, g, h.
+
+e is a group (since in the groups dictionary, group e exists), but f, g, h are not (assuming they are not group names). So when processing d's members, e is a group, which is expanded. So get_employees(d) would include all employees from e, plus f, g, h.
+
+But group e's members are f, g, h, i. So e's expansion would be f, g, h, i (employees). So when processing d, the employees are (e's employees) f, g, h, i plus f, g, h. But wait, wait. Because the members of d are e, f, g, h. So:
+
+- e is a group → add f, g, h, i.
+
+- f is an employee → add f.
+
+- g → add g.
+
+- h → add h.
+
+So the set for d is {f, g, h, i}.
+
+Wait, but then when processing d, the code would collect all employees from e, plus f, g, h. But e's employees are f, g, h, i. So combining all:
+
+e's employees (f,g,h,i) plus f, g, h (from d's members). But when you collect all, they are all in the set. So d's employees are {f,g,h,i}.
+
+Then, when processing c's members (d, e, f, g):
+
+d's employees (f,g,h,i), e's (f,g,h,i), f (employee), g (employee). So the set for c is {f,g,h,i}.
+
+Processing group c: members d, e, f, g.
+
+d → f,g,h,i.
+
+e → f,g,h,i.
+
+f → add f.
+
+g → add g.
+
+So combining all: {f, g, h, i}.
+
+So group c's employees are these four.
+
+Then group b's members are c, d, e, f.
+
+c's employees (f,g,h,i), d's (f,g,h,i), e's (f,g,h,i), f (employee). So group b's employees are {f, g, h, i}.
+
+Then group a's members are b, c, d, e.
+
+Each of these groups' employees are {f,g,h,i} → so group a's employees are the union of all four, which is {f,g,h,i}, count 4. Which matches the sample output of 4.
+
+So the code works for that case.
+
+Now, for the last sample input:
+
+4
+
+aa:bb.
+
+cc:dd,ee.
+
+ff:gg.
+
+bb:cc.
+
+Group1 is aa. Members: bb.
+
+bb is a group with member cc.
+
+cc is a group with members dd, ee. Are these groups? Let's see:
+
+Looking at all group names: aa, cc, ff, bb.
+
+cc's members are dd and ee. Are these groups? Only if they are in the groups list. But in this dataset, the groups are aa, cc, ff, bb. So dd and ee are employees. Similarly, ff's members are gg (employee). bb's members are cc (group).
+
+So expanding aa:
+
+aa → bb.
+
+bb → cc.
+
+cc → dd, ee.
+
+dd and ee are employees. So aa's employees are dd, ee. But wait:
+
+aa's members: bb (group) → which has members: cc (group) → which has members: dd and ee (employees). So the total employees in aa are dd and ee. So the output is 2.
+
+Which matches the sample's last output of 2.
+
+So the code correctly handles nested groups.
+
+Now, the code steps:
+
+Implement the helper function with memoization.
+
+In Python, we can use a dictionary to memoize the results for each group.
+
+So the code outline:
+
+For each dataset:
+
+Read n.
+
+If n is 0, break.
+
+Read n lines, parse into groups dictionary.
+
+group1 is the first group in the input (i=0 when reading lines).
+
+Compute the set of employees for group1 using the helper function.
+
+Print the size of the set.
+
+Implement the helper function as a memoized recursive function.
+
+But in Python, using a memoization decorator like lru_cache could work, but since the group names are dynamic (depend on the dataset), we need to handle each dataset's groups separately. So better to pass the groups and memo as parameters.
+
+So code steps:
+
+def process_dataset(n, lines):
+
+    groups = {}
+
+    group1 = None
+
+    for i in range(n):
+
+        line = lines[i]
+
+        group_part, members_part = line.split(':')
+
+        group_name = group_part
+
+        members = members_part.rstrip('.').split(',')
+
+        groups[group_name] = members
+
+        if i == 0:
+
+            group1 = group_name
+
+    # Now, compute employees for group1
+
+    memo = {}
+
+    def get_employees(group):
+
+        if group in memo:
+
+            return memo[group]
+
+        employees = set()
+
+        for member in groups[group]:
+
+            if member in groups:  # it's a group
+
+                employees.update(get_employees(member))
+
+            else:
+
+                employees.add(member)
+
+        memo[group] = employees
+
+        return employees
+
+    employees = get_employees(group1)
+
+    return len(employees)
+
+Wait, but for each dataset, the memo is local to that dataset. So each time process_dataset is called, a new memo is created.
+
+Yes. So in the code, each dataset is processed independently.
+
+So the code for reading input and processing each dataset:
+
+Read the entire input until 0 is encountered.
+
+But since each dataset may have multiple lines (n followed by n lines), we need to read them line by line.
+
+But in practice, the code should read lines until a 0 is encountered.
+
+So the code in Python could look like this:
+
+import sys
+
+def main():
+
+    for line in sys.stdin:
+
+        line = line.strip()
+
+        if not line:
+
+            continue
+
+        n = int(line)
+
+        if n == 0:
+
+            break
+
+        # Read next n lines for the dataset
+
+        groups = {}
+
+        group1 = None
+
+        for i in range(n):
+
+            current_line = sys.stdin.readline().strip()
+
+            while not current_line:  # skip empty lines
+
+                current_line = sys.stdin.readline().strip()
+
+            group_part, members_part = current_line.split(':')
+
+            group_name = group_part
+
+            # process members_part: split on commas, remove trailing '.'.
+
+            members = members_part.rstrip('.').split(',')
+
+            groups[group_name] = members
+
+            if i == 0:
+
+                group1 = group_name
+
+        # Now process group1
+
+        memo = {}
+
+        def get_employees(g):
+
+            if g in memo:
+
+                return memo[g]
+
+            res = set()
+
+            for m in groups[g]:
+
+                if m in groups:
+
+                    res.update(get_employees(m))
+
+                else:
+
+                    res.add(m)
+
+            memo[g] = res
+
+            return res
+
+        employees = get_employees(group1)
+
+        print(len(employees))
+
+But wait, there's a possible issue with the order of reading lines.
+
+For example, after reading the 'n' line, the next lines may be read via sys.stdin.readline(). But sometimes, the line could be empty (like if the input has blank lines between datasets). But the problem statement says that the input is a sequence of datasets as specified. However, in practice, the code should read the next n lines correctly.
+
+But in the code above, after reading the first line (n), the code reads n lines, each time using sys.stdin.readline(). But after that, the next line is the next 'n' (or 0).
+
+But in the sample input, each dataset's lines are given consecutively. So the code should handle that.
+
+Testing with sample input 2:
+
+Sample Input:
+
+3
+
+one:another.
+
+another:yetanother.
+
+yetanother:dave.
+
+Processing:
+
+n=3.
+
+Read three lines. Then process group1 (one). Its members are another. another is a group, which is processed recursively.
+
+Another's members are yetanother (group), which has dave. So the employees set is {'dave'}, so output is 1.
+
+Which is correct.
+
+Another sample:
+
+The last sample input:
+
+4
+
+aa:bb.
+
+cc:dd,ee.
+
+ff:gg.
+
+bb:cc.
+
+Group1 is aa. Its members are bb. bb is a group with member cc. cc's members are dd, ee (not groups). So the employees are dd and ee → output 2.
+
+Yes.
+
+So the code should work.
+
+But in Python, the recursion depth could be a problem. Let's see: for a dataset with n=100 groups forming a chain (each group has the next one as a member). The recursion depth would be 100. Python's default recursion depth is 1000, so this should be okay.
+
+But for the problem constraints (n up to 100), this is manageable.
+
+Another possible test case: group1 is a group that includes itself. But the problem states no circular definitions, so this case won't exist.
+
+Now, the code reads the input correctly. For example, in the first sample input, the lines after n=2 are:
+
+development:alice,bob,design,eve.
+
+design:carol,alice.
+
+So group1 is development. The code processes it correctly.
+
+Thus, the code should handle all cases correctly.
+
+So, the function to generate is as follows, which reads from stdin, processes the datasets, and outputs the required numbers.
+
+The code must be self-contained, executable, and call the function after definition. So the final code would be:
+
+Read all lines, process each dataset as per the logic above.
+</think>
+To solve this problem, we need to determine the number of unique employees in the first group specified in each dataset, considering nested group memberships. The goal is to expand all nested groups recursively and count the unique employees.
+
+### Approach
+1. **Input Parsing**: Read the input datasets, each starting with an integer `n` indicating the number of groups. For each group, parse the group name and its members.
+2. **Recursive Expansion with Memoization**: For the first group in each dataset, recursively expand its members. If a member is a group, expand it further until all members are employees. Use memoization to avoid redundant computations and improve efficiency.
+3. **Set Operations**: Use a set to collect all unique employee names during the expansion process. The size of this set gives the required count of unique employees.
+
+### Solution Code
+```python
+import sys
+
+def main():
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        n = int(line)
+        if n == 0:
+            break
+        groups = {}
+        group1 = None
+        for i in range(n):
+            current_line = sys.stdin.readline().strip()
+            while not current_line:
+                current_line = sys.stdin.readline().strip()
+            group_part, members_part = current_line.split(':', 1)
+            group_name = group_part
+            members = members_part.rstrip('.').split(',')
+            groups[group_name] = members
+            if i == 0:
+                group1 = group_name
+        memo = {}
+        def get_employees(g):
+            if g in memo:
+                return memo[g]
+            employees = set()
+            for member in groups[g]:
+                if member in groups:
+                    employees.update(get_employees(member))
+                else:
+                    employees.add(member)
+            memo[g] = employees
+            return employees
+        employees = get_employees(group1)
+        print(len(employees))
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Reading Input**: The code reads each dataset line by line. The first line gives the number of groups `n`, followed by `n` lines each describing a group.
+2. **Storing Groups**: Groups are stored in a dictionary where each key is a group name and the value is a list of its members.
+3. **Recursive Expansion**: The `get_employees` function recursively expands each group. If a member is a group, it recursively processes that group. Employees are collected in a set to ensure uniqueness.
+4. **Memoization**: A memoization dictionary (`memo`) caches the result for each group to avoid redundant calculations when a group is referenced multiple times.
+5. **Output**: For each dataset, the number of unique employees in the first group is printed.
+
+This approach efficiently handles nested group structures and ensures that each group is expanded only once, leading to optimal performance even for the upper constraint limits.
+</bot>

@@ -1,0 +1,1650 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.You are given n intervals in form [l; r] on a number line.
+
+You are also given m queries in form [x; y]. What is the minimal number of intervals you have to take so that every point (not necessarily integer) from x to y is covered by at least one of them? 
+
+If you can't choose intervals so that every point from x to y is covered, then print -1 for that query.
+
+Input
+
+The first line contains two integers n and m (1 ≤ n, m ≤ 2 ⋅ 10^5) — the number of intervals and the number of queries, respectively.
+
+Each of the next n lines contains two integer numbers l_i and r_i (0 ≤ l_i < r_i ≤ 5 ⋅ 10^5) — the given intervals.
+
+Each of the next m lines contains two integer numbers x_i and y_i (0 ≤ x_i < y_i ≤ 5 ⋅ 10^5) — the queries.
+
+Output
+
+Print m integer numbers. The i-th number should be the answer to the i-th query: either the minimal number of intervals you have to take so that every point (not necessarily integer) from x_i to y_i is covered by at least one of them or -1 if you can't choose intervals so that every point from x_i to y_i is covered.
+
+Examples
+
+Input
+
+
+2 3
+1 3
+2 4
+1 3
+1 4
+3 4
+
+
+Output
+
+
+1
+2
+1
+
+
+Input
+
+
+3 4
+1 3
+1 3
+4 5
+1 2
+1 3
+1 4
+1 5
+
+
+Output
+
+
+1
+1
+-1
+-1
+
+Note
+
+In the first example there are three queries:
+
+  1. query [1; 3] can be covered by interval [1; 3]; 
+  2. query [1; 4] can be covered by intervals [1; 3] and [2; 4]. There is no way to cover [1; 4] by a single interval; 
+  3. query [3; 4] can be covered by interval [2; 4]. It doesn't matter that the other points are covered besides the given query. 
+
+
+
+In the second example there are four queries:
+
+  1. query [1; 2] can be covered by interval [1; 3]. Note that you can choose any of the two given intervals [1; 3]; 
+  2. query [1; 3] can be covered by interval [1; 3]; 
+  3. query [1; 4] can't be covered by any set of intervals; 
+  4. query [1; 5] can't be covered by any set of intervals. Note that intervals [1; 3] and [4; 5] together don't cover [1; 5] because even non-integer points should be covered. Here 3.5, for example, isn't covered.
+</user>
+<bot>
+<think>
+Okay, let's see. So the problem is about intervals and queries. For each query, we need to find the minimal number of intervals that cover the entire query interval. If it's not possible, output -1. Hmm. 
+
+First, I need to understand how to approach this efficiently. Because n and m are up to 2e5, any O(nm) approach is definitely not going to work. So we need a way to preprocess the intervals so that each query can be answered quickly.
+
+Let me think about the structure of the intervals. The key here is to select intervals that optimally cover the query [x, y]. The optimal way would be to greedily choose intervals that extend as far as possible. Like, for each step, pick the interval that starts before the current end and extends the furthest. This is similar to the interval greedy algorithm for covering a range.
+
+Wait, right. The standard greedy approach for interval covering is to sort intervals by starting point, then for each step, pick the interval that starts <= current end and has the maximum end. Repeat until the entire range is covered. If at any step there's no such interval, return -1.
+
+But how to apply this efficiently for multiple queries? Because each query is [x, y], and we need to process this for all m queries. Preprocessing the intervals in a way that allows us to quickly find the next best interval for any position would be crucial.
+
+Let me think. Let's sort all intervals by their starting point. Then, for any position, the next intervals we can choose are those starting <= current position, and among those, the one that extends the farthest. So if we can precompute for each possible position the farthest reach, we can use this to jump through the intervals quickly.
+
+This sounds like the approach used in the jump pointer method. For example, precompute for each position the farthest interval starting at or before that position, then for a query, we can jump through these pointers to see how many steps are needed to reach the end of the query.
+
+Yes. So the plan is:
+
+1. Sort the intervals by their start. If two intervals have the same start, choose the one with the larger end. Because if two intervals start at the same point, the longer one is better.
+
+2. Preprocess a structure that allows us to quickly find, for any position s, the maximum end that can be achieved by intervals starting <= s. This can be done by creating an array where for each position, we have the maximum end up to that position. But since the intervals are sorted, maybe we can use binary search here.
+
+Wait, here's another idea. After sorting the intervals, create a list of start points and their corresponding maximum end. Then, for any current position, we can find the rightmost interval that starts <= current position and has the maximum possible end. Then, the next step would be to set the current position to this maximum end, and repeat until we cover the query.
+
+But how to efficiently find this for all possible current positions during a query?
+
+Alternatively, for each position, precompute the maximum reach. Let's say we have all intervals sorted. Then for each possible start point l_i, the maximum end is the maximum of all r_j where l_j <= l_i. Wait, no. Wait, after sorting, the intervals are in order of increasing l_i. So for any current position s, the maximum reach is the maximum r_i among all intervals where l_i <= s and r_i is as large as possible. 
+
+So the steps for a query [x, y] would be:
+
+- Start at x. The first interval to pick is the one with l_i <= x and the maximum possible r_i. Let's call this r_max. If r_max <= x, then it's impossible (since no interval covers x). Otherwise, increment the count and move to r_max. Then, in the next step, look for intervals starting <= r_max, and again take the maximum possible r_i. Repeat until the current position reaches or exceeds y.
+
+But how to compute the maximum r_i for intervals starting <= a certain position efficiently? 
+
+Ah, here's a way. Since the intervals are sorted by l_i, we can pre-process a list of the maximum ends up to each interval. Wait, no. Alternatively, we can create a list where for each interval, we have the maximum end in the intervals up to that point. But since the intervals are sorted by l_i, for each interval i, the maximum end up to i is the max of r_1 ... r_i. So we can precompute a prefix maximum array. Then, for a given s (current position), we can find the largest index i where l_i <= s. The maximum end up to that index is the prefix_max[i]. 
+
+Wait, yes. Let me think:
+
+After sorting intervals by l_i, the list is l_1 <= l_2 <= ... <= l_n. Then, the prefix_max array would store prefix_max[i] = max(r_1, r_2, ..., r_i). So for any s, we can binary search the largest l_i that is <= s. Then, the maximum reach up to that point is prefix_max[i]. 
+
+But during the processing of a query, we can do this step for each jump. So for the query x, y:
+
+Initialize current = x, count = 0.
+
+While current < y:
+
+   Find the largest interval in the sorted list with l_i <= current. Let's call this index i.
+
+   The max_reach = prefix_max[i]. But wait, no. Because the prefix_max array is up to index i. So the maximum end in intervals 0..i is prefix_max[i]. 
+
+   If max_reach <= current: no progress can be made, return -1.
+
+   Otherwise, increment count.
+
+   Set current = max_reach.
+
+Repeat until current >= y.
+
+Wait, but this might not be the optimal way. For example, suppose after current, there's an interval that starts at a point after current but ends further. But the intervals are sorted by l_i. So all intervals after index i have l_i > current, so can't be used. So the maximum possible is indeed prefix_max[i]. So this approach is correct.
+
+But how to handle this with binary search for each step. Because for each step, the current position changes, and we need to find the largest l_i <= current. So the binary search would take O(log n) time per step. For a query, the number of steps could be O(log (max interval length)), but worst case O(n), which is not acceptable for m=2e5. 
+
+Wait, that's a problem. For example, if a query requires O(n) steps, then for m=2e5, the total time becomes O(nm) = 4e10 operations, which is way too slow.
+
+So this approach is not feasible. We need a better way.
+
+Hmm. So the standard greedy approach works for a single query in O(k log n) time, where k is the number of intervals selected. But with m=2e5, this is not feasible. So we need a way to precompute something that allows us to answer each query in O(log n) time.
+
+Alternative approach: For each possible position, precompute the maximum jump possible. Then, build a sparse table for binary lifting. This allows us to compute the number of jumps in O(log (max_jump)) time per query.
+
+Yes! This is a common technique. Let me think. 
+
+The idea is to preprocess for each position s, the next position after selecting the best interval. Then, using binary lifting (like in the LCA algorithm), we can compute the minimal steps to reach from x to y.
+
+But how to model this. Let's see:
+
+First, pre-process all intervals. Sort them by l_i, and create a list of sorted intervals. Then, precompute the maximum reach for each interval. For each interval i, the maximum reach from l_i is the maximum r of all intervals up to i (prefix max).
+
+Wait, but to build the jump pointers, we need to know for each position s, what is the maximum reach. But positions can be up to 5e5. So we can't precompute for every possible s. Instead, perhaps we can model the jump steps as intervals between key points.
+
+Alternatively, create an array for each position s where s is the start of an interval's l_i. Then, for any s between l_i and l_{i+1}, the maximum reach is the same as that of l_i. Wait, maybe not. Let me think again.
+
+Another approach: Let's process all the intervals and create a list of events where the maximum reach changes. For example, after sorting intervals by l_i, the prefix_max array is non-decreasing. So the maximum reach can be determined by the maximum of all r_i up to the current l_i.
+
+So, for any s, the maximum reach is the maximum r of all intervals with l_i <= s. So, the steps are:
+
+1. Sort intervals by l_i in increasing order.
+
+2. Precompute the prefix_max array, where prefix_max[i] = max(r_0, r_1, ..., r_i).
+
+3. For a given s, find the largest index i where l_i <= s. The maximum reach is prefix_max[i].
+
+But how to compute this efficiently.
+
+This is possible with binary search. For each s, we can binary search in the sorted l_i list for the largest l_i <= s. Then, the maximum reach is the prefix_max at that index.
+
+So, during processing a query, each step involves finding the maximum possible reach from the current position, and jumping to that reach. The number of steps depends on how far each jump takes. But in the worst case, like when each jump is small, this can be O(k) steps per query, which is not acceptable.
+
+Thus, we need a way to compute the minimal number of steps in logarithmic time. Binary lifting is the way to go here.
+
+Binary lifting allows us to precompute jumps of 2^0, 2^1, ..., 2^log(max_steps) steps. For each position, we can store where we end up after 2^k steps and the number of steps taken. Then, for a query, we can greedily take the largest possible steps until we reach or exceed the target.
+
+But how to model this. Let's think of the jumps as transitions. For each position s, the next position after one jump is the maximum reach from s. Then, the next position after two jumps is the maximum reach after the first jump, and so on.
+
+But how to model this for arbitrary s. Since s can be any value up to 5e5, and the possible maximum reaches are up to 5e5, it's impossible to precompute this for every s. So instead, we can precompute for the intervals sorted by their l_i.
+
+Wait, perhaps the key is to model the jumps based on the intervals. Let's consider that each jump can be represented as a step from a certain position to the maximum reach.
+
+Wait, here's an alternative approach inspired by the binary lifting technique.
+
+First, we process the intervals by sorting them, then build a structure that allows us to find the maximum reach for any position s. Then, for each possible s, we can precompute the maximum reach in O(1) or O(log n) time.
+
+But since s can be up to 5e5, precomputing for all s is possible. Wait, 5e5 is manageable. Let's see:
+
+We can create an array, let's call it max_reach, where max_reach[s] is the maximum reach possible from position s. Then, for any s, we can compute this by taking the maximum of all r_i where l_i <= s. 
+
+But how to compute max_reach for all s from 0 to 5e5.
+
+This can be done as follows:
+
+- Sort all intervals by l_i.
+
+- Precompute an array of the maximum r encountered so far. Then, for each interval in the sorted list, we can note that from l_i to l_{i+1}-1, the maximum reach is the current prefix_max. Then, for l >= l_i and < l_{i+1}, the maximum reach is prefix_max[i]. The last interval would cover from l_n onwards to 5e5, with the prefix_max[n-1].
+
+Wait, that's a way to model the maximum_reach array. For example:
+
+Let intervals be sorted as l_0, l_1, ..., l_{n-1}, with l_0 <= l_1 <= ... <= l_{n-1}.
+
+Then, for s in [0, l_0), the maximum reach is 0 (since no interval starts <= s). For s in [l_0, l_1), the maximum reach is max(r_0). For s in [l_1, l_2), the maximum reach is max(r_0, r_1), and so on. For s >= l_{n-1}, the maximum reach is the maximum of all r_i.
+
+So, the max_reach can be represented as a series of intervals. For example, the points where the max_reach changes are the l_i sorted. So, we can create a list of events where the max_reach changes. Then, for any s, we can binary search in this list to find the correct interval and get the corresponding max_reach.
+
+So, here's how to precompute this:
+
+After sorting the intervals by l_i, we create a list of sorted_l and prefix_max.
+
+sorted_l = [l_0, l_1, ..., l_{n-1}]
+
+prefix_max = [r_0, max(r_0, r_1), ..., max(r_0..r_{n-1})]
+
+Then, the max_reach for a given s is the maximum r in all intervals with l_i <= s. Which is the prefix_max of the largest i where l_i <= s.
+
+So, to compute this for any s, we can binary search sorted_l to find the rightmost l_i <= s, and take the prefix_max[i].
+
+Yes. So for any s, the maximum reach is prefix_max[i], where i is the largest index with l_i <= s.
+
+This is correct.
+
+Now, the problem is how to model the steps for each query. For a query [x, y], we need to start at x, and repeatedly jump to the maximum reach until we reach or exceed y. Each jump is one step. If at any point the maximum reach is <= current position, return -1.
+
+But with m=2e5 and each query potentially taking O(k) steps, this approach is not feasible. So we need a way to compute the number of steps in O(log k) time per query.
+
+This is where binary lifting comes in. The idea is to precompute for each possible position s, the maximum reach after 2^j jumps. But since s can be up to 5e5, this would require a lot of memory. So perhaps, instead, we can precompute the jumps for each possible log level and then use those to compute the minimal steps quickly.
+
+But how to model the jumps. Let's think:
+
+Each jump takes us from current position s to the max_reach(s). So for each position s, the next position after one jump is max_reach(s). Then, the next after two jumps is max_reach(max_reach(s)), and so on. However, precomputing this for all s and all log levels is not feasible due to memory constraints.
+
+Alternative idea: For each query, we can use the binary lifting approach on the fly. For example, start from x, and try the largest possible step (like 2^17), then 2^16, etc., until we reach the target.
+
+But how to do that. Let's think:
+
+We can precompute for each level j, the maximum reach after 2^j steps. But how? Alternatively, during the processing of each query, we can keep track of the current position and the number of steps taken, and use the binary lifting technique to jump as far as possible each time.
+
+Wait, but this might not be possible unless the jumps are precomputed. So perhaps, the steps are similar to the following:
+
+We can precompute a sparse table where for each position s, and each power of two j, we store the position we reach after 2^j jumps starting from s. But since s can be up to 5e5, this is O(5e5 * log(max_steps)), which may be manageable if log(max_steps) is around 20. For 5e5 * 20, that's 1e7, which is acceptable.
+
+But how to build this sparse table. Let's see:
+
+For j=0 (2^0 = 1 step), for each s, jump_table[j][s] = max_reach(s).
+
+For j>0, jump_table[j][s] = jump_table[j-1][jump_table[j-1][s]]
+
+But building this table would take O(max_s * log(max_steps)) time and space. However, max_s is 5e5, and log(max_steps) can be up to 20 (since 2^20 is 1e6, which is larger than the maximum possible steps needed). So 5e5 * 20 = 1e7 entries. Each entry is a 4-byte integer, so about 40 MB. Which is manageable.
+
+But how to compute the max_reach(s) for each s. For that, as discussed before, we can binary search in the sorted_l array. But for each s in 0 to 5e5, this would take O(log n) time, leading to O(5e5 * log n) time for precomputing the first level. For n=2e5, log n is around 18, so 5e5 * 18 = 9e6 operations. That's acceptable.
+
+So the steps are:
+
+1. Sort all intervals by l_i. If two intervals have the same l_i, keep the one with the larger r_i. Because when l_i is the same, the longer interval is better. Then, among intervals with same l_i, we can discard those with smaller r_i. So first, we process the intervals to remove duplicates and keep only the best ones for each starting point.
+
+Wait, yes. Because for intervals with same l_i, the one with the largest r_i is the only one needed. So we can process the intervals to merge those with the same l_i, keeping the maximum r_i. Also, after sorting, if there are intervals where l_i is the same, we can take the maximum r_i for that l_i. This will reduce the number of intervals, possibly.
+
+So first step:
+
+Sort the intervals by l_i, then r_i in descending order. Then, for each group of same l_i, take the first one (the maximum r_i). Then, after that, process the intervals and for each interval, if the current interval's r_i is not larger than the previous maximum, we can skip it. Because if we have intervals in sorted order by l_i, and if a later interval's l_i is >= previous l_i but r_i <= previous max_r, then it's redundant. So after sorting the intervals by l_i, we can pre-process them to create a list where each interval's r_i is strictly larger than the previous ones. This is the standard step for the greedy interval covering.
+
+Wait, here's the correct way to preprocess the intervals:
+
+After sorting the intervals by l_i, we can process them and keep only the intervals that are useful. For example:
+
+Initialize a list. Add the first interval. For each subsequent interval, if its r_i is greater than the current maximum in the list, add it to the list. Otherwise, skip it. This ensures that the intervals in the list are strictly increasing in l_i and also strictly increasing in r_i. Because, for example, if a later interval has a l_i >= previous, but r_i <= previous's r_i, then it's redundant and can be skipped. So this preprocessing step reduces the number of intervals and ensures that we have a list where each next interval starts after the previous and extends further.
+
+Wait, but the sorted list is in order of increasing l_i, but after sorting, we can have intervals where l_i increases but r_i may not. So by keeping only those intervals that have r_i larger than all previous ones, we can build a list that is both sorted by l_i and by r_i. This is crucial for the greedy approach to work.
+
+Yes. So the preprocessing steps are:
+
+Sort intervals by l_i ascending, and if l_i is the same, by r_i descending. Then, deduplicate l_i by keeping only the first occurrence (since they have the largest r_i). Then, process the list and keep only intervals that have r_i greater than the previous maximum. 
+
+This process will create a list of intervals where l_i is strictly increasing, and r_i is strictly increasing. 
+
+For example:
+
+Original intervals sorted by l_i: [1,3], [2,4], [3,5], [4,5], [5,6]
+
+After dedup l_i: [1,3], [2,4], [3,5], [4,5], [5,6]
+
+Now, check r_i. 3,4,5,5,6. The fourth interval's r_i is 5, which is same as previous. So we can skip it. The list becomes [1,3], [2,4], [3,5], [5,6]. So each next interval's r_i is larger than the previous.
+
+This way, the list is strictly increasing in l_i and r_i. This allows us to perform binary searches and efficiently find the maximum reach.
+
+Once the intervals are preprocessed into this list, we can proceed.
+
+So the steps to preprocess the intervals are:
+
+1. Sort the intervals by l_i. For intervals with same l_i, sort by r_i in descending order.
+
+2. Remove duplicates in l_i: for each l_i, keep only the first interval (which has the largest r_i).
+
+3. Now, iterate through the list and keep only those intervals where r_i is larger than the previous maximum. This is because any interval that starts after the previous interval but ends earlier is redundant. For example, if an interval starts at l2 > l1 and ends at r2 <= r1, then it's not useful. So the processed list will have intervals with l_i and r_i strictly increasing.
+
+Once the intervals are processed, we can proceed to build the sorted_l and prefix_max arrays. But in this case, since the intervals are already in order and their r_i is strictly increasing, the prefix_max array is simply the r_i of each interval. Because each new interval has a larger r_i than the previous.
+
+So sorted_l is the list of l_i, and prefix_max is the list of r_i. Because for each interval in the processed list, r_i is larger than all previous r_i.
+
+This is a key point. Because after preprocessing, the r_i are strictly increasing, so the prefix_max for the first k intervals is the r_k of the k-th interval.
+
+So with that, when we want to find the maximum reach for a given s, we can binary search sorted_l for the largest l_i <= s. Then, the maximum reach is the r_i of that interval.
+
+So the preprocessing steps are crucial to reduce the intervals to a list where binary search is efficient and the max reach can be found quickly.
+
+Once we have this processed list, we can build the binary lifting tables.
+
+Now, the next step is to precompute the jump_table for binary lifting.
+
+The idea is that for each possible position s, and for each power of two j, jump_table[j][s] represents the position we can reach after 2^j jumps starting from s. The maximum j needed is around log2(max_possible_steps). Since the maximum possible steps is O(log (y-x)), which for y-x up to 5e5 is about 20 steps (2^20 is a million).
+
+So how to precompute the jump_table:
+
+- Precompute the max_reach function as before. For any s, it's the maximum r_i where l_i <= s. For the processed intervals, this is the r_i of the interval found via binary search in sorted_l.
+
+- The jump_table[0][s] is max_reach(s). If s >= y, then jump_table[0][s] is s.
+
+- For j > 0, jump_table[j][s] = jump_table[j-1][ jump_table[j-1][s] ]
+
+But building this table for all s up to 5e5 would require O(5e5 * 20) storage. Which is acceptable.
+
+But in Python, even 1e7 elements can be handled, but perhaps we need to find a way to compute this efficiently.
+
+Alternatively, during a query, we can compute the jumps on the fly using the max_reach function. Because binary lifting requires that we can compute the max_reach for any position, and that is possible via binary search.
+
+But the problem is that for each query, even using binary lifting, each step may require a binary search. For example, during the binary lifting steps, for each possible jump (like 2^19, 2^18, etc.), we need to check if jumping that many steps would take us past y. For each step, we need to compute the jump, which involves a binary search each time.
+
+But if the binary lifting approach reduces the number of steps per query to O(log max_jump), then even with a binary search per step, the total time would be O(m * log max_jump * log n), which for m=2e5 and log terms around 20, gives 2e5 * 20 * 20 = 8e6 operations, which is manageable.
+
+So here's the plan for each query [x, y]:
+
+Initialize current = x, count = 0.
+
+If current >= y: return 0.
+
+Else:
+
+   While True:
+
+      Find the maximum reach from current. Let's call this next_reach.
+
+      If next_reach <= current: return -1.
+
+      count += 1.
+
+      current = next_reach.
+
+      If current >= y: return count.
+
+But this is O(k) steps per query, which could be O(n) in the worst case, which is not acceptable.
+
+So we need a way to compute the minimal steps using binary lifting. But how?
+
+Alternative approach:
+
+We can model the jumps as follows. For a given query [x, y], the minimal number of intervals is the minimal number of times we can apply the max_reach function starting from x until we reach >= y.
+
+But how to compute this efficiently. Let's think in terms of the binary lifting steps.
+
+We can precompute for each possible jump power (like 2^j steps) the maximum reach possible. But for each query, we can try to jump the largest possible steps (from highest to lowest power) and accumulate the count if the jump does not exceed y.
+
+For example:
+
+Initialize current = x, count = 0.
+
+For j from log_max down to 0:
+
+   if after making a jump of 2^j steps from current, the position is still < y:
+
+      do the jump, add 2^j to count, set current to the new position.
+
+At the end, check if current >= y. If yes, return count. Else, check if one more jump is possible.
+
+But how to compute the position after 2^j steps from current. Each step is a jump to the max_reach. But since the max_reach depends on the current position, each jump depends on the current state. So it's not possible to precompute the jumps for all possible steps.
+
+Hmm. So perhaps this approach is not feasible.
+
+Alternative idea: For each query, we can use binary lifting steps on the fly. For example, we can precompute the jumps up to the maximum possible steps (log2(max_possible steps)), and for each query, try to take the largest possible steps.
+
+But how?
+
+Wait, here's an alternative approach inspired by the binary lifting technique. Let's precompute for each possible position s, the maximum reach after 2^j jumps, for j up to 20. Then, for a query, we can start from x, and greedily take the largest possible jumps (starting from the largest j) that do not exceed y, accumulating the count.
+
+But to precompute these jumps, we need to compute for each s and j, the result of 2^j jumps starting at s. However, each jump is a single step of applying the max_reach function. So for j=0, it's one jump (max_reach(s)). For j=1, it's two jumps: max_reach(s), then max_reach(max_reach(s)). And so on.
+
+But precomputing this for all s and j up to 20 is not feasible for s up to 5e5 and j up to 20. So this approach is not viable.
+
+Alternative plan: For each query, use the binary lifting approach but compute the jumps on the fly. For example, for each query [x, y], we start with current = x, count = 0. Then, for j from log_max (like 20) down to 0:
+
+   temp_current = current
+
+   temp_count = count + (1 << j)
+
+   for k in 0 to j steps:
+
+       temp_current = max_reach(temp_current)
+
+   if temp_current < y:
+
+       current = temp_current
+
+       count = temp_count
+
+But this is O(log_max * j) per query, which for j=20 is O(20*20) = 400 per query. For m=2e5, that's 8e7 operations. Which might be manageable. But the problem is that each step requires multiple calls to max_reach, which is O(log n) each. So for each j, we have to compute j jumps, which for j=20 is 20 steps. So per query, it's 20^2 log n steps. 2e5 * 400 * 20 = 1.6e9 operations, which is too slow.
+
+Hmm. This seems tricky.
+
+Wait, perhaps there's a smarter way to compute the minimal steps. Let's think again about the properties of the processed intervals.
+
+After preprocessing, the intervals are sorted in strictly increasing l_i and strictly increasing r_i. So for any current position s, the next interval is the one with the largest l_i <= s. Then, the next position is the r_i of that interval.
+
+But because the processed intervals have l_i and r_i strictly increasing, once you pick the next interval, the next possible jump is determined by the next interval's r_i.
+
+Wait, no. Because the next interval's l_i is after the current interval's l_i. But once you jump to the current interval's r_i, the next interval must have l_i <= r_i. So the next interval could be a higher index in the processed list.
+
+But with the intervals sorted by l_i, and the processed list having strictly increasing l_i and r_i, this implies that the next interval after jumping to r_i would have l_i <= r_i. So the next interval would be the first interval in the list with l_i <= r_i and the largest r_i.
+
+Wait, but the processed list has intervals sorted by l_i, and each has r_i larger than the previous. So for any s, the maximum reach is the r_i of the largest interval where l_i <= s.
+
+So when we jump to r_i, the next interval would be the largest l_j <= r_i. Since the processed list is sorted, this can be found via binary search again.
+
+But even with this, the steps could be O(log n) per jump, which for each query could be O(k log n) steps, which is again not feasible for m=2e5.
+
+So perhaps we need to find another way to model the jumps.
+
+Wait, here's an alternative idea inspired by the fact that the processed intervals are sorted in l_i and r_i:
+
+We can precompute for each interval i, the farthest interval j where l_j <= r_i. Then, the next interval after i is j. This way, the steps can be represented as a graph where each node is an interval, and edges represent jumps. Then, using binary lifting on this graph, we can precompute for each interval i, the jumps of 2^j steps.
+
+But how to model this. Let's see:
+
+- For each interval i, find the farthest interval j where l_j <= r_i. The farthest is j such that l_j is the maximum possible <= r_i, which would give the largest possible r_j. So j is the largest index where l_j <= r_i. This j can be found via binary search in the processed list.
+
+- Then, the next interval after i is j. The number of steps increases by 1. The next position is r_j.
+
+But the problem is that a query starts at x, which may not be the starting point of any interval. So, first, we have to find the initial interval that covers x, which is the largest l_i <= x. Then, the next intervals are determined by their jumps.
+
+But this approach requires that the initial x is covered by some interval. If x is not covered by any interval, then the answer is -1. Otherwise, the first interval is i, and then we can proceed with jumps.
+
+But for queries where x is not the start of an interval, but lies within some interval's l_i, this approach is still valid. Because the first interval is the largest l_i <= x. So the first step is to select that interval and jump to its r_i. Then, the next steps are based on the r_i.
+
+So, let's model the jumps between intervals. Each interval i has a next interval j (the farthest interval reachable by one step from i). Then, using binary lifting on these jumps, we can precompute for each interval i, the jump of 2^k steps.
+
+For example, let's build a table up[][] where up[i][k] represents the interval we reach after 2^k jumps starting from interval i. Then, the maximum r_i after 2^k jumps would be up[i][k]'s r_i.
+
+Once we have this, for a query [x, y], the steps are:
+
+1. Find the first interval i that covers x (i.e., l_i <= x and r_i > x). If no such interval exists, return -1.
+
+2. Now, we need to find the minimal number of intervals starting from i to cover up to y.
+
+3. Use the binary lifting table to compute the minimal steps required.
+
+But how to handle this. Let's think:
+
+Initialize current_interval = i, current_r = r_i, steps = 1. If current_r >= y, return 1.
+
+Else, we need to jump as much as possible. For each power j from log_max down to 0:
+
+   if the jump of 2^j steps from current_interval results in a new_r that is < y:
+
+      steps += 2^j
+
+      current_interval = up[current_interval][j]
+
+      current_r = current_interval.r_i
+
+If after all possible jumps, current_r < y, then check if there is a next interval j where l_j <= current_r. If j exists, then steps += 1, current_r = j.r_i. If current_r >= y, return steps. Otherwise, return -1.
+
+But how to precompute the up table.
+
+The up table can be precomputed as follows:
+
+- For each interval i, up[i][0] = j, where j is the farthest interval reachable from i in one step (i.e., l_j <= r_i, and j is the largest possible such interval).
+
+- For higher k, up[i][k] = up[ up[i][k-1] ][k-1].
+
+Then, for each interval i and each k, up[i][k] represents the interval after 2^k jumps from i.
+
+Additionally, for each interval i, we can precompute the maximum reach after 2^k jumps, which is the r_i of up[i][k].
+
+Once this table is built, we can process each query as follows:
+
+1. Find the first interval i such that l_i <= x and r_i > x. If no such interval exists, output -1.
+
+2. Check if r_i >= y. If yes, output 1.
+
+3. Else, use binary lifting to find the minimal steps:
+
+   Initialize steps = 1, current_interval = i.
+
+   For j from log_max down to 0:
+
+      next_interval = up[current_interval][j]
+
+      if next_interval is valid and next_interval.r_i < y:
+
+          steps += 2^j
+
+          current_interval = next_interval
+
+   After processing all j, check if the next possible jump (up[current_interval][0]) exists and its r_i >= y. If yes, steps += 1. Else, check if current_interval can be extended by one more jump. If not possible, return -1.
+
+But this approach requires that the initial step is part of the intervals. Also, the preprocessing of the intervals is essential.
+
+So the steps are:
+
+Preprocessing:
+
+1. Sort the intervals and process them to keep only the necessary ones (as described earlier).
+
+2. For each interval i, compute its next interval j (the farthest interval that can be reached from i's r_i). This can be done via binary search in the sorted_l array.
+
+3. Build the binary lifting table up for each interval.
+
+Queries:
+
+For each query [x, y]:
+
+   if x >= y: output 0 (but according to the problem statement, x < y always, since x_i < y_i).
+
+   Find the first interval i where l_i <= x and r_i > x. If no such interval exists, output -1.
+
+   If r_i >= y: output 1.
+
+   Else:
+
+      Use binary lifting on the up table to find the minimal steps.
+
+This approach reduces the number of steps per query to O(log k), where k is the maximal steps needed.
+
+Now, how to implement this.
+
+First, the preprocessing:
+
+1. Sort the intervals by l_i, then r_i descending.
+
+2. Deduplicate intervals with the same l_i by keeping only the one with the largest r_i.
+
+3. Process the intervals to keep only those with increasing r_i. For example, initialize current_max_r = 0. Iterate through the intervals, and for each interval, if its r_i > current_max_r, keep it, else skip it. Update current_max_r to the new r_i.
+
+This results in a list of intervals sorted by l_i, with strictly increasing l_i and r_i.
+
+Now, for each interval in this list, compute the next interval j for i. Which is the largest interval j where l_j <= r_i. The maximum j is found via binary search in the sorted_l array.
+
+Once we have this next interval for each i, we can build the up table.
+
+The binary lifting table can be built for log_max levels. For example, log_max = 20 (since 2^20 is over a million).
+
+Now, for each query:
+
+x and y are given.
+
+First, find the initial interval i. This is the largest l_i <= x. But the initial interval's r_i must be >x. Because if r_i <=x, then even the first interval doesn't cover x.
+
+So the steps to find i:
+
+Use binary search on sorted_l to find the largest l_i <=x. Let this be index i. Then, check if r_i >x. If not, then there's no interval covering x, so output -1.
+
+Else, the initial interval is i. Then, current_r = r_i. If current_r >= y, return 1.
+
+Else, proceed to use binary lifting.
+
+For binary lifting:
+
+Initialize steps =1, current_interval = i.
+
+For j from log_max downto 0:
+
+   candidate = up[current_interval][j]
+
+   if candidate is not None and candidate.r_i < y:
+
+       steps += 2^j
+
+       current_interval = candidate
+
+After all j levels, check if up[current_interval][0] exists, i.e., there's a next interval. If yes:
+
+   new_r = up[current_interval][0].r_i
+
+   steps +=1
+
+   if new_r >=y:
+
+       return steps
+
+   else:
+
+       current_interval = up[current_interval][0]
+
+       current_r = new_r
+
+       if current_r >= y:
+
+           return steps
+
+       else:
+
+           return -1
+
+Wait, but this is just a rough idea. The actual implementation needs to handle cases where even after all possible jumps, the current_interval's r_i is still less than y, but there's another interval that can be taken.
+
+Alternatively, after the binary lifting steps, check if the current_interval's next interval (up[current_interval][0]) exists and whether taking it would reach y.
+
+But perhaps there's a better way. Let's think:
+
+After using the binary lifting steps, the current_interval is as far as possible without exceeding y. Then, we need to take as many steps as possible, and finally check if we can reach y in one more step.
+
+But perhaps there is a step that can be taken, but the binary lifting didn't account for it. So after all jumps, we need to check if the current_interval's next interval can reach y.
+
+So, the algorithm is:
+
+steps = 0
+
+current_r = x
+
+while current_r < y:
+
+    next_r = max_reach(current_r)
+
+    if next_r <= current_r:
+
+        return -1
+
+    steps +=1
+
+    current_r = next_r
+
+return steps
+
+But this is the original O(k) approach, which is too slow.
+
+But using the binary lifting on intervals and the up table, we can reduce the number of steps.
+
+But this requires that the initial interval is found, and then the binary lifting is applied on the interval indices.
+
+The key is that the up table allows us to jump multiple steps at once.
+
+So for example, the up table for interval i at level j allows us to jump 2^j intervals. Each jump corresponds to moving to the next interval in the up table.
+
+But how to model this.
+
+Alternatively, the up table can store for each interval i and j, the interval that is 2^j steps ahead, and the maximum r_i reachable in those steps. Then, for a given current interval and steps taken, we can use this to jump as far as possible.
+
+But this requires precomputing for each interval i and j, the maximum r_i after 2^j steps.
+
+So, for example:
+
+up[i][j] = the interval after 2^j steps from i.
+
+max_r[i][j] = the maximum r_i after 2^j steps.
+
+But building this table is possible.
+
+But given that the intervals are processed into a list of size m (say, up to 2e5), the up table would be m * log_max in size.
+
+For each interval i, and j from 0 to log_max, up[i][j] is the interval after 2^j steps.
+
+Then, max_r[i][j] = up[i][j].r_i.
+
+With this table, the steps for a query would be:
+
+Initialize steps = 0.
+
+current_interval = i (the initial interval).
+
+current_r = i.r_i.
+
+if current_r >= y: return 1.
+
+Else:
+
+   for j from log_max downto 0:
+
+       if up[current_interval][j] is not None and max_r[current_interval][j] < y:
+
+           steps += 2^j
+
+           current_interval = up[current_interval][j]
+
+           current_r = max_r[current_interval][0]
+
+   after all j, check if current_interval can take one more step to reach y.
+
+But this is still not clear.
+
+Alternatively, the code can be structured as follows:
+
+steps = 0
+
+current = i
+
+current_r = current.r_i
+
+if current_r >= y:
+
+   return 1
+
+steps = 1
+
+for j in reversed(range(log_max+1)):
+
+   if up[current][j] is not None:
+
+       next_r = up[current][j].r_i
+
+       if next_r < y:
+
+           steps += (1 << j)
+
+           current = up[current][j]
+
+           current_r = next_r
+
+# After all jumps, check if one more step can cover y
+
+next_interval = up[current][0]
+
+if next_interval is not None:
+
+   next_r = next_interval.r_i
+
+   if next_r >= y:
+
+       steps += 1
+
+       return steps
+
+   else:
+
+       # Even after this step, not enough.
+
+       return -1
+
+else:
+
+   return -1
+
+But this requires that after the binary lifting steps, there is a next interval. If not, then return -1.
+
+But this approach may work.
+
+Now, the key steps are:
+
+1. Preprocess the intervals into a list of sorted and strictly increasing l_i and r_i.
+
+2. For each interval i, compute its next interval (j) which is the farthest interval with l_j <= current i's r_i. This is done via binary search.
+
+3. Precompute the up table and max_r table for binary lifting.
+
+4. For each query:
+
+   a. Find the initial interval i covering x.
+
+   b. If i's r_i >= y, return 1.
+
+   c. Else, use binary lifting to jump steps.
+
+Now, the implementation.
+
+In code:
+
+First, preprocessing the intervals:
+
+intervals = sorted list, processed as described.
+
+Then, for each interval i, next_i is the farthest interval j where l_j <= r_i.
+
+This can be found via binary search on the sorted intervals' l_i.
+
+Then, build the up table.
+
+But in Python, using a list of lists for up table may be feasible.
+
+Now, the code steps:
+
+Read n and m.
+
+Read n intervals, store as list.
+
+Sort the intervals by l_i ascending, then r_i descending.
+
+Deduplicate intervals with same l_i (keep first, which has largest r_i).
+
+Process the intervals to keep only those with increasing r_i.
+
+So:
+
+processed = []
+
+max_r = -1
+
+for interval in sorted_intervals:
+
+    l, r = interval
+
+    if len(processed) == 0:
+
+        processed.append( (l, r) )
+
+        max_r = r
+
+    else:
+
+        if r > max_r:
+
+            processed.append( (l, r) )
+
+            max_r = r
+
+sorted_intervals = processed.
+
+Then, for each interval in sorted_intervals, find next interval via binary search.
+
+For each i in range(len(sorted_intervals)):
+
+    l_i, r_i = sorted_intervals[i]
+
+    # find the largest j where l_j <= r_i
+
+    low = i+1
+
+    high = len(sorted_intervals)-1
+
+    j = i
+
+    # binary search for the largest j where l_j <= r_i
+
+    left = 0
+
+    right = len(sorted_intervals) - 1
+
+    best = -1
+
+    while left <= right:
+
+        mid = (left + right) // 2
+
+        if sorted_intervals[mid][0] <= r_i:
+
+            best = mid
+
+            left = mid + 1
+
+        else:
+
+            right = mid -1
+
+    next_i = best if best > i else None
+
+But wait, the next interval must have l_j <= r_i and j > i (since processed intervals are sorted in increasing l_i). Because if j <= i, then it's earlier in the list and l_j <= l_i <= r_i. But the next interval after i should be the one that starts after i's l_i but before i's r_i.
+
+Wait, no. The next interval after jumping to r_i could be any interval with l_j <= r_i, including those before i. But since the processed intervals are sorted by l_i in increasing order, and the next interval must have l_j <= r_i. However, since the processed intervals have r_i increasing, any interval j where j > i will have l_j >= l_i and r_j >= r_i. So if j > i and l_j <= r_i, then the interval j's r_j is >= r_i, which would cover more than the current interval. So the optimal next interval after i is the largest j where l_j <= r_i. This j could be i itself (but then jumping to r_i and not making progress).
+
+Wait, no. Because j must be > i. Because the current interval's r_i is already processed, and the next interval must start at l_j <= r_i. But in the processed list, intervals are sorted by l_i. So the next interval after i with l_j <= r_i is the largest j where l_j <= r_i and j >= i.
+
+So the binary search is for the largest j where l_j <= r_i.
+
+But since the processed intervals are sorted by l_i, the largest j where l_j <= r_i is the result.
+
+Once we find j, the next interval for i is j. Because after jumping to r_i, the next interval would be j, which is the largest possible interval starting <= r_i.
+
+But j can be i itself. For example, if the current interval is i and l_j <= r_i includes i. But in the processed list, the intervals have strictly increasing l_i and r_i. So for j > i, l_j > l_i. But if l_j <= r_i, then r_j > r_i (since the processed list has r_i increasing).
+
+So if there's a j > i with l_j <= r_i, then r_j > r_i, and that's the best next interval. If there's no such j, then after i, there's no interval to jump to.
+
+But how to find j for each i.
+
+The code:
+
+for each i in 0..len(sorted_intervals)-1:
+
+    l_i, r_i = sorted_intervals[i]
+
+    # find largest j where l_j <= r_i
+
+    # binary search in the entire list.
+
+    left = 0
+
+    right = len(sorted_intervals) -1
+
+    best = -1
+
+    while left <= right:
+
+        mid = (left + right) // 2
+
+        if sorted_intervals[mid][0] <= r_i:
+
+            best = mid
+
+            left = mid +1
+
+        else:
+
+            right = mid -1
+
+    next_i = best if best > i else None
+
+But wait, if best <= i, then there's no interval j > i that can be used. Because the next interval must have l_j <= r_i and j > i. But in the processed list, j > i implies l_j >= l_i. So if best > i, then j is the best. Otherwise, if best <= i, then there's no interval j > i with l_j <= r_i.
+
+Wait, no. Because the best is the largest j where l_j <= r_i. If j > i, then yes. If j <=i, then there's no j > i with l_j <= r_i.
+
+So for example, if the best j is i, then there's no j > i with l_j <= r_i. Because the processed intervals are sorted by l_i.
+
+So, for i's next interval, if best > i: next_i = best. Else: next_i = None.
+
+So in code:
+
+next_i = best if best > i else None
+
+Now, build the up table.
+
+We can precompute up to log_max levels. For example, log_max = 20.
+
+log_max = 20
+
+up = [[-1] * (log_max + 1) for _ in range(len(sorted_intervals))]
+
+max_r = [[-1] * (log_max + 1) for _ in range(len(sorted_intervals))]
+
+For each interval i:
+
+    up[i][0] = next_i if next_i is not None else -1
+
+    if up[i][0] != -1:
+
+        max_r[i][0] = sorted_intervals[up[i][0]][1]
+
+    else:
+
+        max_r[i][0] = -1
+
+For j from 1 to log_max:
+
+    for i in 0..len(sorted_intervals)-1:
+
+        if up[i][j-1] == -1:
+
+            up[i][j] = -1
+
+            max_r[i][j] = -1
+
+        else:
+
+            up[i][j] = up[up[i][j-1]][j-1]
+
+            if up[i][j] == -1:
+
+                max_r[i][j] = -1
+
+            else:
+
+                max_r[i][j] = max_r[up[i][j-1]][j-1]
+
+Wait, no. For max_r[i][j], it's the maximum r_i after 2^j steps. Since each step takes you to up[i][j-1], and then 2^{j-1} steps more.
+
+But perhaps max_r[i][j] is the r_i of the interval reached after 2^j steps. So if up[i][j] is k, then max_r[i][j] = sorted_intervals[k][1].
+
+But it's easier to compute up[i][j] and then max_r[i][j] is simply sorted_intervals[up[i][j]][1], provided that up[i][j] is not -1.
+
+So, perhaps the code can be simplified as:
+
+for j in range(1, log_max+1):
+
+    for i in range(len(sorted_intervals)):
+
+        if up[i][j-1] == -1:
+
+            up[i][j] = -1
+
+        else:
+
+            up[i][j] = up[up[i][j-1]][j-1]
+
+So, for each i and j, up[i][j] is the interval after 2^j steps from i.
+
+Now, for each query:
+
+x and y.
+
+We need to find the initial interval i such that l_i <= x and r_i >x.
+
+This is done via binary search on the sorted_intervals' l_i.
+
+The binary search for the largest l_i <=x.
+
+If no such interval exists, or the found interval's r_i <=x, then output -1.
+
+Else, the initial interval is i.
+
+Now, if i's r_i >= y: output 1.
+
+Else, proceed with binary lifting.
+
+Initialize steps = 1.
+
+current = i.
+
+current_r = sorted_intervals[i][1]
+
+for j in reversed(range(log_max+1)):
+
+    if up[current][j] != -1:
+
+        jump_r = sorted_intervals[ up[current][j] ][1]
+
+        if jump_r < y:
+
+            steps += (1 << j)
+
+            current = up[current][j]
+
+            current_r = jump_r
+
+After processing all j:
+
+Check if up[current][0] is not -1. If yes:
+
+    next_r = sorted_intervals[ up[current][0] ][1]
+
+    if next_r >= y:
+
+        steps +=1
+
+        return steps
+
+    else:
+
+        return -1
+
+Else:
+
+    return -1
+
+But this may not cover all cases.
+
+For example, after jumping as much as possible, there might be a next interval that can be taken. So after the binary lifting steps, we check if there's a next interval and whether it can cover y.
+
+But how to handle cases where even after that, there are multiple steps needed.
+
+Wait, no. Because the binary lifting steps should have already taken all possible jumps. But if after all jumps, the current_r is still less than y, and there's a next interval, then taking that next step would give a new_r. If that new_r is still less than y, then there's no way to reach y.
+
+But if the next step's new_r is >= y, then we can take it and add 1 to the steps.
+
+Thus, the code after the binary lifting steps is:
+
+Check if there's a next interval (up[current][0] is not -1). If yes, then:
+
+   new_r = sorted_intervals[ up[current][0] ][1]
+
+   if new_r >= y:
+
+       return steps +1
+
+   else:
+
+       return -1
+
+Else:
+
+   return -1
+
+But this assumes that there's only one step left. Which is correct.
+
+Now, let's test this with the first example.
+
+Sample input 1:
+
+2 3
+
+1 3
+
+2 4
+
+After processing:
+
+sorted and deduped intervals sorted by l_i. Then, after processing for increasing r_i:
+
+Interval 0: (1,3)
+
+Interval 1: (2,4)
+
+Because 4>3.
+
+For interval 0:
+
+r_i is 3. Find largest j where l_j <=3.
+
+In the sorted list, j=1 (l=2 <=3). So next_i is 1.
+
+For interval 1:
+
+r_i is4. Find j where l_j <=4. But there's no j>1 (since there are only 2 intervals). So next_i is None.
+
+The up table for log_max=1:
+
+up[0][0] =1
+
+up[0][1] = up[1][0] =-1.
+
+up[1][0] =-1.
+
+For the first query (1,3):
+
+x=1, y=3.
+
+The initial interval is 0 (l=1 <=1, r=3 >=3). So output 1.
+
+Second query (1,4):
+
+x=1.
+
+initial interval is 0, r=3 <4.
+
+binary lifting steps:
+
+log_max is 20. But in this case, up[0][0] is 1.
+
+So steps starts at 1.
+
+For j from 20 downto 0:
+
+for j=0, up[0][0] =1. sorted_intervals[1][1]=4 >=4.
+
+So steps +=1? No.
+
+Wait, the code for the second query:
+
+x=1, y=4.
+
+initial interval is 0. current_r =3 <4.
+
+steps=1.
+
+For j in reversed(range(20+1)):
+
+j=20: up[0][20] is -1. So skip.
+
+...
+
+j=1: up[0][1] is up[up[0][0]][0] = up[1][0] =-1. So skip.
+
+j=0: up[0][0] is 1. jump_r is 4. Which is >=4. So we don't take this jump.
+
+After processing all j, check if up[0][0] is 1. sorted_intervals[1][1] is 4 >=4. So steps +=1. steps becomes 2. Return 2.
+
+Which matches the sample.
+
+Third query (3,4):
+
+x=3.
+
+The initial interval is the largest l_i <=3. l_i can be 2 (interval 1's l=2) and 3 <=3. So interval 1. r_i=4 >=4. So output 1.
+
+Which matches the sample.
+
+So the code works for the first sample.
+
+Another sample:
+
+Input:
+
+3 4
+
+1 3
+
+1 3
+
+4 5
+
+After processing:
+
+sorted by l_i, then deduped (same l_i, keep largest r_i).
+
+Then, intervals are [1,3], [4,5].
+
+Processing for increasing r_i:
+
+3 <5, so the list is [1,3], [4,5].
+
+For each query:
+
+First query [1,2]:
+
+x=1.
+
+Find interval 0 (l=1 <=1, r=3>1). y=2 <=3. So output 1.
+
+Second query [1,3]:
+
+Same as first. output 1.
+
+Third query [1,4]:
+
+x=1. initial interval is 0. r=3 <4. steps=1.
+
+Check next interval for 0: l_j <=3. Interval 1 has l=4>3. So next_i is None. So after steps=1, current_r=3. Check if there's a next interval. No. So output -1.
+
+Fourth query [1,5]:
+
+Same. initial interval 0, r=3 <5. next step is None. output -1.
+
+Which matches the sample.
+
+Thus, this approach works.
+
+Now, the code.
+
+But in Python, we need to handle large n and m efficiently.
+
+But with binary search and binary lifting, this should be feasible.
+
+Now, the code:
+
+First, read the input.
+
+import sys
+
+import bisect
+
+def main():
+
+    n, m = map(int, sys.stdin.readline().split())
+
+    intervals = []
+
+    for _ in range(n):
+
+        l, r = map(int, sys.stdin.readline().split())
+
+        intervals.append( (l, r) )
+
+    # Preprocess the intervals.
+
+    # Sort by l ascending, then r descending.
+
+    intervals.sort(key=lambda x: (x[0], -x[1]))
+
+    # Deduplicate l's.
+
+    processed = []
+
+    prev_l = None
+
+    for l, r in intervals:
+
+        if prev_l is None or l != prev_l:
+
+            processed.append( (l, r) )
+
+            prev_l = l
+
+        else:
+
+            continue
+
+    # Now, keep only those with increasing r.
+
+    new_processed = []
+
+    max_r = -1
+
+    for l, r in processed:
+
+        if len(new_processed) == 0:
+
+            new_processed.append( (l, r) )
+
+            max_r = r
+
+        else:
+
+            if r > max_r:
+
+                new_processed.append( (l, r) )
+
+                max_r = r
+
+    processed = new_processed
+
+    # If no intervals left, answer all queries with -1.
+
+    if not processed:
+
+        for _ in range(m):
+
+            x, y = map(int, sys.stdin.readline().split())
+
+            print(-1)
+
+        return
+
+    # Prepare sorted_l and sorted_r.
+
+    sorted_l = [ l for l, r in processed ]
+
+    sorted_r = [ r for l, r in processed ]
+
+    # Precompute next intervals.
+
+    next_intervals = [ -1 ] * len(processed)
+
+    for i in range(len(processed)):
+
+        l_i, r_i = processed[i]
+
+        # Binary search for largest j where l_j <= r_i.
+
+        left = 0
+
+        right = len(processed) - 1
+
+        best_j = -1
+
+        while left <= right:
+
+            mid = (left + right) // 2
+
+            if processed[mid][0] <= r_i:
+
+                best_j = mid
+
+                left = mid + 1
+
+            else:
+
+                right = mid - 1
+
+        # Next interval is best_j if best_j > i.
+
+        if best_j > i:
+
+            next_intervals[i] = best_j
+
+        else:
+
+            next_intervals[i] = -1
+
+    # Build binary lifting tables.
+
+    log_max = 20
+
+    up = [ [ -1 ] * (log_max + 1) for _ in range(len(processed)) ]
+
+    for i in range(len(processed)):
+
+        up[i][0] = next_intervals[i]
+
+    for j in range(1, log_max + 1):
+
+        for i in range(len(processed)):
+
+            if up[i][j-1] == -1:
+
+                up[i][j] = -1
+
+            else:
+
+                up[i][j] = up[ up[i][j-1] ][j-1]
+
+    # Process each query.
+
+    for _ in range(m):
+
+        x, y = map(int, sys.stdin.readline().split())
+
+        # Find initial interval.
+
+        # Binary search for the largest l_i <=x.
+
+        idx = bisect.bisect_right(sorted_l, x) -1
+
+        if idx < 0 or processed[idx][1] <=x:
+
+            print(-1)
+
+            continue
+
+        initial_interval = idx
+
+        current_r = processed[initial_interval][1]
+
+        if current_r >= y:
+
+            print(1)
+
+            continue
+
+        steps = 1
+
+        current = initial_interval
+
+        # Binary lifting.
+
+        for j in reversed(range(log_max +1)):
+
+            if up[current][j] != -1:
+
+                jump_to = up[current][j]
+
+                jump_r = processed[jump_to][1]
+
+                if jump_r < y:
+
+                    steps += (1 << j)
+
+                    current = jump_to
+
+                    current_r = jump_r
+
+        # After binary lifting, check if can take one more step.
+
+        if up[current][0] != -1:
+
+            next_r = processed[ up[current][0] ][1]
+
+            if next_r >= y:
+
+                steps +=1
+
+                print(steps)
+
+            else:
+
+                print(-1)
+
+        else:
+
+            print(-1)
+
+    return
+
+if __name__ == "__main__":
+
+    main()
+
+Now, testing this code with the samples.
+
+Sample 1:
+
+Input:
+
+2 3
+
+1 3
+
+2 4
+
+After preprocessing, the processed list is [(1,3), (2,4)].
+
+next_intervals:
+
+For i=0:
+
+r_i=3. The largest j where l_j <=3 is 1 (l=2). So next_intervals[0] =1.
+
+For i=1: r_i=4. No j>1. next_intervals[1] =-1.
+
+up table:
+
+up[0][0] =1, up[0][1] =-1.
+
+up[1][0] =-1.
+
+Sample query 2: 1 4.
+
+Initial interval is 0. current_r=3 <4.
+
+steps=1.
+
+For j from 20 downto 0:
+
+j=0: up[0][0] =1. processed[1][1] =4 >=4. So not taken.
+
+steps remains 1.
+
+After all j, check if up[0][0] is 1. next_r=4 >=4. steps +=1. steps=2. Output 2.
+
+Which is correct.
+
+Another sample:
+
+Input:
+
+3 4
+
+1 3
+
+1 3
+
+4 5
+
+Processed list: [(1,3), (4,5)].
+
+next_intervals[0] is -1 (4>3).
+
+Query 3: 1 4.
+
+Initial interval is 0. current_r=3 <4.
+
+binary lifting steps:
+
+up[0][j] is -1 for j>=0.
+
+So steps remains 1.
+
+Check up[0][0] is -1. So output -1.
+
+Which is correct.
+
+Thus, the code should work.
+</think>
+To solve this problem, we need to determine the minimal number of intervals required to cover each query range [x, y]. If it's impossible to cover the range, we should return -1 for that query. The solution involves preprocessing the intervals to optimize the query handling using a greedy algorithm combined with binary lifting for efficient jumps.
+
+### Approach
+1. **Preprocessing Intervals**:
+   - Sort intervals by their starting point. If multiple intervals start at the same point, keep the one with the largest end.
+   - Further process the intervals to retain only those that extend the coverage further than the previous intervals. This helps in reducing redundant intervals and ensures that the intervals are sorted by their start and end points.
+
+2. **Binary Lifting Table**:
+   - For each interval, precompute the farthest interval that can be reached in one step using binary search.
+   - Build a binary lifting table to allow efficient jumps of powers of two steps. This table helps in quickly determining the farthest point reachable in logarithmic time.
+
+3. **Query Handling**:
+   - For each query, use binary search to find the initial interval that covers the start point. If no such interval exists, return -1.
+   - Use the binary lifting table to jump through intervals efficiently and count the minimal number of steps required to cover the query range.
+
+### Solution Code
+```python
+import sys
+import bisect
+
+def main():
+    n, m = map(int, sys.stdin.readline().split())
+    intervals = []
+    for _ in range(n):
+        l, r = map(int, sys.stdin.readline().split())
+        intervals.append((l, r))
+    
+    # Preprocess intervals to keep only the necessary ones
+    intervals.sort(key=lambda x: (x[0], -x[1]))
+    processed = []
+    prev_l = None
+    for l, r in intervals:
+        if prev_l is None or l != prev_l:
+            processed.append((l, r))
+            prev_l = l
+    
+    new_processed = []
+    max_r = -1
+    for l, r in processed:
+        if r > max_r:
+            new_processed.append((l, r))
+            max_r = r
+    processed = new_processed
+    
+    if not processed:
+        for _ in range(m):
+            x, y = map(int, sys.stdin.readline().split())
+            print(-1)
+        return
+    
+    sorted_l = [l for l, r in processed]
+    sorted_r = [r for l, r in processed]
+    len_processed = len(processed)
+    next_intervals = [-1] * len_processed
+    
+    for i in range(len_processed):
+        l_i, r_i = processed[i]
+        left, right = 0, len_processed - 1
+        best_j = -1
+        while left <= right:
+            mid = (left + right) // 2
+            if processed[mid][0] <= r_i:
+                best_j = mid
+                left = mid + 1
+            else:
+                right = mid - 1
+        next_intervals[i] = best_j if best_j > i else -1
+    
+    log_max = 20
+    up = [[-1] * (log_max + 1) for _ in range(len_processed)]
+    for i in range(len_processed):
+        up[i][0] = next_intervals[i]
+    
+    for j in range(1, log_max + 1):
+        for i in range(len_processed):
+            if up[i][j-1] != -1:
+                up[i][j] = up[up[i][j-1]][j-1]
+    
+    for _ in range(m):
+        x, y = map(int, sys.stdin.readline().split())
+        if x >= y:
+            print(0)
+            continue
+        
+        idx = bisect.bisect_right(sorted_l, x) - 1
+        if idx < 0 or processed[idx][1] <= x:
+            print(-1)
+            continue
+        
+        current = idx
+        current_r = processed[current][1]
+        if current_r >= y:
+            print(1)
+            continue
+        
+        steps = 1
+        for j in reversed(range(log_max + 1)):
+            if up[current][j] != -1:
+                jump_r = processed[up[current][j]][1]
+                if jump_r < y:
+                    steps += (1 << j)
+                    current = up[current][j]
+                    current_r = jump_r
+        
+        if up[current][0] != -1:
+            final_jump_r = processed[up[current][0]][1]
+            if final_jump_r >= y:
+                print(steps + 1)
+            else:
+                print(-1)
+        else:
+            print(-1)
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Preprocessing**:
+   - Intervals are sorted and deduplicated to retain only the longest intervals for each starting point.
+   - Further filtering ensures that intervals are strictly increasing in both start and end points, which is crucial for efficient query handling.
+
+2. **Binary Lifting**:
+   - For each interval, we precompute the farthest interval that can be reached in one step. This allows us to build a jump table for efficient power-of-two jumps.
+
+3. **Query Handling**:
+   - Each query is processed by finding the initial interval covering the start point. Using the precomputed jump table, we efficiently determine the minimal number of intervals needed to cover the query range using binary lifting techniques.
+
+This approach ensures that each query is handled in logarithmic time relative to the number of intervals, making the solution efficient even for large inputs.
+</bot>

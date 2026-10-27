@@ -1,0 +1,917 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.You have a string S of length N. Initially, all characters in S are `1`s.
+
+You will perform queries Q times. In the i-th query, you are given two integers L_i, R_i and a character D_i (which is a digit). Then, you must replace all characters from the L_i-th to the R_i-th (inclusive) with D_i.
+
+After each query, read the string S as a decimal integer, and print its value modulo 998,244,353.
+
+Constraints
+
+* 1 \leq N, Q \leq 200,000
+* 1 \leq L_i \leq R_i \leq N
+* 1 \leq D_i \leq 9
+* All values in input are integers.
+
+Input
+
+Input is given from Standard Input in the following format:
+
+
+N Q
+L_1 R_1 D_1
+:
+L_Q R_Q D_Q
+
+
+Output
+
+Print Q lines. In the i-th line print the value of S after the i-th query, modulo 998,244,353.
+
+Examples
+
+Input
+
+8 5
+3 6 2
+1 4 7
+3 8 3
+2 2 2
+4 5 1
+
+
+Output
+
+11222211
+77772211
+77333333
+72333333
+72311333
+
+
+Input
+
+200000 1
+123 456 7
+
+
+Output
+
+641437905
+</user>
+<bot>
+<think>
+Okay, let's see. I need to solve this problem where after each query, the string S is modified, and then I have to output the number modulo 998244353. But with N and Q up to 2e5, a naive approach where I update each character in the range every time would be way too slow. So I need a smarter data structure here.
+
+Hmm, the problem involves range updates and then computing the entire number's value modulo 998244353 after each update. Since each digit contributes to the value based on their position (like digit at position i contributes digit * 10^{N-i} mod MOD), maybe I can track each digit's contribution and manage the ranges efficiently.
+
+Wait, the key is that when a range is updated, all the digits in that range are set to D_i. So, for each position, the last query that affects it determines its current value. So maybe we can use a segment tree with lazy propagation where each node represents the current digit and the power of 10 for the range. But even that might be tricky because the segment tree needs to track the sum of digit * 10^power for each position in the range, and handle range assignments.
+
+Alternatively, perhaps we can model each position's value as digit * (10^p) where p depends on the position. Since the positions are from left to right, each position i (1-based) contributes digit * 10^{N-i}. So for example, in a string of length 8, the first digit (position 1) contributes d * 10^7, and the last (position 8) contributes d * 10^0.
+
+So the total value is the sum of d_i * 10^{N-i} for each i from 1 to N. Modulo 998244353.
+
+So the problem reduces to efficiently maintaining this sum, and handling range updates where a range [L, R] is set to a new digit D. Each such update replaces the sum of digits in [L, R] multiplied by their respective 10^k factors.
+
+So the challenge is to compute the sum of 10^{N - i} for i in [L, R], multiply by D, and then update the total sum. Then, after each query, output the total sum mod 998244353.
+
+But how do we efficiently compute the sum of 10^{N - i} for a range [L, R]? Let's call this sum as S(L, R). Then, each query's contribution is D * S(L, R). But the previous digits in that range might have different values, so the change is (D - old_value) * S(L, R). But since each query overwrites the digits, the old values in that range are whatever they were before, but after this update, they are all D. So maybe we need a way to track the current digits and compute the sum efficiently.
+
+Wait, but if we can track for each interval [L, R] the current digit (since each interval is overwritten by a query, and the latest query for a position determines its digit), perhaps using a data structure that can track the latest intervals and their digits. This sounds like the interval partitioning problem, where each query paints an interval with a color (digit) and we need to manage these intervals efficiently. But with 2e5 queries, how can this be done?
+
+Alternatively, using a segment tree with lazy propagation where each node can track if the entire segment is covered by a single digit. For example, when a range update is applied, if the current segment is entirely within the update range, and the segment has a uniform digit (due to previous lazy operations), then we can just update the sum for that segment by replacing the digit. Otherwise, we need to propagate the lazy updates and process the children.
+
+The segment tree would need to store for each node:
+
+- The current sum of the digits in the segment multiplied by their respective 10^{N-i} factors.
+
+- The length of the segment.
+
+- The current digit (if the entire segment is covered by the same digit; otherwise, maybe a sentinel value indicating that it's mixed).
+
+- The lazy value for pending updates.
+
+So when a node is fully covered by a range update, we can set its digit to D, calculate the new sum (D * sum_of_10_powers in the segment), and set a lazy value if there are children that need to be updated (but since the node is a leaf in the current structure, maybe not). Wait, but the segments that are completely covered by the query's L and R can be updated in O(logN) time by setting their digit and updating their sum.
+
+So the plan is:
+
+1. Precompute an array pow10 where pow10[i] = 10^i mod MOD. But considering that for position i (1-based), the exponent is N - i. So, for each i from 1 to N, the exponent is (N - i). So the pow10 array can be precomputed as follows: compute 10^0, 10^1, ..., up to 10^(N-1), and then for position i, it's pow10[N - i].
+
+Wait, but N can be up to 2e5, so precomputing a prefix sum for each possible interval's sum of 10^(N-i) would be helpful. Let's think.
+
+The sum of 10^{N - i} for i from L to R is equal to sum_{k = (N - R)}^{N - L} 10^k.
+
+Wait, because for i = L, N - i = N - L, and for i = R, N - i = N - R. Wait, no. Let's see:
+
+If i runs from L to R (inclusive), then N - i runs from (N - L) down to (N - R). So the sum is 10^{N-L} + 10^{N-L-1} + ... + 10^{N-R}.
+
+Wait, but the exponents are decreasing. So for example, if L=3, R=6 in N=8, then exponents are 5,4,3,2. So sum is 10^5 + 10^4 + 10^3 +10^2.
+
+But the sum of exponents from a to b (a >= b) is 10^b * (10^{a - b + 1} - 1)/9. For example, sum from 10^2 to 10^5 is 10^2 + 10^3 + 10^4 + 10^5 = (10^6 - 10^2)/9.
+
+Wait, sum_{k = a}^b 10^k, where a >= b (since a is higher than b?), no. Wait, in the example, a is 5, b is 2. Wait, perhaps I should reverse the order.
+
+Alternatively, the sum from exponent x to exponent y (x >= y) is sum_{k=y}^x 10^k = (10^{x+1} - 10^y)/9.
+
+Wait, let's verify:
+
+For x=2, y=2: sum is 10^2. Using formula (10^3 - 10^2)/9 = (1000-100)/9 = 900/9=100, correct.
+
+x=3, y=2: sum is 100+1000=1100. Formula: (10^4-10^2)/9 = (10000-100)/9= 9900/9=1100. Correct.
+
+So yes, sum_{k=y}^x 10^k = (10^{x+1} - 10^y)/9.
+
+But in our case, the exponents for a range [L, R] are (N-L) down to (N-R). So the sum is sum_{k=(N-R)}^{(N-L)} 10^k, which is sum from (N-R) to (N-L), inclusive. But since (N-R) can be less than (N-L), we need to swap them.
+
+Wait, if L <= R, then N-L >= N-R. For example, L=3, R=6, N=8: N-L=5, N-R=2. So the sum is from exponent 5 to 2. But sum from 2 to 5 is 10^2 +10^3 +10^4 +10^5 = sum_{k=2}^5 10^k = (10^6 -10^2)/9.
+
+So the sum for [L, R] is (10^{N-L +1} - 10^{N-R}) ) / 9.
+
+But since we are working modulo 998244353, division by 9 requires multiplying by the modular inverse of 9 modulo 998244353.
+
+So the plan is:
+
+For a given query [L, R], D:
+
+- Compute the sum S = sum_{i=L to R} 10^{N-i} * D.
+
+But since all the digits in [L, R] are set to D, the contribution to the total sum is D * (sum of 10^{N-i} for i in [L, R}).
+
+But how do we manage the previous contributions of these digits? Because after the update, the previous digits in [L, R] are overwritten, so the change is (D - previous_contribution) for that range.
+
+But tracking this directly would require knowing the previous digits in the range. So perhaps the data structure needs to allow for range assignments (setting a range to a particular digit) and efficiently computing the sum.
+
+Thus, a segment tree with range assignment (lazy propagation) and the ability to compute the sum of (digit * 10^{N-i}) for any range.
+
+Each node in the segment tree would represent a range [start, end]. For each node, we need to track:
+
+- The sum of the digits in the range multiplied by their respective 10^{N-i} values.
+
+- The current digit (if the entire range is the same, otherwise None), which allows for efficient propagation of the lazy updates.
+
+The segment tree operations would be:
+
+- For a range update [L, R] to D:
+
+   Traverse the segment tree, and for each node that is completely within [L, R], set its digit to D, compute the sum as D * sum_10_powers for that node's range, and mark it as having a uniform digit. If the node has children, propagate the current lazy update to them if necessary.
+
+- For sum queries, the root's sum is the total.
+
+So the key is that each node can have a digit, which, if present, indicates that all positions in the node's range have that digit, and the sum is D * sum_10_powers of that range.
+
+Thus, precomputing the sum_10_powers for every possible range is crucial.
+
+But how to precompute the sum_10_powers for arbitrary ranges efficiently?
+
+We can precompute a prefix array where prefix[i] is the sum of 10^{N-j} for j from 1 to i.
+
+Wait, for example, prefix[i] = sum_{j=1 to i} 10^{N-j}.
+
+Then, the sum from L to R is prefix[R] - prefix[L-1].
+
+So if we can precompute the prefix sums, then for any range [L, R], the sum_10_powers can be computed quickly as (prefix[R] - prefix[L-1]) mod MOD.
+
+Yes, that's a good plan.
+
+So the steps are:
+
+1. Precompute the prefix sums of 10^{N-i} for each position i.
+
+But how to compute 10^{N-i} mod MOD?
+
+Wait, since N can be up to 2e5, precompute pow10 where pow10[k] = 10^k mod MOD, for k from 0 to N.
+
+Then, for position i (1-based), 10^{N -i} = pow10[N -i].
+
+So for i from 1 to N, the sum from 1 to i is sum_{j=1 to i} pow10[N-j}.
+
+But N-j can be written as (N-1) - (j-1). So for j=1, it's N-1, j=2, N-2, etc. So the sum is pow10^{N-1} + pow10^{N-2} + ... + pow10^{N-i}.
+
+Which is the same as sum_{k=0}^{i-1} pow10^{N-1 -k} }, but perhaps easier to compute via prefix sums.
+
+So precompute a prefix array where prefix[i] is the sum of pow10^{N-j} for j=1 to i.
+
+This can be done by iterating from i=1 to N:
+
+prefix[i] = prefix[i-1] + pow10[N - i]
+
+mod MOD.
+
+So once we have this prefix array, the sum_10_powers for [L, R] is (prefix[R] - prefix[L-1]) mod MOD.
+
+So that part is manageable.
+
+Now, the segment tree:
+
+Each node represents a range [a, b], and for that node:
+
+- If all elements in the range are the same digit (digit != None), then the sum is digit * (prefix[b] - prefix[a-1]) mod MOD.
+
+- Otherwise, the sum is the sum of the left and right children's sums.
+
+For each node, we can have a lazy value (the digit to set, if the entire range is to be set to that digit).
+
+When a range update comes, we traverse the tree and apply the updates:
+
+For a node's range [a, b]:
+
+- If the current node's range is entirely outside the query's range [L, R], do nothing.
+
+- If the current node's range is entirely inside [L, R], then set the node's digit to D, compute the sum as D * (prefix[b] - prefix[a-1]) mod MOD, and mark the node's lazy value (if it has children, but once a node is marked as having a uniform digit, perhaps we can avoid propagating unless necessary).
+
+Wait, but if the node has children and we set it to a uniform digit, we need to propagate the digit to the children when a conflicting update comes in. But with lazy propagation, when a node has a pending update (like a digit assignment), and a new update comes that overlaps partially, we need to propagate the pending update to the children first.
+
+So the structure is similar to the standard segment tree with range updates and lazy propagation.
+
+Thus, each node will need to track:
+
+- sum: the sum of the digits in the range, multiplied by their respective 10^{N-i} factors, mod MOD.
+
+- digit: the current digit of the entire range (if uniform), else None.
+
+So during the update:
+
+When we want to set [L, R] to D:
+
+We start at the root. For each node:
+
+If the current node's range is outside [L, R], do nothing.
+
+Else, if the node's range is completely inside [L, R], and the node's digit is already set (i.e., the entire range is a single digit), then we can update its sum to D * (prefix[b] - prefix[a-1]) mod MOD, set its digit to D, and return.
+
+Otherwise, if the node has a digit (i.e., all elements are the same), but the current update only partially covers the node, we need to split the node by propagating the digit to its children. So we set the left and right children's digits to the current node's digit, compute their sums, then set the current node's digit to None (since now it's split), and proceed to update the children.
+
+Wait, this seems manageable.
+
+So, during the update process:
+
+1. If the node's range is completely within [L, R], and the node has a digit (all same):
+
+   - Update the node's digit to D, sum becomes D * (prefix[b] - prefix[a-1]) mod MOD.
+
+   - Return.
+
+2. If the node's range is partially within [L, R]:
+
+   - If the node has a digit (all same), we need to split it: propagate the digit to the children, setting their digits and sums.
+
+   - Then recursively update the left and right children as necessary.
+
+3. After updating the children, recompute the node's sum as the sum of the left and right children.
+
+For the initial setup, all nodes are set to digit '1'.
+
+Now, the sum for the entire tree is the sum of all digits multiplied by their respective 10^{N-i} factors.
+
+The key is that when a range is updated, the sum for that range is D multiplied by the precomputed sum_10_powers of the range.
+
+Thus, with the segment tree, each range update can be done in O(logN) time, and the sum can be retrieved in O(1) time (since the root's sum is the total).
+
+So the steps to solve the problem are:
+
+1. Precompute pow10 up to N elements, where pow10[k] = 10^k mod MOD.
+
+2. Precompute the prefix sum array, where prefix[i] is the sum of pow10[N-j] for j from 1 to i.
+
+   So for each i, prefix[i] = (prefix[i-1] + pow10[N - i]) % MOD.
+
+3. Initialize a segment tree where each node can handle range assignments and compute the sum.
+
+4. For each query:
+
+   a. Update the segment tree to set [L, R] to D.
+
+   b. Output the sum from the segment tree's root, mod 998244353.
+
+Now, the challenge is implementing the segment tree correctly and efficiently.
+
+But with N up to 2e5 and Q up to 2e5, the segment tree needs to handle O(Q logN) operations, which is acceptable.
+
+Now, implementing the segment tree.
+
+Each node in the segment tree can be represented as a class, but in Python, for speed, perhaps a list-based approach with 2^ceil(log2(N)) * 2 size is better. But with N up to 2e5, the segment tree size is about 4e5 * 4, which is manageable.
+
+Alternatively, since Python's recursion stack is limited, a recursive implementation might hit stack limits for large N. So better to implement the segment tree iteratively, but that's more complex. Alternatively, increase the recursion limit, but that's not safe.
+
+Alternatively, use a list-based approach with each node stored as a dictionary with 'left', 'right', 'sum', 'digit', etc. But for Python, even a recursive segment tree may be too slow for 2e5 queries.
+
+Wait, but in Python, for 2e5 queries, each taking O(logN) steps (around 20 steps each), that's 4e6 operations, which should be manageable.
+
+But implementing a segment tree with N=2e5 in Python may be possible, but perhaps there's a better way.
+
+Alternative approach:
+
+Because all operations are range assignments (set [L, R] to D), and the sum is required after each assignment.
+
+But perhaps we can use a binary indexed tree (Fenwick tree) approach, but I don't see a straightforward way because the updates are range assignments, not point updates or additive range updates.
+
+Another approach: using a Union-Find (Disjoint Set Union) structure to track intervals with the same digit. But I'm not sure how to manage that efficiently.
+
+Hmm. Alternatively, using a balanced binary search tree to track intervals. For example, each interval is represented as a start and end, and the digit. When a new query comes, we split existing intervals that overlap with [L, R] and merge them into a new interval with digit D. This way, each query is handled in O(k log k) time, where k is the number of intervals that are split. But in the worst case, this could be O(Q*N) time, which is not acceptable.
+
+So the segment tree approach seems the way to go.
+
+So let's outline the steps for the segment tree:
+
+Precompute prefix array.
+
+Implement a segment tree with the following functions:
+
+- update(L, R, D): set all elements in [L, R] to D.
+
+- get_sum(): return the sum of all elements * 10^{N-i} mod MOD.
+
+The segment tree nodes each have:
+
+- a, b: the range they cover.
+
+- sum_val: sum of the current digits multiplied by their 10^{N-i} factors.
+
+- digit: the current digit (if the entire range is the same digit), else None.
+
+- left and right children (if not a leaf).
+
+Initially, all digits are 1, so each node's digit is 1, and sum_val is 1 * (prefix[b] - prefix[a-1]).
+
+Implementing this in Python with a recursive approach.
+
+But how to structure the nodes?
+
+Alternative approach: represent the segment tree as a list of nodes, each with a start, end, sum, digit, left and right pointers. But for Python, a class-based approach is possible but might be slow for 2e5 nodes.
+
+Alternatively, we can use a list-based segment tree where each node is stored in an array, and children of node i are 2i+1 and 2i+2. But this approach can be memory-heavy for large N.
+
+Alternatively, use a bottom-up approach.
+
+But perhaps the most straightforward way is to implement a recursive segment tree with each node represented by a start and end, and for each node, track sum_val, digit, and have left and right children.
+
+But in Python, recursion depth can be a problem. For N=2e5, the height of the segment tree is about 18 (since 2^18 is 262144). So recursion depth is manageable as Python's default recursion depth is 1000.
+
+So here's a plan:
+
+Implement the segment tree as a class, with each node being a dictionary or an object that holds:
+
+- a, b: the interval [a, b]
+
+- sum_val: the sum of the current digits multiplied by 10^{N-i} in [a, b]
+
+- digit: the current digit (if uniform)
+
+- left and right children (for non-leaf nodes)
+
+The build function recursively splits the interval into left and right children, until the interval is a single element.
+
+The update function for a node:
+
+def update(node, L, R, D):
+
+   if node's interval is outside [L, R], return
+
+   if node's interval is inside [L, R]:
+
+       if node's digit is present (all same):
+
+           node.sum_val = D * (prefix[node.b] - prefix[node.a - 1]) % MOD
+
+           node.digit = D
+
+           return
+
+       else:
+
+           # non-uniform, need to process children
+
+           propagate the node's current digit to children if necessary?
+
+           No, because the node doesn't have a digit (it's split into children).
+
+           So update left and right children.
+
+           After updating, set the node's sum_val to left.sum_val + right.sum_val.
+
+   else:
+
+       if node has a digit (uniform):
+
+           # split this node into children by propagating the digit
+
+           left = node.left
+
+           right = node.right
+
+           left.digit = node.digit
+
+           left.sum_val = node.digit * (prefix[left.b] - prefix[left.a -1]) % MOD
+
+           right.digit = node.digit
+
+           right.sum_val = node.digit * (prefix[right.b] - prefix[right.a -1]) % MOD
+
+           node.digit = None  # now, the children have the digit, and this node is split
+
+       # Now proceed to update the children
+
+       update(node.left, L, R, D)
+
+       update(node.right, L, R, D)
+
+       node.sum_val = (node.left.sum_val + node.right.sum_val) % MOD
+
+       return
+
+Wait, but when a node is split (i.e., when it's uniform but needs to be updated partially), we need to propagate the current digit to its children, then mark the node as non-uniform (digit None).
+
+This way, the children now have the digit, and the parent's sum is the sum of the children.
+
+So during an update, when a node has a digit and is partially overlapping with the update range, we split it by assigning the digit to the children, then proceed to update the children.
+
+The initial build of the segment tree would set all nodes to digit 1.
+
+Now, the build function:
+
+def build(a, b):
+
+   create a node covering [a, b]
+
+   if a == b:
+
+       node.sum_val = 1 * pow10[N - a] % MOD
+
+       node.digit = 1
+
+   else:
+
+       mid = (a + b) // 2
+
+       node.left = build(a, mid)
+
+       node.right = build(mid+1, b)
+
+       node.sum_val = (node.left.sum_val + node.right.sum_val) % MOD
+
+       node.digit = 1  # initially all are 1
+
+   return node
+
+Wait, but this is incorrect. Because in the build function, the parent nodes are initially set to digit 1, but their sum is the sum of the children. But if the children are also digit 1, then the parent's sum is 1 * sum_10_powers for the entire range. So the initial setup can set all nodes (even parents) to have digit 1.
+
+So during the initial build, for a non-leaf node, the sum is computed as left.sum + right.sum, and the digit is 1. However, since all children are also 1, the sum is indeed 1 * sum_10_powers for the node's range. So the initial setup is correct.
+
+Thus, the initial build works.
+
+Now, for each query, we call update on the root node with L, R, D. Then, we output the root.sum_val mod MOD.
+
+Thus, the code structure would be:
+
+- Precompute pow10 and prefix.
+
+- Build the segment tree.
+
+- For each query, perform the update and print the sum.
+
+But implementing this in Python is challenging, especially with the recursive segment tree and handling large N.
+
+Alternatively, use a class-based approach.
+
+But in Python, for large N, the recursive calls may hit stack limits, but for N=2e5, the depth is about 18, which is manageable.
+
+Testing with N=8 as per the sample input:
+
+pow10 precomputed as [1, 10, 100, ..., 10^7 mod MOD].
+
+prefix[i] = sum_{j=1 to i} 10^{8-j} mod MOD.
+
+So for i=8, it's 10^0 =1.
+
+The initial sum is 8 digits of 1: 11111111.
+
+Each query updates a range and then the sum is printed.
+
+But the problem is to compute the sum after each update.
+
+Now, the code.
+
+But how to implement the segment tree in Python?
+
+Alternatively, perhaps we can use a flattened array approach for the segment tree. But let's think.
+
+Alternatively, use a list-based representation, where each node is stored in a list, with each node's left and right children indices.
+
+But this is complicated.
+
+Alternatively, use a class-based approach with objects. Here's a rough sketch:
+
+class SegmentTreeNode:
+    def __init__(self, a, b):
+        self.a = a
+        self.b = b
+        self.sum_val = 0
+        self.digit = None
+        self.left = None
+        self.right = None
+
+But building such a tree for N=2e5 may be memory-heavy, but Python can handle it.
+
+But in practice, for 4*2e5 nodes (each about 40 bytes), it's manageable.
+
+But recursion may be a problem.
+
+Alternatively, here's the code outline:
+
+MOD = 998244353
+
+N, Q = map(int, input().split())
+queries = [tuple(map(int, input().split())) for _ in range(Q)]
+
+# Precompute pow10 up to N.
+pow10 = [1] * (N)
+for i in range(1, N):
+    pow10[i] = (pow10[i-1] * 10) % MOD
+
+# Precompute prefix sums.
+prefix = [0] * (N + 1)  # prefix[0] = 0, prefix[1] = pow10[N-1], prefix[2] = pow10[N-1] + pow10[N-2], etc.
+for i in range(1, N+1):
+    prefix[i] = (prefix[i-1] + pow10[N - i]) % MOD
+
+class Node:
+    __slots__ = ['a', 'b', 'sum_val', 'digit', 'left', 'right']
+    def __init__(self, a, b):
+        self.a = a
+        self.b = b
+        self.sum_val = 0
+        self.digit = 1  # initial digit is 1
+        self.left = None
+        self.right = None
+
+def build(a, b):
+    node = Node(a, b)
+    if a == b:
+        node.sum_val = (1 * pow10[N - a]) % MOD
+    else:
+        mid = (a + b) // 2
+        node.left = build(a, mid)
+        node.right = build(mid+1, b)
+        node.sum_val = (node.left.sum_val + node.right.sum_val) % MOD
+    node.digit = 1  # initially, all digits are 1
+    return node
+
+def update(node, L, R, D):
+    if node.b < L or node.a > R:
+        return
+    if L <= node.a and node.b <= R:
+        # Entirely covered
+        if node.digit is not None:
+            # All same digit, update
+            sum_range = (prefix[node.b] - prefix[node.a - 1]) % MOD
+            node.sum_val = (D * sum_range) % MOD
+            node.digit = D
+            return
+        else:
+            # Not all same, need to go deeper
+            update(node.left, L, R, D)
+            update(node.right, L, R, D)
+            node.sum_val = (node.left.sum_val + node.right.sum_val) % MOD
+            return
+    # Partially covered
+    if node.digit is not None:
+        # Split the node by propagating the digit to children
+        # Assign the same digit to children and update their sums
+        node.left.digit = node.digit
+        sum_left = (node.digit * (prefix[node.left.b] - prefix[node.left.a -1])) % MOD
+        node.left.sum_val = sum_left
+        node.right.digit = node.digit
+        sum_right = (node.digit * (prefix[node.right.b] - prefix[node.right.a -1])) % MOD
+        node.right.sum_val = sum_right
+        node.digit = None  # now the children have the digit, this node is split
+    # Now proceed to update children
+    update(node.left, L, R, D)
+    update(node.right, L, R, D)
+    # Update current sum
+    node.sum_val = (node.left.sum_val + node.right.sum_val) % MOD
+
+root = build(1, N)
+
+for L, R, D in queries:
+    update(root, L, R, D)
+    print(root.sum_val % MOD)
+
+Wait, but in the build function, the sum_val for a non-leaf node is initially sum of children. However, after building, the node's digit is set to 1. But when a non-leaf node's digit is 1, its sum_val is D * sum_range, but sum_range is computed as prefix[b] - prefix[a-1], which for a non-leaf node is the same as the sum of the children's sum_val. But since all children are also 1, this is correct.
+
+However, when building the tree, the node.sum_val is correctly computed as the sum of the children, and the digit is set to 1, indicating that all elements in the range are 1. So during the initial build, the sum_val is correctly set.
+
+Now, when a node is split (i.e., its digit is not None and the update partially overlaps), we set the children's digits to the parent's digit, compute their sum_val as digit * sum_range, and then set the parent's digit to None. Then, update the children.
+
+This should work.
+
+Testing the sample input:
+
+Sample Input 1:
+
+8 5
+3 6 2
+1 4 7
+3 8 3
+2 2 2
+4 5 1
+
+Sample Output:
+
+11222211 → sum is 1*10^7 +1*10^6 +2*10^5 +2*10^4 +2*10^3 +2*10^2 +1*10^1 +1*10^0 = 11222211 mod MOD.
+
+In the code, after the first update (3-6 to 2), the sum_val should be computed as 2 * (sum of 10^{8-3} to 10^{8-6}) + other digits.
+
+But let's see:
+
+For the first query, L=3, R=6, D=2.
+
+The sum_range is sum from i=3 to 6 of 10^{8-i} = 10^5 + 10^4 + 10^3 + 10^2.
+
+Which is (10^6 -10^2)/9.
+
+But in code, it's prefix[6] - prefix[2].
+
+The prefix array for i=1 to 8:
+
+prefix[1] = 10^7 mod MOD.
+
+prefix[2] = 10^7 + 10^6 mod MOD.
+
+prefix[3] = 10^7 + 10^6 + 10^5 mod MOD.
+
+...
+
+prefix[6] = 10^7 + ... + 10^2.
+
+prefix[6] - prefix[2] = 10^5 + 10^4 + 10^3 + 10^2.
+
+So 2 * (prefix[6] - prefix[2]).
+
+The rest of the digits are 1's, so their sum is prefix[2] (positions 1 and 2) + prefix[8] - prefix[6] (positions 7 and 8).
+
+So total sum is 2*(prefix[6] - prefix[2-1]) + (prefix[2] - prefix[0]) + (prefix[8] - prefix[6]).
+
+But in code, the root.sum_val after the first update is computed as:
+
+After updating [3,6] to 2:
+
+The sum of the entire range is sum of [1-2] (1's), [3-6] (2's), [7-8] (1's).
+
+So the code's root.sum_val should be (prefix[2] * 1) + (prefix[6] - prefix[2]) * 2 + (prefix[8] - prefix[6]) * 1.
+
+Which is 1*(prefix[2]) + 2*(prefix[6] - prefix[2]) + 1*(prefix[8] - prefix[6}).
+
+Summing these gives 1*(prefix[2] + (prefix[8] - prefix[6})) + 2*(prefix[6] - prefix[2})).
+
+Which simplifies to prefix[8] - (prefix[6} - prefix[2}) + 2*(prefix[6} - prefix[2}) = prefix[8} + (prefix[6} - prefix[2})).
+
+But since prefix[8} is the sum of all digits (originally 1's), this would be the initial sum plus (D - 1) * sum_range.
+
+But in any case, the code should handle this correctly.
+
+Now, in the code, after the first update, the sum is computed correctly.
+
+But when the code runs, the first query is processed:
+
+update(root, 3,6,2)
+
+The root is the entire [1,8]. Since [3,6] is inside the root's range, but the root's digit is 1 (initially), the code checks if the entire node is covered. Since 3 <=1 and 6 >=8 is false, but the root's range is [1,8], which is not inside [3,6]. So it proceeds to check if the node's digit is not None (which it is, 1). Then, it splits the node by propagating the digit to its left and right children.
+
+The root's left child is [1,4], right is [5,8].
+
+After splitting, the root's digit becomes None, and its sum is the sum of the children.
+
+Then, the code proceeds to update the left and right children.
+
+For the left child [1,4], the query's L=3 and R=6. So the left child's range [1,4] is partially overlapping with [3,6]. The code checks the left child's digit (which is now 1, because during splitting, the root propagated its digit to its children). So, since left child's [1,4] is not entirely inside [3,6], and its digit is 1, it needs to split.
+
+So, split the left child into its left and right children (which are [1,2] and [3,4]).
+
+Set [1,2] and [3,4] to 1, sum_val accordingly.
+
+Then, the left child (parent) has digit None.
+
+Now, update the left child's left and right.
+
+For [1,2], it's outside the query's range (3-6), so no change.
+
+For [3,4], which is inside the query's range. So set their digits to 2, sum_val to 2*(prefix[4] - prefix[2}).
+
+Then, the left child's sum_val is sum of [1,2] (1's) and [3,4] (2's).
+
+Similarly, the right child [5,8] is partially covered by the query's range (3-6). So the right child's range is [5,8], which overlaps with [3,6] in [5,6].
+
+So the right child's digit is 1, so it needs to split into [5,6] and [7,8].
+
+Set [5,6] to 2 (since the query's R=6 includes them), and [7,8] remains 1.
+
+Thus, the sum after the first query is:
+
+sum from 1-2: 1's.
+
+sum from 3-4: 2's.
+
+sum from 5-6: 2's.
+
+sum from 7-8: 1's.
+
+Which is 11 2222 11 → 11222211, which matches the sample output.
+
+Thus, the code should work.
+
+Now, possible issues:
+
+- Precomputing pow10 correctly. For example, for N=8, pow10[0] =1, pow10[1]=10, etc. But when N-i is computed, for i=1, N-i=7, which is pow10[7].
+
+But in the code, pow10 is computed as pow10 = [1] * N. Then, for i in 1 to N-1, pow10[i] = (pow10[i-1] *10) mod MOD. So pow10[i] is 10^i.
+
+Thus, for position i=1, the exponent is N -i = 7, which is pow10[7], correct.
+
+The prefix array is computed as prefix[i] = sum_{j=1 to i} pow10[N-j], which is correct.
+
+Thus, the code should work.
+
+Another possible issue is handling the modular inverses for division by 9. But in the code, there's no division by 9 because we precompute the sum using the prefix array, which is the sum of 10^{k} terms. So no division needed.
+
+Now, testing the code with the first sample input.
+
+But in Python, the code's recursive build may be slow for N=2e5, but perhaps it's manageable.
+
+But let's see for N=8:
+
+pow10 is [1, 10, 100, 1000, 10000, 100000, 1000000, 10000000], each mod 998244353.
+
+prefix array:
+
+prefix[0] =0.
+
+prefix[1] = 10^7.
+
+prefix[2] = 10^7 + 10^6.
+
+...
+
+prefix[8] = sum_{j=1 to 8} 10^{8-j} = sum 10^7 down to 10^0.
+
+Which is (10^8 -1)/9 mod MOD.
+
+But in the code, the prefix array is computed correctly.
+
+Now, the code's initial sum is sum of all 1's multiplied by their respective 10^{N-i} → sum is 11111111 mod MOD, which is correct.
+
+After first update, the code outputs 11222211 mod MOD.
+
+Which is correct.
+
+But in Python, the code may take time to handle 2e5 queries. So perhaps we need to optimize.
+
+But given the problem's constraints, it's possible that the code would time out in Python for the worst case. However, given that the code uses O(Q logN) operations, and each operation is O(1) except for the recursive calls, it may pass within the time limits. But in Python, recursion is generally slower than iterative approaches.
+
+Thus, perhaps converting the code to an iterative segment tree approach is better.
+
+But given time constraints, perhaps proceed with this approach and see.
+
+Another optimization: precompute the prefix array as (prefix[b] - prefix[a-1]) % MOD for any a and b.
+
+But the code already does that.
+
+Alternatively, use memoization for the sum ranges. But the prefix array is precomputed.
+
+Thus, the code should work.
+
+Finally, after generating the code, make sure to call the function and read from stdin.
+
+The code given here reads the input, precomputes the necessary arrays, builds the segment tree, and processes each query with an update and output.
+
+But there's a mistake in the pow10 precomputation. Let's see:
+
+pow10 = [1] * N
+
+Wait, for N=8, the pow10 array needs to have pow10[0] to pow10[7], because 10^7 is needed for position 1. So pow10 has length N.
+
+Yes.
+
+But in the code, pow10 is initialized as [1] * N. Then, for i in 1 to N-1:
+
+pow10[i] = (pow10[i-1] *10) % MOD.
+
+Thus, pow10[0] =1 (10^0), pow10[1]=10^1, etc. So for exponent k, pow10[k] is 10^k.
+
+Thus, for position i=1, N-i =7, so pow10[7] is 10^7.
+
+Yes.
+
+Thus, the code is correct.
+
+Another possible error is in the prefix array:
+
+for i in 1 to N:
+
+prefix[i] = prefix[i-1] + pow10[N - i]
+
+But N - i can be negative if i > N. But in the loop, i runs from 1 to N, so N -i ranges from N-1 down to 0.
+
+Yes.
+
+Thus, the code should work.
+</think>
+To solve this problem, we need to efficiently handle range updates on a string of digits and compute the value of the string modulo 998244353 after each update. Given the constraints, a naive approach would be too slow, so we use a segment tree with lazy propagation to manage the range updates and efficiently compute the required values.
+
+### Approach
+1. **Precompute Powers and Prefix Sums**: 
+   - Precompute powers of 10 modulo 998244353 up to the maximum needed value.
+   - Precompute prefix sums of these powers to quickly calculate the sum of powers over any range.
+
+2. **Segment Tree with Lazy Propagation**:
+   - Build a segment tree where each node can handle range updates and maintain the sum of the digits in its range, each multiplied by their respective power of 10.
+   - Each node tracks the sum of its range and can propagate pending updates to its children (lazy propagation) to ensure efficient updates.
+
+3. **Handling Queries**:
+   - For each query, update the segment tree to set the specified range to the given digit.
+   - After each update, output the sum of the entire string modulo 998244353.
+
+### Solution Code
+```python
+import sys
+MOD = 998244353
+
+def main():
+    sys.setrecursionlimit(1 << 25)
+    N, Q = map(int, sys.stdin.readline().split())
+    queries = [tuple(map(int, sys.stdin.readline().split())) for _ in range(Q)]
+
+    # Precompute pow10: pow10[k] = 10^k mod MOD, for 0 <= k < N
+    pow10 = [1] * (N)
+    for i in range(1, N):
+        pow10[i] = (pow10[i-1] * 10) % MOD
+
+    # Precompute prefix sums: prefix[i] is sum of 10^{N-j} for j=1 to i
+    prefix = [0] * (N + 2)  # 1-based to N
+    for i in range(1, N+1):
+        exponent = N - i
+        prefix[i] = (prefix[i-1] + pow10[exponent]) % MOD
+
+    class SegmentTreeNode:
+        __slots__ = ['a', 'b', 'sum_val', 'digit', 'left', 'right']
+        def __init__(self, a, b):
+            self.a = a
+            self.b = b
+            self.sum_val = 0
+            self.digit = 1  # initial digit is 1
+            self.left = None
+            self.right = None
+
+    def build(a, b):
+        node = SegmentTreeNode(a, b)
+        if a == b:
+            node.sum_val = (1 * pow10[N - a]) % MOD
+        else:
+            mid = (a + b) // 2
+            node.left = build(a, mid)
+            node.right = build(mid + 1, b)
+            node.sum_val = (node.left.sum_val + node.right.sum_val) % MOD
+        node.digit = 1
+        return node
+
+    root = build(1, N)
+
+    def update(node, L, R, D):
+        if node.b < L or node.a > R:
+            return
+        if L <= node.a and node.b <= R:
+            if node.digit is not None:
+                sum_range = (prefix[node.b] - prefix[node.a - 1]) % MOD
+                node.sum_val = (D * sum_range) % MOD
+                node.digit = D
+                return
+            else:
+                update(node.left, L, R, D)
+                update(node.right, L, R, D)
+                node.sum_val = (node.left.sum_val + node.right.sum_val) % MOD
+                return
+        if node.digit is not None:
+            node.left.digit = node.digit
+            sum_left = (node.digit * (prefix[node.left.b] - prefix[node.left.a - 1])) % MOD
+            node.left.sum_val = sum_left
+            node.right.digit = node.digit
+            sum_right = (node.digit * (prefix[node.right.b] - prefix[node.right.a - 1])) % MOD
+            node.right.sum_val = sum_right
+            node.digit = None
+        update(node.left, L, R, D)
+        update(node.right, L, R, D)
+        node.sum_val = (node.left.sum_val + node.right.sum_val) % MOD
+
+    for L, R, D in queries:
+        update(root, L, R, D)
+        print(root.sum_val % MOD)
+
+if __name__ == '__main__':
+    main()
+```
+
+### Explanation
+1. **Precomputation**: We precompute the powers of 10 modulo 998244353 and their prefix sums to quickly calculate the sum of any range of powers.
+2. **Segment Tree Construction**: The segment tree is built such that each node initially represents a range of '1's. Each node tracks the sum of the digits in its range and their respective powers of 10.
+3. **Lazy Propagation**: When a range update is performed, the segment tree uses lazy propagation to efficiently update the relevant nodes and propagate changes to child nodes only when necessary.
+4. **Query Handling**: Each query updates the relevant range in the segment tree and outputs the current sum of the entire string modulo 998244353.
+
+This approach ensures that each update and query operation is handled efficiently in logarithmic time, making it suitable for large input sizes as specified in the problem constraints.
+</bot>

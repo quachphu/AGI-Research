@@ -1,0 +1,802 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.The Smart Beaver from ABBYY invented a new message encryption method and now wants to check its performance. Checking it manually is long and tiresome, so he decided to ask the ABBYY Cup contestants for help.
+
+A message is a sequence of n integers a1, a2, ..., an. Encryption uses a key which is a sequence of m integers b1, b2, ..., bm (m ≤ n). All numbers from the message and from the key belong to the interval from 0 to c - 1, inclusive, and all the calculations are performed modulo c.
+
+Encryption is performed in n - m + 1 steps. On the first step we add to each number a1, a2, ..., am a corresponding number b1, b2, ..., bm. On the second step we add to each number a2, a3, ..., am + 1 (changed on the previous step) a corresponding number b1, b2, ..., bm. And so on: on step number i we add to each number ai, ai + 1, ..., ai + m - 1 a corresponding number b1, b2, ..., bm. The result of the encryption is the sequence a1, a2, ..., an after n - m + 1 steps.
+
+Help the Beaver to write a program that will encrypt messages in the described manner.
+
+Input
+
+The first input line contains three integers n, m and c, separated by single spaces. 
+
+The second input line contains n integers ai (0 ≤ ai < c), separated by single spaces — the original message. 
+
+The third input line contains m integers bi (0 ≤ bi < c), separated by single spaces — the encryption key.
+
+The input limitations for getting 30 points are: 
+
+  * 1 ≤ m ≤ n ≤ 103
+  * 1 ≤ c ≤ 103
+
+
+
+The input limitations for getting 100 points are: 
+
+  * 1 ≤ m ≤ n ≤ 105
+  * 1 ≤ c ≤ 103
+
+Output
+
+Print n space-separated integers — the result of encrypting the original message.
+
+Examples
+
+Input
+
+4 3 2
+1 1 1 1
+1 1 1
+
+
+Output
+
+0 1 1 0
+
+
+Input
+
+3 1 5
+1 2 3
+4
+
+
+Output
+
+0 1 2
+
+Note
+
+In the first sample the encryption is performed in two steps: after the first step a = (0, 0, 0, 1) (remember that the calculations are performed modulo 2), after the second step a = (0, 1, 1, 0), and that is the answer.
+</user>
+<bot>
+<think>
+Okay, let's see. I need to solve this encryption problem. The problem statement says that for each step i, we add the key elements b1 to bm to the elements ai, ai+1, ..., ai+m-1. And there are n - m + 1 steps in total. All operations are modulo c.
+
+The straightforward approach would be to simulate each step. For each step from 0 to (n-m) steps, iterate through the m elements of the key and add them to the corresponding elements in the message array. But wait, if n and m are up to 1e5, then the time complexity would be O((n - m + 1)*m), which could be up to 1e10 operations. That's way too slow and would definitely time out. So the naive approach isn't going to work for the 100 points case.
+
+Hmm. So we need a smarter way to compute the final array without simulating each step.
+
+Let me think about how each element in the message array is modified. For a particular position i in the message array (0-based?), how many times does each b_j get added to a_i?
+
+Wait, the steps are such that step i (starting from 0 maybe?) applies the key to positions starting at i. So for each position k in the message array, the number of times it's been added by the key is equal to the number of steps where i <= k and i + m -1 >=k. Wait, perhaps not. Let me think again.
+
+Each step corresponds to adding the key to a window of m elements. The first step adds to a1..am. The second step adds to a2..a(m+1), etc. So for each element a_p in the message, the number of times it's been added by each b_j depends on how many windows include it, and which position in the key it was in each window.
+
+Wait, but each time a window starts at position s (1-based?), then the elements a_s, a_{s+1}, ..., a_{s+m-1} are each added by b_1, b_2, ..., b_m respectively. So for element a_p, the number of times it is in a window, and the position in the key depends on how many windows start at s such that s <= p <= s + m -1. For each such s, the key's b_{p - s + 1} is added to a_p.
+
+Wait, maybe that's getting complicated. Let's see. For a particular a_p, how many times is b_k added to it? For each window starting at s, the key is applied to positions s, s+1, ..., s + m -1. So a_p is in the window if s <= p <= s + m -1. Which can be rewritten as s <= p and s >= p - m + 1. So s can range from max(1, p - m + 1) to min(p, (n - m + 1)) ... Wait, the steps are from s=1 to s=(n - m + 1). So for a given p, the possible s values are s >= 1, s <= (n - m + 1), and s <= p <= s + m -1. So s can be from max(1, p - m + 1) to min( (n - m + 1), p ). The number of such s is (p - (p - m + 1) + 1) = m if p - m +1 >=1 and p <= (n - m + 1) + m -1). Hmm, maybe this is getting too tangled.
+
+Alternatively, for each position p in the message array, the number of steps where the window includes p is the number of steps where s (the starting position of the window) is in [p - m + 1, p], but s has to be >=1 and <= (n - m +1). So the valid s's are from max(1, p - m +1) to min(p, (n - m +1)). The number of such s's is (min(p, n - m +1) - max(1, p - m +1) + 1) if that's non-negative. Otherwise zero.
+
+But even if I can compute the number of times each position p is covered by a window, that's not enough because each time the key's elements are added. So the key's element added to position p in each window is b_{k}, where k is (p - s + 1). Because when the window starts at s, the first element is s, and in that window, the j-th key element is added to s + j -1. So for p = s + j -1, the key element is b_j. So j = p - s +1. So for each window starting at s that covers p (s <= p <= s + m -1), the key element added to p is b_{p - s +1}.
+
+So for a_p, the total addition is sum_{s in S} b_{p - s +1}, where S is the set of valid s (the starting positions of windows that include p).
+
+But calculating this sum directly for each p would be O(m) per p, which for 1e5 elements is 1e10 again. So this approach won't work.
+
+We need a way to compute this sum efficiently. Let's see if there's a pattern or a way to precompute these sums using prefix sums or convolution.
+
+Wait, maybe we can model this as a convolution problem. Let's consider the number of times a particular b_j is added to a particular position p.
+
+For each j, how many times is b_j added to a_p?
+
+It's the number of windows where the window starts at s = p - j + 1. Because for a window starting at s, the j-th element of the key is added to p = s + j -1. So s = p - j +1.
+
+But s has to be between 1 and (n - m +1), and the window starting at s must have length m. So s can't exceed (n -m +1), and also s must be >=1. Also, since the window starts at s, and has m elements, s + m -1 <=n. So when s = p -j +1, we need:
+
+s >=1
+
+s <= (n -m +1)
+
+Also, the window starting at s must include p, which is s <= p <= s + m -1. Since p = s + j -1, and j ranges from 1 to m. So s + j -1 <= s + m -1 → j <=m. Which it is.
+
+So the valid s's for a particular j and p are s = p -j +1, but only if s is in [1, n - m +1]. So for each j, the number of times b_j is added to p is 1 if (s >=1 and s <= n -m +1), else 0.
+
+Wait, that's a key insight. For a given p and j, the number of times b_j is added to a_p is 1 if there exists a window starting at s = p - j +1, and s is within [1, n -m +1]. Otherwise zero.
+
+So for each p, the sum over j from 1 to m of b_j multiplied by the count of how many times j is added to p. But the count is 1 if s = p -j +1 is within 1 and n -m +1. So for each j, check if s is within [1, n -m +1], then add b_j once.
+
+So for each p, the total addition is sum_{j=1 to m} [ (p -j +1 >=1) and (p -j +1 <= (n -m +1)) ] ? b_j : 0.
+
+But how to compute this efficiently.
+
+Alternatively, the condition for j can be rewritten as:
+
+p - j +1 >=1 → j <= p.
+
+p -j +1 <= (n -m +1) → j >= p - (n -m +1) +1 → j >= p - (n -m).
+
+So j must satisfy j <= p and j >= (p - (n - m +1) +1) → j >= p - (n -m +1) +1 → j >= p - (n -m +1 -1) → j >= p - (n -m). Wait, maybe I should re-express the inequalities.
+
+s = p -j +1 must be >=1 → p -j +1 >=1 → j <= p.
+
+s must be <= (n -m +1) → p -j +1 <= (n -m +1) → j >= p - (n -m +1) +1 → j >= p - (n -m +1) +1 → j >= (p - n + m -1 +1) → j >= p - n + m.
+
+So j must be in the range [max(1, p - n +m), min(m, p)].
+
+Wait, since j is between 1 and m, the lower bound is max(1, p -n +m), and the upper bound is min(m, p).
+
+But for j to be in this interval, the total number of terms is the number of j's that satisfy these conditions.
+
+So for each p, the sum over j in [a, b] of b_j, where a = max(1, p - (n -m +1) +1) ??? Hmm, perhaps this is getting complicated. Let's see an example.
+
+Take the first sample input:
+
+n=4, m=3, c=2.
+
+The key is [1,1,1].
+
+The message is [1,1,1,1].
+
+So steps are 2 steps.
+
+For each p (positions 1 to 4), what's the sum?
+
+In the first sample:
+
+After two steps:
+
+For p=1:
+
+The windows that include 1 are the first window (s=1). So j can be 1, since s=1, j=1 (s =1 = p -j +1 → 1 =1 -j +1 → j=1).
+
+So sum is b_1 (1) added once. Then the second step starts at s=2, but p=1 is not in that window (s=2, covers 2,3,4). So only once. Then modulo 2: 1 +1 =2 mod2=0.
+
+For p=2:
+
+In first step (s=1), j=2: s=1 =2 -j +1 → j=2 →1=2-2+1 →1=1. Yes. So added 1.
+
+In second step (s=2), j=1: s=2 =2 -j +1 → j=1. So added 1.
+
+So total added 2 → mod2=0. Original a_p was 1, 1+0=1? Wait, the sample output for p=2 is 1. Wait, the sample output after steps is 0 1 1 0.
+
+Wait, initial a is [1,1,1,1]. Then first step adds [1,1,1] to positions 1-3 → [ (1+1) mod2=0, (1+1)=0 mod2, (1+1)=0 mod2, 1 ] → [0,0,0,1].
+
+Second step adds [1,1,1] to positions 2-4: [0, (0+1) mod2=1, (0+1)=1, (1+1)=0] → [0,1,1,0].
+
+So for p=2, the sum is 1 (from first step j=2) and 1 (from second step j=1) → total 2 mod2=0, but in the final a_p=1. Wait, that's confusing. Oh wait, maybe the initial a is added with the sum. So the original a_p is 1, plus 1 +1 =2 mod2=0, so 1 +0=1. Yes.
+
+So for p=2, sum is 2 mod2=0. So 1 +0 =1.
+
+So the sum for p=2 is 2 (sum of b_j added twice).
+
+Hmm. So the approach of checking for j in the valid range for each p would allow us to compute the sum of b_j for those j's and add that to the original a_p.
+
+So the problem reduces to, for each p in 1..n, compute the sum of b_j where j is in [a, b], where a and b depend on p.
+
+But how to compute this efficiently.
+
+Another approach: For each j, find the range of p's where this j is added to p. Then, for each j, we can add b_j to all p in that range.
+
+For example, j is added to p when s = p -j +1 is a valid step (s is in [1, steps] where steps = n -m +1). So s can be from 1 to steps. So p -j +1 >=1 → p >= j. And p -j +1 <= steps → p <= steps +j -1. But steps is (n -m +1). So p must be between j and (steps +j -1) = (n -m +1) + j -1 = n -m +j.
+
+But since p is also up to n.
+
+So for j, the p's that receive b_j are those in [j, min(n -m +j, n)].
+
+Wait, but n -m +j can be larger than n. Let's see: n -m +j ≤n → j ≤m. Which is true because j ranges from 1 to m. So n -m +j ≤n → j ≤m.
+
+Yes. So for each j, the p's that are in [j, (n -m +j)] will receive b_j added once.
+
+So for example, j=1: p ranges from 1 to (n -m +1). For j=2: p ranges from 2 to (n -m +2), etc.
+
+So for each j, the range of p is [j, j + (n -m)] ].
+
+Because steps = n -m +1. So for j, the maximum p is j + (steps-1) = j + (n -m).
+
+So for j, the p's are j, j+1, ..., j + (n -m).
+
+But since p can't exceed n. Let's check: j + (n -m) = n -m +j. Since j ≤m → n -m +j ≤n -m +m =n. So yes.
+
+So for each j, the range of p is j to j + (n -m) inclusive.
+
+So for each j, the number of p's that get b_j added is exactly (n -m +1) times. Which makes sense since each step contributes one p.
+
+But how to represent this as ranges for each j. So for each j, we can mark the start and end of the p's where we add b_j.
+
+Once we have these ranges, the problem becomes: for each j, add b_j to the a_p's from p=j to p= j + (n -m).
+
+But how to compute this efficiently for all j.
+
+This is similar to a range update problem. For each j, we need to add b_j to a range [j, j + (n -m)] in the array a.
+
+Then, after all such updates, compute the final a array mod c.
+
+But applying all these range updates can be done efficiently using a prefix sum array.
+
+Let's see. We can create a difference array (or a prefix sum array) for the updates. Then, after processing all j's, compute the prefix sums and add to the original a array.
+
+Yes. So here's the plan:
+
+1. Initialize an array delta of size n+2 (to handle 1-based indices) with all zeros. The delta array will be used to compute the sum of all updates using a prefix sum approach.
+
+2. For each j in 1..m:
+
+   a. The start of the range is p_start = j.
+
+   b. The end of the range is p_end = j + (n -m).
+
+   c. If p_start > n, then this j does not contribute to any p.
+
+   d. Else, if p_end >n, set p_end =n.
+
+   Wait, but earlier analysis says p_end is j + (n -m) which for j <= m, j + (n -m) = (n -m) +j. But since j can be up to m, (n -m) +m =n. So p_end is always <=n.
+
+   So for each j, p ranges from j to j + (n -m), which is <=n.
+
+   So for each j, we add b_j to delta[p_start], and subtract b_j from delta[p_end +1].
+
+3. After processing all j's, compute the prefix sum of delta. The prefix sum array, say sum_delta, will have sum_delta[p] equal to the total sum added to a_p.
+
+4. Then, for each p in 1..n, the new a_p is (original_a[p] + sum_delta[p]) mod c.
+
+This way, the time complexity is O(m + n), which is acceptable for the constraints.
+
+Let me check with the first sample.
+
+Sample Input 1:
+
+n=4, m=3, c=2.
+
+message: [1,1,1,1]
+
+key: [1,1,1]
+
+steps = 4-3 +1=2.
+
+For j=1:
+
+p_start =1, p_end=1 + (4-3) =2. So range is 1-2.
+
+So add 1 to delta[1], subtract 1 at delta[3].
+
+For j=2:
+
+p_start=2, p_end=2 +1=3. So delta[2] +=1, delta[4] -=1.
+
+For j=3:
+
+p_start=3, p_end=3+1=4. delta[3] +=1, delta[5] -=1.
+
+So delta array (indices 1 to 5) after all j:
+
+delta[1] =1, delta[2]=1, delta[3] =1, delta[4] =0, delta[5]=-1, delta[3] -=1 (from j=1's end). Wait, let me re-calculate.
+
+Wait, j=1:
+
+start at 1, end at 2. So delta[1] +=1, delta[3] -=1.
+
+j=2: start at 2, end at3. delta[2] +=1, delta[4] -=1.
+
+j=3: start at3, end at4. delta[3] +=1, delta[5] -=1.
+
+So delta is:
+
+1:1
+
+2:1
+
+3:1-1 (from j=1's delta[3] -=1, then j=3 adds +1. So delta[3] is 1 (from j=3) minus 1 (from j=1). So 0?
+
+Wait, no. Let's track the delta array step by step.
+
+Initially delta is all zeros.
+
+Processing j=1:
+
+delta[1] +=1 → delta[1] =1.
+
+delta[3] -=1 → delta[3] =-1.
+
+Processing j=2:
+
+delta[2] +=1 → delta[2] =1.
+
+delta[4] -=1 → delta[4] =-1.
+
+Processing j=3:
+
+delta[3] +=1 → delta[3] =-1 +1=0.
+
+delta[5] -=1 → delta[5] =-1.
+
+So delta array after all j's is:
+
+index 1:1
+
+2:1
+
+3:0
+
+4:-1
+
+5:-1
+
+Then, compute the prefix sum:
+
+sum_delta[1] =1
+
+sum_delta[2] =1 +1=2
+
+sum_delta[3] =2 +0=2
+
+sum_delta[4] =2 + (-1) =1
+
+sum_delta[5] =1 + (-1) =0.
+
+But since the array is of size 4, sum_delta for p=1 to4 is [1,2,2,1].
+
+Original a is [1,1,1,1]. Adding the sum_delta:
+
+1+1=2 mod2=0
+
+1+2=3 mod2=1
+
+1+2=3 mod2=1
+
+1+1=2 mod2=0
+
+Which matches the sample output [0,1,1,0]. So this approach works.
+
+Another test case: input 3 1 5. message is 1,2,3. key is4.
+
+So m=1, steps=3-1+1=3.
+
+For j=1:
+
+p starts at1, ends at1 + (3-1)=3. So delta[1] +=4, delta[4] -=4.
+
+sum_delta is [4,4,4].
+
+Original a:1,2,3.
+
+Adding sum_delta: 5 mod5=0, 6 mod5=1,7 mod5=2. Which matches the sample output.
+
+So yes, this approach is correct.
+
+So the plan is:
+
+- Read n, m, c.
+
+- Read a as a list.
+
+- Read b as a list.
+
+- Compute delta array.
+
+- For each j in 0 to m-1 (since Python uses 0-based, but in the problem j is 1-based?), wait, need to clarify.
+
+Wait, in the problem statement, the key is given as a list of m integers: b1, b2, ..., bm. So when j is 1-based. But in the code, the list is 0-based. So j in the code corresponds to j-1 in the problem.
+
+Wait, for code, let's say the key is stored as a list with indices 0-based. So j in code is 0 to m-1. But in the problem's logic, j is 1-based.
+
+So in the code:
+
+for each j in 0 to m-1:
+
+   problem_j = j+1.
+
+   the start p_start is problem_j = j+1.
+
+   p_end = problem_j + (n -m) = (j+1) + (n -m).
+
+   because steps is n -m +1. steps-1 is n -m.
+
+So for each j in the code's indices:
+
+start_p = j +1
+
+end_p = (j+1) + (n -m) 
+
+Then, in the code, since the message is 0-based or 1-based? The problem statement says the message is a1, a2, ..., an, which is 1-based. So in code, perhaps the message is 0-based. So need to adjust indices.
+
+Wait, this is a critical part. Let's clarify.
+
+The code will represent the message as 0-based, but the problem uses 1-based indices. So in the code, p ranges from 0 to n-1. So for j in code (0-based for the key), the problem's j is code_j +1.
+
+So, for the code:
+
+each j in 0..m-1:
+
+problem_j = j+1.
+
+start_p (1-based) = problem_j.
+
+end_p (1-based) = problem_j + (n -m).
+
+But in code, the message is 0-based. So to convert to code's indices:
+
+start_code = start_p -1 = j+1 -1 = j.
+
+end_code = end_p -1 = (j+1 + (n -m)) -1 = j + (n -m).
+
+So for each j in code's 0-based index, the code's p starts at j and ends at j + (n -m).
+
+But code's p must be in 0 <= p <n.
+
+Since j ranges from 0 to m-1, and n >=m, j + (n -m) can be up to (m-1) + (n -m) =n-1 - (n -m - (m-1) )? Wait, for j = m-1:
+
+j + (n -m) = (m-1) + (n -m) = n -1.
+
+Which is the last index (0-based) of the message. So that's correct.
+
+So in code, for each j in 0..m-1:
+
+start = j
+
+end = j + (n -m)
+
+But since n >=m, (n -m) is >=0.
+
+So the code's delta array (0-based) will handle the range [start, end], inclusive.
+
+So for each j in 0..m-1:
+
+delta[start] += b[j]
+
+if end +1 <n:
+
+   delta[end +1] -= b[j]
+
+So for example, in code:
+
+for j in range(m):
+
+    start = j
+
+    end = j + (n - m)
+
+    if end >=n:
+
+        end =n-1
+
+    # add b[j] to start ... end
+
+    delta[start] += b[j]
+
+    if end +1 <n:
+
+        delta[end+1] -= b[j]
+
+Wait, but since end is j + (n -m), and j can be up to m-1, so end can be (m-1)+(n -m) =n-1, which is valid.
+
+So for j in 0..m-1, the end is always j + (n -m) = (n -m) +j. Which for j up to m-1 gives (n -m) +m-1 =n-1.
+
+So the end is always <=n-1.
+
+So delta[start] +=b[j]
+
+delta[end+1] -=b[j]
+
+But if end+1 >=n, we can't subtract (since delta is of size n). So we need to check if end+1 is <n before subtracting.
+
+So in code:
+
+for each j in 0 to m-1:
+
+    start = j
+
+    end = j + (n -m)
+
+    delta[start] += b[j]
+
+    if end +1 <n:
+
+        delta[end +1] -=b[j]
+
+Once all j's are processed, compute the prefix sum of delta.
+
+sum_delta[0] = delta[0]
+
+sum_delta[i] = sum_delta[i-1] + delta[i]
+
+Then, the total added to a[i] is sum_delta[i], mod c.
+
+So the code steps are:
+
+Read n, m, c.
+
+Read a as list of integers (0-based).
+
+Read b as list of integers (0-based).
+
+Initialize delta as [0]*(n+1) (since end+1 can be up to (n-1)+1 =n).
+
+for j in 0 to m-1:
+
+    start = j
+
+    end = j + (n -m)
+
+    delta[start] += b[j]
+
+    if end +1 <n:
+
+        delta[end +1] -=b[j]
+
+Compute the prefix sum.
+
+current_sum =0
+
+sum_deltas = [0]*n
+
+for i in 0..n-1:
+
+    current_sum += delta[i]
+
+    sum_deltas[i] = current_sum
+
+Then, for each i in 0..n-1:
+
+    a[i] = (a[i] + sum_deltas[i]) %c
+
+Then print the a array.
+
+Yes. This approach should work.
+
+Now, let's code this.
+
+Testing sample 1:
+
+n=4, m=3, c=2.
+
+a = [1,1,1,1]
+
+b = [1,1,1]
+
+delta is initialized as [0,0,0,0,0,0] (n+1=5 elements?)
+
+Wait, n=4. The code initializes delta as [0]*(n+1) → 5 elements. Because for i up to n (in code, end+1 can be up to (n-1) +1 =n, so delta needs to be of size n+1 (since 0-based, indexes 0..n).
+
+For j=0:
+
+start=0, end=0 + (4-3) =1.
+
+delta[0] +=1 → delta[0]=1.
+
+end+1=2 <4 → delta[2] -=1.
+
+delta[2] =-1.
+
+For j=1:
+
+start=1, end=1 +1=2.
+
+delta[1] +=1 → delta[1]=1.
+
+end+1=3 <4 → delta[3] -=1.
+
+delta[3] =-1.
+
+For j=2:
+
+start=2, end=2+1=3.
+
+delta[2] +=1 → delta[2] =-1 +1=0.
+
+end+1=4 >=4 → no change.
+
+So delta is:
+
+index 0:1
+
+1:1
+
+2:0
+
+3:-1
+
+4:0
+
+Now, compute prefix sum.
+
+sum_deltas[0] =1.
+
+sum_deltas[1] =1+1=2.
+
+sum_deltas[2] =2+0=2.
+
+sum_deltas[3] =2 + (-1) =1.
+
+So a[0] =1+1=2 mod2=0.
+
+a[1] =1+2=3 mod2=1.
+
+a[2] =1+2=3 mod2=1.
+
+a[3] =1+1=2 mod2=0.
+
+Which matches the sample.
+
+Another test case: input 3 1 5. message is [1,2,3], key [4].
+
+n=3, m=1, c=5.
+
+delta is [0]*(3+1) →4 elements.
+
+j=0:
+
+start=0, end=0 + (3-1) =2.
+
+delta[0] +=4.
+
+end+1=3 <3? No, since n=3, 3 is equal to n. So delta[3] -=4.
+
+But delta has index 0..3.
+
+delta[0] =4, delta[3] =-4.
+
+Compute prefix sum:
+
+sum_deltas[0] =4.
+
+sum_deltas[1] =4 +0 (delta[1] is 0) =4.
+
+sum_deltas[2] =4 +0 (delta[2] is 0) =4.
+
+sum_deltas[3] would be 4 + (-4) =0, but we only process up to n-1 (3-1=2).
+
+So the sum_deltas array is [4,4,4].
+
+Original a is [1,2,3].
+
+Adding sum_deltas: 1+4=5 mod5=0; 2+4=6 mod5=1; 3+4=7 mod5=2.
+
+Which matches the sample.
+
+So the code works.
+
+Now, to code this in Python.
+
+Read the inputs:
+
+n, m, c = map(int, input().split())
+
+a = list(map(int, input().split()))
+
+b = list(map(int, input().split()))
+
+Initialize delta as [0]*(n+1)
+
+for j in range(m):
+
+    start = j
+
+    end = j + (n -m)
+
+    delta[start] += b[j]
+
+    if end +1 <n:
+
+        delta[end+1] -=b[j]
+
+Compute prefix sum:
+
+current =0
+
+sum_deltas = []
+
+for i in range(n):
+
+    current += delta[i]
+
+    sum_deltas.append(current)
+
+Then, update a:
+
+result = [(a[i] + sum_deltas[i]) %c for i in range(n)]
+
+Print the result as space-separated integers.
+
+Putting it all together:
+
+def main():
+
+    import sys
+
+    n, m, c = map(int, sys.stdin.readline().split())
+
+    a = list(map(int, sys.stdin.readline().split()))
+
+    b = list(map(int, sys.stdin.readline().split()))
+
+    delta = [0] * (n +1)
+
+    for j in range(m):
+
+        start = j
+
+        end = j + (n -m)
+
+        delta[start] += b[j]
+
+        if end +1 <n:
+
+            delta[end+1] -=b[j]
+
+    current =0
+
+    sum_deltas = [0]*n
+
+    for i in range(n):
+
+        current += delta[i]
+
+        sum_deltas[i] = current
+
+    result = [(a[i] + sum_deltas[i]) %c for i in range(n)]
+
+    print(' '.join(map(str, result)))
+
+main()
+
+This should handle all test cases efficiently.
+</think>
+To solve this problem, we need to efficiently encrypt a message using a given key. The encryption process involves repeatedly applying the key to overlapping windows of the message, which can be computationally intensive if done naively. Instead, we use a difference array technique to optimize the range updates, ensuring the solution runs efficiently even for large input sizes.
+
+### Approach
+1. **Problem Analysis**: The encryption process involves adding the key to each window of the message. Directly simulating each step would be too slow for large inputs, so we need an optimized approach.
+2. **Key Insight**: Each element in the key affects a specific range of elements in the message. By determining these ranges, we can use a difference array to efficiently compute the cumulative effect of all key applications.
+3. **Difference Array Technique**: This technique allows us to perform range updates in constant time. We maintain an array `delta` where we mark the start and end of each range affected by the key elements. After processing all key elements, we compute the prefix sum of the `delta` array to get the total effect on each message element.
+4. **Modulo Operation**: Since all operations are performed modulo `c`, we apply the modulo after computing the cumulative sums to ensure the results are within the required range.
+
+### Solution Code
+```python
+def main():
+    import sys
+    input = sys.stdin.read
+    data = input().split()
+    
+    index = 0
+    n = int(data[index])
+    m = int(data[index+1])
+    c = int(data[index+2])
+    index += 3
+    
+    a = list(map(int, data[index:index+n]))
+    index += n
+    
+    b = list(map(int, data[index:index+m]))
+    
+    delta = [0] * (n + 1)
+    for j in range(m):
+        start = j
+        end = j + (n - m)
+        delta[start] += b[j]
+        if end + 1 < n:
+            delta[end + 1] -= b[j]
+    
+    current = 0
+    sum_deltas = [0] * n
+    for i in range(n):
+        current += delta[i]
+        sum_deltas[i] = current
+    
+    result = [(a[i] + sum_deltas[i]) % c for i in range(n)]
+    print(' '.join(map(str, result)))
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Reading Input**: The input is read in one go for efficiency, especially for large datasets.
+2. **Difference Array Initialization**: The `delta` array is initialized to track the start and end of the range affected by each key element.
+3. **Range Updates**: For each element in the key, we update the `delta` array to mark the start and end of its influence on the message elements.
+4. **Prefix Sum Calculation**: The prefix sum of the `delta` array is computed to determine the cumulative effect of all key applications on each message element.
+5. **Modulo Operation**: The final result for each message element is computed by applying the modulo operation to ensure values are within the required range.
+
+This approach efficiently handles the encryption process in O(n + m) time, making it suitable for large input sizes up to 100,000 elements.
+</bot>

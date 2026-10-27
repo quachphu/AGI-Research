@@ -1,0 +1,1131 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Hooray! Berl II, the king of Berland is making a knight tournament. The king has already sent the message to all knights in the kingdom and they in turn agreed to participate in this grand event.
+
+As for you, you're just a simple peasant. There's no surprise that you slept in this morning and were late for the tournament (it was a weekend, after all). Now you are really curious about the results of the tournament. This time the tournament in Berland went as follows:
+
+  * There are n knights participating in the tournament. Each knight was assigned his unique number — an integer from 1 to n. 
+  * The tournament consisted of m fights, in the i-th fight the knights that were still in the game with numbers at least li and at most ri have fought for the right to continue taking part in the tournament. 
+  * After the i-th fight among all participants of the fight only one knight won — the knight number xi, he continued participating in the tournament. Other knights left the tournament. 
+  * The winner of the last (the m-th) fight (the knight number xm) became the winner of the tournament. 
+
+
+
+You fished out all the information about the fights from your friends. Now for each knight you want to know the name of the knight he was conquered by. We think that the knight number b was conquered by the knight number a, if there was a fight with both of these knights present and the winner was the knight number a.
+
+Write the code that calculates for each knight, the name of the knight that beat him.
+
+Input
+
+The first line contains two integers n, m (2 ≤ n ≤ 3·105; 1 ≤ m ≤ 3·105) — the number of knights and the number of fights. Each of the following m lines contains three integers li, ri, xi (1 ≤ li < ri ≤ n; li ≤ xi ≤ ri) — the description of the i-th fight.
+
+It is guaranteed that the input is correct and matches the problem statement. It is guaranteed that at least two knights took part in each battle.
+
+Output
+
+Print n integers. If the i-th knight lost, then the i-th number should equal the number of the knight that beat the knight number i. If the i-th knight is the winner, then the i-th number must equal 0.
+
+Examples
+
+Input
+
+4 3
+1 2 1
+1 3 3
+1 4 4
+
+
+Output
+
+3 1 4 0 
+
+Input
+
+8 4
+3 5 4
+3 7 6
+2 8 8
+1 8 1
+
+
+Output
+
+0 8 4 6 4 8 6 1 
+
+Note
+
+Consider the first test case. Knights 1 and 2 fought the first fight and knight 1 won. Knights 1 and 3 fought the second fight and knight 3 won. The last fight was between knights 3 and 4, knight 4 won.
+</user>
+<bot>
+<think>
+Okay, let's see. I need to find for each knight, the knight who conquered them. The problem says that a knight b is conquered by a if they were in the same fight where a won. And the output is for each knight, the one that beat them. The winner of the tournament (xm) will have 0, others will have the conqueror.
+
+Hmm, the challenge is to process all the fights and track which knights were eliminated by whom. But the problem is that each fight can involve a range of knights. For each fight, all knights in [li, ri] except xi are eliminated, and xi continues. So, for each knight in [li, ri], if they were still in the tournament before this fight, then their conqueror is xi. But if they were already eliminated in a previous fight, then this fight doesn't affect them.
+
+Wait, right. So, the same knight can't be in multiple fights once they're eliminated. So for each knight, the first fight they are part of (and not the winner) will determine their conqueror. Once they are eliminated, subsequent fights they might be in the range but they are already out.
+
+So the approach is: for each knight, find the earliest fight in which they were in the [li, ri] range but were not the winner. Then their conqueror is xi of that fight.
+
+But how to efficiently compute this for all n knights given the constraints (n and m up to 3e5). A naive approach where for each knight, iterate through all m fights and check if they are in the range would be O(nm), which is 9e10 operations. That's way too slow.
+
+So we need a smarter way. Let's think about the data structures here.
+
+Alternative idea: For each fight, we want to assign xi as the conqueror to all knights in [li, ri] except xi, but only if they haven't been conquered before. So the first fight that includes a knight (and they are not the winner) determines their conqueror.
+
+So the problem reduces to, for each knight i, find the earliest fight where i is in [lj, rj] and i is not xj. Then their conqueror is xj of that fight. If no such fight exists (i.e., they are the final winner), then output 0.
+
+But how to find that efficiently.
+
+Let me think of the fights in reverse order. Because once a knight is conquered, their conqueror is fixed. So processing fights in reverse might not help. Alternatively, we can model the active knights as intervals and track their conqueror.
+
+Wait, but each fight affects a range of active knights. The winner of a fight remains, others are eliminated. So after the first fight, the remaining knights are the xi of that fight. Wait, no. Wait, each fight is between the remaining knights. Wait, the problem states that the m fights happen in order. For the first fight, the knights in [l1, r1] (but they must all still be active). Then the winner x1 remains, others in that range are eliminated. Then the next fight includes active knights in [l2, r2], which are the ones not eliminated before. So the fights can affect different ranges over time.
+
+But how to model which knights are active at each step. Because each fight's [li, ri] is a range, but only the active knights in that range are part of the fight. So, after each fight, all active knights in [li, ri] except xi are eliminated. So the active knights after the fight are those not in [li, ri] (and still active) plus xi.
+
+But tracking the active knights after each fight is tricky, especially for large n and m.
+
+But the problem is that we need to find for each knight, the earliest fight in which they were in the fight's range (and thus were part of the fight) and were not the winner. Because that's when they were eliminated.
+
+So for each knight i (except xm), we need to find the first fight that includes i in [lj, rj], and i is not xj. Because once that happens, they are eliminated, and their conqueror is xj.
+
+The key here is that a knight can be part of multiple fights, but only the first one where they are in the fight's range (and not the winner) matters.
+
+So how to efficiently find for each i, the first such fight.
+
+This sounds like for each i, we need to find the earliest j (fight) where lj <=i <= rj and xj != i. Then, conqueror[i] = xj.
+
+But how to compute this for all i efficiently.
+
+An alternative approach: For each fight, the range [lj, rj] contributes xj as the conqueror for all knights in this range that have not been conquered yet. So, if we process the fights in order, for each fight j, we can assign xj to all knights in [lj, rj] that haven't been assigned before.
+
+But how to do this efficiently. Because for each fight, the range can be up to 3e5 in size, and m is 3e5. So we need a way to assign xj to ranges, but only for those elements that haven't been assigned yet.
+
+This sounds like the problem can be approached with a Union-Find (Disjoint Set Union) structure. Or maybe a segment tree that keeps track of unassigned positions.
+
+Wait, here's an idea inspired by the offline processing and interval assignment. For each knight, their conqueror is the xj of the first fight that covers them (and xj is not the knight itself). So if we can, for each knight, find the earliest fight j where they are in [lj, rj], and xj is not i. Then, conqueror[i] = xj.
+
+But how to compute this for all i.
+
+Another angle: Since the fights are processed in order, each fight can potentially set the conqueror for some knights. For knights that are not yet conquered and are in the current fight's [lj, rj], their conqueror is xj of this fight. So, for each fight, we can mark the conquerors of those knights in the range who haven't been marked before.
+
+So the problem becomes, for each fight, how to efficiently mark all unmarked positions in [lj, rj] with xj.
+
+But how to do that efficiently. Because for each fight, the range [lj, rj] can be big, and doing this naively would be O(n) per fight, which is not feasible.
+
+So the solution is to use a data structure that allows us to find the unmarked positions in [lj, rj] quickly, and mark them with xj.
+
+One possible data structure is a Binary Indexed Tree (Fenwick Tree) or a segment tree that tracks intervals of unmarked positions. Alternatively, we can use a Union-Find structure where each unmarked position points to the next unmarked position. This approach is sometimes used in similar problems.
+
+Wait, here's a possible approach inspired by the Union-Find (DSU) method:
+
+We need to track which knights have not been assigned a conqueror yet. For each fight j, we want to assign xj to all knights in [lj, rj] that haven't been assigned yet. Then, once assigned, we don't process them again.
+
+So the idea is to maintain a data structure that allows us to find the next unassigned knight in a given range. For this, a DSU structure where each node points to the next available knight can be useful.
+
+The DSU structure can be initialized such that each knight's parent is itself. For a given range [l, r], we can iterate through the knights in [l, r] that are still unassigned. For each such knight i, we assign conqueror[i] = xj. Then, we "remove" i from the available set by unioning it with i+1. This way, when we process subsequent ranges, these knights are skipped.
+
+But how to efficiently process the [l, r] ranges. Let's outline the steps:
+
+1. Initialize conqueror array as 0 for all knights. The final winner will have 0, others will have their conqueror.
+
+2. Process the fights in the order they occurred (from first to last). For each fight j:
+
+   a. The current fight's range is [lj, rj], and the winner is xj.
+
+   b. For all knights in [lj, rj] that have not yet been assigned a conqueror (conqueror[i] is 0), set conqueror[i] = xj if i != xj.
+
+   c. The winner xj's conqueror is determined later (if they are eliminated in a subsequent fight) or remains 0 if they are the final winner.
+
+But how to efficiently find all unassigned knights in [lj, rj] for each fight.
+
+Here's where the DSU approach comes in. The DSU can help us find the next available knight in a range. The DSU is implemented with a parent array. For each i, parent[i] is the next available knight >= i. So, when we want to process a range [l, r], we start at l, and for each knight i in the range:
+
+   i = find(l)
+
+   while i <= r:
+
+       assign conqueror[i] = xj (if i != xj)
+
+       parent[i] = find(i+1)
+
+       i = find(i)
+
+This way, each knight is processed exactly once. Because once a knight is assigned, they are removed from the DSU (their parent points to the next available knight beyond them). So, for each fight, we can iterate over the unassigned knights in [lj, rj], assign their conqueror as xj (if they are not the winner), and mark them as processed.
+
+This approach is efficient because each knight is processed once. The find and union operations are done in nearly O(1) time due to path compression and union by size/rank. The total time complexity is O(m α(n)) + O(n α(n)), which is acceptable for n up to 3e5.
+
+So the steps are:
+
+- Initialize parent array as parent[i] = i for all i from 1 to n.
+
+- Initialize conqueror array as 0.
+
+- For each fight in order:
+
+   l, r, x = current fight's parameters.
+
+   current = find(l)
+
+   while current <= r:
+
+       if current != x:
+
+           conqueror[current] = x
+
+       parent[current] = find(current + 1)
+
+       current = find(current)
+
+   Then, after processing all in this fight, the conqueror of x is not set yet unless they are part of another fight where someone else wins.
+
+Wait, but the winner x of the fight remains in the tournament. So x's conqueror is not set by this fight. Because in this fight, x is the winner and continues. So when processing this fight, any knights in the range (except x) are assigned conqueror x. So in the DSU approach, x will not be processed (since when current == x, we skip the assignment, and only assign to others). But wait, the code above checks if current != x, and only then assigns x to conqueror[current]. So the code is correct.
+
+So for the current fight, the winner x is not assigned a conqueror here. So x's conqueror can be set in a later fight if they are part of a fight's range and someone else wins that fight.
+
+So this approach should correctly set the conqueror for each knight except the final winner (xm), who will have conqueror 0.
+
+Yes, because the final fight's winner is xm, and after that, no more fights. So xm's conqueror remains 0.
+
+So this approach should work.
+
+Let's test it against the first sample input:
+
+Sample Input 1:
+
+4 3
+
+1 2 1
+
+1 3 3
+
+1 4 4
+
+Sample Output: 3 1 4 0
+
+Let's walk through the steps.
+
+Parent array starts as [1,2,3,4]
+
+Conqueror array is [0,0,0,0]
+
+Process first fight (1-2, x=1):
+
+We start at l=1. find(1) is 1.
+
+current=1. Since 1 <=2:
+
+   since 1 == x (1), do not set conqueror.
+
+   set parent[1] = find(2) → 2.
+
+   current becomes find(1) → find(2) which is 2.
+
+current=2 <=2:
+
+   conqueror[2] =1 (since 2 !=x (1)).
+
+   set parent[2] = find(3) →3.
+
+   current becomes find(3) →3, which is >2. Exit loop.
+
+So after first fight, conqueror is [0,1,0,0].
+
+Parent array is [2,3,3,4].
+
+Next fight: 1-3, x=3.
+
+We start at l=1.
+
+find(1): parent[1] is 2. find(2) is parent[2] is 3. find(3) is 3. So current is 3.
+
+But 3 is >3? Wait, the fight's l is 1, r is3.
+
+Wait, the current is 3. Which is <=3.
+
+So:
+
+current=3:
+
+   check if 3 != x (3) → no. So do not assign.
+
+   parent[3] = find(4) →4.
+
+   current becomes find(3) →4.
+
+Which is >3. So loop ends.
+
+So no changes to conqueror in this fight.
+
+Wait, but the fight is [1-3]. The unassigned knights here are 1 and 3.
+
+But after first fight, 1's conqueror is 0 (since he was the winner of first fight), and 2's conqueror is 1.
+
+But in the first fight, the DSU processing would have marked 1 and 2 as processed.
+
+Wait, the first fight's code:
+
+current starts at 1. Since 1 is x, we set parent[1] to 2 (find(1+1) is 2). Then current becomes find(1) which is find(2), which is 2. Then current 2 is <=2. Since 2 !=x (1), conqueror[2] is set to 1. Then parent[2] is set to find(3), which is 3. So next current is find(2) which is 3, which is >2. So loop ends.
+
+So after first fight, 1 and 2 are processed (but 1's conqueror remains 0, since he was x in that fight). So in the DSU structure, parent[1] is 2, parent[2] is 3.
+
+Now the second fight is 1-3, x=3.
+
+The code starts at l=1. find(1) is find(1) → parent[1] is 2. find(2) is 3 (since parent[2] is 3). find(3) is 3. So current is 3.
+
+3 is in [1,3]. So current is 3. Since 3 == x (3), do not set. Then set parent[3] to find(4) →4. current becomes find(3) →4. Which is >3. So loop ends.
+
+So the only knight in this fight's range that's unprocessed is 3, but since he's the winner, his conqueror is not set here.
+
+So conqueror remains [0,1,0,0].
+
+Third fight: 1-4, x=4.
+
+We process l=1.
+
+find(1) → parent[1] is 2. find(2) is 3. find(3) is 4 (since parent[3] is 4 now). So current is4.
+
+4 is in [1,4]. So:
+
+current=4.
+
+Check if 4 !=x (4) → no. So do not assign.
+
+Set parent[4] = find(5) → which is beyond n. So current becomes find(4) →4+1=5, which is beyond 4. So loop ends.
+
+Wait, but the range is 1-4. So after processing this fight, the code checks for current in [1,4].
+
+But in the DSU, after the first two fights:
+
+parent[1] →2
+
+parent[2] →3
+
+parent[3] →4
+
+parent[4] →4.
+
+So for the third fight (1-4, x=4):
+
+current starts at find(1) → find(1) → parent[1] is 2. find(2) → parent[2] is 3. find(3) → parent[3] is4. find(4) is4.
+
+So current=4. 4 <=4.
+
+Check if 4 !=x (4) → no. So conqueror[4] remains 0.
+
+Set parent[4] = find(4+1) →5. Since n is 4, find(5) is beyond, so parent[4] is5.
+
+current becomes find(4) →5. Which is >4. Loop ends.
+
+So after this fight, conqueror is [0,1,0,0].
+
+But according to the sample output, the final conqueror array is [3,1,4,0].
+
+Hmm, this suggests that the approach is missing some steps.
+
+Wait, what's wrong here?
+
+In the sample explanation, after the first fight, knights 1 and 2 fight. 1 wins. So knight 2's conqueror is 1. Then the second fight is between 1 and 3. 3 wins, so knight 1's conqueror is 3. Then the third fight is between 3 and4. 4 wins, so knight 3's conqueror is4. 4's conqueror is 0.
+
+So the correct conqueror array is [3,1,4,0].
+
+But according to the DSU approach, after processing the first fight, conqueror[2] is 1. Then the second fight's code is supposed to process the range 1-3, but the DSU skips 1 and 2 (since they are already processed), but knight 1's conqueror is 0. So why in the code's approach, when processing the second fight, the current is 3 (which is part of the range 1-3), but since x is3, we don't set conqueror[3] here. Then in the third fight, the code processes 4 (since the DSU starts at 1, but find(1) leads to 2→3→4, which is part of the range 1-4. So 4 is processed, but since x is4, we don't set it. But what about 3?
+
+Ah, here's the problem. In the second fight, the code processes the range 1-3, but the DSU's find(1) returns 3. Because after the first fight, the parent structure is:
+
+parent[1] = 2, parent[2] =3, parent[3] =3, parent[4] =4.
+
+Then, when processing the second fight (1-3, x=3), the code starts with find(1) which is 3 (since 1's parent is 2, find(2) is 3). So current is3, which is <=3. Since current (3) is equal to x (3), we do not set the conqueror. Then, we set parent[3] to find(4) which is4, and current becomes find(3) which is4, which is beyond the range. So in this fight, no changes are made. So knight 1 and 3 are part of this fight. But knight 1's conqueror is still 0. But according to the problem's scenario, knight 1 is part of this fight and is eliminated by 3.
+
+So the DSU approach is not handling this case correctly.
+
+Wait, why is that? Because in the second fight, the active knights are those not eliminated in previous fights. But the code is processing the fights in order and tracks which knights have been assigned a conqueror. However, in the second fight, the code is processing the range [1,3], but in the DSU, the find(1) returns 3, which is the next available knight. That's because after the first fight, the parent array for 1 is 2, which's parent is3. So, in the second fight, the code processes 3 (the next available knight in [1,3]) but since 3 is the winner, nothing is done. So knight 1, who was in the previous fight's range but not eliminated (he was the winner of that fight) is not processed here.
+
+Ah! So the problem is that the DSU approach is considering all knights in the fight's range, regardless of whether they were active. But according to the problem statement, each fight includes the knights that are still active in the tournament. So after the first fight, the only active knights are 1 and those outside the first fight's range (3 and4). Then, the second fight's range is [1,3], so the active knights in that range are 1,3. So the fight is between 1 and3, and 3 wins. So knight1 is eliminated, so his conqueror is3. But according to the DSU approach, knight1's conqueror remains 0, because the code processed the first fight (where he was the winner) and in the second fight, the DSU starts at find(1) which is3, so he's not processed again.
+
+So the DSU approach is not correct. Because it's not tracking the active knights, but rather all knights in the fight's range, including those already eliminated.
+
+Wait, but according to the problem statement, each fight's range [li, ri] must include at least two active knights, and the input is guaranteed to be correct. So in the second fight, the code must process all active knights in [li, ri], which are the ones that haven't been eliminated yet.
+
+But in the DSU approach, the code is assigning conquerors to knights in the fight's range [li, ri] only once. So in the first fight, the code marks 1 and2. But knight1 was the winner and remains active, so he can be part of future fights. But in the DSU approach, once a knight is processed (i.e., assigned a conqueror or not), they are marked as processed and cannot be part of any subsequent fight's processing. This is incorrect.
+
+Ah! This is the crux of the problem. The DSU approach is tracking which knights have been eliminated (i.e., assigned a conqueror), but the problem's logic is that a knight can participate in multiple fights until they are eliminated. Only when they are eliminated (by losing a fight) do they get a conqueror. So, the DSU approach is not modeling the active knights correctly.
+
+So the problem with the initial approach is that the DSU marks all knights in the range as processed, even if they are the winner (and thus remain active). So, for example, in the first fight, knight1 is the winner. He is part of the next fight, but in the DSU approach, since he was in the first fight's range, he is marked as processed (even though he wasn't eliminated). Therefore, in the next fight, the DSU skips him, and he is not part of the processing. Thus, his conqueror remains 0, but according to the problem's scenario, he should be eliminated in the second fight and have conqueror3.
+
+So the initial approach is incorrect.
+
+Hmm. This means that the DSU approach is not applicable here, since it's not tracking active knights, but rather whether a knight has been processed in any fight. But the actual active knights are those who have not been eliminated (i.e., not assigned a conqueror). So the DSU approach can be modified to track which knights are still active (i.e., have not been assigned a conqueror). Then, for each fight, we process the active knights in the range [li, ri], assign their conqueror (if not the winner), and mark them as eliminated.
+
+But the DSU approach is designed to process each knight exactly once. So when a knight is processed (assigned a conqueror), they are removed from the DSU. But in the problem's logic, the winner of a fight is still active and can participate in future fights. So the DSU needs to not process the winner of the current fight.
+
+Ah! So the code should process all active knights in the fight's range [li, ri], except the winner xi. For those, assign their conqueror as xi, and mark them as eliminated (processed). The winner xi remains active and can be part of future fights.
+
+But how to track the active knights. The DSU approach can be modified to track the active knights. So, the DSU represents the active knights. Initially, all are active. For each fight, we process the active knights in [li, ri], except xi. Assign their conqueror, and mark them as inactive. So the DSU needs to allow us to find all active knights in [li, ri], assign their conqueror, and then remove them from the active set.
+
+But the winner xi must remain active. So, the code should process all active knights in [li, ri] except xi. So, during the processing of the current fight, xi may or may not be in the DSU. If he is, we need to skip him.
+
+But how to do that.
+
+Let's think again.
+
+The DSU will track the active knights. For each fight, we need to process all active knights in [li, ri], except xi. Assign their conqueror to xi, and mark them as inactive (i.e., remove from DSU).
+
+But how to find the active knights in [li, ri] and exclude xi.
+
+Hmm, perhaps for each fight, we can process the active knights in [li, ri], and for each such knight, check if it is xi. If not, assign conqueror and mark as inactive.
+
+But how to efficiently find and process these knights.
+
+Alternative approach:
+
+Each time a fight occurs, the active knights in the range [li, ri] are those that are still in the DSU (i.e., not marked as processed). For each such knight, if they are not xi, then their conqueror is xi and they are marked as processed (removed from DSU). xi remains in the DSU (since he is the winner and remains active).
+
+So the DSU represents the active knights. Initially, all are active. For each fight:
+
+1. Find all active knights in [li, ri].
+
+2. For each such knight, if they are not xi, set their conqueror to xi and remove them from the DSU.
+
+But how to efficiently find these knights.
+
+This brings us back to the original problem of processing ranges and marking elements as inactive. The DSU approach can be used here, but with a modification to exclude xi.
+
+So for each fight, we process the range [li, ri], and for each active knight in this range (found via DSU), we check if it's xi. If not, assign xi as conqueror and remove from DSU.
+
+But how to do this efficiently.
+
+But xi could be in the range [li, ri], and we need to skip it. So perhaps during the processing, whenever we find xi, we skip it and proceed.
+
+Wait, here's a modified DSU approach:
+
+We have a DSU where each active knight's parent is the next active knight.
+
+Initially, parent[i] = i.
+
+For a fight with parameters l, r, x:
+
+   current = find(l)
+
+   while current <= r:
+
+       if current != x:
+
+           conqueror[current] = x
+
+           parent[current] = find(current + 1)
+
+       else:
+
+           # skip x; need to find the next knight after x.
+
+           # So, parent[x] = find(x + 1), but x remains in the DSU.
+
+           # So, for x, we need to leave it in the DSU.
+
+           # So, we find the next after x, and then set current to that.
+
+           next_node = find(x + 1)
+
+           # Mark x's parent to next_node, so that when we call find(x), it returns next_node.
+
+           # Wait, but that would remove x from the DSU.
+
+           # No, because we want to keep x in the DSU. So perhaps this approach is not working.
+
+Ah, this is getting complicated. Because in the DSU approach, once a node is processed (assigned conqueror), it is marked by pointing to the next node. But in the current scenario, the winner x should remain in the DSU, but other nodes in the range are processed.
+
+So for the current fight's x, we need to process all active knights in [l, r] except x, assign their conqueror to x, and remove them from the DSU (so they are not considered in future fights). The x remains in the DSU.
+
+So, during processing the current fight's range, we need to find all active knights in [l, r], and for each:
+
+   if knight != x: assign conqueror and remove.
+
+   else: leave in DSU.
+
+So the DSU should skip x when processing the range. But how?
+
+One possible way is to split the processing into two parts: process the range [l, x-1] and [x+1, r].
+
+For example:
+
+In a fight with l, r, x:
+
+   process the range [l, x-1] and assign conqueror x to all active knights.
+
+   process the range [x+1, r] and assign conqueror x to all active knights.
+
+   leave x in the DSU.
+
+This way, x is not processed, but all other active knights in [l, r] are processed.
+
+So the code for each fight would be:
+
+l, r, x = fight
+
+process the range [l, x-1], assign x as conqueror.
+
+process the range [x+1, r], assign x as conqueror.
+
+This way, x is skipped.
+
+So this approach would work.
+
+But how to handle cases where x is at the edge of the range.
+
+For example, if x is l, then [l, x-1] is invalid. So in that case, process nothing in the left part.
+
+Similarly for x = r.
+
+So the code can be structured as:
+
+for each fight:
+
+    l, r, x = current fight
+
+    # process left part [l, x-1]
+
+    if l <= x-1:
+
+        current = find(l)
+
+        while current <= x-1:
+
+            conqueror[current] = x
+
+            parent[current] = find(current + 1)
+
+            current = find(current)
+
+    # process right part [x+1, r]
+
+    if x+1 <= r:
+
+        current = find(x+1)
+
+        while current <= r:
+
+            conqueror[current] = x
+
+            parent[current] = find(current + 1)
+
+            current = find(current)
+
+This way, the x is not processed in this fight's range, and remains in the DSU for possible future fights.
+
+Let's test this modified approach with the first sample input.
+
+Sample Input 1:
+
+4 3
+
+1 2 1
+
+1 3 3
+
+1 4 4
+
+First fight: l=1, r=2, x=1.
+
+Process left part [1, 0] (invalid, since x is1, so x-1=0. So no processing.
+
+Process right part [2,2].
+
+current = find(2) →2.
+
+conqueror[2] =1.
+
+parent[2] = find(3) →3.
+
+current = find(2) →3, which is >2. So loop ends.
+
+So after first fight, conqueror[2]=1.
+
+DSU parent array: parent[2] =3, others are 1→1,3→3,4→4.
+
+Second fight: l=1, r=3, x=3.
+
+Process left part [1, 2].
+
+current = find(1) →1.
+
+Loop:
+
+current <=2.
+
+conqueror[1] =3.
+
+parent[1] = find(2) →3.
+
+current = find(1) →3. Which is >2. So loop ends.
+
+Process right part [4,3] → invalid. So no processing.
+
+So after second fight, conqueror[1] is3.
+
+Third fight: l=1, r=4, x=4.
+
+Process left part [1,3].
+
+current = find(1) →3.
+
+Loop:
+
+3 <=3.
+
+conqueror[3] =4.
+
+parent[3] = find(4) →4.
+
+current = find(3) →4. Which is >3. So loop ends.
+
+Process right part [5,4] → invalid.
+
+So after third fight, conqueror[3] is4.
+
+The conqueror array is now [3,1,4,0], which matches the sample output.
+
+Yes! So this modified approach works.
+
+Another test case:
+
+Sample Input 2:
+
+8 4
+
+3 5 4
+
+3 7 6
+
+2 8 8
+
+1 8 1
+
+Output: 0 8 4 6 4 8 6 1 
+
+Let's see how this approach works.
+
+Initial parent array: 1-8.
+
+First fight: 3-5, x=4.
+
+Process left part [3,3].
+
+current = find(3) →3.
+
+Assign conqueror[3] =4. parent[3] =4.
+
+Process right part [5,5].
+
+current = find(5) →5.
+
+Assign conqueror[5]=4. parent[5] =6.
+
+Conqueror after first fight: 3→4,5→4.
+
+Second fight:3-7, x=6.
+
+Process left part [3,5].
+
+current = find(3) →4.
+
+Check if 4 <=5. Yes.
+
+But 4 is in the left part (3-5). So:
+
+conqueror[4] =6.
+
+parent[4] =5 (find(5+1) is6).
+
+current = find(4) →5.
+
+Which is <=5.
+
+conqueror[5] is already 4 (from first fight). So why is this processed?
+
+Wait, no. The second fight's left part is [3,5]. The DSU after first fight:
+
+parent[3] =4 (after first fight's left part processing), but after the first fight's right part (5 processed), parent[5] =6.
+
+So during second fight:
+
+left part is [3,5].
+
+current = find(3) →4 (since parent[3] =4, but parent[4] is4).
+
+Then, current is4. Which is <=5. So conqueror[4] =6 (since x is6).
+
+parent[4] = find(5) →5.
+
+current becomes find(4) →5.
+
+5 <=5. conqueror[5] is4 (already set). So set it to6? No, because in the first fight, conqueror[5] was set to4. But according to the problem statement, each knight is eliminated in the first fight they are part of (and not the winner). So once a knight is eliminated, they are not part of any future fights.
+
+So in this case, knight5 was eliminated in the first fight. So in the second fight's left part (3-5), the active knights are 4 (if he wasn't eliminated) and others. Wait, but in the first fight, the x was4, which is part of the range 3-5. So in the first fight, knights3,4,5 were in the fight. x was4. So knights3 and5 were eliminated, their conqueror is4. 4 remains active.
+
+So in the second fight's range is3-7. So active knights in this range are4 and6,7 (if they were not processed before).
+
+So in the second fight's left part (3-5), which is the range [3,5], the active knights are4 (since3 and5 are already eliminated).
+
+So during processing the left part of the second fight:
+
+current starts at find(3). find(3) is4 (parent[3] =4, parent[4] =4 after first fight's left part processing).
+
+Then, current is4. which is in [3,5]. So conqueror[4] is6.
+
+parent[4] = find(4+1) →5. But find(5) is5's parent, which is6. So parent[4] is5.
+
+Then, current = find(4) →5. 5 is in [3,5]. But knight5 was already processed in the first fight, so his parent is6. So when processing current=5, find(5) is6 (since parent[5] is6). 6 is >5, so loop ends.
+
+Then, process the right part of second fight (x+1=7, r=7). So range is7-7.
+
+current = find(7) →7.
+
+conqueror[7] =6.
+
+parent[7] =8.
+
+So after second fight, conqueror[4] is6, and conqueror[7] is6.
+
+Third fight:2-8, x=8.
+
+Process left part [2,7].
+
+current starts at find(2) →2.
+
+current is2. <=7.
+
+conqueror[2] =8.
+
+parent[2] =3.
+
+current = find(2) →3.
+
+current is3, which is <=7. But knight3's parent is4. find(3) is4 (parent[3]=4). But knight4's parent is5. find(4) is5 (parent[4]=5). find(5) is6. So current is6. <=7.
+
+conqueror[6] =8.
+
+parent[6] =7.
+
+current = find(6) →7. <=7.
+
+conqueror[7] is already 6. But in this third fight, x is8, and the range is2-8. So the right part is9-8, which is invalid. So process left part [2,7]. 
+
+Wait, current is7, which is <=7. So conqueror[7] is8.
+
+parent[7] =8.
+
+current = find(7) →8. Which is>7. So loop ends.
+
+So after third fight, conqueror[2] is8, 6 is8, 7 is8.
+
+Fourth fight:1-8, x=1.
+
+Process left part [1,0] (invalid).
+
+Process right part [2,8].
+
+current = find(2) →3 (parent[2]=3). find(3) is4 (parent[3]=4). find(4) is5 (parent[4]=5). find(5)=6 (parent[5]=6). find(6)=7 (parent[6]=7). find(7)=8 (parent[7]=8). find(8) is8.
+
+current=8. <=8.
+
+But x=1. So in this fight, the right part is [2,8]. current is8. check if 8 !=1. Yes. So conqueror[8] =1.
+
+parent[8] =9.
+
+current becomes find(8) →9>8. loop ends.
+
+So after fourth fight, conqueror[8] is1.
+
+Final conqueror array:
+
+0 (x=1 is the winner), 8,4,6,4,8,6,1.
+
+Which matches the sample output.
+
+Yes! So this modified DSU approach works.
+
+So the key idea is to split the range into two parts: [l, x-1] and [x+1, r], and process each part separately. This ensures that the winner x is not processed, and remains in the DSU for future fights.
+
+So the code needs to be modified to handle the two ranges for each fight.
+
+Now, the code can be structured as follows:
+
+- Initialize a parent array where parent[i] = i for 1 <=i <=n+1. (n+1 is a sentinel)
+
+- Initialize conqueror array as 0.
+
+- For each fight in order:
+
+   l, r, x = current fight parameters.
+
+   # Process left part [l, x-1]
+
+   if l <= x-1:
+
+       current = find(l)
+
+       while current <= x-1:
+
+           conqueror[current] = x
+
+           parent[current] = find(current +1)
+
+           current = find(current)
+
+   # Process right part [x+1, r]
+
+   if x+1 <= r:
+
+       current = find(x+1)
+
+       while current <= r:
+
+           conqueror[current] = x
+
+           parent[current] = find(current+1)
+
+           current = find(current)
+
+So, the find function is path-compressed to find the next available knight.
+
+The parent array should be initialized up to n+1 to handle the sentinel.
+
+Thus, the code will correctly process all knights in the fight's range except the winner, and the DSU will track which knights have been eliminated.
+
+The time complexity is O(m α(n)), which is acceptable for the constraints.
+
+So the final step is to implement this in Python.
+
+But in Python, for large n (3e5), using a list for parent with path compression is feasible.
+
+Now, implementing the find function with path compression:
+
+def find(u, parent):
+
+    if parent[u] != u:
+
+        parent[u] = find(parent[u], parent)
+
+    return parent[u]
+
+But recursion may hit stack limits for large n. So better to implement iteratively.
+
+Alternatively, use sys.setrecursionlimit, but that's risky. So better to use iterative find.
+
+Implementing iterative find:
+
+def find(u, parent):
+
+    while parent[u] != u:
+
+        parent[u] = parent[parent[u]]
+
+        u = parent[u]
+
+    return u
+
+But even this can be slow for large n. However, with path compression, it's manageable.
+
+So, the code will be:
+
+Read n and m.
+
+Initialize parent as list from 0 to n+1 (since knights are numbered 1 to n, parent[n+1] =n+1).
+
+conqueror = [0]*(n+2) # 1-based.
+
+Then for each of the m fights:
+
+   l, r, x = map(int, input().split())
+
+   process the left and right ranges as described.
+
+At the end, print conqueror[1..n], separated by spaces.
+
+Now, testing the code.
+
+For the first sample:
+
+Sample Input 1:
+
+4 3
+
+1 2 1
+
+1 3 3
+
+1 4 4
+
+Processing fight 1:
+
+l=1, r=2, x=1.
+
+Left part: l <=x-1 → 1 <=0 → no.
+
+Right part: x+1=2 <=2 → yes.
+
+current = find(2) →2.
+
+conqueror[2] =1.
+
+parent[2] = find(3) →3.
+
+current = find(2) →3, which is >2. So loop ends.
+
+Fight 2:
+
+l=1, r=3, x=3.
+
+Left part: 1 <=2.
+
+current = find(1) →1.
+
+conqueror[1] =3.
+
+parent[1] = find(2) →3.
+
+current = find(1) →3.
+
+3 <=2? No. So loop ends.
+
+Right part: x+1=4 <=3 → no.
+
+Fight3:
+
+l=1, r=4, x=4.
+
+Left part:1 <=3.
+
+current = find(1) →3.
+
+conqueror[3] =4.
+
+parent[3] = find(4) →4.
+
+current = find(3) →4.
+
+4 <=3 → no.
+
+Right part: x+1=5 <=4 → no.
+
+So conqueror array is [3,1,4,0], as expected.
+
+Another sample.
+
+So the code should work.
+
+Now, implementing this in Python.
+
+But for handling large n and m, we need to use efficient code.
+
+But in Python, even with 3e5 elements, the code should work.
+
+Now, the code:
+
+Read n and m.
+
+parent = list(range(n+2)) # parent[0] unused, parent[1..n+1]
+
+conqueror = [0]*(n+2)
+
+for each of m fights:
+
+   l, r, x = map(int, input().split())
+
+   # process left part [l, x-1]
+
+   if l <= x-1:
+
+       current = find(l, parent)
+
+       while current <= x-1:
+
+           conqueror[current] = x
+
+           parent[current] = find(current+1, parent)
+
+           current = find(current, parent)
+
+   # process right part [x+1, r]
+
+   if x+1 <= r:
+
+       current = find(x+1, parent)
+
+       while current <= r:
+
+           conqueror[current] = x
+
+           parent[current] = find(current+1, parent)
+
+           current = find(current, parent)
+
+Finally, print conqueror[1..n] joined by spaces.
+
+But how to implement the find function.
+
+Implementing the iterative find with path compression:
+
+def find(u, parent):
+
+    while parent[u] != u:
+
+        parent[u] = parent[parent[u]]
+
+        u = parent[u]
+
+    return u
+
+But since in Python, modifying the parent list inside the function will modify the original list.
+
+Yes.
+
+So the code would be as follows:
+
+import sys
+
+def main():
+
+    import sys
+
+    sys.setrecursionlimit(1 << 25)
+
+    n, m = map(int, sys.stdin.readline().split())
+
+    parent = list(range(n + 2))  # 0 to n+1 (indices 0..n+1)
+
+    conqueror = [0] * (n + 2)  # 1-based to n
+
+    def find(u):
+
+        while parent[u] != u:
+
+            parent[u] = parent[parent[u]]
+
+            u = parent[u]
+
+        return u
+
+    for _ in range(m):
+
+        l, r, x = map(int, sys.stdin.readline().split())
+
+        # Process left part [l, x-1]
+
+        if l <= x -1:
+
+            current = find(l)
+
+            while current <= x-1:
+
+                conqueror[current] = x
+
+                parent[current] = find(current + 1)
+
+                current = find(current)
+
+        # Process right part [x+1, r]
+
+        if x +1 <= r:
+
+            current = find(x +1)
+
+            while current <= r:
+
+                conqueror[current] = x
+
+                parent[current] = find(current +1)
+
+                current = find(current)
+
+    print(' '.join(map(str, conqueror[1:n+1])))
+
+if __name__ == "__main__":
+
+    main()
+
+But in Python, for large input sizes, reading with sys.stdin.readline can be slow if not done properly. However, for 3e5 lines, it should be manageable with this approach.
+
+Test case 1:
+
+4 3
+
+1 2 1
+
+1 3 3
+
+1 4 4
+
+Output: 3 1 4 0.
+
+Test case 2:
+
+8 4
+
+3 5 4
+
+3 7 6
+
+2 8 8
+
+1 8 1
+
+Output: 0 8 4 6 4 8 6 1.
+
+Yes, the code should produce these.
+
+So this should be the correct approach.
+</think>
+To solve this problem, we need to determine the knight that each participant was conquered by in a tournament. The tournament consists of multiple fights where each fight eliminates all knights in a specific range except the winner. The goal is to efficiently track the conqueror of each knight using the given fight details.
+
+### Approach
+1. **Data Structure**: Use a Disjoint Set Union (DSU) with path compression to efficiently track active knights and mark eliminated knights.
+2. **Range Processing**: For each fight, process the range in two parts: left of the winner and right of the winner. This ensures that the winner remains active for future fights.
+3. **Elimination Tracking**: For each knight in the fight range (except the winner), mark their conqueror and update the DSU to skip them in subsequent fights.
+
+### Solution Code
+```python
+import sys
+
+def main():
+    sys.setrecursionlimit(1 << 25)
+    n, m = map(int, sys.stdin.readline().split())
+    parent = list(range(n + 2))  # parent[0] unused, indices 0 to n+1
+    conqueror = [0] * (n + 2)  # 1-based to n
+
+    def find(u):
+        while parent[u] != u:
+            parent[u] = parent[parent[u]]
+            u = parent[u]
+        return u
+
+    for _ in range(m):
+        l, r, x = map(int, sys.stdin.readline().split())
+        # Process left part [l, x-1]
+        if l <= x - 1:
+            current = find(l)
+            while current <= x - 1:
+                conqueror[current] = x
+                parent[current] = find(current + 1)
+                current = find(current)
+        # Process right part [x+1, r]
+        if x + 1 <= r:
+            current = find(x + 1)
+            while current <= r:
+                conqueror[current] = x
+                parent[current] = find(current + 1)
+                current = find(current)
+    
+    print(' '.join(map(str, conqueror[1:n+1])))
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Initialization**: The DSU (`parent`) is initialized such that each knight points to themselves, indicating they are active. The `conqueror` array is initialized to store the result.
+2. **Find Function**: This function uses path compression to quickly find the next active knight.
+3. **Processing Fights**: For each fight, the range is split into two parts around the winner. Each part is processed to mark the conqueror of active knights and update the DSU to skip eliminated knights.
+4. **Output**: After processing all fights, the `conqueror` array is printed, showing the conqueror of each knight or 0 if they won the tournament.
+
+This approach efficiently handles the constraints using DSU with path compression, ensuring each knight is processed exactly once, leading to an optimal time complexity of O(m α(n)) where α is the inverse Ackermann function.
+</bot>

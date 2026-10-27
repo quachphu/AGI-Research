@@ -1,0 +1,945 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Find the number of integers between 1 and K (inclusive) satisfying the following condition, modulo 10^9 + 7:
+
+* The sum of the digits in base ten is a multiple of D.
+
+Constraints
+
+* All values in input are integers.
+* 1 \leq K < 10^{10000}
+* 1 \leq D \leq 100
+
+Input
+
+Input is given from Standard Input in the following format:
+
+
+K
+D
+
+
+Output
+
+Print the number of integers satisfying the condition, modulo 10^9 + 7.
+
+Examples
+
+Input
+
+30
+4
+
+
+Output
+
+6
+
+
+Input
+
+1000000009
+1
+
+
+Output
+
+2
+
+
+Input
+
+98765432109876543210
+58
+
+
+Output
+
+635270834
+</user>
+<bot>
+<think>
+Okay, I need to solve this problem where I have to find the number of integers between 1 and K (inclusive) such that the sum of their digits is a multiple of D. The constraints are big because K can be up to 10^10000, which is way too large to handle with brute force. So, I need a dynamic programming approach here.
+
+Hmm, thinking about dynamic programming for digit sums. Oh right, digit DP is the way to go. The idea is to process each digit of K one by one and keep track of the possible sums modulo D, along with some flags to ensure we don't exceed the digits of K.
+
+Wait, but the sum of digits can be very large, but since we need it to be a multiple of D, we can track the sum modulo D. That's a crucial point. So instead of tracking the actual sum, which could be up to 10000 digits * 9, which is way too big, we track sum mod D. Since D is up to 100, this is manageable.
+
+So the DP state probably needs to include:
+
+- Position in the number (processing each digit from left to right)
+- Current sum modulo D
+- A tight flag indicating whether the previous digits have exactly matched K's digits so far (so that we can't exceed K's digits in the next positions)
+- Maybe a flag for leading zeros, but since we are considering numbers from 1 to K, leading zeros would correspond to 0, which is not counted. Wait, but leading zeros are only allowed when the entire number is zero. So maybe we need to account for numbers that start with zeros but then have non-zero digits. Wait no, because numbers like 012 are not valid; leading zeros aren't considered. So numbers are represented without leading zeros. So when building the digits, we have to track whether we have started the number (i.e., whether any non-zero digit has been chosen yet). Because numbers like 0 are not considered (since the range is 1 to K), except if K is 0, which it can't be here.
+
+Wait, the problem states "between 1 and K inclusive". So the number 0 is not included. So the DP needs to account for numbers that are at least 1 and up to K. So leading zeros are not allowed. So during the DP, when building the number, once we choose a non-zero digit, leading zeros are not allowed anymore, but before that, leading zeros can be considered, but they would represent the number 0, which is not counted. So perhaps we need another state variable indicating whether the number has started (i.e., whether any non-zero digit has been chosen yet). Because numbers with leading zeros before the first non-zero digit are considered as 0, which is not counted. So the state needs to track whether we have started the number (started) or not.
+
+So the DP state could be:
+
+dp[pos][mod][tight][started]
+
+Where:
+
+- pos is the current digit position being processed.
+- mod is the current sum of digits modulo D.
+- tight is a boolean indicating if the previous digits have exactly matched K's digits up to pos-1, so that the next digit cannot exceed K's pos-th digit.
+- started is a boolean indicating whether any non-zero digit has been chosen yet. This is necessary to avoid leading zeros. Because, for example, if we have started, then leading zeros are allowed (like in 105, where after 1, a zero is allowed). But before starting, leading zeros do not contribute to the number. So numbers like 0...0 are not considered, but once a non-zero digit is chosen, the number starts, and zeros after that are part of the number.
+
+Wait, but how to model the started state. For example, if the digits are being processed, and the current position is such that all previous digits are zero. Then, if the current digit is non-zero, the started flag becomes true, and mod is the sum (which is the current digit mod D). If the current digit is zero, the started remains false. So the started flag is necessary to know whether we have started the number (i.e., have at least one non-zero digit). Because numbers can't have leading zeros. So 0 is not counted, so the started flag helps in ensuring that once we have started, we can track the sum, but before that, the digits are not contributing to the sum.
+
+So, in the DP, when started is false, any digit chosen (including zero) doesn't contribute to the sum. Once a non-zero digit is chosen, started becomes true, and the sum starts accumulating.
+
+So, the initial state is pos=0, mod=0, tight=True, started=False.
+
+At each step, for the current position, we can iterate through possible digits d. The allowed digits depend on the tight constraint. If tight is True, then the digit can't exceed the current digit of K. Otherwise, it can be 0-9.
+
+For each digit d:
+
+- If started is False and d is 0: then the started remains False. The mod remains 0. The tight becomes tight_next, which depends on whether d equals K's digit (only if tight was True before).
+
+- If started is False and d is non-zero: then the started becomes True. The mod becomes (current sum + d) mod D. The tight becomes tight_next (whether d == K's digit in this position, if previous tight was True).
+
+- If started is True: then the mod is (current mod + d) mod D. Tight is updated as before.
+
+So the transitions need to handle these cases.
+
+Once all digits are processed, we need to check if mod is 0 and started is True. Only then, the number is counted.
+
+But wait, the sum is the sum of all digits. So for numbers that have started, the sum is the sum of their digits. So when started is True, even if the number is all zeros after the first non-zero digit, the sum is the sum of all digits (including the non-zero ones and the zeros). So the started flag is essential to determine whether the digits contribute to the sum.
+
+Now, how to model this in the DP.
+
+The DP table will be built for each position, tracking mod, tight, started. The transitions will depend on the current state and the chosen digit.
+
+Given that K can be up to 10^10000 digits, the DP needs to process each digit sequentially. The number of digits is up to 1e4, which is manageable as the other dimensions are D (up to 100), tight (2), started (2). So the total states are 1e4 * 100 * 2 * 2 = 400,000, which is acceptable.
+
+The next step is to implement this DP.
+
+Now, let's outline the steps:
+
+1. Read K as a string, D as integer.
+
+2. Precompute the digits of K as a list of integers.
+
+3. Initialize the DP table. Since each state depends only on the previous state, we can use a 2D array (current and next) or use a dictionary. But for efficiency, perhaps using a 3-dimensional array (pos, mod, tight, started) is feasible. However, since pos can be up to 1e4, maybe using a list of dictionaries for each position is better, but perhaps using memoization with a cache might not be feasible due to the size.
+
+Alternatively, since we process each digit one by one, we can model the DP with a current state and update it for each digit. So for each position, we can have a 2D array (mod, tight, started) and track the counts. Wait, but mod is up to D-1, tight is 0 or 1, started is 0 or 1. So for each position, the state is (mod, tight, started). The number of possible states per position is D * 2 * 2 = 4D. Since D is up to 100, that's 400 states per position. For 1e4 positions, that's 4e6 states. Which is manageable.
+
+So the plan is:
+
+- For each position i in 0..n-1 (where n is the length of K):
+
+   - For each possible state (mod, tight, started) in the current DP:
+
+      - For each possible digit d that can be placed at this position (depending on tight):
+
+         - Compute new_tight: if tight is True, then d must be <= the i-th digit of K. If d < K[i], then new_tight is False. If d == K[i], then new_tight remains tight. If d > K[i], it's not allowed (since tight was True).
+
+         - Compute new_started: if started was True, then new_started remains True. If started was False, then new_started is (d != 0).
+
+         - Compute new_mod: if new_started is True, then mod is (current mod + d) mod D. But wait, if started was False and d is non-zero, then new_mod is (0 + d) mod D. If started was True, then new_mod is (current mod + d) mod D. If new_started is False (i.e., started was False and d is 0), then new_mod remains 0.
+
+So, for new_mod:
+
+If started is False:
+
+   if d == 0: new_mod is 0 (since the sum hasn't started)
+
+   else: new_mod is d mod D (sum starts with d)
+
+If started is True:
+
+   new_mod is (current mod + d) mod D.
+
+So, combining these:
+
+new_mod = (current mod + d) mod D, but only if new_started is True. Otherwise, it's 0.
+
+Wait, no. Let's think:
+
+When started is False and d is 0: new_started is False. So the sum remains 0.
+
+When started is False and d is non-zero: new_started becomes True. The sum is d.
+
+When started is True: any digit added adds to the sum.
+
+So the new_mod is:
+
+if not started:
+
+   if d == 0:
+
+      new_mod = 0 (since the sum hasn't started)
+
+   else:
+
+      new_mod = d % D
+
+else:
+
+   (current mod + d) % D
+
+Wait, but when started is False and d is non-zero, the sum is d. So new_mod is d mod D.
+
+But when started is True, the sum is the current mod (sum so far) plus d.
+
+So in code:
+
+if new_started:
+
+   new_mod = (current_mod + d) % D
+
+else:
+
+   new_mod = 0
+
+Wait, no. Because when new_started is True, that can happen in two cases:
+
+1. started was False, and d is non-zero: new_started is True. The sum starts at d.
+
+So new_mod is d mod D.
+
+2. started was True, and d is any digit: new_started is True. The sum is current_mod + d mod D.
+
+So, the correct formula for new_mod is:
+
+if new_started:
+
+   if started:
+
+       new_mod = (current_mod + d) % D
+
+   else:
+
+       new_mod = d % D
+
+else:
+
+   new_mod = 0
+
+But perhaps we can model it as:
+
+new_mod = (current_mod + (d if new_started else 0)) % D
+
+Wait, but when started is False and d is non-zero, new_started becomes True, so new_mod is d mod D.
+
+When started is True and d is any digit, new_mod is (current_mod + d) mod D.
+
+So combining these cases:
+
+if new_started is True:
+
+   if started is True:
+
+       new_mod = (current_mod + d) % D
+
+   else:
+
+       new_mod = d % D
+
+else:
+
+   new_mod = 0
+
+But how to express this in code? Maybe:
+
+if new_started:
+
+   if started:
+
+       new_mod = (current_mod + d) % D
+
+   else:
+
+       new_mod = d % D
+
+else:
+
+   new_mod = 0
+
+Alternatively, perhaps new_mod can be computed as ( (current_mod if started else 0 ) + d ) % D if new_started else 0.
+
+Because, if the new_started is True, then the sum is (previous sum if started else 0) + d. So:
+
+sum_so_far = current_mod if started else 0
+
+new_mod = (sum_so_far + d) % D if new_started else 0
+
+Yes, that's a way to think about it. Because:
+
+If started was False, the sum was 0 (since the number hasn't started yet). If d is non-zero, new_started is True, so the sum is d.
+
+If started was True, the sum was current_mod, adding d gives new_mod.
+
+So, the formula for new_mod is:
+
+if new_started:
+
+   sum_so_far = current_mod if started else 0
+
+   new_mod = (sum_so_far + d) % D
+
+else:
+
+   new_mod = 0
+
+Yes, that's correct.
+
+So, putting this all together.
+
+For each state (mod, tight, started) in the current DP, and for each possible digit d:
+
+- Determine the maximum allowed digit based on tight. If tight is True, the digit can be from 0 to K[i], else from 0 to 9.
+
+For each possible d in 0..max_digit:
+
+- Compute new_tight:
+
+   new_tight = tight and (d == K[i])
+
+- Compute new_started:
+
+   new_started = started or (d != 0)
+
+- Compute new_mod as explained above.
+
+Then, add the current count to the new state (new_mod, new_tight, new_started) in the next DP.
+
+The base case is before processing any digits (pos=0). The initial state is mod=0, tight=True, started=False, with count 1.
+
+Wait, the initial state is at position 0, before processing the first digit. So the initial state is:
+
+mod = 0, tight = True (since we haven't chosen any digits yet, so the tight is True for the first digit), started = False, count = 1.
+
+Then, for each digit position from 0 to len(K)-1, we process each possible state and transition to the next state.
+
+At the end (after processing all digits), the total count is the sum of all states where mod == 0 and started == True. Because those states represent numbers that have started (so they are >=1) and sum of digits mod D is 0.
+
+But wait, there's a catch. Because when K is a number with leading zeros (but K can't be, since K is given as a string without leading zeros). So the code will process K as a normal string, perhaps with leading zeros only if K is "0", but according to the constraints, K >=1? Wait, the constraints say K is >=1. Because the input says 1 <= K < 1e10000. Wait, no. The input says "All values in input are integers. 1 <= K < 1e10000." Wait, the first line of input is K. So K can be 1, but in the problem statement, the numbers considered are 1..K, inclusive. So K is at least 1.
+
+So the K string does not have leading zeros. So the first digit is non-zero.
+
+So the initial digit is non-zero. But during processing, when tight is True, the first digit can be up to K's first digit.
+
+Wait, but K is given as a string. For example, in the first sample input, K is 30. The first digit is 3, and the allowed digits for the first position are 0 to 3? No. Because the numbers start from 1. But the code must handle numbers with leading digits less than or equal to K's first digit. Wait, but for the first digit, if the tight is True, then the digit can't exceed K[0]. So for K=30, the first digit can be 0,1,2,3. But leading zeros are allowed in the digits, but in the code's started flag, those would not count as started. For example, 0 as a number is not considered, but during processing, when the first digit is 0, started remains False, but subsequent digits can't start the number unless a non-zero digit is chosen. But when the entire number is 0, it's not counted. So the code must not count such cases.
+
+So the code's DP will naturally exclude numbers that are 0, because the started flag is False, and the sum mod D would be 0, but the started flag is False. So only numbers where started is True and sum mod D is 0 are counted.
+
+Now, after processing all digits, the answer is the sum of counts for all states where mod is 0 mod D and started is True.
+
+But also, we need to subtract 1 if the number 0 is included, but in our case, since the problem counts from 1, the DP counts all numbers up to K (including K if applicable). Wait, but how does the code handle numbers that are zero? Because in the code's DP, numbers with started=False (all digits zero) will not be counted. So the code's answer is correct.
+
+But wait, what about the number 0? For example, if K is 0, but the problem constraints say K >=1, so that's not possible.
+
+So, the code will correctly count all numbers from 1 to K inclusive where the sum of digits is a multiple of D.
+
+Now, let's test the first sample input:
+
+Sample 1:
+
+Input:
+
+30
+
+4
+
+So K is 30. D is 4.
+
+Numbers between 1 and 30 with sum of digits divisible by 4.
+
+Let's list them:
+
+Numbers: 4 (4), 8 (8), 13 (1+3=4), 17 (1+7=8), 22 (2+2=4), 26 (2+6=8), 30 (3+0=3) no. So that's 6 numbers. The sample output is 6.
+
+So the code should return 6. Let's see how the DP would handle this.
+
+The K digits are [3,0].
+
+Processing the first digit (position 0, which is '3'):
+
+Possible digits for the first position are 0, 1, 2, 3 (since tight is True initially).
+
+For each d in 0..3:
+
+Case 1: d=0.
+
+Then, new_tight = (d == 3) ? No, so new_tight is False. Because tight was True, and d is 0 which is less than 3. So new_tight is False.
+
+new_started is False (since d is 0 and started was False).
+
+So mod remains 0.
+
+So after first digit, state is (mod=0, tight=False, started=False). The count is 1.
+
+Case 2: d=1.
+
+new_tight: since d <3, tight becomes False.
+
+new_started: True (since d is non-zero).
+
+mod becomes 1 mod 4 =1.
+
+So state (1, False, True) with count 1.
+
+Case 3: d=2: same as d=1, mod becomes 2.
+
+State (2, False, True), count 1.
+
+Case4: d=3: tight becomes True (since d ==3).
+
+new_started: True.
+
+mod is 3 mod4 =3.
+
+State (3, True, True) count 1.
+
+So after first digit, the DP states are:
+
+(0, False, False) count 1
+
+(1, False, True) count 1
+
+(2, False, True) count 1
+
+(3, True, True) count1.
+
+Then, processing the second digit (position 1, which is 0).
+
+For each of the previous states:
+
+Let's take each state:
+
+State (0, False, False):
+
+This is the case where the first digit was 0, and now processing the second digit. Since tight is False, the next digit can be 0-9.
+
+But started is False. So for any digit d in 0-9:
+
+if d is 0: new_started remains False. mod is 0. new_tight is False (since tight was already False).
+
+if d is non-zero: new_started becomes True, mod is d mod4.
+
+So for this state:
+
+Possible digits 0-9.
+
+For each d:
+
+For d=0:
+
+new_started: False.
+
+new_mod: 0.
+
+new_tight: False.
+
+So this contributes to (0, False, False).
+
+For d=1-9:
+
+new_started: True.
+
+mod: d mod4.
+
+tight: False.
+
+So for each d in 1-9, add to (d mod4, False, True) the count.
+
+So the contribution from state (0, False, False) (count 1) to:
+
+- (0, False, False) for d=0: +1.
+
+- For d=1: (1, False, True) +1.
+
+... up to d=9: (9 mod4=1, False, True) +1.
+
+But since D is 4, 9 mod4 is 1. So for d=1: 1, d=2: 2, d=3:3, d4:0, d5:1, etc.
+
+But processing all possible digits here may get complicated, but in code, it's handled by loops.
+
+But the key point is that when tight is False, the digits can be 0-9.
+
+Now, moving to other states.
+
+State (1, False, True) (mod=1, tight=False, started=True).
+
+Now, processing the second digit. Tight is False, so digits can be 0-9.
+
+For each digit d in 0-9:
+
+new_tight is False (since tight was False).
+
+new_started is True (since started was True).
+
+new_mod is (1 +d) mod4.
+
+So for each d, the new_mod is (1 +d) mod4.
+
+Each possible d (0-9) will contribute to ( (1+d) mod4, False, True ) the count 1 (since the previous count is 1).
+
+State (2, False, True): same as above, new_mod is (2 +d) mod4.
+
+State (3, True, True): here, tight is True. So the next digit can be up to 0 (since K's second digit is 0). So allowed digits are 0.
+
+So for this state, d can be 0 only.
+
+So new_tight is True (since tight was True and d ==0? Well, K's second digit is 0. So d is 0, which is equal to K's digit. So new_tight is True.
+
+new_started is True.
+
+new_mod is (3 +0) mod4 =3.
+
+So for this state, only d=0 is allowed, leading to new state (3, True, True) with count 1.
+
+So after processing all digits, the final states are:
+
+We need to collect all states after processing the second digit where mod is 0 and started is True.
+
+Looking at the possible states:
+
+For state (0, False, False) after two digits: started is False, so not counted.
+
+For the contributions from (0, False, False) to (d mod4, ...) where started is True:
+
+For example, in the first case, the state (0, False, False) contributes to (0, False, False) when d=0 (count 1). But started is False, so not counted.
+
+The contributions from d=4 (mod4 0), d=8 (mod4 0) would add counts to (0, False, True). So for each d where (0 +d) mod4=0 and d>0: d=4, 8. So for d=4, new_mod is 0. So in this case, when d=4, the new state is (0, False, True) with count 1. Similarly for d=8.
+
+But in the first case, the original state is (0, False, False) (count 1) and when d=4, which is allowed (tight is False), new_started is True, mod is 4 mod4=0. So contributes 1 to (0, False, True).
+
+Same for d=8. So for the (0, False, False) state, the digits d=4 and d=8 will add 1 each to (0, False, True). Wait, no. Because the original count for (0, False, False) is 1. For each d, the code would add to the new state. For example, when d=4, the new state is (0, False, True) and the count is 1 (from the original state). So in the first state (0, False, False), when processing d=4, the code would add 1 to (0, False, True). Similarly, for d=8, another 1. So total 2 contributions to (0, False, True).
+
+But wait, the digits allowed for (0, False, False) are 0-9. So for d=0: new state (0, False, False) count 1. For d=4: (0+4) mod4=0, new_started=True: add 1. For d=8: (0+8) mod4=0: add 1. So for (0, False, False) processing, the sum of all possible digits would contribute 2 instances to (0, False, True) from d=4 and d=8, and others contribute to other mod values.
+
+So after processing all digits, the (0, False, True) state would have a count of 2 (from d=4 and d=8) plus any other contributions from other states.
+
+Similarly, other states contribute to (mod, ...) states.
+
+But perhaps this is getting too detailed. Let's see how the code would compute this.
+
+At the end, the answer is the sum of all counts where mod is 0 mod D and started is True.
+
+In the first sample:
+
+After processing all digits, the states that contribute are those with mod 0 and started True.
+
+For example:
+
+- The state (0, False, True) with count 2 (from d=4 and d=8 in the first case).
+
+- Contributions from other states:
+
+For example, the state (1, False, True) (mod=1) after first digit, when processing second digit:
+
+For each d in 0-9, (1+d) mod4. So when d=3, (1+3)=4 mod4=0. So for d=3, the contribution is 1 to mod 0.
+
+So for this state, when d=3, the new state is (0, False, True) with count 1.
+
+Similarly, other digits would contribute. For example, d=7: 1+7=8 mod4=0.
+
+So for this state (mod=1), the digits 3,7 will contribute to mod 0. So 2 possibilities.
+
+So for each state, the code would accumulate the counts.
+
+But perhaps in code, after processing all digits, the answer is the sum over all states where mod=0 and started=True.
+
+In the first sample, the code would sum these contributions and return 6.
+
+Now, let's think about the code structure.
+
+The code will need to:
+
+1. Read K and D.
+
+2. Convert K into a list of integers (digits).
+
+3. Compute the DP for each digit.
+
+4. Sum the counts of all states with mod 0, started=True.
+
+So the code will use dynamic programming with a DP table that for each position tracks the possible states (mod, tight, started).
+
+Implementing this with a dictionary or a 3-dimensional array. But using a list of dictionaries for each state may be manageable.
+
+But since the mod, tight, and started can be represented as integers, perhaps using a dictionary of tuples as keys.
+
+But for efficiency, perhaps use a list of dictionaries where each dictionary represents the current state counts.
+
+Alternatively, since each transition depends on the current state, we can use two dictionaries (current and next) and update them for each digit.
+
+Here's an outline:
+
+Initialize the current DP as a dictionary. The initial state is (mod=0, tight=True, started=False) with count 1.
+
+For each digit in K:
+
+   Initialize next_dp as empty.
+
+   For each state in current_dp:
+
+      mod, tight, started = state
+
+      count = current_dp[state]
+
+      max_d = K_digits[i] if tight else 9
+
+      for d in 0..max_d:
+
+          new_tight = tight and (d == max_d)
+
+          new_started = started or (d != 0)
+
+          if new_started:
+
+              sum_so_far = mod if started else 0
+
+              new_mod_val = (sum_so_far + d) % D
+
+          else:
+
+              new_mod_val = 0
+
+          new_state = (new_mod_val, new_tight, new_started)
+
+          next_dp[new_state] = (next_dp.get(new_state, 0) + count) % MOD
+
+   current_dp = next_dp
+
+After processing all digits, sum all counts in current_dp where mod == 0 and started is True.
+
+But wait, D could be 0? No, the constraints say D is at least 1. So no division by zero.
+
+Wait, the problem statement says D is an integer with 1 <= D <= 100.
+
+So modulo D is okay.
+
+So the code can proceed.
+
+Now, handling the tight condition:
+
+In each step, the allowed digits are 0..max_d, where max_d is K_digits[i] if tight is True, else 9.
+
+But K is given as a string. So for each digit position i, K_digits[i] is the integer value of the i-th character.
+
+So, for example, K='30' is converted to [3, 0].
+
+Now, the code can process each digit of K in order.
+
+Now, implement the code.
+
+But what about the MOD? The problem says to output the count modulo 1e9+7. So MOD = 1e9+7.
+
+So, the code would:
+
+Read K and D.
+
+digits = list(map(int, list(K)))
+
+n = len(digits)
+
+MOD = 10**9 +7
+
+Initialize current_dp as a defaultdict or a dictionary. Initially, {(0, True, False): 1}
+
+Then, for each i in 0 to n-1:
+
+   next_dp = defaultdict(int)
+
+   for (mod, tight, started), cnt in current_dp.items():
+
+       max_d = digits[i] if tight else 9
+
+       for d in range(0, max_d +1):
+
+           new_tight = tight and (d == max_d)
+
+           new_started = started or (d != 0)
+
+           if new_started:
+
+               if started:
+
+                   new_mod = (mod + d) % D
+
+               else:
+
+                   new_mod = d % D
+
+           else:
+
+               new_mod = 0
+
+           new_state = (new_mod, new_tight, new_started)
+
+           next_dp[new_state] = (next_dp[new_state] + cnt) % MOD
+
+   current_dp = next_dp
+
+Finally, sum all the counts in current_dp where mod is 0 mod D (i.e., 0) and started is True.
+
+But wait, since D is the modulus, the mod is stored as (mod) % D. So new_mod is (sum) mod D. So to check if it's a multiple of D, we check new_mod ==0.
+
+So, the answer is sum( cnt for (mod, tight, started), cnt in current_dp.items() if mod ==0 and started )
+
+But since the problem requires numbers from 1 to K inclusive, the code should include K if it satisfies the condition.
+
+But the code handles K by processing all digits with tight constraints, so numbers up to K are counted.
+
+So, this code should work.
+
+Now, test case 1:
+
+K=30, D=4.
+
+The code's DP should compute 6.
+
+Another test case is when K=1000000009 and D=1. All numbers have sum of digits modulo 1 ==0. So the answer is K. But wait, 1 to K inclusive. But K is 1e9+9, but the output is 2. Wait, the sample input 2's output is 2. Wait, that's for D=1. So all numbers are valid. So the count is K. But sample input 2 has K=1000000009, which is 1,000,000,009. But the output is 2. That's confusing.
+
+Wait, wait, what's sample input 2?
+
+Sample Input 2:
+
+1000000009
+
+1
+
+Output: 2.
+
+Wait, why? Because 1e9+9 mod 1e9+7 is (1e9+9) - (1e9+7) = 2. So the answer is (1e9+9) mod 1e9+7 is 2. So in this case, the code should output (1000000009) mod 1e9+7, which is 2. But why is that the case when D=1? Because any number's sum of digits is congruent to 0 mod 1 (since any sum is divisible by 1). So all numbers from 1 to K are valid. So the count is K numbers, but modulo 1e9+7, which gives 1000000009 mod 1e9+7 = 2. So the sample output is 2.
+
+But according to the code, after processing all digits, the sum of all states where mod ==0 (mod 1 is 0) and started is True. Since mod 1, 0 mod1 is 0. So all numbers are counted, so the code should return K mod 1e9+7.
+
+But how does the code compute this?
+
+In this case, D=1. So any sum mod1 is 0. So every number (started is True) is counted. So the code should return the number of numbers between 1 and K inclusive, mod 1e9+7.
+
+Which is (K) mod 1e9+7. For K=1000000009, that's 1000000009 - 1e9+7 = 1000000009-1000000007=2. So the code should output 2.
+
+So the code's DP should correctly count all numbers from 1 to K, which in this case, for D=1, returns K mod 1e9+7.
+
+So the code must count exactly the number of numbers between 1 and K inclusive, but how?
+
+Because, for each state where started is True, the mod is sum mod1=0. So all such states are counted.
+
+So the sum is the total number of numbers between 1 and K inclusive.
+
+So the code's answer for D=1 is K mod MOD.
+
+But how does the code compute K as a number? Because K is given as a string, and when D=1, the code doesn't need to track the sum, but just whether the number is between 1 and K.
+
+But in the code's DP, when D=1, all states with started=True will have mod 0 mod1=0, so the code's answer is the total count of numbers from 1 to K inclusive.
+
+So the code must correctly count that, which requires that the DP correctly tracks the count of numbers up to K.
+
+So for D=1, the code's answer is (K) mod MOD. But how to verify that.
+
+Well, for K=1000000009, the code must compute the count as 1000000009 mod MOD, which is 2.
+
+So in the code, when D=1, the sum is always 0 mod1=0. So the code counts all numbers from 1 to K.
+
+So the code's DP is correct.
+
+So the code works for this case.
+
+Thus, the code's approach is correct.
+
+Now, implement this code in Python.
+
+But wait, in Python, for large K (up to 1e4 digits), the code should process each digit without problem.
+
+Now, code steps:
+
+Read K and D from input.
+
+digits = list of integers of K.
+
+Initialize current_dp as a dictionary with initial state (mod=0, tight=True, started=False): count 1.
+
+Then, for each digit in digits:
+
+   for each state in current_dp:
+
+      mod, tight, started = state
+
+      max_d = digits[i] if tight else 9
+
+      for d in 0 to max_d:
+
+          compute new_tight, new_started, new_mod.
+
+          update next_dp accordingly.
+
+Finally, sum all counts where mod %D ==0 and started is True.
+
+But in code, the new_mod is already modded by D. So new_mod is stored as (sum_so_far + d) %D or 0.
+
+So in the code, the final sum is for all (mod, tight, started) in current_dp where mod ==0 and started is True.
+
+Thus, the code can be written as follows.
+
+Now, code:
+
+Read K as a string. D is integer.
+
+digits = [int(c) for c in K]
+
+n = len(digits)
+
+MOD = 10**9 +7
+
+from collections import defaultdict
+
+current = defaultdict(int)
+
+current[(0, True, False)] = 1
+
+for i in range(n):
+
+    next_dp = defaultdict(int)
+
+    for (mod, tight, started), cnt in current.items():
+
+        max_d = digits[i] if tight else 9
+
+        for d in range(0, max_d+1):
+
+            new_tight = tight and (d == max_d)
+
+            new_started = started or (d != 0)
+
+            if new_started:
+
+                if started:
+
+                    new_mod = (mod + d) % D
+
+                else:
+
+                    new_mod = d % D
+
+            else:
+
+                new_mod = 0
+
+            key = (new_mod, new_tight, new_started)
+
+            next_dp[key] = (next_dp[key] + cnt) % MOD
+
+    current = next_dp
+
+ans =0
+
+for (mod, tight, started), cnt in current.items():
+
+    if mod % D ==0 and started:
+
+        ans = (ans + cnt) % MOD
+
+print(ans)
+
+Wait, but mod is already mod D, so mod% D is redundant. So checking mod ==0 is sufficient.
+
+So the condition is:
+
+if mod ==0 and started:
+
+    ans += cnt
+
+Yes.
+
+So the code should work.
+
+Testing the first sample:
+
+Sample Input 1:
+
+30
+
+4
+
+The code should output 6.
+
+Sample Input 2:
+
+1000000009
+
+1
+
+The code should output 2.
+
+Sample Input3:
+
+98765432109876543210
+
+58
+
+Output: 635270834.
+
+The code should compute this correctly.
+
+So the code should be correct.
+</think>
+To solve this problem, we need to determine the number of integers between 1 and K (inclusive) such that the sum of their digits is a multiple of D. Given the constraints that K can be extremely large (up to 10^10000), a brute force approach is infeasible. Instead, we use a dynamic programming (DP) approach known as digit DP to efficiently count valid numbers.
+
+### Approach
+1. **Digit DP Concept**: We process each digit of K from left to right, maintaining states to track the sum of digits modulo D, whether the current number being formed is still tight (i.e., not exceeding the corresponding digits of K), and whether the number has started (to handle leading zeros).
+
+2. **State Representation**: The DP state is represented by:
+   - `mod`: The sum of digits modulo D.
+   - `tight`: A boolean indicating if the current number being formed is still within the bounds of the corresponding digits of K.
+   - `started`: A boolean indicating if the number has started (to handle leading zeros).
+
+3. **Transitions**: For each digit position, we consider all possible digits (0-9 if not tight, otherwise 0 to the current digit of K). We update the states based on the chosen digit, adjusting `mod`, `tight`, and `started` accordingly.
+
+4. **Final Count**: After processing all digits, the result is the count of valid numbers where the sum of digits modulo D is 0 and the number has started (to exclude zero).
+
+### Solution Code
+```python
+K = input().strip()
+D = int(input())
+MOD = 10**9 + 7
+
+digits = [int(c) for c in K]
+n = len(digits)
+
+from collections import defaultdict
+
+current = defaultdict(int)
+current[(0, True, False)] = 1
+
+for i in range(n):
+    next_dp = defaultdict(int)
+    for (mod, tight, started), cnt in current.items():
+        max_d = digits[i] if tight else 9
+        for d in range(0, max_d + 1):
+            new_tight = tight and (d == max_d)
+            new_started = started or (d != 0)
+            if new_started:
+                if started:
+                    new_mod = (mod + d) % D
+                else:
+                    new_mod = d % D
+            else:
+                new_mod = 0
+            key = (new_mod, new_tight, new_started)
+            next_dp[key] = (next_dp[key] + cnt) % MOD
+    current = next_dp
+
+ans = 0
+for (mod, tight, started), cnt in current.items():
+    if mod == 0 and started:
+        ans = (ans + cnt) % MOD
+
+print(ans)
+```
+
+### Explanation
+1. **Reading Input**: The input values K and D are read and processed. K is converted into a list of its digits for easier manipulation.
+
+2. **Initial State**: The initial state is set with `mod=0`, `tight=True`, and `started=False` with a count of 1, representing the empty number before processing any digits.
+
+3. **Processing Each Digit**: For each digit in K, we consider all possible states and transition to new states based on the current digit choice. The transitions update the sum modulo D, check if the number remains tight, and handle leading zeros.
+
+4. **Final Calculation**: After processing all digits, we sum the counts of all valid states where the sum modulo D is 0 and the number has started (i.e., non-zero), giving the result modulo 10^9 + 7.
+
+This approach efficiently handles the large constraints using dynamic programming to track relevant states, ensuring we count valid numbers without explicitly generating them.
+</bot>

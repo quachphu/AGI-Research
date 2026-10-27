@@ -1,0 +1,577 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.There are n cities numbered from 1 to n in Berland. Some of them are connected by two-way roads. Each road has its own length — an integer number from 1 to 1000. It is known that from each city it is possible to get to any other city by existing roads. Also for each pair of cities it is known the shortest distance between them. Berland Government plans to build k new roads. For each of the planned road it is known its length, and what cities it will connect. To control the correctness of the construction of new roads, after the opening of another road Berland government wants to check the sum of the shortest distances between all pairs of cities. Help them — for a given matrix of shortest distances on the old roads and plans of all new roads, find out how the sum of the shortest distances between all pairs of cities changes after construction of each road.
+
+Input
+
+The first line contains integer n (2 ≤ n ≤ 300) — amount of cities in Berland. Then there follow n lines with n integer numbers each — the matrix of shortest distances. j-th integer in the i-th row — di, j, the shortest distance between cities i and j. It is guaranteed that di, i = 0, di, j = dj, i, and a given matrix is a matrix of shortest distances for some set of two-way roads with integer lengths from 1 to 1000, such that from each city it is possible to get to any other city using these roads.
+
+Next line contains integer k (1 ≤ k ≤ 300) — amount of planned roads. Following k lines contain the description of the planned roads. Each road is described by three space-separated integers ai, bi, ci (1 ≤ ai, bi ≤ n, ai ≠ bi, 1 ≤ ci ≤ 1000) — ai and bi — pair of cities, which the road connects, ci — the length of the road. It can be several roads between a pair of cities, but no road connects the city with itself.
+
+Output
+
+Output k space-separated integers qi (1 ≤ i ≤ k). qi should be equal to the sum of shortest distances between all pairs of cities after the construction of roads with indexes from 1 to i. Roads are numbered from 1 in the input order. Each pair of cities should be taken into account in the sum exactly once, i. e. we count unordered pairs.
+
+Examples
+
+Input
+
+2
+0 5
+5 0
+1
+1 2 3
+
+
+Output
+
+3 
+
+Input
+
+3
+0 4 5
+4 0 9
+5 9 0
+2
+2 3 8
+1 2 1
+
+
+Output
+
+17 12
+</user>
+<bot>
+<think>
+Okay, let's see. I need to solve this problem where we have a matrix of shortest distances between cities, and after each new road is added, I have to compute the sum of all pairs' shortest paths. Hmm.
+
+So the initial matrix is already the all-pairs shortest paths. Then, each new road might potentially offer a shorter path between some pairs. The challenge is to efficiently update the shortest paths after each addition and compute the sum each time.
+
+Wait, the roads are being added incrementally. So after each new road, the existing graph's edges include all the original roads plus the new ones added up to that point. For each step, we add one new road and then compute the new sum of shortest paths.
+
+But how do the original roads work? Wait, the original roads are such that their lengths are already represented in the initial distance matrix. But maybe the original roads are a minimal set, but the problem states that the initial distance matrix is the result of the shortest paths for some set of roads. So we don't have the actual roads, just the distance matrix. But when new roads are added, we can model them as adding edges to the graph and then recompute the shortest paths considering these new edges.
+
+But the problem is that when adding a new road between a and b with length c, we need to check if this new edge can provide a shorter path for any pair of cities. For example, if the existing distance between a and b is d_ab, and the new edge has length c, then the new shortest distance between a and b would be min(d_ab, c). But that's just between a and b. However, adding this edge might also affect other pairs. For instance, for any i and j, the shortest path from i to j could now go through this new edge, leading to a shorter path.
+
+So the key is, after adding each new edge (a, b, c), we need to update the distance matrix such that for all i and j, d[i][j] is the minimum between the original d[i][j], d[i][a] + c + d[b][j], and d[i][b] + c + d[a][j]. Because the new edge could create a shortcut between a and b, but also provide a way to go from i to a, take the new road to b, then to j, which might be shorter than the existing path.
+
+Wait, that's the standard approach for updating all-pairs shortest paths after adding a new edge. The Floyd-Warshall algorithm has a way to handle this. Alternatively, since we are adding edges incrementally, maybe we can process each new edge and then perform a relaxation step for all pairs.
+
+So here's the plan: for each new road (a, b, c), first check if the new road's length is less than the current shortest path between a and b. If not, then adding this road doesn't affect the shortest paths at all. But if it is shorter, then we need to update the distance matrix by considering this new possible path.
+
+But even if c is not shorter than the existing distance between a and b, adding it might still affect other pairs. For example, maybe there's a pair i-j where the current path goes through a longer route, but now taking the new road (even if it's not the shortest between a and b) could create a shorter path via a -> new road -> b. Wait, no. Because the existing path between a and b is already the shortest. So taking the new road (c) which is longer than the existing d_ab would not help. So if the new edge's length is not better than the current d_ab, then adding it won't help any other pairs. Because any path that uses this new edge would have a cost of d_ia + c + d_bj, but the original d_ij is already the shortest, and since d_ab is <= c, then d_ia + d_ab + d_bj <= d_ia + c + d_bj. So that path isn't better. So if the new edge's c is not better than d_ab, then no changes are needed. But if c is better, then all pairs could potentially have their paths updated via a and b.
+
+So the algorithm after adding a new edge (a, b, c) would be:
+
+1. Check if c is less than the current distance between a and b. If not, do nothing. The sum remains the same as before.
+2. If c is better, then update the distance between a and b (and b and a, since it's undirected) to be c. Then, for all pairs (i, j), the new distance is the minimum of the current distance, the distance from i to a plus c plus the distance from b to j, and the distance from i to b plus c plus the distance from a to j. But wait, since the graph is undirected, we can treat a and b symmetrically.
+
+Wait, maybe the standard approach here is that adding a new edge (u, v, w) allows us to consider all possible paths that go through this edge. So for the Floyd-Warshall approach, when you add a new edge, you can update the distance matrix by considering all pairs (i, j) and check if going through the new edge provides a shorter path. But how?
+
+Alternatively, for each new edge (a, b, c), we can first check if the existing d[a][b] is greater than c. If not, skip. Otherwise, set d[a][b] = c, then run a Floyd-Warshall step where we iterate over all pairs and see if their distance can be improved via a and b.
+
+But even then, how to do that efficiently. Since the initial distance matrix already has all the shortest paths, adding a new edge (a, b, c) that's shorter than the current d[a][b] would create new paths that could potentially improve other distances.
+
+So the approach is:
+
+After adding the new edge (a, b, c):
+
+For each pair (i, j), the new distance is the minimum of:
+
+- the original distance d[i][j]
+
+- d[i][a] + c + d[b][j]
+
+- d[i][b] + c + d[a][j]
+
+But wait, this is because the new edge provides a way to go from i to a, take the new edge (cost c), then from b to j. Or from i to b, take the new edge (cost c), then from a to j.
+
+But since the initial distance matrix is already the shortest paths, the new edge can only help if it creates a shorter path for some pair. So for each i and j, we can compute the possible improvement via a and b.
+
+But how do we compute this efficiently? Because for each new edge, we have to check all possible pairs (i, j), which is O(n^2), which is acceptable since n is up to 300 and k is up to 300, leading to 300*300^2 = 27 million operations, which should be manageable.
+
+So here's the plan for each new road:
+
+- Let the new road connect a and b with length c. Since the graph is undirected, a and b are interchangeable.
+
+- First, check if the current distance between a and b is greater than c. If not, adding this road doesn't change anything, so the sum remains the same as before.
+
+- If yes, then update the distance between a and b (and b and a) to c. Then, for all pairs (i, j), compute the possible new distance via a or via b and update accordingly.
+
+Wait, but after updating a and b's distance, other pairs might have their distances improved by going through a and b. For example, if there's a pair i-j where the original path was through some other nodes, but now going i -> a -> b -> j is shorter.
+
+But how to capture all possible improvements efficiently. The way to do this is similar to the Floyd-Warshall algorithm's relaxation step. Because Floyd-Warshall iterates through all possible intermediate nodes. But in this case, the new edge introduces a new possible intermediate node (a and b) that can be used to find shorter paths.
+
+But since the initial distance matrix is already the shortest paths, and we add a new edge, the only possible intermediate nodes that can help are a and b. So perhaps after adding the edge (a, b, c), we can iterate through all pairs (i, j) and check if using a or b as intermediates gives a shorter path.
+
+Wait, but after adding the edge (a, b, c), the distance between a and b is now c. Then, for any i and j, the possible new paths are i -> a -> b -> j (cost d[i][a] + c + d[b][j]) or i -> b -> a -> j (cost d[i][b] + c + d[a][j]). We can check both possibilities and take the minimum.
+
+So for each pair (i, j), the new distance would be the minimum of the existing d[i][j], the path through a and then the new edge, and the path through b and then the new edge.
+
+Wait, but in the initial step, when we add the new edge (a, b, c), we first set d[a][b] and d[b][a] to the minimum of their current value and c. Then, for all other pairs, we need to see if going through a or through b gives a better path.
+
+But perhaps the correct approach is:
+
+For each new road (a, b, c):
+
+1. If c >= current d[a][b], do nothing. Sum remains the same as before.
+
+2. Else:
+
+   a. Update d[a][b] and d[b][a] to c.
+
+   b. Then, for all possible pairs (i, j), check if the path i -> a -> b -> j or i -> b -> a -> j gives a shorter distance. So for each i and j:
+
+      new_dist = min(d[i][j], d[i][a] + c + d[b][j], d[i][b] + c + d[a][j])
+
+      if new_dist < d[i][j], then update d[i][j] = new_dist.
+
+But wait, this might not capture all possible paths that use the new edge. For example, the path might involve multiple new edges. But in the problem, we process each road one by one. So after adding a new road, we need to update the distance matrix considering that new edge. But the problem is that the order of processing new roads might require that each new edge is considered in the context of all previously added edges.
+
+So, for example, after adding the first new road, the distance matrix is updated. Then, when adding the second new road, the distance matrix includes the effects of the first road. So the approach for each new road is to apply the above step once.
+
+But this approach may miss some optimizations. Because the first new road may have created new paths that could be combined with the second new road. However, by handling each new road in sequence and updating the distance matrix each time, we can ensure that all possible paths are considered. Because each time a new edge is added, the distance matrix is adjusted to account for that edge, and subsequent edges are processed with the updated distances.
+
+So the algorithm would work as follows:
+
+Initialize the distance matrix with the given input.
+
+For each new road in order:
+
+   a, b, c = the new road's parameters.
+
+   if c >= d[a-1][b-1] (since Python uses 0-based indices), then no change. Sum remains the same.
+
+   else:
+
+       set d[a-1][b-1] and d[b-1][a-1] to min(current value, c).
+
+       Then, for all possible i and j:
+
+           d[i][j] = min(d[i][j], d[i][a-1] + c + d[b-1][j], d[i][b-1] + c + d[a-1][j])
+
+           Similarly, since the graph is undirected, we can also check the other way, but perhaps the two terms cover all possibilities.
+
+       Wait, but after setting d[a][b] = c, we need to check all pairs (i, j) to see if their distance can be improved by going through a and then b, or through b and then a.
+
+       So the approach is to iterate through all i and j and compute the possible new distance via the new edge.
+
+       Once this is done for all i and j, the distance matrix is updated for this new road.
+
+Then, after each addition (whether it affects the matrix or not), compute the sum of all pairs (i < j) of d[i][j] and output that.
+
+But how to compute this sum efficiently.
+
+The sum for all unordered pairs can be computed by iterating i from 0 to n-1, j from i+1 to n-1, summing d[i][j].
+
+So for each step after adding a new road, compute this sum and store it.
+
+Now, considering that n can be up to 300, the sum computation would take O(n^2) time. For k steps, that's 300*300 = 90,000 per step, multiplied by k=300, giving 27,000,000 operations. Which should be manageable.
+
+So the steps are:
+
+Read n.
+
+Read the n x n distance matrix. Since the input is 1-based, but in code we can treat it as 0-based for easier handling.
+
+Read k.
+
+For each of the k roads:
+
+   Read a_i, b_i, c_i. Subtract 1 to get 0-based indices.
+
+   Check if c_i is less than current d[a][b]. If not, skip.
+
+   Else, update d[a][b] and d[b][a] to c_i.
+
+   Then, for all i in 0..n-1:
+
+       for all j in 0..n-1:
+
+           via_a = d[i][a] + c_i + d[b][j]
+
+           via_b = d[i][b] + c_i + d[a][j]
+
+           new_dist = min(d[i][j], via_a, via_b)
+
+           if new_dist < d[i][j]:
+
+               d[i][j] = new_dist
+
+               d[j][i] = new_dist  # since the graph is undirected
+
+   Wait, but this approach of iterating all i and j and checking via a and via b may not capture all possible updates. Because after updating i and j, other pairs that use i or j as intermediates may need to be updated. But since the initial distance matrix was all pairs' shortest paths, and we are adding a new edge, perhaps this step is sufficient. Because the only new path added is the one using the new edge, so for any pair i-j, the new possible path is i -> a -> new edge -> b -> j, or i -> b -> new edge -> a -> j. So checking those two possibilities for all i and j would capture any possible shorter path via the new edge.
+
+But is this sufficient? Let's think. Suppose that after adding the new edge, there's a path that goes through multiple new edges. But each new edge is processed one by one. So when processing the current new edge, all previous edges have already been considered, so the distance matrix includes their effects. So, for example, when adding the first new edge, we compute the possible improvements via that edge. Then, when adding the second edge, the distance matrix already reflects the first edge's presence, so any improvement via the second edge would include paths that might go through the first edge. But in this approach, after adding each edge, we only check paths that use that particular edge. But is that sufficient?
+
+Hmm. Let's consider an example. Suppose there are three cities A, B, C. The original distance between A and B is 5, B and C is 5, and A and C is 10. Then the shortest path from A to C is 10. Then, a new edge is added between A and B with length 3. So the distance A-B becomes 3. Then, after this edge is added, the distance A-C can be updated to 3 + 5 = 8. Now, adding another new edge between B and C with length 2. The current distance between B and C is 5. So the new edge is better. Now, after adding this edge, the distance B-C is 2. Then, for the pairs A-C, the new distance would be min(8, 3+2=5). So the sum would be 5. But according to our approach, when processing the second edge (B-C, 2), since the current distance B-C is 5, we update it to 2. Then, for all pairs i,j, we check via B and via C.
+
+For example, for i=A and j=C:
+
+via_B = d[A][B] (3) + 2 (new edge) + d[C][C] (0) = 5. The current d[A][C] is 8, so this is better.
+
+So the approach captures this.
+
+But what if the new edges form a path that allows multiple new routes? For example, adding edges A-B and B-C. When processing each edge, the algorithm would update the distances considering that edge and all previous edges.
+
+So perhaps this approach is sufficient. Because each new edge is processed in sequence, and the distance matrix is updated each time to include the effects of all previous edges. Then, when adding a new edge, the algorithm checks all possible paths that can be formed by using that edge once. However, Floyd-Warshall's approach would check all possible intermediate nodes, but here we're only checking two nodes (a and b) for each new edge. But since the new edge is the only new connection added, perhaps this is sufficient.
+
+But wait, maybe not. Let's think of a case where adding a new edge (a, b) allows a new path that uses other edges added in previous steps.
+
+For example, suppose after adding edges (a, b) and (b, c), when adding (c, d), the algorithm would check paths through c and d, but maybe there's a path that goes through a, b, c, d. But since the previous edges have already been processed, the distance between a and c would have been updated to a-b-c, and the distance between a and d would be a-b-c-d, which would be considered when adding the new edge (c, d). Wait, but in that case, the current distance between c and d would be updated to the new edge's length, and then for all pairs, the paths via c or d would be considered. But how does the algorithm capture the path a-b-c-d via the new edge (c, d) when processing it?
+
+Ah, when processing the new edge (c, d, len), the algorithm first updates the distance between c and d. Then, for all i and j, it checks if i to c plus len plus d to j (i.e., i -> c -> d -> j) is shorter than existing. Similarly for i -> d -> c -> j. So if the distance from i to c is already the shortest (which includes any previous edges), and the same for d to j, then this will capture the new path.
+
+Yes, because when processing each new edge, the distance matrix already includes all previous updates. So any path that uses multiple new edges (added in previous steps) would already have their shortest distances computed and stored in the matrix. Therefore, when adding a new edge, checking all pairs via a and via b (the endpoints of the new edge) is sufficient to capture all possible new shortest paths that include this edge. Because any other path that uses this edge plus other edges added earlier would have their components (like i to a, or b to j) already computed as the shortest possible.
+
+So the approach is correct.
+
+Now, let's code this.
+
+First, read n.
+
+Then read the distance matrix. The input is given as n lines, each with n integers. Since the matrix is symmetric, we can read it as a 2D list.
+
+Then read k, and the k roads.
+
+For each road in order:
+
+   a, b, c = input values. Convert to 0-based indices.
+
+   if c >= current d[a][b], do nothing.
+
+   else:
+
+       update d[a][b] and d[b][a] to c.
+
+       then, for all i in 0..n-1:
+
+           for all j in 0..n-1:
+
+               new_dist = min(d[i][j], d[i][a] + c + d[b][j], d[i][b] + c + d[a][j])
+
+               if new_dist < d[i][j]:
+
+                   d[i][j] = new_dist
+
+                   d[j][i] = new_dist  # since it's undirected
+
+But wait, this is O(n^2) for each road. For n=300, that's 90,000 operations per road. For k=300 roads, that's 27 million operations. Which should be manageable.
+
+Then, after processing each road, compute the sum of all pairs i < j of d[i][j], and collect those sums.
+
+Finally, output the sums separated by spaces.
+
+So the code structure would be:
+
+Read n.
+
+d = []
+
+for _ in range(n):
+
+    row = list(map(int, input().split()))
+
+    d.append(row)
+
+k = int(input())
+
+roads = []
+
+for _ in range(k):
+
+    a, b, c = map(int, input().split())
+
+    a -= 1
+
+    b -= 1
+
+    roads.append( (a, b, c) )
+
+sums = []
+
+for a, b, c in roads:
+
+    if c < d[a][b]:
+
+        # Update the distance between a and b
+
+        d[a][b] = c
+
+        d[b][a] = c
+
+        # Now, iterate through all pairs and see if their distance can be improved via a or b.
+
+        for i in range(n):
+
+            for j in range(n):
+
+                # Possible paths: i -> a -> b -> j and i -> b -> a -> j
+
+                via_a = d[i][a] + c + d[b][j]
+
+                via_b = d[i][b] + c + d[a][j]
+
+                new_dist = min(d[i][j], via_a, via_b)
+
+                if new_dist < d[i][j]:
+
+                    d[i][j] = new_dist
+
+                    d[j][i] = new_dist
+
+    # Compute the sum of all pairs i < j
+
+    total = 0
+
+    for i in range(n):
+
+        for j in range(i+1, n):
+
+            total += d[i][j]
+
+    sums.append(str(total))
+
+print(' '.join(sums))
+
+Wait, but in the code above, when we update the distance matrix, we have to check for all i and j whether via a or via b gives a shorter path. However, the code as written loops through all i and j, and for each, computes via_a and via_b, then updates d[i][j] and d[j][i].
+
+But for each pair (i,j), this is O(1) per pair. So the code should work.
+
+Testing this code against the examples.
+
+First example:
+
+Input:
+
+2
+
+0 5
+
+5 0
+
+1
+
+1 2 3
+
+So n=2. The initial sum is 5 (since 1 and 2 are the only pair). Adding a road between 1-2 with length 3.
+
+Since 3 < 5, we update d[0][1] and d[1][0] to 3. Then, for all i and j, check via a and via b. For i=0, j=1:
+
+d[0][1] is already 3. via_a = d[0][0] +3 +d[1][1] = 0 +3 +0=3. via_b = d[0][1] +3 +d[0][0] =3+3+0=6. So new_dist is 3. No change.
+
+Other pairs (like (0,0), (1,1) are 0). So the sum is 3. So the output is 3, which matches the example.
+
+Second example:
+
+Input:
+
+3
+
+0 4 5
+
+4 0 9
+
+5 9 0
+
+2
+
+2 3 8
+
+1 2 1
+
+Wait, the input matrix is:
+
+Row 1: 0 4 5
+
+Row 2:4 0 9
+
+Row 3:5 9 0
+
+So the initial sum is (0 and 1:4) + (0 and 2:5) + (1 and 2:9) = 4+5+9=18?
+
+Wait no, the initial sum is for all unordered pairs. So the sum is 4+5+9 = 18?
+
+Wait but the first example output after adding the first road (road 2-3 with 8) is 17. Let's see.
+
+Original distance matrix:
+
+Between 1-2 (0-based 0-1) is 4.
+
+Between 0-2 (0-based 0-2) is 5.
+
+Between 1-2 (0-based 1-2) is 9.
+
+So initial sum is 4 +5 +9 = 18.
+
+First new road is 2 3 8. But wait, the cities are numbered 1-based. So 2 3 are cities 1 and 2 (0-based) connected with length 8. So a=1, b=2, c=8. The current distance between 1 and 2 is 9. Since 8 <9, we update d[1][2] and d[2][1] to 8.
+
+Then, for all i and j, check via a and via b.
+
+For example, i=0, j=2 (original distance 5):
+
+via_a is d[0][1] +8 +d[2][2] =4 +8 +0=12. via_b is d[0][2] +8 +d[1][2]. Wait, d[0][2] is 5, d[1][2] is 8. So via_b is 5 +8 +8? No, wait via_b is d[i][b] + c + d[a][j]. So for i=0, j=2, via_b is d[0][2] (5) +8 (c) + d[1][j] (j=2 is 8?), but wait j is 2, which is the same as b (2). So d[1][j] is d[1][2] =8. So via_b is 5 +8 +8 =21. The original distance is 5. So the new_dist is min(5, 12, 21) =5. So no change.
+
+But for i=1, j=2, the distance is 8.
+
+What about for i=0, j=1? Original distance 4. via_a is d[0][1] (4) +8 +d[2][j=1] (d[2][1] is 8). 4+8+8=20. via_b is d[0][2] (5) +8 +d[1][j=1] (d[1][1] is 0). 5+8+0=13. So new_dist is min(4, 20,13) →4. No change.
+
+Wait, but what about other pairs? For example, i=1 and j=2: already 8.
+
+Another pair: i=2 and j=0. Their distance is 5 (since the matrix is symmetric). via_a is d[2][1] +8 +d[2][0]. Wait, a is 1 (0-based?), no. Wait a and b are 1 and 2 (0-based) in the first road. So for i=2 (city 3 in 1-based), j=0 (city 1 in 1-based), via_a is d[i][a] (d[2][1] =8) +8 + d[b][j] (d[2][0] is 5). So 8+8+5=21. via_b is d[i][b] (d[2][2] is 0) +8 +d[a][j] (d[1][0] is4). 0+8+4=12. So new_dist is min(5, 21, 12) →5. So no change.
+
+Hmm, but the output after the first road is 17. Let's see.
+
+Wait, after adding the first road (between 2 and 3 (0-based 1 and 2) with length 8), the distance between 1 and 2 (0-based 1 and 2) is 8. Then, for all pairs, check via a and via b. So what changes?
+
+For example, the pair 0 and 2 (0-based 0 and 2) have a distance of 5. But maybe there's a shorter path via the new edge.
+
+Current d[0][a] is d[0][1] =4. d[b][j] is d[2][2] =0. So via_a is 4 +8 +0 =12. Which is larger than 5.
+
+via_b is d[0][2] (5) +8 +d[1][2] (8?) Wait, no. via_b is d[i][b] (i=0, b=2: d[0][2] is5) + c (8) + d[a][j] (j=2, a=1: d[1][2] is8). So 5 +8 +8=21. So the minimum is 5.
+
+But perhaps other pairs are affected. Like, the pair 1 and 2 (a and b) are now 8. But the sum after this step is 4+5+8=17, which matches the first output.
+
+So the sum after first road is 17.
+
+Then, the second road is between 1 and 2 (0-based 0 and 1) with length 1. The current distance between 0 and 1 is 4. The new length is 1, which is better.
+
+So update d[0][1] and d[1][0] to 1.
+
+Then, for all i and j:
+
+Compute via_a (a=0) and via_b (b=1).
+
+For example, i=0, j=2: the current distance is 5.
+
+via_a: d[i][a] (d[0][0] =0) +1 + d[b][j] (d[1][2] is8). 0+1+8=9. via_b: d[i][b] (d[0][1] is1) +1 +d[a][j] (d[0][2] is5). 1+1+5=7. So new_dist is min(5,9,7) →5,7? Wait, new_dist is min(5,9,7) →5. So no change.
+
+Wait, but wait, via_b is d[i][b] (1) + c (1) + d[a][j] (5). 1+1+5=7. So current distance is 5. So min is 5. So no change.
+
+But what about i=1 and j=2. Current distance is8.
+
+via_a: d[1][0] (1) +1 +d[1][2] (8). 1+1+8=10. via_b: d[1][1] (0) +1 +d[0][2] (5). 0+1+5=6. So new_dist is min(8, 10,6) →6. So we update d[1][2] and d[2][1] to6.
+
+So after this, the pair 1-2 (0-based) is now 6.
+
+Then, other pairs:
+
+i=0, j=1: 1.
+
+i=0, j=2:5.
+
+i=1, j=2:6.
+
+Sum is 1 +5 +6=12, which matches the second output.
+
+So the code should handle this correctly.
+
+Now, in the code, when processing the first road:
+
+After updating a=1 and b=2 (0-based), the code iterates through all i and j.
+
+For example, when i=1 and j=2 (original distance 8), via_a is d[i][a] (d[1][1] is4? Wait, no. Wait the first road in the second example is between cities 2 and 3 (1-based) → a=1, b=2 (0-based).
+
+So in the first iteration, after setting d[1][2] =8, we loop through all i and j.
+
+Take i=1, j=2:
+
+via_a = d[i][a] (d[1][1] =0) +8 +d[b][j] (d[2][2] =0) →0+8+0=8. via_b = d[i][b] (d[1][2] is8) +8 +d[a][j] (d[1][2] is8). 8+8+8=24. So new_dist is min(8,8,24) →8. So no change.
+
+But wait, the original distance between i=1 and j=2 is 9. After the road is added, it's updated to 8. Then, during the loop, for i=1 and j=2, via_a would be d[1][a] (a=1) →d[1][1] is 0. 0 +8 +d[b][j] (b=2, j=2 →d[2][2] is 0. So via_a is 0+8+0=8. via_b is d[i][b] (d[1][2] is8) +8 +d[a][j] (d[1][2] is8. So via_b is 8+8+8=24. So new_dist is min(8,8,24) →8, which is same as current. So no change.
+
+Wait, but why after adding this road the sum is 4+5+8=17. That's correct.
+
+But after processing all pairs, perhaps other pairs are updated. For example, the pair i=2 and j=0.
+
+Original distance is 5. via_a is d[2][1] (8) +8 +d[2][0] (5) →8+8+5=21. via_b is d[2][2] (0) +8 +d[1][0] (4) →0+8+4=12. So new_dist is min(5,21,12) →5. So no change.
+
+So the code correctly handles this.
+
+Then, when adding the second road between a=0 and b=1 (0-based) with c=1.
+
+Original distance between 0 and 1 is4. So c=1 is better. So update d[0][1] and d[1][0] to 1.
+
+Then, for all i and j:
+
+Check via a (0) and via b (1).
+
+For example, i=1, j=2.
+
+via_a: d[1][0] (1) +1 +d[1][2] (8) →1+1+8=10.
+
+via_b: d[1][1] (0) +1 +d[0][2] (5) →0+1+5=6.
+
+new_dist is min(8,10,6) →6. So update d[1][2] and d[2][1] to6.
+
+Similarly, other pairs:
+
+i=0, j=2: via_a is d[0][0] (0) +1 +d[1][2] (now 6) →0+1+6=7. via_b is d[0][1] (1) +1 +d[0][2] (5) →1+1+5=7. current d[0][2] is5. So new_dist is min(5,7,7) →5. No change.
+
+But wait, the new d[1][2] is now6. So after this road is processed, when checking i=0, j=2, via_a is 0 +1 +6=7, which is higher than 5.
+
+But after processing the road, the sum is 1 (0-1) +5 (0-2) +6 (1-2) → total 12, which matches the example.
+
+So the code seems correct.
+
+Thus, the code should work.
+</think>
+To solve this problem, we need to determine the sum of the shortest distances between all pairs of cities in Berland after each new road is added. The solution involves updating the shortest path matrix incrementally as each new road is considered.
+
+### Approach
+1. **Input Reading**: Read the number of cities and the initial shortest distance matrix.
+2. **Process Each New Road**: For each new road, check if it provides a shorter path between its two cities than the current shortest path.
+3. **Update Distance Matrix**: If the new road provides a shorter path, update the distance matrix by considering paths that use this new road.
+4. **Sum Calculation**: After processing each new road, compute the sum of the shortest distances between all pairs of cities.
+
+### Solution Code
+```python
+n = int(input())
+d = []
+for _ in range(n):
+    row = list(map(int, input().split()))
+    d.append(row.copy())
+
+k = int(input())
+roads = []
+for _ in range(k):
+    a, b, c = map(int, input().split())
+    a -= 1  # convert to 0-based index
+    b -= 1
+    roads.append((a, b, c))
+
+sums = []
+
+for a, b, c in roads:
+    if c < d[a][b]:
+        # Update the distance between a and b
+        d[a][b] = c
+        d[b][a] = c
+        # Iterate over all pairs to update via a and via b
+        for i in range(n):
+            for j in range(n):
+                via_a = d[i][a] + c + d[b][j]
+                via_b = d[i][b] + c + d[a][j]
+                new_dist = min(d[i][j], via_a, via_b)
+                if new_dist < d[i][j]:
+                    d[i][j] = new_dist
+                    d[j][i] = new_dist  # since it's undirected
+
+    # Calculate the sum of all pairs i < j
+    total = 0
+    for i in range(n):
+        for j in range(i + 1, n):
+            total += d[i][j]
+    sums.append(str(total))
+
+print(' '.join(sums))
+```
+
+### Explanation
+1. **Reading Input**: The input includes the number of cities, the initial shortest distance matrix, and the details of each planned road.
+2. **Processing Each Road**: For each new road, check if it shortens the distance between its two cities. If it does, update the shortest distance matrix.
+3. **Updating Distances**: For each pair of cities, check if using the new road provides a shorter path. This involves checking paths through both endpoints of the new road.
+4. **Sum Calculation**: After processing each road, compute the sum of the shortest distances between all pairs of cities and store the result.
+
+This approach ensures that each new road is efficiently considered, and the shortest paths are updated incrementally, leading to the correct sum after each addition. The algorithm efficiently handles up to 300 cities and 300 new roads, ensuring optimal performance.
+</bot>

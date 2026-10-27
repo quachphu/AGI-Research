@@ -1,0 +1,663 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Sometimes mysteries happen. Chef found a directed graph with N vertices and M edges in his kitchen! 
+The evening was boring and chef has nothing else to do, so to entertain himself, Chef thought about a question "What is the minimum number of edges he needs to reverse in order to have at least one path from vertex 1 to vertex N, where the vertices are numbered from 1 to N.
+
+Input
+Each test file contains only one test case.
+The first line of the input contains two space separated integers N and M, denoting the number of vertices and the number of edges in the graph respectively. The i^th line of the next M lines contains two space separated integers Xi and Yi, denoting that the i^th edge connects vertices from Xi to Yi.
+
+Output
+In a single line, print the minimum number of edges we need to revert. If there is no way of having at least one path from 1 to N, print -1.
+
+Constraints
+
+1 ≤ N, M ≤ 100000 = 10^5
+1 ≤ Xi, Yi ≤ N
+There can be multiple edges connecting the same pair of vertices, There can be self loops too i.e.  Xi = Yi 
+
+
+Example
+Input:
+7 7
+1 2 
+3 2
+3 4
+7 4
+6 2
+5 6
+7 5
+
+Output:
+2
+
+
+Explanation
+We can consider two paths from 1 to 7:
+
+ 1-2-3-4-7 
+ 1-2-6-5-7 
+
+In the first one we need to revert edges (3-2), (7-4). In the second one - (6-2), (5-6), (7-5). So the answer is  min(2, 3) = 2.
+</user>
+<bot>
+<think>
+Okay, let's see. The problem is about finding the minimum number of edge reversals needed to create a path from vertex 1 to N. Hmm. So the original edges are directed, and reversing an edge allows us to traverse it in the opposite direction. The cost here is the number of reversals, and we need the path with the least such cost.
+
+So, the key idea here is to model this as a graph problem where each edge has a cost of 0 if we use it as it is, and 1 if we reverse it. Then, the problem reduces to finding the shortest path from 1 to N in this modified graph, where the path's total cost is the sum of the reversed edges. Because that would give us the minimal number of reversals needed.
+
+But how do we model this efficiently? Because the number of vertices and edges can be up to 1e5, which is quite large. So we need an algorithm that's linear or linearithmic in time.
+
+Wait, in this case, each edge can be traversed in two ways: either as original (cost 0) but only in the direction Xi to Yi, or reversed (cost 1) in the direction Yi to Xi. But how do we represent all possible options here without building a graph that's twice as big?
+
+Alternatively, perhaps we can model this as a graph where each node's state includes the direction of edges. But that's not feasible. Wait, maybe not. Let me think again.
+
+Another approach is to treat the edges as two possible edges. For each original edge (u, v), we can have a directed edge from u to v with cost 0 (no reversal), and a directed edge from v to u with cost 1 (reversed). Then, finding the shortest path from 1 to N in this graph will give the minimal number of reversals.
+
+But with M edges, each contributing two edges, that's 2*M edges. Then, using a Dijkstra's algorithm with a priority queue. But Dijkstra's time complexity is O((V + E) log V), and with E up to 2e5, V up to 1e5, this could be manageable. But 2e5 edges and 1e5 nodes, the log factor would be around 18 (log2(1e5) is about 17), so 1e5*18 is 1.8 million operations. That's acceptable for Python, but maybe with some optimizations.
+
+Wait, but Dijkstra's might work here. Since the edge weights are 0 or 1, maybe we can use a deque-based approach, like 0-1 BFS. Because when dealing with edges with 0 or 1 weight, we can use a deque to process nodes in order of their distance. This is similar to BFS but allows handling 0-cost edges by appending to the front of the deque and 1-cost edges by appending to the end. This way, the deque always contains nodes in order of their distance, and we can process them efficiently.
+
+Yes, 0-1 BFS is suitable here. Because the possible cost increments are either 0 or 1, so the deque can be used to manage the order of processing nodes to find the shortest path efficiently.
+
+So the steps are:
+
+1. For each original edge (u, v), create two edges in our modified graph:
+   - u -> v with cost 0 (original direction, no reversal)
+   - v -> u with cost 1 (reverse the edge, so we can traverse from v to u at cost 1)
+   
+2. Then, perform a 0-1 BFS starting from node 1, tracking the minimal cost to reach each node. The cost represents the number of edges reversed in the path taken.
+
+3. The answer is the minimal cost to reach node N. If node N is unreachable even after considering reversed edges, output -1.
+
+But wait, how do we handle the original edges? Because for each edge, even if it's a self-loop (u == v), adding both directions would mean that you can traverse the self-loop either way. But in the original problem, a self-loop (u to u) can be traversed as is (cost 0) or reversed (cost 1). But that's allowed. The problem statement allows self-loops and multiple edges, so our approach handles that correctly.
+
+So the main steps are to model the problem as a graph with 0/1 edge weights and perform a 0-1 BFS.
+
+Now, let's think about implementing this.
+
+In Python, for each node, we need to track the minimal distance. We can use a deque to manage the nodes in order. The deque starts with node 1 (distance 0). For each node we process, we look at all outgoing edges. For each edge (u, v, cost), if the current distance plus the cost is less than the known distance to v, we update the distance and add v to the front of the deque if the cost is 0, or to the back if the cost is 1.
+
+But in Python, handling large graphs (like 1e5 nodes and 2e5 edges) can be tricky. Let's think about the data structures.
+
+First, the adjacency list. For each node u, we need a list of edges, each being a tuple (v, cost). So the adjacency list can be a list of lists.
+
+For example, adj[u] is a list of tuples (v, cost). For each original edge (u, v), we add (v, 0) to adj[u], and (u, 1) to adj[v]? Wait, no. Wait, the original edge is from u to v, so in the modified graph:
+
+- Using the original edge direction (no reversal), we can go from u to v with cost 0. So adj[u].append( (v, 0) )
+- To use the reversed edge (from v to u, with cost 1), we add to adj[v] an edge (u, 1). Wait, no. Because the original edge is u->v. To reverse it, the direction becomes v->u, but to traverse that reversed edge, you can go from v to u, but you have to reverse the original edge. Wait, no. Let me clarify:
+
+The original edge is u->v. If we reverse it, it becomes v->u. So when we are in v, we can use this reversed edge to go to u. But the cost is 1. So for the original edge u->v, the reversed edge is v->u (but only after reversal). So in the modified graph, for each original edge u->v, we create two possibilities:
+
+- We can take the edge as is (u to v) with cost 0. So in adj[u], add (v, 0)
+- We can reverse the edge (v to u) with cost 1. So in adj[v], add (u, 1) ?
+
+Yes. Because if you are at u, you can take the original edge to v for free. But if you are at v, you can take the reversed edge (which was originally u->v) to u, but that would cost 1. So for each original edge u->v, we add the first edge (u to v, 0) and the second edge (v to u, 1) ?
+
+Yes.
+
+So the adjacency list for each original edge u->v would contribute two entries: (v, 0) to u's list, and (u, 1) to v's list.
+
+Wait, no. Because for the reversed edge (v->u) to exist as a traversable edge, but you can only traverse it by paying the cost. So when you are at v, you can take that reversed edge (which is represented as a directed edge from v to u, but with cost 1). So yes, for each original edge (u, v), we add (v, 0) to u's adjacency list, and (u, 1) to v's adjacency list.
+
+But wait, no. Wait, the original edge is u->v. The reversed edge would be v->u. So to traverse from u to v, you use the original edge (cost 0). To traverse from v to u, you need to reverse the original edge (cost 1). So for each original edge u->v, we add two edges:
+
+u can go to v (cost 0)
+v can go to u (cost 1)
+
+So the adjacency list is built this way.
+
+So for each input edge (u, v), we add (v, 0) to u's list, and (u, 1) to v's list.
+
+But then, when building the adjacency list, for each of the M edges, we process them and add two entries. So the adjacency list will have 2*M entries.
+
+But M can be up to 1e5, which gives 2e5 edges. That's manageable.
+
+Now, the BFS 0-1 approach:
+
+We need to track the minimal distance to each node. We can initialize a distance array with infinity, set distance[1] = 0, and then proceed.
+
+We use a deque. Start by appending node 1. Then, for each node in the deque, pop from the left (like a queue), and process all its edges.
+
+For each edge (v, cost), if the current distance plus cost is less than distance[v], then we update distance[v] and add it to the deque. If the cost is 0, add to the front; if 1, add to the back.
+
+This way, the deque always processes nodes in order of their distance, ensuring that the first time we process a node, it's with the minimal possible distance.
+
+This approach is O(V + E), which is efficient enough for the constraints.
+
+Now, let's test this approach against the sample input.
+
+Sample Input:
+7 7
+1 2 
+3 2
+3 4
+7 4
+6 2
+5 6
+7 5
+
+So the original edges are:
+
+1->2 (add 2,0 to 1's adj, and 1,1 to 2's adj)
+3->2 (add 2,0 to 3's adj; add 3,1 to 2's adj)
+3->4 (3's adj adds 4,0; 4's adj adds 3,1)
+7->4 (7's adj adds 4,0; 4's adj adds 7,1)
+6->2 (6's adj adds 2,0; 2's adj adds 6,1)
+5->6 (5's adj adds 6,0; 6's adj adds 5,1)
+7->5 (7's adj adds 5,0; 5's adj adds7,1)
+
+Then, the problem is to find the minimal cost path from 1 to 7.
+
+Sample Output is 2.
+
+Let's see how this path is found.
+
+Possible path 1: 1-2-3-4-7. Let's see the edges:
+
+1 to 2: original (cost 0)
+2 to 3: reversed edge from 3->2. So in the adj of 2, there's an edge to 3 with cost 1? Wait, no. Wait, the original edge is 3->2. So for this edge, the adjacency list for 3 has (2, 0), and the adjacency list for 2 has (3, 1). So from 2, you can go to 3 with cost 1. So in the path 1->2 (cost 0), then 2->3 (cost 1), then 3->4 (cost 0), then 4->7 (cost 1). Wait, but 4 has an edge to 7? Let's see. The original edge 7->4, so in the adjacency list of 7, there's (4, 0), and in 4's adjacency list, there's (7, 1). So to go from 4 to 7, you have to reverse the original edge. So that's cost 1. So the total cost would be 0 (1->2) +1 (2->3) +0 (3->4) +1 (4->7) = 2. Which matches the sample's first path.
+
+Another path: 1-2-6-5-7.
+
+1->2 (0), 2->6 (using the original edge 6->2 reversed: cost 1?), wait. Wait, the original edge is 6->2. So in 6's adjacency list, there's (2, 0) (original direction), and in 2's adjacency list, (6, 1) (reversed edge). So 2 can go to 6 via cost 1. Then, from 6, original edges: 2 (0) and 5 (from 5->6's reversed edge). Wait, the original edge 5->6 is part of the input. So for 5->6, the adjacency list of 5 has (6, 0), and 6's adjacency list has (5, 1). So from 6, to go to 5, you can take the reversed edge (cost 1). So 6->5 would cost 1. Then 5->7: looking at edges. The original edge 7->5 is part of the input. So adjacency list for 7 has (5, 0), and 5's adjacency list has (7, 1). So to go from 5 to 7, you need to reverse the original edge (which was 7->5), so cost 1. So the path would be 1-2 (0) → 2-6 (1) →6-5 (1) →5-7 (1), total 0+1+1+1=3, which is the second path's cost. So the minimal is 2.
+
+Thus, the BFS approach should find the correct minimal path.
+
+So the code should model this correctly.
+
+Now, in Python, how to implement this.
+
+First, read N and M.
+
+Then, read M edges. For each edge u, v, add (v, 0) to adj[u], and (u, 1) to adj[v].
+
+Then, perform the 0-1 BFS.
+
+Initialize distance array with infinity. distance[1] = 0.
+
+Use a deque. Start with deque.append(1).
+
+While deque is not empty:
+
+   current node u = deque.popleft()
+
+   for each (v, cost) in adj[u]:
+
+       if distance[u] + cost < distance[v]:
+
+           distance[v] = distance[u] + cost
+
+           if cost == 0:
+
+               deque.appendleft(v)
+
+           else:
+
+               deque.append(v)
+
+This way, nodes with lower cost are processed first.
+
+Finally, check distance[N]. If it's still infinity, output -1 else output the distance.
+
+Now, for the sample input, this should compute distance[7] as 2.
+
+Now, the code.
+
+But in Python, with 1e5 nodes and 2e5 edges, using lists for adjacency is feasible. But we need to pre-allocate the adjacency list. Because in Python, appending to lists is O(1) amortized, so that's manageable.
+
+Wait, for each edge in the input, we process u and v. For each u, add (v, 0) to adj[u]. For each v, add (u, 1) to adj[v]. So each input edge contributes two entries.
+
+So for M edges, the adjacency list has 2*M entries.
+
+But in Python, the adjacency list can be a list of lists. For example, adj = [[] for _ in range(N+1)].
+
+But for N up to 1e5, this is possible. Since in Python, a list of 1e5+1 elements is manageable.
+
+So code steps:
+
+Read N and M.
+
+Read M lines, each with u and v.
+
+Build adj as:
+
+adj = [[] for _ in range(N+1)]
+
+for each u, v in edges:
+
+   adj[u].append( (v, 0) )
+
+   adj[v].append( (u, 1) )
+
+Then, distance = [infinity] * (N+1)
+
+distance[1] = 0.
+
+Use deque.
+
+from collections import deque
+
+dq = deque()
+
+dq.append(1)
+
+while dq is not empty:
+
+   u = dq.popleft()
+
+   for (v, c) in adj[u]:
+
+       if distance[u] + c < distance[v]:
+
+           distance[v] = distance[u] + c
+
+           if c == 0:
+
+               dq.appendleft(v)
+
+           else:
+
+               dq.append(v)
+
+But wait, this is a standard BFS approach. However, in Python, using a deque for this might not be efficient enough for 1e5 nodes and 2e5 edges, but given that each node is processed once (since once the minimal distance is found, any subsequent processing with higher cost can be ignored), the algorithm's time complexity is O(V + E), which should be acceptable.
+
+Now, testing on the sample input.
+
+Sample Input:
+
+7 7
+
+1 2 
+
+3 2
+
+3 4
+
+7 4
+
+6 2
+
+5 6
+
+7 5
+
+So adj:
+
+adj[1] = [(2, 0)]
+
+adj[2] = [(1,1), (3,1), (6,1)] (from edges 1->2, 3->2, 6->2)
+
+adj[3] = [(2,0), (4,0)]
+
+adj[4] = [(3,1), (7,1)]
+
+adj[7] = [(4,0), (5,0)]
+
+adj[6] = [(2,0), (5,1)]
+
+adj[5] = [(6,0), (7,1)]
+
+and others?
+
+Wait, let's process each input edge:
+
+Edge 1 2:
+
+add (2, 0) to adj[1]
+
+add (1, 1) to adj[2]
+
+Edge 3 2:
+
+add (2, 0) to adj[3]
+
+add (3,1) to adj[2]
+
+Edge3 4:
+
+add (4,0) to adj[3]
+
+add (3,1) to adj[4]
+
+Edge7 4:
+
+add (4,0) to adj[7]
+
+add (7,1) to adj[4]
+
+Edge6 2:
+
+add (2,0) to adj[6]
+
+add (6,1) to adj[2]
+
+Edge5 6:
+
+add (6,0) to adj[5]
+
+add (5,1) to adj[6]
+
+Edge7 5:
+
+add (5,0) to adj[7]
+
+add (7,1) to adj[5]
+
+So adj[2] would have:
+
+From edge1 2: (1, 1)
+
+From edge3 2: (3,1) added to adj[2]
+
+From edge6 2: (6,1) added to adj[2]
+
+So adj[2] is [(1,1), (3,1), (6,1)].
+
+So when processing node 1 (distance 0), we look at adj[1], which is (2,0). So distance[2] becomes 0, and added to the front of deque.
+
+Then process node 2 (distance 0). For each edge in adj[2]:
+
+(1,1): distance[1] is 0, adding 1+0=1 which is not better than 0, so skip.
+
+(3,1): distance[3] is currently infinity, so 0+1=1. So distance[3] becomes 1. Add to the end of deque.
+
+(6,1): distance[6] is infinity, set to 1. Add to end of deque.
+
+Then deque has 3 and 6 (since after processing node 2, which was taken from the front, after adding 2's edges, the deque has 3 and 6 added to the end).
+
+Next, process node 3 (distance 1). adj[3] has (2,0), (4,0). So for each:
+
+(2,0): distance[2] is 0. 1+0=1 > 0, so no change.
+
+(4,0): distance[4] is infinity. Set to 1+0=1. Add to front of deque.
+
+Now deque has 4 (added to front) and then 6 (from earlier). So processing 4 next.
+
+Adj[4] has (3,1), (7,1). So for each:
+
+(3,1): current distance[4] is 1. 1+1=2, which is higher than current distance[3] (1), so no change.
+
+(7,1): distance[7] is infinity. So set to 1+1=2. Add to end of deque.
+
+Now deque has 6,7.
+
+Processing 6 next (distance 1, from earlier when node 2 was processed). adj[6] has (2,0), (5,1).
+
+(2,0): distance[2] is 0. 1+0=1>0. No change.
+
+(5,1): distance[5] is infinity. Set to 1+1=2. Add to end of deque.
+
+So deque now has 7,5.
+
+Processing 4 next (distance 1). Then 7 (distance 2), etc.
+
+Wait, no. Wait, after processing node 3, the deque after adding 4 to front would be [4,6]. Then processing 4, which adds 7 to the end. So deque becomes [6,7]. Then processing 6.
+
+Wait, let's see the exact order.
+
+After processing node 1:
+
+distance[1] =0, deque is [1].
+
+Process node 1:
+
+for (2,0):
+
+distance[2] =0. add to front. deque is [2].
+
+Then, node 1 is done. deque is [2].
+
+Process node 2 (distance 0):
+
+process edges (1,1), (3,1), (6,1).
+
+For (1,1): distance[1] is 0, so 0+1=1>0. No change.
+
+For (3,1): distance[3] is inf → 0+1=1. Add to end. deque becomes [3,6].
+
+For (6,1): distance[6] is inf →0+1=1. Add to end. deque becomes [3,6].
+
+After processing node 2's edges, deque is [3,6].
+
+Next, process node 3 (distance 1):
+
+edges (2,0), (4,0).
+
+For (2,0): distance[2] is 0. 1+0=1>0. No change.
+
+For (4,0): distance[4] is inf →1+0=1. Add to front. deque becomes [4,6].
+
+Process node 4 (distance 1):
+
+edges (3,1), (7,1).
+
+For (3,1): distance[3] is 1 →1+1=2>1. No change.
+
+For (7,1): distance[7] is inf →1+1=2. Add to end. deque becomes [6,7].
+
+Then process node 6 (distance 1):
+
+edges (2,0), (5,1).
+
+For (2,0): distance is 0. 1+0=1>0. No.
+
+For (5,1): distance[5] is inf →1+1=2. Add to end. deque becomes [7,5].
+
+Process node 7 (distance 2):
+
+edges (4,0), (5,0).
+
+For (4,0): distance is 2+0=2. Current distance[4] is 1. So no change.
+
+For (5,0): distance[5] is 2 → 2+0=2. No change.
+
+So 7's edges don't help. Then deque has [5].
+
+Process node5 (distance 2):
+
+edges (6,0), (7,1).
+
+For (6,0): distance[6] is 1. 2+0=2>1. No change.
+
+For (7,1): distance[7] is 2. 2+1=3>2. No change.
+
+So deque is now empty.
+
+Then, the distance[7] is 2, which is the answer.
+
+Yes, that's correct.
+
+So the code should work.
+
+Now, edge cases.
+
+What if there is no path? For example, N=2, M=0. Then, no edges. So output is -1.
+
+Another case: N=1. Then, output is 0, as start and end are same.
+
+Another case: edges that form a cycle. But the code should handle it.
+
+But when N=1, the code's distance[1] is 0, so output is 0.
+
+Now, let's think about how to handle that.
+
+In the code, after building the adjacency list, and processing the BFS, for N=1, the distance is 0, so correct.
+
+So the code needs to handle N=1 correctly.
+
+Another test case:
+
+Input:
+
+2 1
+
+2 1
+
+Output: 1 (reverse the edge to go from 1 to 2).
+
+Because the original edge is 2->1. So the adjacency list for 2 has (1,0). For 1, has (2,1). So from 1, we can reverse the edge (cost 1) to reach 2. So distance[2] is 1.
+
+So code would output 1.
+
+So the code should handle all these cases.
+
+Now, about the code in Python.
+
+But in Python, for N up to 1e5, the adjacency list as a list of lists is possible. For example, adj = [[] for _ in range(N+1)].
+
+But in Python, creating a list of 1e5+1 elements, each being a list, is possible.
+
+Now, code:
+
+Read N and M.
+
+Then read M lines, each with u and v.
+
+Then build the adjacency list.
+
+Then perform the BFS.
+
+But what about the initial distance array?
+
+In Python, we can set distance = [inf] * (N+1), then set distance[1] = 0.
+
+But what's inf? Let's use a large number, like 1e18.
+
+Then, the deque is from collections import deque.
+
+Now, code:
+
+import sys
+from collections import deque
+
+def main():
+    import sys
+    input = sys.stdin.read().split()
+    idx = 0
+    N = int(input[idx])
+    idx +=1
+    M = int(input[idx])
+    idx +=1
+    adj = [[] for _ in range(N+1)]
+    for _ in range(M):
+        u = int(input[idx])
+        idx +=1
+        v = int(input[idx])
+        idx +=1
+        adj[u].append( (v,0) )
+        adj[v].append( (u,1) )
+    distance = [float('inf')] * (N+1)
+    distance[1] = 0
+    dq = deque([1])
+    while dq:
+        u = dq.popleft()
+        for (v, c) in adj[u]:
+            if distance[u] + c < distance[v]:
+                distance[v] = distance[u] + c
+                if c == 0:
+                    dq.appendleft(v)
+                else:
+                    dq.append(v)
+    print(distance[N] if distance[N] != float('inf') else -1)
+
+main()
+
+But wait, in Python, the default recursion stack is not an issue here, and the code is as above.
+
+But for large N and M, the code may be slow. However, in practice, for 1e5 nodes and 2e5 edges, and using a deque with O(1) operations, this should be manageable.
+
+But in Python, the speed may be a problem. Let's see. For example, in the worst case, each edge is processed once. But for each edge, we check if we can improve the distance, and if so, add to the deque. So the code is O(M), which is acceptable.
+
+So the code should work.
+
+Testing with the sample input:
+
+Input:
+
+7 7
+
+1 2 
+
+3 2
+
+3 4
+
+7 4
+
+6 2
+
+5 6
+
+7 5
+
+The code should output 2, as expected.
+
+Another test case: N=1. Then, output is 0.
+
+Another test case: N=2, M=1, edge from 2 to 1. Output is 1.
+
+Another test case: N=2, M=0. Output -1.
+
+Thus, the code seems correct.
+</think>
+To solve this problem, we need to determine the minimum number of edge reversals required to create a path from vertex 1 to vertex N in a directed graph. The approach involves modeling the problem as a shortest path problem in a modified graph where each edge can be traversed in its original direction with a cost of 0 or reversed with a cost of 1. 
+
+### Approach
+1. **Graph Representation**: For each directed edge from vertex u to v, we consider two possibilities:
+   - Traverse the edge in its original direction (from u to v) with a cost of 0.
+   - Reverse the edge (from v to u) with a cost of 1.
+   
+2. **0-1 BFS Algorithm**: This algorithm efficiently finds the shortest path in a graph where edge weights are either 0 or 1. We use a deque (double-ended queue) to process nodes such that nodes reachable with a cost of 0 are processed before those with a cost of 1, ensuring the shortest path is found efficiently.
+
+### Solution Code
+```python
+import sys
+from collections import deque
+
+def main():
+    input = sys.stdin.read().split()
+    idx = 0
+    N = int(input[idx])
+    idx += 1
+    M = int(input[idx])
+    idx += 1
+    adj = [[] for _ in range(N + 1)]
+    for _ in range(M):
+        u = int(input[idx])
+        idx += 1
+        v = int(input[idx])
+        idx += 1
+        adj[u].append((v, 0))
+        adj[v].append((u, 1))
+    
+    distance = [float('inf')] * (N + 1)
+    distance[1] = 0
+    dq = deque([1])
+    
+    while dq:
+        u = dq.popleft()
+        for (v, c) in adj[u]:
+            if distance[u] + c < distance[v]:
+                distance[v] = distance[u] + c
+                if c == 0:
+                    dq.appendleft(v)
+                else:
+                    dq.append(v)
+    
+    print(distance[N] if distance[N] != float('inf') else -1)
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Input Reading**: The input is read in one go for efficiency, especially given the constraints. The graph is represented using an adjacency list where each entry includes the target vertex and the cost (0 or 1).
+
+2. **Initialization**: The distance array is initialized with infinity to represent the minimum cost to reach each vertex, starting with vertex 1 having a cost of 0.
+
+3. **0-1 BFS Execution**: Using a deque, nodes are processed in order of their distance. Nodes reachable with a cost of 0 are added to the front of the deque, while those requiring a cost of 1 are added to the back. This ensures that nodes are processed in the order of increasing cost, guaranteeing the shortest path is found efficiently.
+
+4. **Result Determination**: After processing all nodes, the minimum cost to reach vertex N is checked. If it remains infinity, it means vertex N is unreachable, and we output -1. Otherwise, the minimum cost is printed.
+
+This approach efficiently handles the constraints and ensures optimal performance using the 0-1 BFS algorithm, making it suitable for large graphs with up to 100,000 vertices and edges.
+</bot>

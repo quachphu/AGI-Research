@@ -1,0 +1,1176 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.The research center Q has developed a new multi-core processor. The processor consists of n cores and has k cells of cache memory. Consider the work of this processor.
+
+At each cycle each core of the processor gets one instruction: either do nothing, or the number of the memory cell (the core will write an information to the cell). After receiving the command, the core executes it immediately. Sometimes it happens that at one cycle, multiple cores try to write the information into a single cell. Unfortunately, the developers did not foresee the possibility of resolving conflicts between cores, so in this case there is a deadlock: all these cores and the corresponding memory cell are locked forever. Each of the locked cores ignores all further commands, and no core in the future will be able to record an information into the locked cell. If any of the cores tries to write an information into some locked cell, it is immediately locked.
+
+The development team wants to explore the deadlock situation. Therefore, they need a program that will simulate the processor for a given set of instructions for each core within m cycles . You're lucky, this interesting work is entrusted to you. According to the instructions, during the m cycles define for each core the number of the cycle, during which it will become locked. It is believed that initially all cores and all memory cells are not locked.
+
+Input
+
+The first line contains three integers n, m, k (1 ≤ n, m, k ≤ 100). Then follow n lines describing instructions. The i-th line contains m integers: xi1, xi2, ..., xim (0 ≤ xij ≤ k), where xij is the instruction that must be executed by the i-th core at the j-th cycle. If xij equals 0, then the corresponding instruction is «do nothing». But if xij is a number from 1 to k, then the corresponding instruction is «write information to the memory cell number xij».
+
+We assume that the cores are numbered from 1 to n, the work cycles are numbered from 1 to m and the memory cells are numbered from 1 to k.
+
+Output
+
+Print n lines. In the i-th line print integer ti. This number should be equal to 0 if the i-th core won't be locked, or it should be equal to the number of the cycle when this core will be locked.
+
+Examples
+
+Input
+
+4 3 5
+1 0 0
+1 0 2
+2 3 1
+3 2 0
+
+
+Output
+
+1
+1
+3
+0
+
+
+Input
+
+3 2 2
+1 2
+1 2
+2 2
+
+
+Output
+
+1
+1
+0
+
+
+Input
+
+1 1 1
+0
+
+
+Output
+
+0
+</user>
+<bot>
+<think>
+Okay, let's tackle this problem. Hmm, the task is to simulate the processor's behavior over m cycles and determine for each core when it gets locked. The cores can get locked if they try to write to a memory cell that's either already locked or if multiple cores try to write to the same cell in the same cycle. So, I need to model each cycle step by step, track which cores and cells are locked, and record the cycle when each core gets locked.
+
+First, let's understand the problem. Each cycle, every core (that's not already locked) executes its instruction. If a core's instruction is 0, it does nothing. If it's a cell number (1 to k), the core tries to write to that cell. Now, if during the same cycle, two or more cores try to write to the same cell, all those cores and the cell become locked. Also, if a core tries to write to a cell that's already locked, the core gets locked immediately in that cycle.
+
+So, for each cycle, I need to process all the cores' instructions, check for conflicts. But wait, the order might matter here. Wait, the problem says that all cores receive their commands and execute them immediately. So for a given cycle, all active (unlocked) cores execute their instruction for that cycle at the same time. Then, any conflicts in that cycle's writes cause the involved cores and the cell to lock. So processing all instructions for the current cycle in one batch is important.
+
+So here's the plan:
+
+1. Keep track of which cores are locked (initially all are unlocked). For each core, we'll have a status (locked or not) and the cycle when they were locked (if any).
+
+2. Keep track of which memory cells are locked (initially all unlocked). Once a cell is locked, any future write attempts to it will lock the core in that cycle.
+
+3. For each cycle from 1 to m:
+   a. For each core that is still active (not locked), check their instruction for this cycle.
+   b. Collect all the write operations (cell numbers) from active cores for this cycle.
+   c. For each cell in this cycle's writes:
+      i. If the cell is already locked, then all cores that tried to write to it in this cycle get locked (if they were active). Because those cores attempted to write to a locked cell.
+      ii. If the cell is not locked, check how many active cores are trying to write to it. If the count is >=2, then all those cores are locked, and the cell becomes locked.
+   d. Then, update the cores' locked statuses and the cells' locked statuses accordingly.
+
+But how to process this step by step?
+
+Wait, the steps for each cycle should be:
+
+- For the current cycle, collect all the write operations from active cores.
+   For each cell in 1..k:
+      Check if the cell is already locked. If yes, then any core that tried to write to it in this cycle (and is still active) gets locked in this cycle.
+      If the cell is not locked, count how many active cores are writing to it this cycle. If the count >=2, then the cell becomes locked and all those cores get locked in this cycle.
+
+But how to handle the order here. Because if a cell is being written to by multiple cores in the same cycle, and the cell is not locked, then all those cores get locked, and the cell becomes locked. Also, if any core writes to an already locked cell (from previous cycles or from this cycle's processing), then they get locked.
+
+Wait, but in the same cycle, if two different cells are being written to by multiple cores, each group in their own cell. Then, the processing of each cell in that cycle would check for conflicts. But the cells are processed in some order? Or all simultaneously?
+
+This is a bit tricky. Let's think through an example.
+
+Suppose in cycle 1:
+
+Core 1 writes to cell 1.
+
+Core 2 writes to cell 1.
+
+Core 3 writes to cell 2.
+
+Core 4 writes to cell 2.
+
+In this case, both cells 1 and 2 have two writes each. So all four cores would be locked in cycle 1, and cells 1 and 2 become locked.
+
+So, the processing for each cell in the same cycle is done in a way that all such conflicts are detected.
+
+But the order in which we process the cells might affect other cells. For example, suppose in cycle 1:
+
+Core A writes to cell 1.
+
+Core B writes to cell 1 and cell 2 (but how? No, each core's instruction is for one cell or 0. Wait, each core's instruction per cycle is a single cell or 0. So in a cycle, a core can't write to two cells. So the scenario where a core writes to multiple cells in a cycle isn't possible. So each core's instruction in a cycle is either 0, or a single cell.
+
+So, during a cycle, each active core's instruction is either 0 (do nothing) or a cell x. So for the current cycle, for each active core, we check their instruction.
+
+Now, the steps for processing a cycle:
+
+1. Collect all the writes from active cores for the current cycle. For each core i that is active (not locked yet), look at x_ij (j is current cycle). If x_ij is non-zero, then it's a cell number. So, each such core is attempting to write to that cell.
+
+   So, for each cell c, we can make a list of cores that are trying to write to c in this cycle.
+
+2. Now, for each cell c:
+
+   a. Check if c is already locked. If yes:
+
+      - All cores in the list for c (those trying to write to c this cycle) will be locked in this cycle (if they were active).
+
+   b. If c is not locked:
+
+      - Count the number of cores in the list for c. If >=2, then:
+
+         * All these cores are locked in this cycle.
+
+         * The cell c becomes locked.
+
+   But the order of processing cells here might affect the outcome, but according to the problem statement, the conflicts are determined per cell. So if two cells are being written to by multiple cores in the same cycle, then each of those cells will cause their respective cores to be locked, regardless of the other cell's state.
+
+So the processing can be done as:
+
+For the current cycle, collect all the write attempts (cell and core). Then, for each cell c in this cycle's writes:
+
+- If c is already locked: mark all cores attempting to write to c as locked this cycle (if they are still active).
+
+- Else, if the number of active cores writing to c is >=2: mark all those cores as locked this cycle, and lock the cell c.
+
+But this approach would have overlapping processing. For example, if a core is involved in writing to two different cells in the same cycle (but that's impossible, because each core can have only one instruction per cycle. So a core can write to at most one cell per cycle. So a core can't be part of two different cell groups in the same cycle.
+
+Therefore, the processing for each cell can be done in any order, and each core can be part of at most one cell's conflict.
+
+Wait, no. For example, a core could be writing to a cell c that is already locked (so the core is locked this cycle). Then, even if that core also wrote to another cell in the same cycle (which isn't possible), but according to the problem, each core's instruction per cycle is a single cell. So the core can't be part of multiple cell conflicts in the same cycle.
+
+So, in processing each cell, we can first check if the cell is already locked. If so, any active cores writing to it get locked. Otherwise, check if the number of active cores writing to it is >=2. If so, lock the cell and those cores.
+
+But the key is that once a core is locked in this cycle, it is no longer active for any other cells in this same cycle. So the order in which the cells are processed may affect the outcome.
+
+Wait, here's a problem. Suppose during the same cycle, two cells are being written to by cores. Let's say:
+
+Cell 1 has two cores (A and B) writing to it.
+
+Cell 2 has two cores (C and D) writing to it.
+
+In this case, processing cell 1 first would lock A, B, and cell 1. Then processing cell 2 would lock C, D, and cell 2. All four cores are locked in the same cycle. But if the processing order of cells was different, the outcome is the same.
+
+But another scenario: suppose cell 1 is written to by core A (active), cell 2 is written to by core B (active). Then processing cell 1 first would check if it's locked. Since it's not, but only one core, no action. Then cell 2 is processed: same thing. So no locks. But if cell 1 and 2 are processed in any order, same result.
+
+But what if a cell c is processed, and in doing so locks some cores. Then, when processing another cell d, some cores may have been locked and thus are not counted in the number of active cores writing to d.
+
+So, the order in which we process the cells in the same cycle can affect the result. For example:
+
+Cycle 1:
+
+Core 1 writes to cell 1.
+
+Core 2 writes to cell 1.
+
+Core 3 writes to cell 2.
+
+Core 4 writes to cell 2.
+
+Processing cell 1 first:
+
+- Cell 1 is not locked. Two cores writing to it. So core 1 and 2 are locked. Cell 1 is locked.
+
+Then processing cell 2:
+
+- Two cores (3 and 4) writing to cell 2. So they are locked. Cell 2 is locked.
+
+Result: all four cores locked in cycle 1.
+
+If we process cell 2 first:
+
+Same outcome. So in this case, order doesn't matter.
+
+Another example:
+
+Cycle 1:
+
+Core 1 writes to cell 1.
+
+Core 2 writes to cell 1.
+
+Core 3 writes to cell 2.
+
+Processing cell 1 first:
+
+Core 1 and 2 are locked. Cell 1 is locked.
+
+Then processing cell 2: core 3 is only one writing, so no problem.
+
+Core 3 remains active.
+
+If processing cell 2 first: cell 2 has one core (3), no action. Then cell 1 has two cores, they are locked. So same result.
+
+Another scenario where order matters:
+
+Cycle 1:
+
+Core A writes to cell 1.
+
+Core B writes to cell 1.
+
+Core C writes to cell 2 (which is already locked due to a previous cycle). But in the current cycle, cell 2 is not locked yet.
+
+Wait, let's think of a case where processing order affects the outcome.
+
+Wait, suppose in cycle 1:
+
+Core 1 writes to cell 1.
+
+Core 2 writes to cell 1.
+
+Core 3 writes to cell 2.
+
+Core 4 writes to cell 2.
+
+Now, if we process cell 1 first: cores 1 and 2 are locked. Cell 1 is locked.
+
+Processing cell 2: cores 3 and 4 are locked. Cell 2 is locked.
+
+All four locked in cycle 1.
+
+Now, another scenario where in the same cycle, processing cell X leads to a cell Y's processing being affected.
+
+But how?
+
+Wait, perhaps:
+
+Cycle 1:
+
+Core 1 writes to cell 1.
+
+Core 2 writes to cell 2.
+
+Core 3 writes to cell 2.
+
+If we process cell 1 first: no conflict (only one core). Then processing cell 2: two cores (2 and 3) → locked. So cores 2 and 3 are locked.
+
+But if processing cell 2 first: cores 2 and 3 are locked, cell 2 is locked. Then processing cell 1: core 1's write is to cell 1 (not locked), so no conflict.
+
+So outcome is same: core 1 is not locked, cores 2 and 3 are locked.
+
+But in this case, the order doesn't matter. Hmm.
+
+Wait, perhaps in a case where a core writes to two different cells in the same cycle (but that's not possible). So each core can only write to one cell per cycle, so the order of processing the cells in the same cycle can't affect whether a core is involved in multiple cells.
+
+Wait, the problem states that each core's instruction is either 0 or a single cell. So in a given cycle, a core can only write to one cell or do nothing.
+
+So, in any cycle, a core can contribute to at most one cell's conflict.
+
+Thus, the order in which the cells are processed in the same cycle does not affect the outcome, as each core can be part of at most one cell's conflict. Because a core can't be part of two cells' conflicts in the same cycle. Therefore, when processing a cell, if the core is not already locked (from processing another cell in the same cycle), then their write to this cell can cause them to be locked. Once they are locked, they are excluded from other cells' processing in the same cycle.
+
+Wait, but how could that be? For example, if a core is part of two different cells' processing in the same cycle. But that's impossible, because the core can only write to one cell per cycle (if they are active). So, the core can't be part of two different cells' processing in the same cycle.
+
+Thus, when processing cells in a cycle, each core can be in the list for at most one cell. So the order in which we process the cells in a cycle doesn't affect the outcome. Because processing one cell's conflict won't affect the other cells' processing, as each core is only part of one cell's list.
+
+Therefore, in each cycle, we can process the cells in any order, and the outcome will be the same.
+
+So, the steps for each cycle are:
+
+1. For the current cycle, collect all the active cores' write instructions. For each active core (not locked), check their instruction for this cycle. If the instruction is a cell c (1 <= c <=k), add the core to a list for cell c. Also, track which cores are attempting to write to which cells.
+
+2. For each cell c in the collected write attempts:
+
+   a. If cell c is already locked:
+
+      i. For each core in the list for c (the ones trying to write to c this cycle), if they are still active (i.e., not locked yet in this cycle), mark them as locked in this cycle.
+
+   b. Else:
+
+      i. Check how many cores are in the list for c (active ones). If >=2:
+
+         - Mark all these cores as locked in this cycle.
+
+         - Lock cell c.
+
+   So, for this, during processing, once a core is marked as locked (due to a cell's conflict), they are no longer considered active for other cell's processing in the same cycle.
+
+Wait, but in the same cycle, a core can't be part of multiple cell's processing. So once a core is locked in this cycle (due to a cell's processing), they are not part of any other cell's processing.
+
+So during step 2, when processing cell c, we need to check if the core is still active (i.e., not locked yet in this cycle).
+
+Therefore, the approach is:
+
+For each cycle:
+
+   a. Create a dictionary that maps each cell c to the list of active cores attempting to write to c in this cycle.
+
+   b. For each cell c in this dictionary:
+
+      i. If the cell is already locked:
+
+         - For each core in the list for c: if the core is not already locked (from this cycle), lock them, record their locked cycle as current cycle.
+
+      ii. Else:
+
+         - Check the count of active cores in the list for c.
+
+         - If count >=2:
+
+             * Lock all cores in the list (if not already locked this cycle).
+
+             * Lock the cell c.
+
+             * Record their locked cycle as current.
+
+   c. After processing all cells, proceed to the next cycle.
+
+But how do we track which cores are active during processing of cells in the same cycle?
+
+Ah, here's the thing: during the processing of the current cycle's cells, when we lock a core, they are immediately marked as locked. So, when processing cell c, any core that was locked in a previous cell's processing (in the same cycle) is not considered.
+
+Wait, but in the same cycle, when processing cell A, some cores are locked. Then, when processing cell B, the same cores are already locked, so their write to cell B (if any) would be ignored.
+
+But in our initial step, when collecting the write attempts, we collect only the active cores. So during the cycle, when we collect the write attempts, we have all the cores that are active (not locked before this cycle) and their instructions. So the list for cell c in the current cycle is based on cores that were active at the start of the cycle.
+
+Wait, no. Because during the current cycle's processing, some cores might be locked, but the initial collection of writes is done before any processing. So, for example:
+
+Core 1 is active at the start of the cycle. His instruction is to write to cell 1. Core 2 is active, writes to cell 1.
+
+Core 3 is active, writes to cell 2.
+
+Processing cell 1 first: cores 1 and 2 are locked. Then, when processing cell 2, core 3 is still active (since he wasn't processed yet). So core 3's write to cell 2 (which has no other cores) would not result in a lock.
+
+But if the order is reversed, processing cell 2 first: core 3 writes to cell 2, no conflict. Then processing cell 1: cores 1 and 2 get locked. So outcome same.
+
+But if during the same cycle, a core writes to a cell that is already locked (from this cycle's processing), then the core would be locked. But the initial list of writes is collected before processing any cells. So if during processing cell A, a core is locked, then when processing cell B, if that core's instruction was to write to cell B, even though he's now locked, he's still part of cell B's list.
+
+Wait, this is a problem.
+
+Let's think through an example. Suppose in cycle 1:
+
+Core 1 writes to cell 1.
+
+Core 2 writes to cell 1.
+
+Core 3 writes to cell 2.
+
+Core 4 writes to cell 1.
+
+We collect all writes: cell 1 has cores 1,2,4; cell 2 has core3.
+
+Processing cell 1 first:
+
+   cell 1 is not locked. 3 cores writing → >=2. So all three are locked. cell 1 is locked.
+
+Processing cell 2 next:
+
+   core3 is active (wasn't processed yet), writes to cell 2. Since cell 2 is not locked and count is 1 → no action. So core3 remains active.
+
+But if the order were reversed, processing cell 2 first:
+
+   core3 is the only writer → no action. Then cell 1's processing locks cores 1,2,4. So same outcome.
+
+But the problem here is that when we process cell 1 first, cores 1,2,4 are locked. Then, when processing cell 2, core3's instruction was collected at the start of the cycle (when he was active). But during processing cell 1, the cores 1,2,4 are locked. So core3 is still active when processing cell 2.
+
+But in reality, even if a core is locked during the same cycle, their write instruction (if to another cell) was part of the initial collection.
+
+Wait, but the initial collection is done before any processing. So all active cores (those not locked before the cycle starts) contribute their writes. So even if during processing cell A, a core is locked, their write to cell B (processed later in the same cycle) is still considered. But in reality, once the core is locked, they shouldn't be able to write to any cell.
+
+But according to the problem statement, during each cycle, each core (that's not locked) receives their instruction and executes it immediately. So in a cycle, the core's instruction is executed regardless of what happens during the cycle. But if during the cycle the core becomes locked, then it's after executing the instruction.
+
+Wait, the problem statement says: "After receiving the command, the core executes it immediately. Sometimes it happens that at one cycle, multiple cores try to write the information into a single cell. [...] all these cores and the corresponding memory cell are locked forever."
+
+So the core executes the instruction (writes to the cell, if applicable) regardless of whether the cell is locked. But if during the same cycle, after executing the instruction, the core is part of a conflict (or writes to a locked cell), it becomes locked.
+
+So perhaps the sequence is:
+
+In a cycle, all active cores execute their instructions. Then, the conflicts are resolved. But during the execution of the instructions, the cores might be writing to cells that are locked, which would cause them to lock.
+
+Wait, this is a crucial part. Let's re-read the problem statement.
+
+Problem statement:
+
+"After receiving the command, the core executes it immediately. [...] in this case there is a deadlock: all these cores and the corresponding memory cell are locked forever. [...] If any of the cores tries to write an information into some locked cell, it is immediately locked."
+
+So when a core's instruction is to write to a cell that is already locked (from previous cycles), then during this cycle, the core will execute the instruction (attempt to write), but since the cell is already locked, the core becomes locked immediately. But if during the same cycle, multiple cores write to the same cell (which is not locked before the cycle), then all those cores and the cell are locked.
+
+So the order of processing is as follows:
+
+For each cycle:
+
+   All active cores execute their instructions (writing to cells or not).
+
+   Then, for each cell:
+
+      If during this cycle, multiple cores wrote to the cell (and the cell was not locked before the cycle), then those cores are locked, and the cell is locked.
+
+      Also, any cores that wrote to a cell that was already locked (from previous cycles) are locked.
+
+So the key is that during the cycle, the cores first execute their instructions (regardless of whether the cell is locked), and then the deadlocks are determined.
+
+Wait, but that's conflicting. Let's re-examine the problem statement:
+
+"After receiving the command, the core executes it immediately. Sometimes it happens that at one cycle, multiple cores try to write the information into a single cell. [...] in this case there is a deadlock: all these cores and the corresponding memory cell are locked forever. [...] If any of the cores tries to write an information into some locked cell, it is immediately locked."
+
+So, executing the command happens immediately. So, the core may try to write to a cell that's already locked. In that case, the core is locked immediately (during the cycle). But if multiple cores write to the same cell (that's not locked), then they and the cell are locked.
+
+But when exactly are the deadlocks checked? Are they checked after all instructions are executed for the cycle?
+
+This is ambiguous. Let's see the example:
+
+First sample input:
+
+4 3 5
+
+Cores' instructions:
+
+Core 1: 1 0 0
+
+Core 2: 1 0 2
+
+Core 3: 2 3 1
+
+Core 4: 3 2 0
+
+Output:
+
+1
+
+1
+
+3
+
+0
+
+Explanation:
+
+Cycle 1: core 1 writes to cell 1, core 2 writes to cell 1. So two cores writing to the same cell. So both are locked. Cell 1 is locked.
+
+Core 3 writes to cell 2 (no conflict). So no lock. Core 4 writes to 3 (no conflict). So no lock.
+
+So cycle 1's output is 1 for cores 1 and 2.
+
+Then cycle 2: core 1 and 2 are already locked. Core 3's instruction is 3 (cell 3). Core 4's instruction is 2 (cell 2).
+
+Processing cycle 2:
+
+Core 3 writes to cell 3. No conflict. So no lock.
+
+Core 4 writes to cell 2. No conflict (only one core). So no lock.
+
+Cycle 2: no new locks.
+
+Cycle 3: core 3's instruction is 1. But cell 1 is already locked. So core 3 is locked during cycle 3.
+
+So output for core 3 is 3.
+
+Core 4's instruction is 0. So no action. Remains unlocked.
+
+Thus, the sample output is as given.
+
+So in this case, when a core writes to a cell that's already locked, it's locked during that cycle.
+
+But how does this processing work?
+
+It seems that during the cycle, each core executes their instruction:
+
+If they write to a cell that's already locked (from previous cycles), then they are locked immediately.
+
+If they write to a cell that's not locked, but during the same cycle, other cores also write to the same cell, then all those cores are locked, and the cell becomes locked.
+
+So the processing steps for a cycle are:
+
+1. For each active core (not locked):
+
+   a. Check their instruction for this cycle.
+
+   b. If the instruction is 0: do nothing.
+
+   c. Else: write to cell c.
+
+      i. Check if cell c is already locked (from previous cycles):
+
+          - If yes: lock the core (in this cycle).
+
+          - Else: add to a list of writes to cell c for this cycle.
+
+2. After all cores have executed their instructions (either doing nothing or writing to a cell), process the writes to each cell:
+
+   a. For each cell c that was written to by at least one active core (that wasn't locked due to writing to a locked cell):
+
+      i. If the number of such writes is >=2: lock all those cores (if not already locked) and lock the cell.
+
+So the steps are:
+
+- First, process all cores that write to locked cells (those cores are locked).
+
+- Then, collect all the writes to cells that are not locked. For each such cell, if multiple cores wrote to it, lock those cores and the cell.
+
+But how to model this?
+
+Let's think:
+
+For each cycle:
+
+   Create a set of cores that are active (not locked before the cycle starts).
+
+   For each active core:
+
+      their instruction is x.
+
+      if x == 0: do nothing.
+
+      else:
+
+         c = x.
+
+         if cell c is already locked (from previous cycles):
+
+             core is locked in this cycle.
+
+         else:
+
+             add the core to a list of writes for cell c.
+
+   Now, after handling the writes to already locked cells:
+
+   For each cell c in the writes list (those not locked before the cycle):
+
+      if the number of cores in c's list >=2:
+
+          lock all those cores (if not already locked).
+
+          lock cell c.
+
+So this approach ensures that cores writing to locked cells are processed first, then cells with multiple writes are processed.
+
+In this way, the order of processing cells in the same cycle doesn't matter.
+
+So the steps are:
+
+1. For the current cycle:
+
+   a. For each active core (not locked before the cycle):
+
+      i. Check their instruction. If it's a cell c.
+
+      ii. If cell c is locked (from previous cycles):
+
+          mark the core as locked in this cycle.
+
+      iii. Else:
+
+          add the core to a temporary list for cell c.
+
+   b. After processing all cores, for each cell c in the temporary list:
+
+      i. If the number of cores in the list for c >=2:
+
+          lock all cores in the list (if not already locked from step 1a ii).
+
+          lock cell c.
+
+          mark the cores' lock cycle as current.
+
+   So, in step 1a ii, cores that write to a locked cell are immediately locked in this cycle. Then, in step 1b i, for cells that were written to by >=2 active cores (those that didn't write to a locked cell), their cores are locked and the cell is locked.
+
+This approach seems correct.
+
+So, to model this:
+
+We need to track for each core whether they are locked, and the cycle they were locked. Initially, all cores are unlocked (locked_cycle = 0). Similarly, track for each cell whether it's locked (locked = False).
+
+For each cycle from 1 to m:
+
+   # Step 1: process writes to already locked cells and collect writes to unlocked cells
+
+   writes = defaultdict(list)  # key: cell, value: list of cores that wrote to it (and cell was not locked before cycle)
+
+   locked_this_cycle = set()  # cores that are locked in this cycle (due to writing to a locked cell)
+
+   # iterate over all cores that are not locked before this cycle starts
+   for core in range(n):
+       if locked_cycle[core] != 0:
+           continue  # already locked
+
+       instruction = instructions[core][current_cycle - 1]  # assuming 0-based cycle in array
+       if instruction == 0:
+           continue  # do nothing
+       cell = instruction
+
+       if cell_locked[cell - 1]:  # assuming cell is 1-based in input, stored as 0-based in array
+           # core writes to a locked cell: lock the core
+           locked_cycle[core] = current_cycle
+           locked_this_cycle.add(core)
+       else:
+           # add to writes for this cell
+           writes[cell].append(core)
+
+   # Step 2: process the writes to cells that are not locked (before the cycle)
+   for cell, cores in writes.items():
+       if len(cores) >= 2:
+           # lock the cell
+           cell_locked[cell - 1] = True  # assuming cell is 1-based in input
+           # lock the cores
+           for core in cores:
+               if locked_cycle[core] == 0:  # not already locked in this cycle (e.g., by step 1a ii)
+                   locked_cycle[core] = current_cycle
+
+   # After processing all cells, proceed to next cycle.
+
+Wait, but in step 2, the cores in 'writes' are those that wrote to the cell (and the cell was not locked before the cycle). So if during this step, multiple cores are writing to the same cell, then the cell is locked and the cores are locked. So even if during step 1a ii, some other cores are locked, those in 'writes' are unaffected.
+
+So in this approach:
+
+- For each core that writes to a cell already locked (before the cycle starts), they are locked immediately.
+
+- For cores that write to a cell not locked before the cycle starts, they are added to 'writes' for that cell.
+
+- After processing all cores, for each cell in 'writes' with >=2 cores, all those cores are locked (if not already locked), and the cell is locked.
+
+This should handle all cases correctly.
+
+Now, let's test this logic against the first sample input:
+
+Sample Input 1:
+
+4 3 5
+
+Cores:
+
+Core 1: [1,0,0]
+
+Core 2: [1,0,2]
+
+Core 3: [2,3,1]
+
+Core 4: [3,2,0]
+
+Initial state: all cores and cells are unlocked.
+
+Cycle 1:
+
+Step 1a:
+
+Processing each core:
+
+Core 1: instruction 1 (cell 1). cell 1 is not locked. Add to writes[1] → [0] (assuming core indices are 0-based).
+
+Core 2: instruction 1. cell 1 not locked. Add to writes[1] → [0,1].
+
+Core 3: instruction 2. cell 2 not locked. Add to writes[2] → [2].
+
+Core 4: instruction 3. cell 3 not locked. Add to writes[3] → [3].
+
+No cores are locked in step 1a (since none wrote to locked cells).
+
+Step 2:
+
+Check writes:
+
+cell 1 has 2 cores (0 and 1) → lock them. Cell 1 becomes locked.
+
+cell 2 has 1 core → no action.
+
+cell 3 has 1 core → no action.
+
+So cores 0 and 1 (core 1 and 2 in 1-based) are locked in cycle 1.
+
+Cycle 2:
+
+Cores 0 and 1 are already locked. So process cores 2 and 3 (indices 2 and 3).
+
+Core 2's instruction is 0 → do nothing.
+
+Core 3's instruction is 3. Cell 3 is not locked. Add to writes[3] → [3].
+
+Core 4's instruction is 2 (cell 2). Cell 2 is not locked. Add to writes[2] → [3].
+
+Step 1a:
+
+Core 3 and 4 are active.
+
+Processing:
+
+Core 2 (index 2) is not locked. His instruction for cycle 2 is 3 (cell 3). Cell 3 is not locked → add to writes[3] → [2].
+
+Core 3 (index 3) instruction is 2 (cell 2). Add to writes[2] → [3].
+
+Step 2:
+
+cell 3 has 1 core → no action.
+
+cell 2 has 1 core → no action.
+
+No locks in this cycle.
+
+Cycle 3:
+
+Core 0 and 1 are locked.
+
+Process cores 2 and 3.
+
+Core 2's instruction is 1 (cell 1). Cell 1 is locked (from cycle 1). So core 2 (index 2) is locked in cycle 3.
+
+Core 3's instruction is 1 (cell 1). Cell 1 is locked. So core 3 (index 2) is locked in cycle 3.
+
+Wait, core 2 is index 2 (original third core), instruction for cycle 3 is 1. Cell 1 is locked. So in step 1a:
+
+Core 2 (index 2) is not locked. He writes to cell 1, which is locked. So he is locked in cycle 3.
+
+Core 3 (index 3) is not locked. His instruction is 0 (third cycle's instruction is 0?), wait the input for core 3 is 2,3,1. Wait, the third cycle (cycle 3) is 1. So core 3's instruction for cycle 3 is 1. So cell 1 is locked. So core 3 (index 2? Wait, the cores are 0-based. So core 3 is index 3?
+
+Wait, let's reindex:
+
+The input lines are for cores 1 to n (1-based). So in code, we should read them as 0-based. Let's clarify:
+
+For the first sample input, the four cores are:
+
+Core 0 (1-based core 1) instructions [1,0,0]
+
+Core 1 (1-based core 2) instructions [1,0,2]
+
+Core 2 (1-based core 3) instructions [2,3,1]
+
+Core 3 (1-based core 4) instructions [3,2,0]
+
+So cycle 3:
+
+Core 2 (original core 3) has instruction 1 (cell 1). So step 1a:
+
+Check if cell 1 is locked (yes). So core 2 is locked in cycle 3.
+
+Core 3 (original core 4) has instruction 0 → do nothing.
+
+Thus, in cycle 3:
+
+Step 1a:
+
+Core 2 writes to cell 1 (locked) → locked in cycle 3.
+
+Core 3's instruction is 0 → do nothing.
+
+No other cores are active.
+
+So after step 1a, core 2 is locked.
+
+Step 2: no writes (since core 3 did 0 and core 2 is already processed).
+
+Thus, core 2's locked cycle is 3.
+
+So the output is:
+
+Core 0 (original 1) → 1.
+
+Core 1 (original 2) → 1.
+
+Core 2 (original 3) →3.
+
+Core 3 (original 4) → 0.
+
+Which matches the sample.
+
+So the logic works here.
+
+Another example: second sample input.
+
+Sample Input 2:
+
+3 2 2
+
+Cores:
+
+1 2 → core 0
+
+1 2 → core 1
+
+2 2 → core 2
+
+Output:
+
+1
+
+1
+
+0
+
+Explanation:
+
+Cycle 1:
+
+Core 0 writes to 1. Core 1 writes to 1. Core 2 writes to 2.
+
+Step 1a:
+
+cell 1 and 2 are not locked.
+
+writes: cell 1 has [0, 1], cell 2 has [2].
+
+Step 2: cell 1 has 2 cores → locked. So cores 0 and 1 are locked in cycle 1. Cell 1 is locked.
+
+cell 2: 1 core → no action.
+
+Cycle 2:
+
+Core 0 and 1 are locked. Core 2 is active.
+
+Core 2's instruction is 2 (cell 2). Cell 2 is not locked.
+
+Add to writes[2] → [2].
+
+Step 2: only 1 core → no action.
+
+Thus, core 2 is not locked. So output is 1,1,0.
+
+Which matches.
+
+Thus, the logic seems correct.
+
+Now, to implement this in Python.
+
+We need to:
+
+- Read n, m, k.
+
+- Read n lines, each with m integers. For each core (0-based), store their instructions (cycle 1 to m: stored as a list, index 0 to m-1).
+
+- Initialize locked_cycles for each core (list of 0s).
+
+- Initialize cell_locked (list of False, size k, 0-based).
+
+- For each cycle from 1 to m:
+
+   a. Collect all writes to cells, checking if the cell is already locked (before the cycle starts).
+
+   b. For cores writing to locked cells, mark them as locked in this cycle.
+
+   c. For the writes to cells not locked, collect them.
+
+   d. For each cell in the collected writes, if >=2 cores, mark those cores as locked and lock the cell.
+
+So code steps:
+
+Read input:
+
+n, m, k = map(int, input().split())
+
+instructions = []
+
+for _ in range(n):
+
+   line = list(map(int, input().split()))
+
+   instructions.append(line)
+
+locked_cycle = [0] * n
+
+cell_locked = [False] * k  # index 0 is cell 1 in input.
+
+for cycle in range(1, m+1):
+
+   # Step 1a and collect writes
+
+   writes = defaultdict(list)
+
+   # track cores locked due to writing to locked cells
+
+   for core in range(n):
+
+       if locked_cycle[core] != 0:
+
+           continue
+
+       current_instr = instructions[core][cycle-1]
+
+       if current_instr == 0:
+
+           continue
+
+       cell = current_instr
+
+       if cell_locked[cell-1]:  # cell is already locked (before this cycle)
+
+           locked_cycle[core] = cycle
+
+       else:
+
+           writes[cell].append(core)
+
+   # Step 2: process writes
+
+   for cell, cores in writes.items():
+
+       if len(cores) >= 2:
+
+           # lock the cell
+
+           cell_locked[cell-1] = True
+
+           for core in cores:
+
+               if locked_cycle[core] == 0:
+
+                   locked_cycle[core] = cycle
+
+After processing all cycles, output each core's locked_cycle.
+
+Then, print each locked_cycle[i] for each core in order.
+
+Thus, the code would look like this.
+
+Wait, but in the code above, in step 1a, when a core writes to a cell that's locked (cell_locked[cell-1] is True), the core is immediately locked. Then, in step 2, for writes to cells that are not locked (before the cycle), we process the cells. But the cell_locked is modified during step 2. For example, if two cores write to cell 1 in the same cycle, and the cell wasn't locked before, during step 2, cell 1 is locked. But other cells processed after would see this. But since all writes are processed in step 1a (based on cell_locked before the cycle), this is correct.
+
+Because, during step 2, the cells processed in this cycle are those that were not locked before the cycle started. So even if during processing cell 1 in step 2, cell 1 is locked, other cells in the same cycle's writes are processed based on their state before the cycle.
+
+Yes. Because step 2 is for cells that were not locked before the cycle. Even if during processing cell 1, the cell becomes locked, other cells in the same cycle's step 2 processing are still processed, but they were not locked before the cycle.
+
+Thus, the code is correct.
+
+Now, let's code this.
+
+Also, note that the code must read from stdin and write to stdout, and call the function after defining it.
+
+So the code:
+
+Read n, m, k.
+
+Then read n lines of instructions.
+
+Then process each cycle.
+
+Finally, print the locked_cycle for each core.
+
+So the code:
+
+But in Python, using defaultdict for writes.
+
+The code:
+
+import sys
+from collections import defaultdict
+
+def simulate_processor():
+    n, m, k = map(int, sys.stdin.readline().split())
+    instructions = []
+    for _ in range(n):
+        instructions.append(list(map(int, sys.stdin.readline().split())))
+    locked_cycle = [0] * n
+    cell_locked = [False] * k  # cell 0 is input's cell 1
+
+    for cycle in range(1, m+1):
+        writes = defaultdict(list)
+        for core in range(n):
+            if locked_cycle[core] != 0:
+                continue
+            current_instr = instructions[core][cycle-1]
+            if current_instr == 0:
+                continue
+            cell = current_instr
+            if cell_locked[cell-1]:  # cell was locked before this cycle
+                locked_cycle[core] = cycle
+            else:
+                writes[cell].append(core)
+        # process the writes
+        for cell, cores in writes.items():
+            if len(cores) >= 2:
+                # lock cell and cores
+                cell_locked[cell-1] = True
+                for core in cores:
+                    if locked_cycle[core] == 0:
+                        locked_cycle[core] = cycle
+
+    for cycle in locked_cycle:
+        print(cycle)
+
+simulate_processor()
+
+Testing this code with the samples:
+
+Sample Input 1:
+
+4 3 5
+
+1 0 0
+
+1 0 2
+
+2 3 1
+
+3 2 0
+
+Processing:
+
+n=4, m=3, k=5.
+
+instructions:
+
+core 0: [1,0,0]
+
+core 1: [1,0,2]
+
+core 2: [2,3,1]
+
+core 3: [3,2,0]
+
+Cycle 1:
+
+writes:
+
+core 0: cell 1 → not locked. writes[1] = [0]
+
+core 1: cell 1 → writes[1] = [0,1]
+
+core 2: cell 2 → writes[2] = [2]
+
+core 3: cell 3 → writes[3] = [3]
+
+Then processing writes:
+
+cell 1 has 2 cores → lock them. cell 1 becomes locked.
+
+cores 0 and 1 locked_cycle = 1.
+
+cell 2: 1 core → no action.
+
+cell3: 1 core → no action.
+
+Cycle 2:
+
+core 0 and 1 are locked.
+
+core 2's instruction is 3 (cell3) → cell3 not locked. add to writes[3] → [2].
+
+core3's instruction is 2 (cell2) → add to writes[2] → [3].
+
+processing writes:
+
+cell3: 1 core → no action.
+
+cell2: 1 core → no action.
+
+No changes.
+
+Cycle3:
+
+core 2's instruction is 1 (cell1) which is locked → core 2's locked_cycle becomes 3.
+
+core3's instruction is 0 → nothing.
+
+Thus, locked_cycle is [1,1,3,0].
+
+Which matches the sample.
+
+Sample Input 2:
+
+3 2 2
+
+1 2
+
+1 2
+
+2 2
+
+Instructions:
+
+core0: [1,2]
+
+core1: [1,2]
+
+core2: [2,2]
+
+Cycle 1:
+
+core0 writes to 1: not locked → writes[1].append(0)
+
+core1 writes to 1 → writes[1].append(1)
+
+core2 writes to 2 → writes[2].append(2)
+
+Then, cell1 has 2 cores → locked. cores 0 and 1 locked_cycle =1.
+
+cell2: 1 core → no action.
+
+Cycle 2:
+
+core0 and 1 are locked.
+
+core2's instruction is 2 → cell2 not locked. writes[2].append(2). count 1 → no action.
+
+Thus, locked_cycle for core2 remains 0.
+
+So output is 1,1,0.
+
+Sample3:
+
+1 1 1
+
+0
+
+core0's instruction is 0 → nothing. locked_cycle remains 0.
+
+Thus, code is correct.
+</think>
+To solve this problem, we need to simulate the behavior of a multi-core processor with cache memory, where cores can become locked due to conflicts when writing to the same memory cell in the same cycle. The goal is to determine the cycle in which each core becomes locked, if at all.
+
+### Approach
+1. **Initialization**: Read the input values for the number of cores (n), cycles (m), and memory cells (k). Also, read the instructions for each core.
+2. **Tracking Locks**: Maintain two arrays to track which cores and memory cells are locked. `locked_cycle` records the cycle in which each core becomes locked, and `cell_locked` tracks whether a memory cell is locked.
+3. **Cycle Processing**: For each cycle, process each core's instruction:
+   - **Check for Locked Cells**: If a core writes to a memory cell that is already locked, the core becomes locked immediately.
+   - **Collect Writes**: If the memory cell is not locked, collect the cores attempting to write to each cell.
+4. **Conflict Resolution**: After collecting all writes for the current cycle, check each memory cell. If two or more cores attempt to write to the same cell, lock all those cores and the cell.
+
+### Solution Code
+```python
+import sys
+from collections import defaultdict
+
+def simulate_processor():
+    n, m, k = map(int, sys.stdin.readline().split())
+    instructions = []
+    for _ in range(n):
+        instructions.append(list(map(int, sys.stdin.readline().split())))
+    locked_cycle = [0] * n
+    cell_locked = [False] * k  # cell 0 corresponds to input's cell 1
+
+    for cycle in range(1, m + 1):
+        writes = defaultdict(list)
+        # Process each core for the current cycle
+        for core in range(n):
+            if locked_cycle[core] != 0:
+                continue  # Core is already locked
+            current_instr = instructions[core][cycle - 1]
+            if current_instr == 0:
+                continue  # Do nothing
+            cell = current_instr
+            if cell_locked[cell - 1]:  # Cell is already locked
+                locked_cycle[core] = cycle
+            else:
+                writes[cell].append(core)
+        # Check for conflicts in writes and lock cores and cells
+        for cell, cores in writes.items():
+            if len(cores) >= 2:
+                cell_locked[cell - 1] = True
+                for core in cores:
+                    if locked_cycle[core] == 0:
+                        locked_cycle[core] = cycle
+    
+    for cycle in locked_cycle:
+        print(cycle)
+
+simulate_processor()
+```
+
+### Explanation
+- **Reading Input**: The input is read and parsed into the number of cores, cycles, memory cells, and the instructions for each core.
+- **Cycle Processing**: For each cycle, each core's instruction is checked. If a core writes to a locked cell, it is locked immediately. Otherwise, the core is added to a list of cores writing to that cell.
+- **Conflict Handling**: After processing all cores for the current cycle, check each memory cell. If two or more cores wrote to the same cell, lock all involved cores and the cell.
+
+This approach ensures that all conflicts are resolved correctly within each cycle, and the state of cores and memory cells is updated appropriately, providing the correct cycle in which each core becomes locked.
+</bot>

@@ -1,0 +1,956 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Little Petya likes to play a lot. Most of all he likes to play a game «Holes». This is a game for one person with following rules:
+
+There are N holes located in a single row and numbered from left to right with numbers from 1 to N. Each hole has it's own power (hole number i has the power ai). If you throw a ball into hole i it will immediately jump to hole i + ai, then it will jump out of it and so on. If there is no hole with such number, the ball will just jump out of the row. On each of the M moves the player can perform one of two actions: 
+
+  * Set the power of the hole a to value b. 
+  * Throw a ball into the hole a and count the number of jumps of a ball before it jump out of the row and also write down the number of the hole from which it jumped out just before leaving the row. 
+
+
+
+Petya is not good at math, so, as you have already guessed, you are to perform all computations.
+
+Input
+
+The first line contains two integers N and M (1 ≤ N ≤ 105, 1 ≤ M ≤ 105) — the number of holes in a row and the number of moves. The second line contains N positive integers not exceeding N — initial values of holes power. The following M lines describe moves made by Petya. Each of these line can be one of the two types: 
+
+  * 0 a b
+  * 1 a
+
+Type 0 means that it is required to set the power of hole a to b, and type 1 means that it is required to throw a ball into the a-th hole. Numbers a and b are positive integers do not exceeding N.
+
+Output
+
+For each move of the type 1 output two space-separated numbers on a separate line — the number of the last hole the ball visited before leaving the row and the number of jumps it made.
+
+Examples
+
+Input
+
+8 5
+1 1 1 1 1 2 8 2
+1 1
+0 1 3
+1 1
+0 3 4
+1 2
+
+
+Output
+
+8 7
+8 5
+7 3
+</user>
+<bot>
+<think>
+Okay, let's tackle this problem. So, the task is to process a series of operations on a list of holes. Each hole has a power, and when a ball is thrown into a hole, it jumps according to the power of each hole it lands on. We need to track two things for each query of type 1: the last hole before the ball leaves and the number of jumps.
+
+Hmm, the straightforward approach would be to simulate each ball's path when a type 1 query comes in. But wait, the constraints are N and M up to 1e5. If we simulate each query naively by following each jump step by step, that's O(M*K) where K is the number of jumps per query. In the worst case, each query could take O(N) steps, which would be 1e10 operations—way too slow.
+
+So we need a more efficient data structure here. Let's think about what operations we need to handle. There are two types: update the power of a hole, and process a query that requires traversing the path from a given hole until it exits.
+
+This reminds me of problems where path compression techniques are used, like in the Union-Find (Disjoint Set Union) data structure. But here, the direction is always forward (i to i+a_i), so maybe a form of memoization or pre-processing jumps can help.
+
+Another approach is to use binary lifting. But binary lifting is usually for trees, and here the structure can change dynamically when updates happen, so precomputing jumps might not be feasible.
+
+Wait, but each update changes the power of a hole, which affects all the jumps that pass through it. So any structure that relies on precomputed jumps would need to be updated whenever a hole's power changes, which could be expensive.
+
+Alternatively, maybe we can partition the holes into blocks (like in a square root decomposition). For each hole, we precompute how many steps it takes to jump out of the block, and the last hole before exiting the block. Then, when processing a query, we can jump block by block, which reduces the number of steps. However, handling updates would require recomputing the block information for the affected holes. The size of the blocks would be around sqrt(N), so each query would take O(sqrt N) steps, and updates would take O(sqrt N) steps as well. For N=1e5, sqrt(N) is about 300, which would make M=1e5 operations take about 3e7 steps, which should be manageable.
+
+Let's think through this. For each hole, we can store:
+
+- The next hole outside the block, or the exit point.
+- The total number of steps taken to exit the block.
+- The last hole in the block before exiting.
+
+But wait, maybe for each hole, we can store the exit point of the entire sequence (the last hole before exiting the row), and the number of steps to get there. But since each update can affect the path, this would require recomputing for all holes that are affected by the update, which again is O(N) in the worst case.
+
+Alternatively, using square root decomposition, each block would have a size of B. For each hole in the block, when processing a query, we can jump through the blocks. So, when a query comes in for hole a, we first check if jumping a's power takes us out of the block. If not, we jump within the block. Otherwise, we jump to the next block's entry point and repeat.
+
+But how does this help with the updates? For a hole a that's updated, we need to recompute the jumps within its block. Since each block has size B, each update would take O(B) time. Then, for each query, the number of jumps is O(N/B), so choosing B as sqrt(N) would balance the two.
+
+Yes, that's the idea. Let's formalize this:
+
+1. Divide the holes into blocks of size B (e.g., B = 300 for N=1e5).
+2. For each hole i, precompute:
+   a. The number of steps it takes to exit the block (steps[i]).
+   b. The next hole after exiting the block (next_hole[i]).
+   c. The last hole in the block before exiting (last_in_block[i]).
+3. When a query of type 1 (simulate ball thrown into a) is processed, we can traverse the blocks by jumping through next_hole[i] and accumulate the total steps and track the last hole. This would take O(B) steps if we have to process each block's steps once.
+4. For an update (type 0), we need to update the power of a hole and then recompute the steps and next_hole for all holes in its block. Since each block has size B, this takes O(B) time.
+
+The key here is choosing B such that both the query and update operations are efficient. The optimal B is around sqrt(N), which for N=1e5 is 316. Let's see:
+
+- For each query of type 1, the time is O(B) in the worst case (if the ball jumps through each block step by step). Wait, no. Because when using the precomputed steps, each query would take O(N/B) steps, since each step jumps through a block. For example, if each block is B steps, then the maximum number of block jumps is O(N/B). Each block can be processed in O(1) steps (since steps[i] gives the number of jumps within the block, and next_hole[i] tells where to go next). So the total steps per query are O(N/B).
+
+Wait, maybe I'm mixing up the steps. Let me clarify:
+
+Each time you process a query for hole a, you follow the chain of next_hole until you exit the row. For each step, you accumulate the steps and track the last hole.
+
+But how do you compute the steps and last hole when moving from one block to another?
+
+Wait, for each hole i, when you jump steps[i] times, you land in next_hole[i], which is either in another block or outside the row. So the total steps is the sum of steps[i] for each block traversed. Similarly, the last hole before exiting is the last_in_block[i] of the current block.
+
+So, for a query, you start at a. Then, while you are within the array:
+
+- Add steps[i] to the total steps.
+- Update the last hole to last_in_block[i].
+- Move to next_hole[i].
+
+Once next_hole[i] is out of bounds, you check if you have any remaining steps (like if the last jump from i was within the block but leads out of the array). Wait, maybe not. Because the steps[i] represents the number of jumps needed to exit the block. So if during those steps, the ball leaves the array, then steps[i] is the actual number of jumps until exiting.
+
+Wait, maybe the steps[i] is the maximum possible steps within the block. For example, if the hole i's power causes it to jump out of the block in 3 steps, steps[i] is 3, next_hole[i] is the position after those steps (could be beyond N), and last_in_block[i] is the last hole before exiting.
+
+But how do we compute steps[i], next_hole[i], and last_in_block[i] for each hole in a block?
+
+Let's think of processing each hole in reverse order in the block. For a hole i in the block, if i + a[i] is outside the block (or the array), then steps[i] is 1, next_hole[i] is i + a[i], and last_in_block[i] is i. Otherwise, steps[i] is steps[i + a[i]] + 1, next_hole[i] is next_hole[i + a[i]], and last_in_block[i] is last_in_block[i + a[i]].
+
+Wait, that's similar to the way we precompute jumps in a linked list with path compression. So for each block, when the holes are processed in reverse order, each hole's steps and next_hole are computed based on the next hole's values.
+
+This way, when a hole's a[i] is updated, the entire block needs to be recomputed. Since each block is of size B, this takes O(B) time per update.
+
+So the steps to process a query of type 1 (throwing a ball into a) would be:
+
+Initialize current_hole = a, total_steps = 0, last_hole = a.
+
+While current_hole is within the array:
+
+   Add steps[current_hole] to total_steps.
+
+   last_hole = last_in_block[current_hole]
+
+   current_hole = next_hole[current_hole]
+
+But wait, when next_hole is out of the array, the last_hole is last_in_block, which is the last hole visited before exiting. So when current_hole is updated to next_hole, which is beyond N, we exit.
+
+But in that case, the total steps would be the sum of steps from each block, and the last hole is the last_in_block of the previous block.
+
+This seems correct.
+
+So, for example, if the ball starts in block 1, jumps to block 2, then to block 3, etc., each time adding the steps and updating the last hole.
+
+Now, let's test this approach with the sample input.
+
+Sample Input:
+
+8 5
+
+1 1 1 1 1 2 8 2
+
+Queries:
+
+1 1 → output 8 7
+
+0 1 3 → update hole 1's power to 3
+
+1 1 → output 8 5
+
+0 3 4 → update hole 3's power to 4
+
+1 2 → output 7 3
+
+Let's see for the first query. The holes have a power array [1,1,1,1,1,2,8,2].
+
+When a ball is thrown into hole 1. Let's see what path it takes:
+
+1 → 2 → 3 →4 →5 →6 →8 →10 (exit). So last hole is 8, steps 7.
+
+But according to the approach, with blocks of size B=3, the blocks would be:
+
+Block 1: holes 1-3
+
+Block 2: 4-6
+
+Block 3:7-8
+
+But perhaps B is sqrt(8) ~ 3.
+
+So for each hole in block 1 (1,2,3):
+
+Let's compute steps, next_hole, last_in_block for each.
+
+Take hole 3. Its a[i] is 1. So next is 4, which is outside the block. So steps[3]=1, next_hole[3]=4, last_in_block=3.
+
+Hole 2: a[i]=1. Next is 3. Since 3 is in the same block, steps[2] = steps[3] +1 = 2. next_hole=4, last_in_block=3.
+
+Hole 1: a[i]=1 → next is 2. steps[1] = steps[2]+1 = 3. next_hole=4, last_in_block=3.
+
+So when we query hole 1, steps is 3, which adds to total steps. The next_hole is 4 (block 2). The last hole is 3 (the last in block 1).
+
+Then, in block 2: hole 4 has a[i] 1 → 5. Block 2 is 4-6. 5 is in the same block. Let's process in reverse.
+
+Hole 6: a[i]=2 → 8 (block 3). So steps[6]=1, next_hole=8, last_in_block=6.
+
+Hole5: a[i]=1 →6. steps[5] = steps[6]+1=2. next_hole=8, last_in_block=6.
+
+Hole4: a[i]=1 →5. steps[4] = steps[5]+1=3. next_hole=8, last_in_block=6.
+
+So when current_hole is 4, steps is 3, added to total steps (now 3+3=6). last_in_block is 6. next_hole is 8.
+
+Now in block3: holes7-8.
+
+Hole8: a[i]=2 →10 (exit). steps[8]=1, next_hole=10, last_in_block=8.
+
+Hole7: a[i]=8 →15 (exit). steps[7]=1, next_hole=15, last_in_block=7.
+
+So when current_hole is 8 (from previous next_hole=8), steps[8] is 1 → total steps 6+1=7. last_in_block=8. next_hole=10, which is out. So exit.
+
+So the total steps are 3+3+1=7, last hole is 8. Which matches the sample. So the approach works.
+
+When hole1's power is updated to 3, the block for hole1 is block 1. So we need to recompute the steps for all holes in that block.
+
+Hole1's a[i] is now 3. So the next is 4. So steps[1] =1, next_hole=4, last_in_block=1.
+
+Hole2 and hole3 are still processed as before. So when querying hole1 again, the path would be 1→4 (since next_hole is 4). Then from 4, next_hole is 8, steps 3 (block2), and from 8, steps 1. So total steps 1+3+1=5. Last hole is8. Which matches the sample.
+
+Yes. So the approach works.
+
+So the plan is:
+
+1. Choose B as sqrt(N). For N=1e5, B=316.
+
+2. Precompute for each block, the steps, next_hole, last_in_block.
+
+3. For each update (type 0 a b), update a_hole's power to b, then recompute the steps for the entire block that a belongs to.
+
+4. For each query (type 1 a), simulate the jump by following the next_hole until exit, accumulating steps and tracking last_in_block.
+
+Now, the code.
+
+First, we need to manage the blocks.
+
+Each hole is in block (hole-1) // B.
+
+For each hole i, compute steps[i], next_hole[i], last_in_block[i].
+
+To compute these for a block, we process the holes in reverse order (from the end of the block to the start). For each i in the block:
+
+if i + a[i] is outside the block or the array:
+
+   steps[i] = 1
+
+   next_hole[i] = i + a[i]
+
+   last_in_block[i] = i
+
+else:
+
+   steps[i] = steps[i + a[i]] + 1
+
+   next_hole[i] = next_hole[i + a[i]]
+
+   last_in_block[i] = last_in_block[i + a[i]]
+
+So for each block, when we process the holes in reverse, each hole can refer to the next ones.
+
+So, the code steps are:
+
+Read N and M.
+
+Read the array a.
+
+Compute B = int(sqrt(N)) + 1 (or exactly sqrt(N), but better to adjust to avoid issues). Let's use B = 316 for N=1e5.
+
+For each block, process the holes in reverse order.
+
+But how to handle this? For each hole, determine which block it is in, and process the blocks.
+
+But actually, for each block, we can loop from the end of the block to the start.
+
+So for each block start from 0 to (N-1)//B:
+
+   block_start = block * B
+
+   block_end = min(block_start + B -1, N-1) (assuming 0-based indices?)
+
+Wait, but the holes are numbered from 1 to N in the problem. So perhaps it's easier to make the array 1-based.
+
+So, a is a list of size N+1 (indices 1..N).
+
+Then, for each hole i in 1..N:
+
+   block number is (i-1) // B +1 ?
+
+Wait, perhaps not. Let's think again. For B=3, holes 1,2,3 are in block 0, 4-6 in block 1, etc. So for hole i, the block is (i-1) // B. So for i=1, (0)//3=0; i=3, (2)//3=0; i=4, (3)//3=1.
+
+So for each block in 0 to (N-1)//B:
+
+   start = block * B +1
+
+   end = (block+1)*B
+
+   if end >N, set end =N.
+
+So the block contains holes start to end.
+
+Then, for each block, process from end downto start.
+
+So, during the initial setup, for each block, process from end to start.
+
+So, in code:
+
+B = int(N**0.5) 
+
+if B*B < N: B +=1
+
+But perhaps it's better to compute B as int(sqrt(N)) +1. Let's see, for N=8, sqrt(8)=2.828, int is 2. B=316 for N=1e5.
+
+But perhaps we can set B = int(sqrt(N)), then if B*B < N, adjust B. But perhaps a better way is to use B = int(sqrt(N)) +1. However, to avoid division by zero, perhaps better to set B=316.
+
+Alternatively, code-wise, B can be set as 317 (since 316^2 is about 1e5).
+
+Alternatively, set B as the integer part of sqrt(N) +1.
+
+But code-wise, perhaps better to compute B as:
+
+B = int(sqrt(N)) 
+
+if B * B < N: B +=1
+
+But in Python, the sqrt function returns a float, so perhaps:
+
+import math
+
+B = int(math.sqrt(N))
+
+But perhaps for better performance, using a fixed B=317 for N up to 1e5.
+
+But in code, we can calculate B as:
+
+B = int(math.sqrt(N)) 
+
+But for N=8, that's 2, which is correct.
+
+So, code steps:
+
+Read N, M.
+
+a = list of integers, 1-based (a[0] unused, a[1..N])
+
+Compute B.
+
+precompute steps, next_hole, last_in_block:
+
+steps = [0]*(N+1)
+
+next_hole = [0]*(N+1)
+
+last_in_block = [0]*(N+1)
+
+for block in 0..max_block:
+
+   start = block*B +1
+
+   end = (block+1)*B
+
+   if end > N: end = N
+
+   for i in range(end, start-1, -1):
+
+       if i + a[i] > end or i +a[i] > N:
+
+           steps[i] = 1
+
+           next_hole[i] = i + a[i]
+
+           last_in_block[i] = i
+
+       else:
+
+           steps[i] = steps[i + a[i]] +1
+
+           next_hole[i] = next_hole[i +a[i]]
+
+           last_in_block[i] = last_in_block[i +a[i]]
+
+Wait, but in the code, the i is processed in reverse order (from end to start of the block). So for each i in the block, we check if adding a[i] takes us out of the block (i + a[i] > end) or out of the array (i +a[i] > N). If so, steps is 1, etc. Otherwise, take the steps from the next position.
+
+This correctly builds the steps and next_hole for each hole.
+
+Now, for an update (type 0 a b):
+
+We need to set a's value (array index a) to b. Then, recompute the steps, next_hole, and last_in_block for the entire block that a is in.
+
+Because changing a's a[i] affects all previous holes in the same block that could jump to a.
+
+So, for example, if hole a is in block k, then all holes in block k that can reach a (through their jumps) would have their steps and next_hole values affected. Therefore, to correctly update these, we need to recompute the entire block.
+
+So, the code for the update is:
+
+a[a_pos] = b
+
+block = (a_pos -1) // B
+
+start = block * B +1
+
+end = (block +1)*B 
+
+if end > N: end = N
+
+for i in range(end, start-1, -1):
+
+   if i + a[i] > end or i + a[i] > N:
+
+       steps[i] = 1
+
+       next_hole[i] = i + a[i]
+
+       last_in_block[i] = i
+
+   else:
+
+       steps[i] = steps[i + a[i]] +1
+
+       next_hole[i] = next_hole[i + a[i]]
+
+       last_in_block[i] = last_in_block[i +a[i]]
+
+Yes.
+
+Now, for the query (type 1 a):
+
+We start at a, and accumulate steps and track last_in_block.
+
+current = a
+
+total_steps =0
+
+last_hole = a
+
+while current <= N:
+
+   total_steps += steps[current]
+
+   last_hole = last_in_block[current]
+
+   current = next_hole[current]
+
+Then, output last_hole and total_steps.
+
+Wait, but what if during the steps, the next_hole is beyond N? For example, if the next_hole is N+1, then the loop terminates. The last_hole is the last_in_block of the previous current (which was <=N).
+
+Wait, in the code:
+
+current starts as a. Then, in each iteration, current is updated to next_hole[current]. The loop runs as long as current <= N.
+
+So, in the first iteration, current is a. If a's next_hole is >N, then steps[current] is added (steps[a] is 1), last_hole is a, and current becomes next_hole[a] which is a + a[a]. If that's >N, the loop breaks. So total_steps is 1, last_hole is a.
+
+But in the sample input's first query, the code would correctly compute the steps.
+
+So the code seems correct.
+
+Now, test the first sample input.
+
+Sample Input:
+
+8 5
+
+1 1 1 1 1 2 8 2
+
+After initial processing, B is sqrt(8) = 2.828, so B=3.
+
+Wait, B is calculated as int(math.sqrt(8))=2. But perhaps for N=8, B is 3 (since 2^2 is 4 <8). So B=3. Let's see:
+
+Each block is of size 3. So:
+
+Block 0: 1-3
+
+Block1:4-6
+
+Block2:7-9 (but 9>8, so 7-8.
+
+Processing each block.
+
+Block0 (1-3):
+
+Process in reverse order: 3, 2, 1.
+
+For i=3, a=1.
+
+3+1=4. Which is in block1 (4-6). So steps[3] = steps[4] +1? No, because 4 is not in the same block. So if i+a[i] is in another block, then steps[i] is 1, next_hole is 4, last_in_block is3.
+
+So steps[3] =1, next_hole[3] =4, last_in_block[3]=3.
+
+i=2, a=1. 2+1=3, which is in the same block. So steps[2] = steps[3]+1=2, next_hole=4, last_in_block=3.
+
+i=1, a=1. 1+1=2. same block. steps[1] = steps[2]+1=3, next_hole=4, last_in_block=3.
+
+Block1 (4-6):
+
+Process 6,5,4.
+
+i=6, a=2. 6+2=8 (block2). steps[6]=1, next_hole=8, last_in_block=6.
+
+i=5, a=1. 5+1=6. same block. steps[5] = steps[6]+1=2, next_hole=8, last_in_block=6.
+
+i=4, a=1. 4+1=5. same block. steps[4] = steps[5]+1=3. next_hole=8, last_in_block=6.
+
+Block2 (7-8):
+
+Process 8,7.
+
+i=8, a=2. 8+2=10>8. steps[8]=1, next_hole=10, last_in_block=8.
+
+i=7, a=8. 7+8=15>8. steps[7]=1, next_hole=15, last_in_block=7.
+
+So for the first query (1 1):
+
+current =1, steps=3, next_hole=4. So total_steps=3, last_hole=3.
+
+current becomes4 (block1). steps[4]=3, next_hole=8. total steps=6. last_hole=6.
+
+current becomes8 (block2). steps=1. total steps=7. last_hole=8.
+
+current becomes10, which is >8. loop exits. Output is8 7.
+
+Which matches the sample.
+
+When we update a=1 to 3 (0 1 3):
+
+The hole1 is in block0. So we recompute block0.
+
+Block0's holes are 1,2,3.
+
+a[1] is now 3.
+
+Process in reverse order (3,2,1):
+
+i=3: a=1. 3+1=4 (same as before). steps[3]=1, next_hole=4.
+
+i=2: a=1. 2+1=3. steps[2] = steps[3] +1=2. next_hole=4.
+
+i=1: a=3. 1+3=4. which is in block1. So steps[1] =1, next_hole=4. last_in_block[1] =1.
+
+So now, steps[1]=1, next_hole[1]=4, last_in_block=1.
+
+Then the query 1 1:
+
+current=1. steps=1, next_hole=4. total_steps=1. last_hole=1.
+
+current=4 (block1). steps[4] is 3. next_hole=8. total steps=4. last_hole=6.
+
+current=8 (block2). steps=1. total steps=5. last_hole=8.
+
+current=10. exit. So output 8 5.
+
+Which matches the sample.
+
+Yes, this seems correct.
+
+So the code seems correct.
+
+Now, implement this in Python.
+
+But need to handle 1-based indices.
+
+Now, code steps:
+
+Read N and M.
+
+Read the array as a list of N integers, then pad with a[0] (since it's 1-based).
+
+Then compute B = int(math.sqrt(N)). But perhaps in Python, it's better to compute B as:
+
+B = int(math.sqrt(N)) + 1
+
+But perhaps for N=8, math.sqrt(8) is ~2.828, so int is 2. B becomes 3.
+
+Yes.
+
+But let's see:
+
+For N=8, B=3.
+
+So, the code:
+
+import sys, math
+
+def main():
+
+    import sys
+
+    input = sys.stdin.read().split()
+
+    ptr =0
+
+    N = int(input[ptr])
+
+    ptr +=1
+
+    M = int(input[ptr])
+
+    ptr +=1
+
+    a = list(map(int, input[ptr:ptr+N]))
+
+    ptr +=N
+
+    a = [0] + a # 1-based index.
+
+    B = int(math.sqrt(N)) 
+
+    # Maybe adjust B if necessary. For example, if B is too small.
+
+    # But perhaps the initial code works.
+
+    # Compute B as the integer part of sqrt(N). Let's proceed.
+
+    steps = [0]*(N+2) # steps[i]
+
+    next_hole = [0]*(N+2)
+
+    last_in_block = [0]*(N+2)
+
+    # Precompute blocks.
+
+    def compute_block(block):
+
+        start = block * B +1
+
+        end = (block +1)*B 
+
+        if end > N:
+
+            end = N
+
+        # Process from end to start.
+
+        for i in range(end, start-1, -1):
+
+            if i + a[i] > end or i + a[i] > N:
+
+                steps[i] = 1
+
+                next_hole[i] = i + a[i]
+
+                last_in_block[i] = i
+
+            else:
+
+                steps[i] = steps[i +a[i]] +1
+
+                next_hole[i] = next_hole[i +a[i]]
+
+                last_in_block[i] = last_in_block[i +a[i]]
+
+    # Precompute all blocks.
+
+    max_block = (N-1) // B 
+
+    for block in range(max_block+1):
+
+        compute_block(block)
+
+    # Process M queries.
+
+    for _ in range(M):
+
+        query = input[ptr]
+
+        ptr +=1
+
+        if query == '0':
+
+            # Update a to b.
+
+            a_pos = int(input[ptr])
+
+            ptr +=1
+
+            b = int(input[ptr])
+
+            ptr +=1
+
+            a[a_pos] = b
+
+            # Compute the block of a_pos.
+
+            block = (a_pos -1) // B 
+
+            compute_block(block)
+
+        else:
+
+            # Query.
+
+            a_pos = int(input[ptr])
+
+            ptr +=1
+
+            current = a_pos
+
+            total_steps =0
+
+            last = current
+
+            while current <= N:
+
+                total_steps += steps[current]
+
+                last = last_in_block[current]
+
+                current = next_hole[current]
+
+            print(last, total_steps)
+
+main()
+
+Wait, but compute_block is a function that takes a block number and recomputes all holes in that block. So, during the initial setup, we loop through all blocks and call compute_block(block). Then, during updates, we find the block of the updated hole and call compute_block again.
+
+Yes.
+
+But wait, in Python, the B is computed once, based on N. But when we call compute_block during updates, B might be different from the initial B? No, because B is computed once as sqrt(N). Even if during updates, the holes' values change, B is fixed. So the blocks are determined by B, which is based on the initial N.
+
+Yes.
+
+Now, let's test the code with the sample input.
+
+Sample Input:
+
+8 5
+
+1 1 1 1 1 2 8 2
+
+Queries:
+
+1 1 → output 8 7
+
+0 1 3 → update hole1's a to3
+
+1 1 → output8 5
+
+0 3 4 → update hole3's a to4
+
+1 2 → output7 3.
+
+Let's see.
+
+B = int(math.sqrt(8)) = 2.
+
+So for N=8, B=2.
+
+Wait, but this would make blocks of size 2. Let's re-calculate.
+
+Block 0: (0*2+1) to (0+1)*2 →1-2.
+
+Block1:3-4.
+
+Block2:5-6.
+
+Block3:7-8.
+
+Wait, for B=2:
+
+max_block = (8-1)//2 = 3 (since 7//2=3).
+
+So blocks are:
+
+block0:1-2.
+
+block1:3-4.
+
+block2:5-6.
+
+block3:7-8.
+
+Processing block0 (1-2):
+
+Process 2, then 1.
+
+For i=2: a=1. 2+1=3 (block1). steps[2]=1. next_hole=3. last_in_block=2.
+
+i=1: a=1. 1+1=2 (same block). steps[1] = steps[2]+1=2. next_hole=3. last_in_block=2.
+
+Block1:3-4.
+
+i=4: a=1 →5 (block2). steps=1. next_hole=5. last_in_block=4.
+
+i=3: a=1 →4. same block. steps= steps[4]+1=2. next_hole=5. last_in_block=4.
+
+Block2:5-6.
+
+i=6: a=2 →8 (block3). steps=1. next_hole=8. last_in_block=6.
+
+i=5: a=1 →6. steps= steps[6]+1=2. next_hole=8. last_in_block=6.
+
+Block3:7-8.
+
+i=8: a=2 →10. steps=1. next_hole=10. last_in_block=8.
+
+i=7: a=8 →15. steps=1. next_hole=15. last_in_block=7.
+
+Now, first query: a=1.
+
+current=1.
+
+steps[1] is 2. total_steps=2. last=2. current=3.
+
+current=3 (block1). steps[3] is 2. total=4. last=4. current=5.
+
+current=5 (block2). steps[5] is2. total=6. last=6. current=8.
+
+current=8 (block3). steps=1. total=7. last=8. current=10. exit.
+
+So output 8 7. Correct.
+
+Now, update a=1 to 3. The block of 1 is block0 (1-2). So recompute block0.
+
+a[1] is now3.
+
+Processing block0:
+
+i=2: a=1 →3 (block1). steps[2]=1. next_hole=3. last_in_block=2.
+
+i=1: a=3 →4 (block1). steps=1. next_hole=4. last_in_block=1.
+
+Now, query 1=1.
+
+current=1.
+
+steps=1. total=1. last=1. current=4.
+
+current=4 (block1). steps=1. total=2. last=4. current=5.
+
+current=5 (block2). steps=2. total=4. last=6. current=8.
+
+current=8. steps=1. total=5. last=8. current=10.
+
+Output 8 5. Correct.
+
+Then, update a=3 to4. The hole3 is in block1 (3-4). So recompute block1.
+
+a[3]=4.
+
+Processing block1:
+
+i=4: a=1 →5. same as before.
+
+i=3: a=4 →7. which is in block3. steps=1. next_hole=7. last_in_block=3.
+
+So block1 recomputed.
+
+Now query a=2.
+
+Hole2 is in block0 (1-2).
+
+current=2. steps=1. next_hole=3. last=2.
+
+current=3 (block1). steps=1. next_hole=7. last=3.
+
+current=7 (block3). steps=1. next_hole=15. last=7.
+
+current=15>8. exit.
+
+Total steps:1+1+1=3. last=7.
+
+So output 7 3. Correct.
+
+Thus, the code works with B=2 for N=8.
+
+But wait, in the initial code, B is computed as int(math.sqrt(N)), which for N=8 is 2.
+
+So the code works.
+
+But in this case, B=2, and the blocks are small, which is manageable.
+
+So the code should be correct.
+
+Now, in terms of efficiency, for N=1e5 and B=316, each update takes O(316) operations. For M=1e5 queries, the worst case is 1e5 * 316 =3e7 operations, which is acceptable.
+
+Queries take O(N/B) steps, which for 1e5/316 ~ 316 steps per query. So for M=1e5 queries, it's 3e7 operations.
+
+Which should be within time limits.
+
+Thus, the code should work.
+</think>
+To solve this problem, we need to efficiently handle two types of operations on an array of holes: updating the power of a hole and simulating the trajectory of a ball thrown into a hole. The challenge lies in optimizing these operations to handle large input sizes efficiently.
+
+### Approach
+The solution involves using a square root decomposition technique to balance the trade-off between update and query operations. This technique involves dividing the array into blocks of size approximately √N. Each block is preprocessed to store information about jumps within the block, allowing us to answer queries and perform updates in O(√N) time.
+
+1. **Preprocessing**: For each block, compute the number of steps required to exit the block, the next hole the ball will jump to after exiting the block, and the last hole visited within the block.
+2. **Updates**: When the power of a hole is updated, recompute the preprocessing steps for the entire block containing that hole.
+3. **Queries**: Simulate the ball's path by jumping through blocks using the precomputed information, accumulating the total steps and tracking the last hole visited before exiting the array.
+
+### Solution Code
+```python
+import sys
+import math
+
+def main():
+    input = sys.stdin.read().split()
+    ptr = 0
+    N = int(input[ptr])
+    ptr += 1
+    M = int(input[ptr])
+    ptr += 1
+    a = list(map(int, input[ptr:ptr+N]))
+    ptr += N
+    a = [0] + a  # 1-based indexing
+
+    B = int(math.sqrt(N)) 
+    # To handle cases where B might be too small, adjust if necessary
+    if B * B < N:
+        B += 1
+
+    steps = [0] * (N + 2)  # steps[i]
+    next_hole = [0] * (N + 2)
+    last_in_block = [0] * (N + 2)
+
+    def compute_block(block):
+        start = block * B + 1
+        end = (block + 1) * B
+        if end > N:
+            end = N
+        for i in range(end, start - 1, -1):
+            jump = i + a[i]
+            if jump > end or jump > N:
+                steps[i] = 1
+                next_hole[i] = jump
+                last_in_block[i] = i
+            else:
+                steps[i] = steps[jump] + 1
+                next_hole[i] = next_hole[jump]
+                last_in_block[i] = last_in_block[jump]
+
+    # Precompute all blocks initially
+    max_block = (N - 1) // B
+    for block in range(max_block + 1):
+        compute_block(block)
+
+    # Process each query
+    for _ in range(M):
+        query = input[ptr]
+        ptr += 1
+        if query == '0':
+            a_pos = int(input[ptr])
+            ptr += 1
+            b = int(input[ptr])
+            ptr += 1
+            a[a_pos] = b
+            block = (a_pos - 1) // B
+            compute_block(block)
+        else:
+            a_pos = int(input[ptr])
+            ptr += 1
+            current = a_pos
+            total_steps = 0
+            last = current
+            while current <= N:
+                total_steps += steps[current]
+                last = last_in_block[current]
+                current = next_hole[current]
+            print(last, total_steps)
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Preprocessing**: Each block is processed in reverse order to compute the steps required to exit the block, the next hole after exiting, and the last hole visited within the block. This allows efficient jumps during queries.
+2. **Updates**: When updating a hole's power, only the block containing that hole needs to be reprocessed, ensuring updates are efficient.
+3. **Queries**: By leveraging the precomputed block information, each query efficiently jumps through blocks, accumulating steps and tracking the last hole visited, resulting in an optimal query time.
+
+This approach ensures both updates and queries are handled in O(√N) time, making the solution efficient for large input sizes.
+</bot>

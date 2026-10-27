@@ -1,0 +1,604 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Smith wakes up at the side of a dirty, disused bathroom, his ankle chained to pipes. Next to him is tape-player with a hand-written message "Play Me". He finds a tape in his own back pocket. After putting the tape in the tape-player, he sees a key hanging from a ceiling, chained to some kind of a machine, which is connected to the terminal next to him. After pressing a Play button a rough voice starts playing from the tape:
+
+"Listen up Smith. As you can see, you are in pretty tough situation and in order to escape, you have to solve a puzzle. 
+
+You are given N strings which represent words. Each word is of the maximum length L and consists of characters 'a'-'e'. You are also given M strings which represent patterns. Pattern is a string of length  ≤ L and consists of characters 'a'-'e' as well as the maximum 3 characters '?'. Character '?' is an unknown character, meaning it can be equal to any character 'a'-'e', or even an empty character. For each pattern find the number of words that matches with the given pattern. After solving it and typing the result in the terminal, the key will drop from the ceiling and you may escape. Let the game begin."
+
+Help Smith escape.
+
+Input
+
+The first line of input contains two integers N and M (1 ≤ N ≤ 100 000, 1 ≤ M ≤ 5000), representing the number of words and patterns respectively.
+
+The next N lines represent each word, and after those N lines, following M lines represent each pattern. Each word and each pattern has a maximum length L (1 ≤ L ≤ 50). Each pattern has no more that three characters '?'. All other characters in words and patters are lowercase English letters from 'a' to 'e'.
+
+Output
+
+Output contains M lines and each line consists of one integer, representing the number of words that match the corresponding pattern.
+
+Example
+
+Input
+
+3 1
+abc
+aec
+ac
+a?c
+
+
+Output
+
+3
+
+Note
+
+If we switch '?' with 'b', 'e' and with empty character, we get 'abc', 'aec' and 'ac' respectively.
+</user>
+<bot>
+<think>
+Okay, let's tackle this problem. So the task is to find for each pattern the number of words that match it. The patterns can have up to three '?' characters, which can represent any letter from a-e or be removed (i.e., act as an empty character). Hmm, that's a bit tricky because each '?' can expand into multiple possibilities.
+
+First, let's understand the matching process. For a given pattern, a word matches if there's a way to replace each '?' in the pattern with either a letter (a-e) or remove it (so the '?' effectively disappears), such that the resulting string equals the word. But since the pattern's length is up to the word's maximum length L (which is up to 50), how do we efficiently check all possibilities?
+
+The problem constraints are N up to 1e5 and M up to 5e3. So a naive approach of checking each pattern against each word by trying all possible substitutions for the '?'s would be way too slow. For example, if a pattern has 3 '?'s, each can be replaced in 6 ways (each can be a-e or removed), leading to 6^3=216 possibilities. For each of those, we check all N words. But 5e3 * 1e5 * 200+ is way over the acceptable time limit. So we need a smarter approach.
+
+Alternative idea: preprocess the words into a trie or a hash-based structure so that we can quickly look up all words that match a generated pattern. But the problem is that patterns can vary in multiple ways, especially with the '?'s.
+
+Wait, maybe the key is to generate all possible variations of the pattern by replacing the '?'s with all possible options (including removal) and count how many words match any of these variations. But since each '?' can be replaced in 6 ways (a-e plus empty), but multiple '?'s can lead to a lot of possibilities. However, since the maximum number of '?'s is 3, the total variations per pattern would be up to 6^3=216 possibilities, which is manageable for M=5e3 (5e3 * 200 is 1e6 operations, which is acceptable).
+
+So here's the plan:
+
+1. Preprocess all the words into a frequency map (like a dictionary) where the key is the word string and the value is the count (but since words can be repeated, but according to the input description, each word is a separate line, but it's possible that there are duplicates. However, the problem statement says "each word is of the maximum length L and consists of characters 'a'-'e'." So the input may have duplicate words, and we need to count each occurrence. So the correct approach is to count the frequency of each word. So a word that appears multiple times should be counted each time. Wait, no, the problem statement says "the next N lines represent each word". So each line is a separate word. So words can be duplicates, and for each pattern, we need to count how many times any of their possible expansions match any of the words. So for example, if two words are "abc", then both would be counted if the pattern matches "abc".
+
+So the first step is to create a frequency dictionary (a Python defaultdict or Counter) that maps each possible word string to the number of times it appears. Since N can be 1e5, this is feasible.
+
+Then, for each pattern, generate all possible variations by replacing the '?'s with all possible options (each '?' can be replaced by a-e or removed), and sum the frequencies of the words that match any of these variations.
+
+But generating all possible variations for a pattern with k '?'s (k up to 3) would have (1 + 5)^k possibilities? Wait, no. Each '?' can be either replaced by a character (a-e) or be removed. Wait, but when you remove a '?', you're effectively deleting that character from the pattern, which could change the length. So the problem is that each '?' can be replaced by 0 or 1 characters (i.e., either replaced by a character (so the position is filled) or removed (so the length of the pattern decreases by 1 at that position).
+
+Wait, the problem statement says that the pattern's length is ≤ L and each '?' can be any character a-e or empty. Wait, perhaps I'm misunderstanding how the '?' works. Let's re-read the note: the example input has the pattern 'a?c' which can generate 'abc', 'aec', and 'ac' (the third case is when the '?' is replaced by empty). So when a '?' is replaced by empty, the pattern's length decreases. So the original pattern is length 3, but after replacing the '?', the length can be 3 (if replaced by a character) or 2 (if replaced by empty). So the way the substitution works is that each '?' can be replaced by a single character (so the length remains the same as the pattern, but with a different character) or replaced by nothing (so the length decreases by 1). But how does that work when there are multiple '?'s? For example, a pattern like 'a??c' could have two '?'s. Each can be replaced by a character or nothing. But when you replace a '?' with nothing, you have to remove that position. So for a pattern of length m, after replacing some '?'s with nothing, the resulting pattern's length can be up to m (if none are removed) or down to m - k (if k '?'s are removed).
+
+So the substitution process is as follows: for each '?' in the pattern, we can choose to either:
+
+1. Replace it with a character from a-e (so it contributes one character to the resulting string).
+OR
+2. Remove it (so it contributes nothing, effectively deleting that position).
+
+But the order matters. For example, in a pattern like 'a?b?c', replacing the first '?' with nothing and the second with 'd' would result in 'abdc' (wait no, because if the first '?' is removed, the second '?' is now in a different position. Wait, perhaps the way to think is that each '?' is a position in the pattern. When you replace a '?' with a character, that position becomes that character. When you replace it with nothing, you remove that position. So the resulting string is the pattern with some characters replaced and some positions removed.
+
+But this complicates generating all possible variations because removing a '?' changes the positions of the remaining characters. For example, a pattern like 'a?c' can become 'ac' (remove the '?'), but the 'c' moves to the second position. So the substitution could lead to varying lengths.
+
+This makes generating all possible variations non-trivial. Because for each '?' in the pattern, we have to decide whether to replace it with a character (keeping the position) or remove it (thus shortening the string and shifting subsequent characters to the left).
+
+But how can we efficiently generate all possible variations of the pattern considering the possibility of removing '?'s?
+
+Alternative approach: the generated patterns are all possible strings obtained by replacing each '?' with zero or one characters (a-e). For example, a '?' can be replaced by 6 possibilities: a, b, c, d, e, or nothing. So for each '?' in the pattern, there are 6 choices. So for a pattern with k '?'s, there are 6^k possible variations, each of which is a string. Then, for each variation, check if it exists in the words frequency map and sum their counts.
+
+But generating all 6^k variations for each pattern and checking each in the frequency map is feasible if k is up to 3, since 6^3=216 variations per pattern, and M is 5e3. So 5e3 * 216 = 1.08e6, which is manageable.
+
+But how to generate these variations?
+
+Wait, but when a '?' is replaced by nothing, it's not just that the character is removed; the entire string becomes shorter. So for example, the pattern "a?c" would generate variations like:
+
+- Replace '?' with a character: "aac", "abc", ..., "aec" (5 possibilities)
+- Replace '?' with nothing: "ac"
+
+So in total, 6 possibilities for that single '?'.
+
+But when there are multiple '?'s, each can be replaced in 6 ways. For example, two '?'s would generate 6 * 6 = 36 possibilities, each of which is a string formed by replacing each '?' with either a character (a-e) or nothing. But the problem is that replacing a '?' with nothing reduces the length of the string. So the generated strings can have varying lengths.
+
+But to generate all possible variations, we can model this as follows: for each position in the pattern, if it's a '?', we can choose to either replace it with a character (a-e) or skip it (i.e., remove it). For non-'?' characters, they are included as is.
+
+Wait, but how? Let's think of the pattern as a list of characters, some of which are '?'. For each '?', when generating variations, we can choose to either:
+
+1. Replace it with one of a-e, thereby keeping the position, or
+2. Skip it (remove it), thereby not contributing any character in that position.
+
+So for example, pattern "a?c" has three characters. The '?' is at position 1 (0-based or 1-based? Let's say 0-based as in Python). So the variations are:
+
+- Replace with a: "aac"
+- Replace with b: "abc"
+- ... up to e: "aec"
+- Skip: "ac"
+
+So for each '?', the code needs to generate all possible substitutions, including skipping.
+
+But when there are multiple '?'s, each can be replaced or skipped. For example, the pattern "??" can generate:
+
+- Replace both with letters: e.g., "aa", "ab", ..., "ee" (25 possibilities)
+- Replace one and skip the other: e.g., "a" (skip the second), "b" (skip the second), etc. (5 possibilities for first replaced, 5 for second replaced)
+- Skip both: "" (empty string)
+
+So the total number of possibilities is (5+1)^2 = 36.
+
+So, generating all possible combinations of replacements and skips for the '?'s is the way to go.
+
+Now, the problem is to generate all these variations efficiently.
+
+An approach could be to iterate through each '?' in the pattern and generate all possible options, including skipping. But since the order of the '?'s matters (since each can be skipped, which affects the positions of the following characters), we need to track the current position and the choices made so far.
+
+For example, for the pattern "a?b?c", the two '?'s are at positions 1 and 3. If we skip the first '?', the 'b' moves to position 1, and the second '?' is at position 2. But in the variation, the positions are adjusted based on which '?'s are skipped.
+
+But handling this during generation would be tricky. Instead, perhaps we can model the generation as building a string step by step, considering each character in the pattern, and for each '?', branching into all possible options (replace with a-e or skip).
+
+This sounds like a recursive problem. For each position in the pattern, if the current character is not a '?', we add it to the current string. If it is a '?', we branch into all possible options: adding a-e or skipping (i.e., not adding anything). But this is manageable with a recursive generator.
+
+Alternatively, for efficiency, perhaps we can precompute all the possible positions of the '?'s in the pattern and generate all possible combinations.
+
+But since the number of '?'s is up to 3, recursion depth is manageable.
+
+So here's the plan:
+
+For each pattern:
+
+1. Generate all possible variations by replacing each '?' with a character (a-e) or skipping it.
+2. For each generated variation, check if it exists in the words frequency map.
+3. Sum the frequencies of all such variations to get the count for the pattern.
+
+So the steps for the code:
+
+- Read all N words, count their frequencies (using a Counter).
+- Read all M patterns.
+- For each pattern, generate all possible variations (with up to 3 '?'), and sum the counts from the Counter.
+- Output the sum for each pattern.
+
+The key challenge is efficiently generating all variations for a pattern. Let's think about how to implement that.
+
+First, find the positions of the '?'s in the pattern. Then generate all possible combinations for those positions (each can be replaced by a-e or skipped). However, when a '?' is skipped, the positions of subsequent characters in the pattern shift. So perhaps the best way is to process the pattern character by character, making branching decisions when a '?' is encountered.
+
+Let's think of this as a generator function. For example:
+
+def generate_variations(pattern):
+    n = len(pattern)
+    # recursively generate all possible variations by processing each character
+    # start with an empty list, and process each character in the pattern
+    # if the current character is '?', branch into 6 possibilities (a-e, or skip)
+    # else, add the current character to the list and proceed
+    # collect all possible strings generated this way
+
+Implementing this with a recursive approach:
+
+But for Python, recursion depth could be up to 50 (max length of pattern) but with 3 '?'s, but each '?' introduces 6 branches. However, for 3 '?'s, it's manageable.
+
+Wait, but the pattern can be up to 50 characters long, but with up to 3 '?'s. So even if the pattern is 50 characters long, but with 3 '?'s, the recursion would process each character, but only branch when a '?' is found. So the maximum number of recursive steps would be 50, which is acceptable.
+
+Alternatively, an iterative approach using BFS (breadth-first search) could be used. For example:
+
+Start with a list of possible strings (initially empty). Then for each character in the pattern:
+
+- For each string in the current list:
+   - If the current character is not a '?', append it to the string.
+   - If it is a '?', create new strings for each possible replacement (a-e and skip).
+
+This approach builds all possible variations step by step.
+
+Let's see how this works.
+
+For example, pattern "a?c":
+
+Initial list: ['']
+Process first character 'a':
+Each string in the list (initially empty) appends 'a' → ['a'].
+
+Process second character '?':
+For each string in the list ('a'), we create 6 possibilities:
+- append 'a' → 'aa'
+- append 'b' → 'ab'
+- append 'c' → 'ac'
+- append 'd' → 'ad'
+- append 'e' → 'ae'
+- skip → 'a' (since we don't append anything).
+
+Wait, but the 'a' is the original string before processing the '?'. So after processing the '?', the list becomes ['aa', 'ab', 'ac', 'ad', 'ae', 'a'].
+
+Then process the third character 'c':
+For each string in the list, append 'c' to each. So:
+
+'aa' → 'aac', 'ab' → 'abc', 'ac' → 'acc', 'ad' → 'adc', 'ae' → 'aec', 'a' → 'ac'.
+
+So the generated variations are: 'aac', 'abc', 'acc', 'adc', 'aec', 'ac' (plus others like 'aec').
+
+So all the possible variations.
+
+This approach is manageable. So the code can be implemented with an iterative BFS-like approach.
+
+So the code for generating variations would look something like:
+
+def generate_variations(pattern):
+    variations = ['']
+    for c in pattern:
+        new_vars = []
+        for var in variations:
+            if c != '?':
+                new_vars.append(var + c)
+            else:
+                # add all possible replacements and skip
+                for replacement in ['a', 'b', 'c', 'd', 'e', '']:
+                    new_vars.append(var + replacement)
+        variations = new_vars
+    return variations
+
+Wait, but this would generate the variations correctly. For example, the '?' is replaced by a-e or nothing (so appending the replacement, which could be empty).
+
+But wait, in this code, when the pattern is "a?c", the code would process each character:
+
+Initial variations: ['']
+After 'a': ['a']
+After '?': each existing var is 'a', and for each, append a-e and ''. So new_vars becomes ['aa', 'ab', 'ac', 'ad', 'ae', 'a'].
+After 'c': for each of these, append 'c' → 'aac', 'abc', 'acc', 'adc', 'aec', 'ac'.
+
+Which matches the expected variations.
+
+Yes, this code works. So for each character in the pattern, we generate all possible options. For non-'?' characters, we just append the character. For '?', we append a-e or the empty string (so the current variation is extended with each option).
+
+But wait, appending the empty string here is equivalent to skipping the '?'. So this code correctly generates all possible variations.
+
+So the code will generate all possible strings that can be formed by replacing each '?' in the pattern with a letter (a-e) or omitting it.
+
+Once we have all the possible variations for a pattern, we can look up each in the words frequency map and sum the counts.
+
+So the overall approach is:
+
+- Precompute a frequency map (Counter) of all the words.
+- For each pattern, generate all possible variations (strings) as per the rules.
+- For each variation, get its count from the frequency map (defaulting to 0 if not present).
+- Sum all the counts for all variations and output the sum.
+
+Now, considering that some variations may be the same after substitution. For example, if a pattern has two '?'s, but two different substitution paths lead to the same string. For example, the pattern "??" with both '?'s replaced by 'a' and the second replaced by nothing would give "a", but so would replacing the first '?' with nothing and the second with 'a'. However, when generating all variations, these would be generated as separate entries, but when added to the list, they would be treated as the same string. So when we process all variations, duplicates are automatically handled because when we look them up in the Counter, their counts are added once for each occurrence. But wait, no: for example, if a variation is generated multiple times (like "a" in the example above), but in the words frequency map, the count for "a" is 5, then the sum would be 5 multiplied by the number of times "a" appears in the variations. Which is wrong. Because the variation "a" may have been generated multiple times, but the actual word "a" should be counted once per occurrence in the original words, not per variation that generates it. So, for example, if the pattern generates the same string in multiple ways, each occurrence in the variations would count the same word multiple times. Which is incorrect.
+
+Ah, this is a critical point. Because if the same variation is generated multiple times (like "ac" from different substitution paths), each occurrence in the variations list would cause the code to add the count of "ac" once. But if the same variation is generated multiple times, the code would add the count of "ac" multiple times, leading to overcounting.
+
+So this approach is incorrect. Because the code would generate multiple copies of the same variation string, and then sum their counts. For example, if a variation is generated twice, the code would add the count twice, which is incorrect. The correct approach is to generate all unique variations and sum their counts once each.
+
+Therefore, the code must generate all possible unique variations and then sum the counts for each unique variation once. Otherwise, variations that are generated multiple times would be overcounted.
+
+So the problem with the current approach is that the generate_variations function can produce duplicates. Therefore, we need to generate a set of unique variations for each pattern and then sum the counts of each unique variation.
+
+For example, suppose the pattern is "a?", and during generation, the variations could be "aa", "ab", ..., "ae", "a". Now, if the original words include "a", then each variation that results in "a" (which could be generated in multiple ways, like replacing the '?' with nothing, or the '?' with 'a' and then another '?' with nothing) would contribute the count of "a" each time. But in reality, the variation "a" should be checked once, and its count added once, regardless of how many ways the pattern can generate it.
+
+So, to avoid overcounting, we must generate the set of unique variations for each pattern. Then, for each unique variation in the set, we add the count of that word. So duplicates in the generated variations are eliminated before checking the frequency map.
+
+Therefore, the code for generating variations should generate a set of unique strings. For example, in the generate_variations function, instead of returning a list, return a set. But how to handle that?
+
+Modifying the generate_variations function:
+
+def generate_variations(pattern):
+    variations = {''}
+    for c in pattern:
+        new_vars = set()
+        for var in variations:
+            if c != '?':
+                new_vars.add(var + c)
+            else:
+                for replacement in ['a', 'b', 'c', 'd', 'e', '']:
+                    new_vars.add(var + replacement)
+        variations = new_vars
+    return variations
+
+But wait, this code uses sets to accumulate the variations at each step, which automatically handles duplicates. So for each step, the new_vars is a set, which ensures that duplicates are not stored. So in the end, variations is a set of all unique possible variations for the pattern.
+
+This approach is correct and efficient. Because for each step, even if the same variation is generated through different paths, it's stored once in the set.
+
+So in the example where the pattern is "a?", the variations after processing the first 'a' are {'a'}, then processing the '?', the new variations are {'aa', 'ab', 'ac', 'ad', 'ae', 'a'}. So the variation 'a' is generated once (by adding nothing to the existing 'a').
+
+So the code for generating the variations should use a set-based approach to avoid duplicates.
+
+So now, the code for each pattern would generate a set of unique strings. For each of these strings, we check how many times they appear in the words, sum all of them, and that's the answer.
+
+Now, considering the example given:
+
+Input:
+3 1
+abc
+aec
+ac
+a?c
+
+The words are "abc", "aec", "ac". The pattern is "a?c".
+
+The generated variations are:
+
+When processing 'a', variations is {'a'}.
+
+Processing '?', the new variations are:
+
+a + 'a', 'b', 'c', 'd', 'e', '' → 'aa', 'ab', 'ac', 'ad', 'ae', 'a'.
+
+Then processing 'c', each of these is appended with 'c':
+
+'aa' → 'aac', 'ab' → 'abc', 'ac' → 'acc', 'ad' → 'adc', 'ae' → 'aec', 'a' → 'ac'.
+
+So the variations are {'aac', 'abc', 'acc', 'adc', 'aec', 'ac'}.
+
+Now, checking which of these are present in the words:
+
+- 'abc' is in the words (count 1).
+- 'aec' is in the words (count 1).
+- 'ac' is in the words (count 1).
+- The other variations ('aac', 'acc', 'adc') are not present.
+
+So the sum is 1 + 1 + 1 = 3, which matches the sample output.
+
+So the code would work correctly.
+
+Now, let's consider the time and space constraints.
+
+For the frequency map, it's O(N) time and space, which is acceptable.
+
+For each pattern:
+
+Generating the variations: for each '?', the set size multiplies by up to 6. So for k '?'s, the number of unique variations can be up to 6^k. But since the maximum k is 3, 6^3=216 variations. However, in practice, some variations may be the same (for example, if two '?'s are skipped, leading to overlapping possibilities). But in the worst case, it's 216 variations per pattern.
+
+For each variation, a look-up in the frequency map is O(1) (since it's a Python dict). So for M=5e3 patterns, each with up to 216 variations, the total look-ups are 5e3 * 216 = 1.08e6, which is acceptable.
+
+Thus, the code should work within the time constraints.
+
+Now, the code steps:
+
+Read N and M.
+
+Read N words, count their frequencies. For example, using a collections.defaultdict(int) or collections.Counter. Since the words can be up to 1e5, but in Python, even 1e5 elements in a Counter is manageable.
+
+Read M patterns.
+
+For each pattern, generate all unique variations, sum their counts.
+
+Now, the code:
+
+We need to read from stdin, process, and write to stdout.
+
+But for generating the variations, the code must be efficient. Let's proceed.
+
+Implement the generate_variations function as a helper.
+
+But in Python, using sets can be efficient enough for small numbers of variations.
+
+Now, code outline:
+
+import sys
+from collections import defaultdict
+
+def main():
+    import sys
+    from sys import stdin
+    words_freq = defaultdict(int)
+    n, m = map(int, stdin.readline().split())
+    for _ in range(n):
+        word = stdin.readline().strip()
+        words_freq[word] += 1
+    for _ in range(m):
+        pattern = stdin.readline().strip()
+        variations = {''}
+        for c in pattern:
+            new_vars = set()
+            for var in variations:
+                if c != '?':
+                    new_var = var + c
+                    new_vars.add(new_var)
+                else:
+                    for rep in ['a', 'b', 'c', 'd', 'e', '']:
+                        new_var = var + rep
+                        new_vars.add(new_var)
+            variations = new_vars
+        total = 0
+        for var in variations:
+            total += words_freq.get(var, 0)
+        print(total)
+
+But wait, the code uses a set for variations, which starts as {''}, and for each character in the pattern, processes the current variations. For each existing variation in variations, if the current character is not '?', append it to each variation. If it is '?', append each possible replacement (a-e and empty).
+
+This code should correctly generate all possible variations.
+
+Testing this code with the sample input:
+
+Sample Input:
+
+3 1
+abc
+aec
+ac
+a?c
+
+After reading the words, the words_freq is {'abc':1, 'aec':1, 'ac':1}.
+
+Processing the pattern 'a?c':
+
+variations starts as {''}.
+
+Processing 'a' (not a '?'), so new_vars is {'' + 'a'} → {'a'}.
+
+Processing '?': for each variation in {'a'}, append a, b, c, d, e, or empty.
+
+So new_vars becomes {'aa', 'ab', 'ac', 'ad', 'ae', 'a'}.
+
+Processing 'c' (not a '?'), append 'c' to each variation in new_vars.
+
+Resulting variations:
+
+'aa' + 'c' → 'aac'
+
+'ab' + 'c' → 'abc'
+
+'ac' + 'c' → 'acc'
+
+'ad' + 'c' → 'adc'
+
+'ae' + 'c' → 'aec'
+
+'a' + 'c' → 'ac'
+
+So variations is {'aac', 'abc', 'acc', 'adc', 'aec', 'ac'}.
+
+Now, sum their frequencies:
+
+aac: 0
+
+abc: 1
+
+acc: 0
+
+adc: 0
+
+aec:1
+
+ac:1
+
+Total is 1+1+1=3. So the output is 3.
+
+Which matches the sample.
+
+Great.
+
+Now, possible edge cases:
+
+1. Pattern is all '?'s. For example, pattern "??" (two '?s').
+
+Each '?' can be replaced or skipped. So variations include all possible combinations. For example, "a", "b", ..., "e", "aa", "ab", etc., and the empty string.
+
+But the code handles that.
+
+2. Words have varying lengths. For example, a pattern of length 5 with some '?'s replaced by empty could generate a shorter string. But the code will generate the correct variations.
+
+3. Words that are empty? But according to the input constraints, words have a maximum length L (1 ≤ L ≤50). Wait, the problem statement says: "each word and each pattern has a maximum length L (1 ≤ L ≤50)". So words and patterns can't be empty. So the code can assume that all words and patterns are at least length 1. But when generating variations, a pattern with all '?'s could generate the empty string. However, since the words are at least length 1, the empty variation would not contribute to the sum.
+
+But the code correctly handles it by looking up the frequency, which would be zero.
+
+Another edge case: a pattern with 3 '?'s, each of which is replaced by empty, leading to a string shorter than the original. For example, pattern "???", which after replacing all '?'s with empty becomes "" (empty), but since words have minimum length 1, it's not counted.
+
+But the code handles this.
+
+Now, code efficiency: for each pattern, generating the variations is O(L * 6^k), where k is the number of '?'s. Since L is up to 50, but for each step, the number of variations can be up to 6^3 = 216. So the maximum time per pattern is 50 * 216 = 10,800 operations. For M=5e3, this is 5e3 * 1e4 = 5e7 operations, which may be tight but manageable in Python.
+
+But given that the code uses sets, which are implemented as hash tables, the actual time could be higher. However, given the constraints (M=5e3, 216 variations per pattern), it should be manageable.
+
+Another optimization: precompute the possible replacements for '?', like using a list ['a', 'b', 'c', 'd', 'e', ''] once. So in the code, during processing the '?', iterate over that list.
+
+Yes, that's already done in the code.
+
+Now, possible optimizations:
+
+- Precompute the list of possible replacements for '?': reps = ['a','b','c','d','e', ''].
+
+But in the code, it's written as ['a','b','c','d','e', ''], which is the same.
+
+Another possible optimization is to process the pattern in reverse or another order, but I think the current code is as efficient as possible.
+
+In Python, for large sets, the code can be slow. Let's see: for each pattern, the code processes each character and for each variation in the current set, it creates new variations. For each '?', the number of variations can multiply by 6, but in practice, after k '?'s, the number of variations is 6^k. So for k=3, 6^3=216.
+
+But for a pattern with no '?', the code will process each character normally, and the number of variations is 1. So it's efficient.
+
+Thus, the code should work.
+
+Now, to test another example.
+
+Another sample:
+
+Input:
+
+2 2
+
+a
+
+a
+
+?
+
+a?
+
+Output:
+
+For the first pattern '?', the variations are all possible a, b, c, d, e, or empty. But words are 'a' and 'a' (count 2). So variations for '?' are {'a', 'b', 'c', 'd', 'e', ''}.
+
+The words are 'a' (count 2). So the sum for the first pattern is 2 (from 'a') and 0 for others.
+
+The output for the first pattern is 2.
+
+For the second pattern 'a?', the variations are:
+
+After 'a', then processing '?', which can be replaced by a-e or empty.
+
+So variations:
+
+'aa', 'ab', 'ac', 'ad', 'ae', 'a'.
+
+The words are 'a' (count 2) and 'a' again. So 'a' is one of the variations. So the sum is 2.
+
+So output for the two patterns would be:
+
+2
+
+2
+
+But let's see:
+
+Wait, the second pattern is 'a?', so variations include 'a' (when '?' is replaced by empty). So for the second pattern, the sum is 2 (from 'a') plus counts for 'aa', etc. which may not exist.
+
+But according to the example, the output for the second pattern would be 2.
+
+Yes.
+
+So the code would generate variations for 'a?', which includes 'a' (if the '?' is replaced by empty). So the sum is 2.
+
+Thus, the code works.
+
+So, the code as written should solve the problem correctly.
+</think>
+To solve this problem, we need to determine how many given words match each pattern. Each pattern can contain up to three '?' characters, which can be replaced by any letter from 'a' to 'e' or removed entirely. The challenge is to efficiently compute the number of valid matches for each pattern.
+
+### Approach
+1. **Read Input and Count Word Frequencies**: First, read all the words and count their occurrences using a frequency dictionary. This helps in quickly looking up the count of any word.
+2. **Generate Variations for Each Pattern**: For each pattern, generate all possible variations by replacing each '?' with each of the characters 'a' to 'e' or removing it. This is done using a set to avoid duplicate variations.
+3. **Count Matches**: For each generated variation of a pattern, check how many times it appears in the list of words using the precomputed frequency dictionary and sum these counts.
+
+### Solution Code
+```python
+import sys
+from collections import defaultdict
+
+def main():
+    input = sys.stdin.read().splitlines()
+    idx = 0
+    N, M = map(int, input[idx].split())
+    idx += 1
+    
+    words_freq = defaultdict(int)
+    for _ in range(N):
+        word = input[idx].strip()
+        words_freq[word] += 1
+        idx += 1
+    
+    replacements = ['a', 'b', 'c', 'd', 'e', '']
+    
+    for _ in range(M):
+        pattern = input[idx].strip()
+        idx += 1
+        variations = {''}
+        for c in pattern:
+            new_vars = set()
+            if c != '?':
+                for var in variations:
+                    new_var = var + c
+                    new_vars.add(new_var)
+            else:
+                for var in variations:
+                    for rep in replacements:
+                        new_var = var + rep
+                        new_vars.add(new_var)
+            variations = new_vars
+        total = sum(words_freq.get(var, 0) for var in variations)
+        print(total)
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Reading Input**: The input is read all at once and split into lines for efficient processing. The first line gives the number of words (N) and patterns (M).
+2. **Counting Word Frequencies**: A dictionary (`words_freq`) is used to store the count of each word. This allows O(1) time complexity for frequency lookups.
+3. **Generating Pattern Variations**: For each pattern, generate all possible variations by iterating through each character. If the character is '?', replace it with each possible character (including removal). This is managed using a set to ensure all variations are unique.
+4. **Summing Matches**: For each generated variation, the count from the frequency dictionary is retrieved and summed. This sum is the result for the corresponding pattern.
+
+This approach efficiently handles the constraints by leveraging sets to avoid redundant variations and using a frequency dictionary for quick lookups, ensuring the solution is both optimal and easy to understand.
+</bot>

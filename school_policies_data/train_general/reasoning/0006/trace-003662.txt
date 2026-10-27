@@ -1,0 +1,509 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.This problem of Oz is very straight forward. You are given N distinct prime integers i.e p1, p2,..., pN and an interval [L,R]. Calculate number of integers in this interval that are divisible by at least one of the given primes.
+
+Input : 
+First line of input contain an integer T — the number of test cases. T tests follow. First line of each test case contain 3 integers — N, L, R. and the next line contains N distinct prime integers - p1, p2,..., pN.
+
+Output :
+For each test case output a single number — number of integers in [L,R], that are divisible by at least one of the given primes.
+
+Constraints :
+1 ≤ T ≤ 10
+1 ≤ N ≤ 10
+1 < pi < 1000 where i=1,2..N 
+1 ≤ L ≤ R ≤ 10^18
+
+SAMPLE INPUT
+2
+1 1 10
+3
+2 1 10
+2 3
+
+SAMPLE OUTPUT
+3
+7
+
+Explanation
+
+For second sample : 
+Numbers in the interval [1,10] which are divisible by at least one prime from (2,3) are as follow :
+2, 3, 4, 6, 8, 9, 10
+</user>
+<bot>
+<think>
+Okay, let's tackle this problem. The task is to find the number of integers between L and R inclusive that are divisible by at least one of the given primes. Hmm, right. So for each test case, we have N distinct primes, and we need to count the numbers in [L, R] that are divisible by any of them.
+
+Wait, but the constraints are tight. R can be up to 1e18, and T is up to 10. So we can't check each number in the interval directly; that would be way too slow. We need a smarter approach.
+
+Oh right! This looks like a classic inclusion-exclusion problem. Because inclusion-exclusion allows us to calculate the count of numbers divisible by at least one of the primes without iterating through each number. Let me think about how inclusion-exclusion works here.
+
+Inclusion-exclusion principle: The total number of elements in the union of sets A1, A2, ..., An is equal to the sum of the sizes of each set minus the sum of the sizes of all two-set intersections, plus the sum of all three-set intersections, and so on, alternating signs.
+
+In this problem, each set Ai is the numbers divisible by prime pi. So the total count is the size of the union of all these Ai sets over [L, R].
+
+So to compute this, we can generate all possible subsets of the primes, compute their least common multiple (since the intersection of Ai, Aj is numbers divisible by LCM(pi, pj), but since the primes are distinct, LCM is just their product). Then, for each subset, if the subset has k elements, we add or subtract the count of numbers divisible by the LCM of the subset. The inclusion-exclusion alternates signs based on the size of the subset: subsets of odd size contribute positively, even size subtract.
+
+So the steps would be:
+
+1. Generate all non-empty subsets of the primes.
+2. For each subset, compute the product (since primes are distinct, the LCM is the product).
+3. Determine how many numbers in [L, R] are divisible by this product. That's (R // product) - ((L-1) // product).
+4. Multiply this count by (-1)^(size+1) because inclusion-exclusion alternates signs. Wait, inclusion-exclusion formula: the sign is (-1)^(k+1) where k is the subset size. Because for a subset of size k, the inclusion-exclusion term is (-1)^(k-1) multiplied by the count. Or maybe I should recheck the formula.
+
+Wait, the inclusion-exclusion formula for the union is:
+
+|A1 ∪ A2 ∪ ... ∪ An| = Σ|Ai| - Σ|Ai ∩ Aj| + Σ|Ai ∩ Aj ∩ Ak| - ... + (-1)^(n+1) |A1 ∩ ... ∩ An|
+
+So for a subset of size m, the coefficient is (-1)^(m-1). So each subset contributes with + if m is odd, - if even, but scaled by the count of numbers divisible by the product of the primes in the subset.
+
+So for each non-empty subset S of the primes:
+
+- compute the product of primes in S (since they're primes, the product is LCM)
+- compute the count of numbers in [L, R] divisible by this product: cnt = (R // product) - ((L-1) // product)
+- add to the total: cnt * sign, where sign is +1 if the subset size is odd, -1 if even.
+
+So the algorithm would loop through all possible non-empty subsets of the primes, compute their product, then compute how many numbers in the interval are divisible by that product, multiply by the inclusion-exclusion coefficient, and sum all these contributions.
+
+But how do we handle all subsets efficiently?
+
+The number of primes N can be up to 10, so the number of non-empty subsets is 2^10 -1 = 1023, which is manageable. So even for T=10, it's 10*1023 = around 10k iterations, each time doing some calculations. That's acceptable.
+
+So the steps for each test case:
+
+1. Read N, L, R, then the list of primes.
+2. Iterate over all non-empty subsets of the primes.
+3. For each subset, calculate the product of its primes. If during the product calculation, the product exceeds R (or even 1e18), we can stop multiplying further because once the product is larger than R, the count for that subset would be zero. So in such cases, we can skip processing that subset further as it contributes nothing.
+4. For the product, compute the count of numbers divisible by it in [L, R]. If product is larger than R, count is zero.
+5. Depending on the size of the subset, add or subtract the count to the total.
+
+But wait, calculating the product of a subset of primes can be tricky because primes can be up to 1000, and subsets can have up to 10 primes. For example, 1000^10 is 1e30, which is way bigger than 1e18. So for such subsets, their product will exceed R (since R is up to 1e18), so the count would be zero. Therefore, in these cases, we can skip calculating the product once it exceeds R, as any further primes in the subset would only make the product larger.
+
+So during the product calculation for a subset, if at any step the product exceeds R, we can break early and consider the product as exceeding, thus contributing zero to the total.
+
+This is important for performance. For example, if the subset is {2, 3, 5, 7, 11, 13, 17, 19, 23, 29}, the product is way over 1e18. So during the calculation of the product, once the product exceeds R (say 1e18), we can stop and mark this subset as invalid.
+
+So the plan is:
+
+For each subset:
+
+- Initialize product as 1.
+
+- Iterate through each prime in the subset:
+
+   - multiply the current product by the prime.
+
+   - if product exceeds R, break and set product to 0 (indicating it's invalid).
+
+- After processing all primes in the subset, if product is 0, skip.
+
+- Else, compute the count as (R // product) - ((L-1) // product).
+
+- Multiply by the inclusion-exclusion coefficient (1 if subset size is odd, -1 if even).
+
+- Add to the total.
+
+But how to generate all non-empty subsets of the primes?
+
+In Python, we can use bitmasking. For a list of primes of length N, each subset can be represented by a bitmask from 1 to 2^N -1. For each bitmask, check each bit to see if the prime is included in the subset.
+
+Yes.
+
+So for each bitmask in 1 to (1<<N) -1:
+
+   primes_in_subset = [primes[i] for i in range(N) if (bitmask & (1<<i))]
+
+   m = len(primes_in_subset)
+
+   product = 1
+
+   for p in primes_in_subset:
+
+       product *= p
+
+       if product > R:
+
+           product = 0
+
+           break
+
+   if product == 0:
+
+       continue
+
+   count = R // product - (L-1) // product
+
+   if m % 2 == 1:
+
+       total += count
+
+   else:
+
+       total -= count
+
+Yes, this should work.
+
+But what if L is 0? Wait, the problem states that L can be 1. Because in the input constraints, it says 1 ≤ L ≤ R ≤ 1e18. So L is at least 1. So (L-1) can be zero, but when L is 1, (L-1) is 0, and division by product is okay.
+
+For example, if product is 2 and L=1, then (L-1)//2 is 0//2=0. So R//2 - 0 is the count of numbers from 1 to R divisible by 2.
+
+Wait, yes. For example, product=2, L=1, R=10. 10//2=5. (1-1)//2=0. So 5-0=5. Which is correct (2,4,6,8,10).
+
+So the formula works.
+
+Now, handling the product calculation correctly is important. Because multiplying the primes in the subset in any order is okay, but we have to check after each multiplication whether the product exceeds R. If at any point product exceeds R, we can break out of the loop and skip that subset.
+
+This is crucial to prevent integer overflows and also to save time. For example, a subset with primes that when multiplied even once exceeds R can be skipped early.
+
+In Python, integers can be arbitrarily large, but multiplying 10 primes each 1e3 would result in 1e30, which is manageable in Python, but checking after each multiplication is better for performance.
+
+So in code:
+
+For each test case:
+
+Read N, L, R.
+
+Read the primes list.
+
+Initialize total = 0
+
+For each bitmask from 1 to (1<<N) -1:
+
+   primes_in_subset = list of primes where bit is set in mask.
+
+   m = len(primes_in_subset)
+
+   product = 1
+
+   for p in primes_in_subset:
+
+       product *= p
+
+       if product > R:
+
+           product = 0
+
+           break
+
+   if product == 0:
+
+       continue
+
+   count = R // product - (L-1) // product
+
+   if m % 2 == 1:
+
+       total += count
+
+   else:
+
+       total -= count
+
+So this should compute the inclusion-exclusion sum correctly.
+
+Testing with sample input.
+
+Sample input 2:
+
+Test case 2:
+
+N=2, L=1, R=10.
+
+Primes are 2 and 3.
+
+All non-empty subsets:
+
+Subsets:
+
+{2} (size 1): product=2. Count=10//2 -0=5. Contribute +5.
+
+{3} (size 1): product=3. Count=10//3=3. 3-0=3. Contribute +3.
+
+{2,3} (size 2): product=6. Count=10//6=1. 1-0=1. Contribute -1.
+
+Total is 5+3-1=7. Which matches the sample output.
+
+Yes.
+
+Another sample:
+
+Test case 1: N=1, primes 3, L=1, R=10.
+
+Subsets: only {3}. product=3. count=10//3=3. So total is 3.
+
+Which matches the sample.
+
+So the algorithm works.
+
+Now, code:
+
+We need to read T test cases. For each test case, read N, L, R, then N primes.
+
+Implement the above logic.
+
+But wait, when the product is 0 (exceeds R), we skip. So code for product calculation:
+
+product = 1
+
+for p in primes_in_subset:
+
+    product *= p
+
+    if product > R:
+
+        product = 0
+
+        break
+
+So for example, if during the loop product becomes larger than R, set to 0 and break.
+
+Then, if product is 0, skip.
+
+Otherwise compute count.
+
+Now, code:
+
+In Python, the code would be:
+
+Read T.
+
+For each T:
+
+   Read N, L, R.
+
+   Read N primes as a list.
+
+   total = 0
+
+   for mask in 1 to (1<<N) -1:
+
+       bits = [i for i in range(N) if (mask & (1<<i))]
+
+       m = len(bits)
+
+       primes_subset = [primes[i] for i in bits]
+
+       product = 1
+
+       for p in primes_subset:
+
+           product *= p
+
+           if product > R:
+
+               product = 0
+
+               break
+
+       if product == 0:
+
+           continue
+
+       cnt = R // product - (L-1) // product
+
+       if m % 2 == 1:
+
+           total += cnt
+
+       else:
+
+           total -= cnt
+
+   print(total)
+
+Yes.
+
+But in Python, for mask in range(1, 1<<N) would generate all non-empty subsets.
+
+But when N is 10, 1<<N is 1024, so mask runs from 1 to 1023.
+
+Now, considering that for each mask, the code loops through the primes in the subset, but if the product exceeds R early, it breaks.
+
+This should be efficient enough.
+
+But for N=10, and T=10, the total number of masks is 10 * 1023 = 10230, which is manageable.
+
+But what about when the primes are large? For example, primes like 997, 991, etc. Even subsets of size 2 would have product 997*991= about 1e6. For R=1e18, that's manageable, but for subsets of size 10 primes each 1e3, product would be 1e30, which is way bigger than R=1e18, so such subsets would be skipped.
+
+Therefore, the code is efficient.
+
+Testing edge cases:
+
+Case where L = R. For example, L=R=5. Then check if 5 is divisible by any of the primes.
+
+Another edge case: primes include 2, L=1, R=1. Then 1 is not divisible by 2, so count is 0.
+
+Another case: primes include 1. Wait, but the problem states that primes are given as integers greater than 1. Because the input constraints say 1 < pi < 1000. So primes are all >=2. So no need to handle 1.
+
+So code should work.
+
+Now, code:
+
+Implementing the function.
+
+Read from stdin, process each test case.
+
+Sample code:
+
+import sys
+
+def main():
+    import sys
+    input = sys.stdin.read().split()
+    ptr = 0
+    T = int(input[ptr])
+    ptr +=1
+    for _ in range(T):
+        N = int(input[ptr])
+        L = int(input[ptr+1])
+        R = int(input[ptr+2])
+        ptr +=3
+        primes = list(map(int, input[ptr:ptr+N]))
+        ptr +=N
+        total =0
+        # generate all non-empty subsets
+        for mask in range(1, 1<<N):
+            bits = []
+            for i in range(N):
+                if mask & (1<<i):
+                    bits.append(i)
+            m = len(bits)
+            product =1
+            overflow = False
+            for i in bits:
+                p = primes[i]
+                product *= p
+                if product > R:
+                    overflow = True
+                    break
+            if overflow:
+                continue
+            cnt = R // product - (L-1) // product
+            if m %2 ==1:
+                total += cnt
+            else:
+                total -= cnt
+        print(total)
+
+if __name__ == "__main__":
+    main()
+
+Wait, but in the code, for the bits, I can loop through each bit in the mask and collect the primes. But the code above uses a list 'bits' which holds the indices, then loops through those indices and multiplies the primes. Alternatively, we could collect the primes in the subset first.
+
+But the code is correct as written.
+
+Testing the sample input:
+
+Sample input:
+
+2
+1 1 10
+3
+2 1 10
+2 3
+
+First test case:
+
+N=1, L=1, R=10. primes [3].
+
+The mask runs from 1 (binary 1). So subset is [3]. m=1. product=3.
+
+cnt = 10//3 -0=3. add to total. total=3.
+
+Second test case: N=2, primes 2,3.
+
+masks are 0b01 (primes[0]=2, m=1), 0b10 (primes[1]=3, m=1), 0b11 (both primes, m=2).
+
+For mask 0b01: product 2. cnt 5. total +=5.
+
+mask 0b10: product3. cnt 3. total +=3 → 8.
+
+mask 0b11: product6. cnt 1. m=2 (even), subtract 1 → 8-1=7.
+
+So output is 7. Correct.
+
+Thus the code works.
+
+Now, edge cases.
+
+Test case where L=0: but according to the problem statement, L is >=1. So code is safe.
+
+Another case: primes = [2,3], L=5, R=5. Then numbers in range are 5. Check if 5 is divisible by 2 or 3. No. So count is 0.
+
+In code, each subset:
+
+subset {2}: product 2. R//2 =5//2=2. (L-1)=4 →4//2=2. 2-2=0. So contributes 0.
+
+subset {3}:5//3=1. (5-1)//3=4//3=1. 1-1=0. contributes 0.
+
+subset {2,3}:6. 5//6=0. (5-1)//6=0. 0-0=0. contributes 0. So total is 0.
+
+Another case: L=2, R=2. primes [2]. mask 1. product=2. cnt=1 (2//2 - (1)//2=1-0=1. total is 1. Correct.
+
+Thus code works.
+
+So the code should be correct.
+</think>
+To solve this problem, we need to count the number of integers in a given interval [L, R] that are divisible by at least one of the provided prime numbers. Given the constraints, a direct approach of checking each number in the interval is infeasible due to the potential size of the interval (up to 10^18). Instead, we use the inclusion-exclusion principle to efficiently compute the result.
+
+### Approach
+1. **Inclusion-Exclusion Principle**: This principle allows us to count the union of multiple sets by adding the sizes of individual sets, subtracting the sizes of all pairwise intersections, adding back the sizes of all triple intersections, and so on. This alternates signs based on the subset size.
+2. **Subset Generation**: For each test case, generate all non-empty subsets of the given primes. For each subset, compute the product of the primes (since primes are distinct, the product is their LCM).
+3. **Divisibility Check**: For each subset's product, determine how many numbers in the interval [L, R] are divisible by this product. This is done using integer division.
+4. **Early Termination**: If the product of a subset exceeds R, further multiplication is unnecessary as it won't contribute to the count.
+
+### Solution Code
+```python
+import sys
+
+def main():
+    input = sys.stdin.read().split()
+    ptr = 0
+    T = int(input[ptr])
+    ptr += 1
+    for _ in range(T):
+        N = int(input[ptr])
+        L = int(input[ptr + 1])
+        R = int(input[ptr + 2])
+        ptr += 3
+        primes = list(map(int, input[ptr:ptr + N]))
+        ptr += N
+        total = 0
+        # Generate all non-empty subsets using bitmask
+        for mask in range(1, 1 << N):
+            # Collect primes in the subset
+            product = 1
+            subset_size = 0
+            overflow = False
+            for i in range(N):
+                if mask & (1 << i):
+                    subset_size += 1
+                    p = primes[i]
+                    product *= p
+                    if product > R:
+                        overflow = True
+                        break
+            if overflow:
+                continue
+            # Calculate count of numbers divisible by 'product' in [L, R]
+            cnt = R // product - (L - 1) // product
+            # Apply inclusion-exclusion
+            if subset_size % 2 == 1:
+                total += cnt
+            else:
+                total -= cnt
+        print(total)
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Reading Input**: The input is read in one go for efficiency, especially given the constraints.
+2. **Bitmasking for Subsets**: Each bitmask represents a subset of primes. For example, a bitmask `0b101` represents the subset containing the first and third primes.
+3. **Product Calculation**: For each subset, compute the product of its primes. If the product exceeds R during calculation, the subset is skipped early to save computation.
+4. **Divisibility Count**: Using integer division, the count of numbers in [L, R] divisible by the product is calculated. This is adjusted by the inclusion-exclusion principle based on subset size.
+5. **Efficiency**: The approach efficiently handles large intervals by leveraging mathematical properties and early termination of irrelevant subsets.
+
+This method ensures we handle up to the maximum constraints efficiently, avoiding the need to iterate through each number in potentially enormous intervals.
+</bot>

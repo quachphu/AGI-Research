@@ -1,0 +1,1077 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Alice and Johnny are playing a simple guessing game. Johnny picks an arbitrary positive integer n (1 ≤ n ≤ 10^9) and gives Alice exactly k hints about the value of n. It is Alice's task to guess n, based on the received hints. 
+
+Alice often has a serious problem guessing the value of n, and she's beginning to suspect that Johnny occasionally cheats, that is, gives her incorrect hints. 
+After the last game, they had the following little conversation:
+
+
+[Alice] Johnny, you keep cheating!
+[Johnny] Indeed? You cannot prove it.
+[Alice] Oh yes I can. In fact, I can tell you with the utmost certainty that in the last game you lied to me at least *** times.
+
+
+
+So, how many times at least did Johnny lie to Alice? Try to determine this, knowing only the hints Johnny gave to Alice.
+
+
+Input
+The first line of input contains t, the number of test cases (about 20). Exactly t test cases follow. 
+
+Each test case starts with a line containing a single integer k, denoting the number of hints given by Johnny (1 ≤ k ≤ 100000). Each of the next k lines contains exactly one hint. The i-th hint is of the form:
+
+operator li logical_value
+
+where operator denotes one of the symbols < , > , or ; li is an integer (1 ≤ li ≤ 10^9), while logical_value is one of the words: Yes or No. The hint is considered correct if logical_value is the correct reply to the question: "Does the relation: n operator li hold?", and is considered to be false (a lie) otherwise.
+
+
+Output
+For each test case output a line containing a single integer, equal to the minimal possible number of Johnny's lies during the game.
+
+
+Example
+
+Input:
+3
+2
+< 100 No
+> 100 No
+3
+< 2 Yes
+> 4 Yes
+= 3 No
+6
+< 2 Yes
+> 1 Yes
+= 1 Yes
+= 1 Yes
+> 1 Yes
+= 1 Yes
+
+Output:
+0
+1
+2
+
+Explanation: for the respective test cases, the number picked by Johnny could have been e.g. nnn
+</user>
+<bot>
+<think>
+Okay, let's try to solve this problem. Hmm. The problem is to find the minimal number of lies Johnny could have told based on the given hints. So, for each test case, we need to determine the smallest possible number of hints that are incorrect, considering that there exists some integer n that satisfies all the correct hints. And the rest are the lies. So our goal is to find the maximum number of hints that can be correct for some n, then subtract that from the total hints to get the minimal lies.
+
+Right. So the approach here is similar to interval problems where we need to find the n that fits the maximum number of constraints, then the minimal lies are k minus that maximum.
+
+Each hint defines a condition on n. For example, a hint like "< 100 No" means that the statement "n < 100" is No, which implies n >= 100. Similarly, "> 100 No" would imply n <= 100. So each hint can be translated into a range of possible n values that would make that hint correct.
+
+The challenge is to find the n that satisfies as many hints as possible, and then the minimal lies are k minus that maximum count.
+
+So the steps I need to take are:
+
+1. For each test case, process all hints and convert them into intervals (or ranges) that n must lie in for the hint to be correct.
+2. Find the value of n that is covered by the most intervals. The number of such intervals is the maximum number of correct hints possible.
+3. The minimal lies is then k (total hints) minus this maximum.
+
+But how do we efficiently compute this? Because k can be up to 1e5, we need an efficient way to process all hints and find the optimal n.
+
+Let's think about how each hint translates into a possible interval for n. Let's break down each operator and logical value:
+
+For a hint "operator li logical_value", the correct n must satisfy the condition (operator) evaluated as logical_value.
+
+Let's list all possibilities:
+
+Case 1: operator is '<', logical_value is 'Yes'
+Condition: n < li → interval [1, li-1]
+
+Case 2: operator is '<', logical_value is 'No'
+Condition: n >= li → interval [li, INF]
+
+Case 3: operator is '>', logical_value is 'Yes'
+Condition: n > li → interval [li+1, INF]
+
+Case 4: operator is '>', logical_value is 'No'
+Condition: n <= li → interval [1, li]
+
+Case 5: operator is '=', which I think is a typo here. Wait, the problem statement says the operator is one of <, >, or ; wait, maybe the operator is '=' but in the input it's represented as '='. Wait, looking back at the input example:
+
+In the third test case, there's a hint like "= 3 No", so the operator is '='. So the possible operators are <, >, and =.
+
+So the third operator is '=', so the cases for that:
+
+Case 5: operator is '=', logical_value is 'Yes' → n == li → interval [li, li]
+
+Case 6: operator is '=', logical_value is 'No' → n != li → intervals (-inf, li-1] ∪ [li+1, inf). But since n is a positive integer, this is [1, li-1] ∪ [li+1, INF).
+
+But handling the '=' case is tricky because it's either a single point or two intervals.
+
+So the problem is, for each hint, the interval where n makes the hint correct. Then, find the n that is covered by the maximum number of intervals. The count of intervals covering n is the number of correct hints. So minimal lies is k - max_count.
+
+But how do we handle intervals that are ranges, including the '=' case which can split into two ranges?
+
+The key insight is that the optimal n must be at one of the critical points, which are the li values from the hints, or li +/- 1. Because for example, the intervals for a < li Yes are [1, li-1], and for a > li No are [1, li]. So the boundaries are at li-1, li, li+1, etc. So the optimal n is likely to be at one of these critical points. So perhaps we can collect all possible candidate points from the hints and check each of them, but with 1e5 hints, this could be too slow.
+
+Alternatively, we can model the problem as a line sweep, where for each interval, we add +1 to the start and -1 to the end, then process all these points in order to find the maximum coverage. But this approach works for continuous intervals, but for the '=' case, which can have two separate intervals (for No), this complicates things.
+
+Wait, for the '=' operator with 'No', the correct n can be any number except li. So the interval is [1, li-1] or [li+1, ...). So for this case, the interval is split into two parts. How can we model this in a line sweep?
+
+Hmm, maybe the problem is that with the 'No' on '=', the interval is two separate ranges. So this complicates the interval handling.
+
+An alternative approach: For each possible n, count how many hints are correct. The n with the maximum count gives the minimal lies. So the minimal lies is k - max(counts).
+
+But trying all possible n is impossible since n can be up to 1e9.
+
+Thus, the efficient way is to collect all the critical points where the count could change. For example, for each hint, the boundaries of its intervals are critical points. For example, in a hint like "< 100 Yes", the critical points are 99 and 100. So maybe the optimal n is at li, li-1, or li+1 for some hint.
+
+So perhaps we can collect all the li values and their adjacent numbers (li-1, li, li+1) as candidate points. Then, for each candidate point, compute how many hints are satisfied. The maximum of these would give the maximum possible correct hints. Then, subtract from k to get the minimal lies.
+
+But how many candidate points would that be? For each of the k hints, 3 points. So 3k candidates. For k=1e5, that's 3e5 points. For each point, we need to process all k hints. That would be O(3e5 * 1e5) operations, which is 3e10, which is way too slow.
+
+That's not feasible. So we need a smarter way.
+
+Alternative idea: For each hint, represent the possible ranges where n must lie for the hint to be correct. Then, the problem becomes finding the point n where the maximum number of these ranges include n. However, the ranges can be split (like for '=' No, which is two ranges), but how do we handle that.
+
+Wait, but even with splits, the maximum coverage is the maximum number of overlapping ranges. But with the '=' No case, the coverage is two ranges. So perhaps the maximum coverage could be found by considering all possible events for all the intervals.
+
+But handling all possible intervals, including split ones, is tricky. Let's think.
+
+Each interval (including split ones) can be represented as a set of ranges. For example, the '=' No case would generate two ranges: [1, li-1] and [li+1, infinity]. The other hints generate a single interval.
+
+But how can we model these ranges as events in a line sweep?
+
+Alternatively, we can model the entire possible n (from 1 to 1e9) and track the count of correct hints for each possible n. To find the maximum count.
+
+But the problem is to represent this efficiently.
+
+Another idea: For each hint, create all the possible intervals where the hint is correct, then collect all the start and end points of these intervals as events, and perform a line sweep to find the point where the maximum number of intervals overlap.
+
+But how to handle the split intervals (like for '=' No)?
+
+In that case, a '=' No hint contributes two intervals: [1, li-1] and [li+1, INF]. But when doing a line sweep, the [li+1, INF] part would start at li+1 and go to infinity. But since we can't process infinity, perhaps we can model all events up to the maximum possible li in the hints plus 1. But then again, this may not capture the maximum count if the optimal n is beyond the maximum li in the test case.
+
+Wait, but if a hint's interval is [a, INF], then any n >= a will satisfy that interval. So, for the line sweep approach, when we process events, the intervals that extend to infinity can be represented as [a, 1e18] (assuming 1e18 is larger than any possible n we might have, but since n is up to 1e9, perhaps 1e9+1 is enough). Alternatively, in the line sweep, we can track that the interval starts at a and never ends. So during the line sweep, after all other events, the maximum coverage would include these intervals.
+
+Alternatively, for the line sweep approach, here's how it can work:
+
+We can process all interval start and end points. For each interval [start, end], we add a +1 event at start, and a -1 event at end+1 (since the interval is inclusive). Then, when we process the events in order, we can track the current coverage and find the maximum.
+
+But for intervals that are [a, INF], we can represent their end as a very large number (like 1e18), which is larger than any possible n. Then, during the line sweep, after all events up to 1e18, the coverage would include these intervals. So the maximum coverage can be found during the processing.
+
+But what about the '=' No case, which adds two intervals? For example, the hint '= 5 No' would create two intervals: [1,4] and [6, INF]. So for each of these intervals, we add their start and end events.
+
+But this could lead to a lot of events. For each such hint, two intervals. For k=1e5 hints, each possibly creating up to two intervals, that's 2e5 intervals. Each interval adds two events (start and end), so 4e5 events. Then, line sweep would process these 4e5 events in sorted order, tracking the current coverage. For each event point, we can compute the coverage between the previous point and the current point, and track the maximum.
+
+Wait, line sweep works as follows:
+
+Sort all events (each event is a position x, and a delta of +1 or -1). Then, as we process the events in order, between two consecutive events x_prev and x_curr, the coverage is the current active count. The length of the interval is x_curr - x_prev. But since we are looking for the maximum coverage, the actual length doesn't matter. What's important is the maximum coverage value achieved. However, in our case, the actual n must be an integer, but since the events are at integer positions, perhaps we can process them in such a way that we track the maximum coverage at any x in the interval [x_prev, x_curr).
+
+Wait, perhaps this approach is feasible. Here's the plan:
+
+1. For each hint, generate the interval(s) where the hint is correct.
+2. For each interval [a, b], add two events: (a, +1) and (b+1, -1). For example, if the interval is [3,5], the events are at 3 (+1) and 6 (-1). Between x=3 and x=6, the interval is active.
+3. For intervals that go to infinity, represent the end as 1e18 (or some large number beyond any possible n).
+4. Collect all events from all intervals, sort them by their x position.
+5. Then, process the events in order. For each range between previous x and current x, the coverage is current_active. We need to track the maximum current_active during any interval.
+
+But the problem is that the maximum coverage may be achieved at a point x in the interval where the coverage is active, but since n must be an integer, we need to check if the interval [x_prev, x_curr) contains any integers. However, x_prev and x_curr can be such that x_prev < x_curr, so there's at least one integer in between. For example, if x_prev is 3 and x_curr is 6, then integers 3,4,5 are covered. So the coverage during that interval is current_active, and the maximum during that interval is current_active. So the maximum coverage is the maximum current_active value encountered during any interval.
+
+But in our problem, since we're looking for the maximum count of correct hints, which is the same as the maximum coverage, we can use this approach.
+
+So, the steps are:
+
+- For each test case, process all k hints into their respective intervals.
+- For each interval, generate events for start and end.
+- Sort all events by x.
+- Then, perform a line sweep, tracking the current active count. The maximum active count during the sweep is the maximum number of correct hints possible. The minimal lies is k minus that maximum.
+
+Now, the key is to correctly generate the intervals for each hint.
+
+Let's go through each possible hint:
+
+Operator is '<':
+
+- Yes: n < li → [1, li-1]
+- No: n >= li → [li, INF]
+
+Operator is '>':
+
+- Yes: n > li → [li+1, INF]
+- No: n <= li → [1, li]
+
+Operator is '=':
+
+- Yes: n == li → [li, li]
+- No: n != li → [1, li-1] U [li+1, INF]
+
+So for each hint, depending on the operator and logical value, generate the intervals.
+
+Now, the problem is handling the '=' No case, which splits into two intervals.
+
+For example, a hint '= 5 No' would generate [1,4] and [6, INF].
+
+So for each such case, we need to split into two intervals and add their events.
+
+So, for each '=' No hint:
+
+- Add interval [1, li-1]
+- Add interval [li+1, INF]
+
+So for each of these intervals, generate the start and end events.
+
+Now, for each of these intervals, generate events.
+
+Once all events are generated, sort them, and then process in order.
+
+But how to handle overlapping intervals and track the maximum coverage.
+
+So the steps for each test case:
+
+1. Read k hints.
+
+2. For each hint, generate the interval(s) that satisfy the hint.
+
+3. For each interval [a, b], add events (a, +1) and (b+1, -1). For example, if the interval is [1, 4], the events are (1, +1) and (5, -1). For an interval [6, INF], the end would be 1e18, so the event is (6, +1) and (1e18+1, -1). But perhaps using 1e18+1 is sufficient.
+
+But in code, how do we handle the INF part? Well, since n can be up to 1e9, perhaps setting the end to 1e18 is enough, since any n in [a, 1e18] would be considered as part of the interval. But the line sweep approach will track all events up to that point. But maybe even better to use a value larger than 1e9, say 1e18.
+
+Now, after generating all events, we sort them. The events are sorted by x. For events with the same x, the order of processing the delta may matter. For example, if two events at x=5: a +1 and a -1. We need to process the -1 first, then the +1, to avoid overcounting. Wait, no. Because when an event occurs at x, the delta applies to x and beyond. So for example, if we have an interval ending at x=5 (so event at 5, -1) and another starting at x=5 (event +1), then the end of the first interval is x=5, which means the interval is [a, 5-1] (since the end is b+1). So the first interval is [a,4], and the second starts at 5.
+
+So in the events list, the end event at 5 (delta -1) comes before the start event at 5 (delta +1). So in the sorted list, if two events have the same x, the order is: first process all -1 events, then +1 events. Because the interval ends before the next starts.
+
+So to ensure correct processing, when x is the same, the events with delta -1 should come before those with delta +1.
+
+So when generating the events, for the same x, the order is (-1, then +1). So in code, we can represent each event as a tuple (x, delta), and when sorted, events with same x are ordered with delta in ascending order (since -1 comes before +1).
+
+In Python, when you sort tuples, the first elements are compared, and if they are the same, the second elements are compared. So, if we have (x, -1) and (x, +1), the (x, -1) will come first in the sorted list. So that's correct.
+
+Now, once the events are sorted, we can process them as follows:
+
+Initialize current_active = 0, max_active = 0.
+
+prev_x = None.
+
+For each event in sorted events:
+
+    if prev_x is not None and prev_x < event.x:
+
+        # the interval between prev_x and event.x is [prev_x, event.x - 1]
+
+        # the coverage during this interval is current_active
+
+        # since this interval is from prev_x to event.x - 1, any n in this interval will have coverage current_active.
+
+        # So the max_active is the maximum between current max and current_active.
+
+        if current_active > max_active:
+
+            max_active = current_active
+
+    # Then apply the delta
+
+    current_active += event.delta
+
+    prev_x = event.x
+
+After processing all events, the max_active will be the maximum number of correct hints possible.
+
+But wait, what about the event.x=1e18+1? The interval [prev_x, event.x-1] would be up to 1e18, which is beyond the possible n of 1e9. But since n can be up to 1e9, any event.x beyond 1e9+1 may not contribute to the coverage. So perhaps during the processing, after event.x exceeds 1e9+1, the intervals no longer contain any possible n.
+
+Wait, but if an interval is [a, 1e18], and a is <= 1e9, then all n >= a and <=1e9 are covered. So the event for the end is at 1e18+1. So during processing, when event.x is 1e18+1, the delta is -1, but the interval [a, 1e18] is active until 1e18+1-1 = 1e18. So for n up to 1e9, this interval is active as long as a <=1e9.
+
+So the line sweep will correctly account for that.
+
+But when we process events beyond x=1e9, the intervals between prev_x (say 1e9) and event.x (like 1e18+1) is [1e9, 1e18]. But the possible n in this range (for the problem's constraints) is up to 1e9. So when calculating coverage between 1e9 and 1e18, the maximum coverage is current_active. However, if there are any n in 1e9 that are covered, then the current_active during that interval would apply to those n.
+
+Wait, but the maximum possible n is 1e9. So when we process events beyond 1e9, the coverage in those regions (x >=1e9+1) doesn't apply to any possible n. So in the line sweep, after x exceeds 1e9+1, the intervals [prev_x, event.x-1] start at prev_x >= 1e9+1. So those intervals don't include any n, because n can be up to 1e9. So during processing, once we reach x=1e9+1, we can break the loop, as further events do not affect the coverage for valid n.
+
+But how to handle that in code?
+
+Well, perhaps during the line sweep, after processing events up to x=1e9, we can compute the coverage for x=1e9 and beyond.
+
+Wait, perhaps the line sweep approach can be modified to stop once x exceeds 1e9. Because the maximum possible n is 1e9, and any events beyond that are not needed.
+
+Alternatively, during processing, after processing events up to x=1e9, we can check the current_active (since any interval that starts before 1e9 and ends at 1e18 would still be active up to x=1e9). So after all events are processed, the maximum coverage includes those intervals that are active up to 1e9.
+
+But perhaps the line sweep approach correctly captures this. Let's see.
+
+Suppose we have an interval [a, 1e18], which is active from a to 1e18. The events are (a, +1) and (1e18+1, -1). When processing these events, after a, the current_active increases by 1. Then, when the event.x reaches 1e18+1, the current_active decreases by 1. But between a and 1e18+1, the current_active is 1. However, the interval [a, 1e18] is active for all x from a to 1e18. So during the line sweep, between a and 1e18+1, the coverage is 1. But for our problem, n can be up to 1e9. So the maximum coverage for n up to 1e9 is the maximum coverage found in the events processed up to x=1e9.
+
+So during the line sweep, when processing events up to x=1e9+1, the coverage between x=prev_x (say 1e9) and x=1e9+1 is [1e9, 1e9]. So the coverage during that interval is current_active, and n can be 1e9 (if it is in the interval).
+
+So the line sweep approach would capture this.
+
+But how to manage this in code?
+
+In code, the line sweep processes all events, even those beyond 1e9. But the maximum coverage is tracked correctly, because during the interval [x_prev, x_curr), if x_prev <= 1e9 and x_curr > 1e9, then the coverage for x_prev <= x < x_curr includes x=1e9 if x_prev <=1e9 < x_curr.
+
+So the code will correctly account for that.
+
+Therefore, the line sweep approach should work.
+
+So, putting it all together:
+
+For each test case:
+
+1. Read k hints.
+
+2. For each hint, generate the intervals where the hint is correct.
+
+3. For each interval, generate events (start, +1) and (end+1, -1). For intervals that are [a, INF], end is 1e18.
+
+4. Collect all events.
+
+5. Sort the events by x, and for same x, sorted by delta (since -1 comes before +1).
+
+6. Perform line sweep to compute the maximum active count.
+
+7. Minimal lies is k - max_active.
+
+Now, let's test this approach against the sample input.
+
+Sample Input 1:
+
+3
+2
+< 100 No
+> 100 No
+
+So the first test case has two hints.
+
+First hint: < 100 No → n >= 100. Interval [100, INF].
+
+Second hint: > 100 No → n <= 100. Interval [1, 100].
+
+So the intervals for the two hints are [100, INF] and [1, 100]. The overlap is [100, 100]. So any n=100 would satisfy both hints. So the maximum correct is 2. So lies is 0.
+
+In the line sweep:
+
+The events for the first interval [100, 1e18] are (100, +1), (1e18+1, -1).
+
+The events for the second interval [1, 100] are (1, +1), (101, -1).
+
+All events sorted:
+
+(1, +1), (100, +1), (101, -1), (1e18+1, -1).
+
+Processing these events:
+
+prev_x = None.
+
+First event is x=1, delta +1.
+
+prev_x is None, so no interval. Apply delta: current_active = 1. prev_x = 1.
+
+Next event x=100, delta +1.
+
+Interval between prev_x=1 and x=100 is 1 to 99. Coverage is current_active=1. So max is 1.
+
+Apply delta: current_active=2. prev_x=100.
+
+Next event x=101, delta -1.
+
+Interval between 100 and 101-1=100. So x=100. Coverage is 2. So max becomes 2.
+
+Apply delta: current_active=1. prev_x=101.
+
+Next event x=1e18+1, delta-1.
+
+Interval between 101 and 1e18. But during this interval, current_active is 1. But the maximum is already 2.
+
+So max_active is 2. So lies is 2-2=0. Which matches the sample.
+
+Sample 2:
+
+3
+
+< 2 Yes → n <2 → [1,1]
+
+>4 Yes → n >4 → [5, INF]
+
+=3 No → n !=3 → [1,2] U [4, INF]
+
+So intervals for each hint:
+
+H1: [1,1]
+
+H2: [5, INF]
+
+H3: [1,2] and [4, INF]
+
+So events generated:
+
+H1:
+
+start 1, end 1+1=2 → events (1, +1), (2, -1).
+
+H2:
+
+start 5, end 1e18 → events (5, +1), (1e18+1, -1).
+
+H3:
+
+First interval [1,2]: start 1, end 3 → events (1, +1), (3, -1).
+
+Second interval [4, INF]: start 4, end 1e18 → events (4, +1), (1e18+1, -1).
+
+So all events:
+
+(1, +1) from H1 and H3's first interval.
+
+(1, +1) again for H3's first interval.
+
+But when sorted:
+
+At x=1, two +1 events. So when sorted, the order between same x and same delta doesn't matter.
+
+So events list sorted:
+
+1: two +1's.
+
+Then x=2: H1's end event (delta-1).
+
+x=3: H3's first interval end (delta-1).
+
+x=4: H3's second interval start (delta+1).
+
+x=5: H2's start (delta+1).
+
+x=1e18+1: H2 and H3's second intervals end (delta-1 twice).
+
+Processing:
+
+prev_x = None.
+
+First event x=1, delta+1.
+
+prev_x is None, so no interval. Apply delta → current_active=1. prev_x=1.
+
+Next event x=1, delta+1. Apply delta → current_active=2. prev_x=1.
+
+Now, next event is x=2, delta-1.
+
+Interval between prev_x=1 and x=2 is 1 to 1. Coverage is 2. So max_active becomes 2.
+
+Apply delta → current_active=1. prev_x=2.
+
+Next event x=3, delta-1. Interval between 2 and 3-1=2. So x=2. Coverage is 1. Max remains 2.
+
+Apply delta → current_active=0. prev_x=3.
+
+Next event x=4, delta+1. Apply → current_active=1. prev_x=4.
+
+Next event x=5, delta+1. Apply → current_active=2. prev_x=5.
+
+Check the interval between 5 and next event (1e18+1). Coverage is 2. So during this interval, any n >=5 would be covered. But the maximum n allowed is 1e9, which is much less than 1e18+1. So for the interval [5, 1e18], the coverage is 2. So during this interval, the coverage is 2. So max_active remains 2.
+
+Then, when we process the events at x=1e18+1, the delta is -1 twice. But by that time, the coverage would have dropped.
+
+But the maximum coverage is 2.
+
+But the sample output is 1. So this suggests that this approach may be missing something.
+
+Wait, sample 2's output is 1. So the minimal lies is 3 - 2 = 1. But according to the approach, the maximum correct is 2. So sample output is correct.
+
+Wait, but according to the line sweep's max_active being 2, that's correct. So the code would output 3-2=1. Which matches the sample.
+
+Wait, but how?
+
+Looking for the n that satisfies the maximum number of hints. For example, n=5. Let's check the three hints:
+
+H1: < 2 Yes → n=5 <2? No. So the logical_value is Yes, which is incorrect. So this hint is a lie.
+
+H2: >4 Yes → 5>4 → Yes. Correct.
+
+H3: =3 No → 5 !=3 → correct. So H3 is correct.
+
+So for n=5, two correct hints. But the maximum possible correct is 2. So lies is 3-2=1.
+
+But according to the line sweep approach, the max_active is 2. So that's correct.
+
+But in the line sweep, during the events processing, when x=5, the coverage is 2. So for any n >=5, the coverage is 2. So for those n, two hints are correct. But there's also the H3's second interval (4, INF), which for n=4, the coverage would be 1 (H3's second interval starts at 4, so n=4 is in H3's interval [4, INF], but H1 and H2's conditions.
+
+H1: <2 → n=4 is not, so logical value is No. So if the hint is "No", but the hint here is "Yes". So for H1, the logical value is Yes → n <2. So for n=4, H1 is incorrect. H2: >4 Yes → 4>4 is no → logical value is No. So H2's logical value is Yes → incorrect. So for H3's second interval, n=4 is in the interval (correct). So for n=4, only H3 is correct.
+
+So the maximum coverage is 2, which occurs at n=5, 6, etc.
+
+Thus, the line sweep approach is correct.
+
+Sample 3:
+
+6
+
+Hints:
+
+< 2 Yes → n <2 → [1,1]
+
+>1 Yes → n>1 → [2, INF]
+
+=1 Yes → n=1 → [1,1]
+
+=1 Yes → [1,1]
+
+>1 Yes → [2, INF]
+
+=1 Yes → [1,1]
+
+So the intervals for each hint:
+
+H1: [1,1]
+
+H2: [2, INF]
+
+H3: [1,1]
+
+H4: [1,1]
+
+H5: [2, INF]
+
+H6: [1,1]
+
+So all events are:
+
+For H1: (1, +1), (2, -1)
+
+H2: (2, +1), (1e18+1, -1)
+
+H3: (1, +1), (2, -1)
+
+H4: same as H3.
+
+H5: same as H2.
+
+H6: same as H3.
+
+So events:
+
+At x=1, four +1 events (H1, H3, H4, H6).
+
+At x=2, two -1 events (H1, H3, H4, H6) → wait, each H3 is (1, +1) and (2, -1). So for each of H3, H4, H6, there's a (1, +1) and (2, -1). So four events at x=2: three -1 from H3, H4, H6, and one from H1.
+
+Wait, H1's end is 2, delta -1. H3's end is 2, delta -1. Similarly for H4 and H6.
+
+So events sorted:
+
+x=1: four +1.
+
+x=2: four -1 (from H1, H3, H4, H6), and two +1 (from H2 and H5).
+
+x=1e18+1: two -1 (from H2 and H5).
+
+So processing:
+
+After x=1:
+
+current_active += 4 → 4.
+
+prev_x=1.
+
+Next event x=2.
+
+Interval between 1 and 2 is [1,1]. Coverage is 4. So max_active is 4.
+
+Then apply four -1 events at x=2:
+
+current_active = 4 -4 =0.
+
+Then, apply two +1 events (H2 and H5):
+
+current_active=2.
+
+prev_x=2.
+
+Then, no events until x=1e18+1. The interval between x=2 and 1e18+1 is [2, 1e18]. Coverage is 2.
+
+So max_active is 4. So the maximum correct is 4, so lies is 6-4=2. Which matches the sample.
+
+So the approach works for the samples.
+
+Now, the code.
+
+But handling the intervals correctly is crucial.
+
+Now, in code:
+
+We need to process each hint and generate the intervals.
+
+For each hint:
+
+operator, li, logical_value.
+
+li is given as a string, so need to convert to integer.
+
+We can process each hint as follows:
+
+Case 1: operator is '<'
+
+if logical_value is 'Yes':
+
+    interval is [1, li-1]
+
+else:
+
+    interval is [li, INF]
+
+Case 2: operator is '>'
+
+if logical_value is 'Yes':
+
+    interval is [li+1, INF]
+
+else:
+
+    interval is [1, li]
+
+Case 3: operator is '='
+
+if logical_value is 'Yes':
+
+    interval is [li, li]
+
+else:
+
+    split into two intervals: [1, li-1] and [li+1, INF]
+
+So, for each '=', 'No' case, we need to add two intervals.
+
+Now, code:
+
+In Python, for each test case, read k hints, then generate all the events.
+
+But for k=1e5, and each hint generating up to two intervals, this would be up to 2e5 intervals, each adding two events. So total events per test case could be up to 4e5.
+
+But for Python, sorting 4e5 elements is manageable.
+
+So the code structure:
+
+Read t test cases.
+
+For each test case:
+
+    read k.
+
+    read k hints.
+
+    generate all events.
+
+    sort events.
+
+    line sweep to find maximum active.
+
+    output k - max_active.
+
+Now, generating events.
+
+We can represent INF as 1e18.
+
+Now, code:
+
+INF = 10**18
+
+def process_test_case(k, hints):
+    events = []
+    for op, l_str, val in hints:
+        l = int(l_str)
+        if op == '<':
+            if val == 'Yes':
+                # n < l → [1, l-1]
+                a = 1
+                b = l - 1
+            else:
+                # n >= l → [l, INF]
+                a = l
+                b = INF
+        elif op == '>':
+            if val == 'Yes':
+                # n > l → [l+1, INF]
+                a = l + 1
+                b = INF
+            else:
+                # n <= l → [1, l]
+                a = 1
+                b = l
+        else:  # operator == '='
+            if val == 'Yes':
+                # n == l → [l, l]
+                a = l
+                b = l
+            else:
+                # n != l → [1, l-1], [l+1, INF]
+                # first interval
+                a1 = 1
+                b1 = l - 1
+                # add first interval
+                if a1 <= b1:
+                    events.append( (a1, 1) )
+                    events.append( (b1 + 1, -1) )
+                # second interval
+                a2 = l + 1
+                b2 = INF
+                events.append( (a2, 1) )
+                events.append( (b2 + 1, -1) )
+                # no further processing for this case
+                continue
+        # for cases other than '=' No:
+        # add the interval [a, b]
+        if a > b:
+            # interval is empty, no events to add
+            continue
+        events.append( (a, 1) )
+        events.append( (b + 1, -1) )
+    # sort events
+    events.sort()
+    # line sweep
+    max_active = 0
+    current_active = 0
+    prev_x = None
+    for x, delta in events:
+        if prev_x is not None and x > prev_x:
+            # interval is [prev_x, x-1]
+            # any n in this interval is covered current_active times
+            # so the maximum can be updated
+            if current_active > max_active:
+                max_active = current_active
+        current_active += delta
+        prev_x = x
+    # after all events, check if the last interval has coverage beyond previous x
+    # but prev_x is the last event's x, and no more events. So no more intervals.
+    return max_active
+
+But wait, what if all events are processed and the last event is x=1e18+1? Then, after processing, the coverage after that is current_active, but there are no n's beyond that. So no need to check.
+
+So the code returns the maximum_active.
+
+The minimal lies is k - max_active.
+
+But for the '=' No case, when adding two intervals, we need to check if l-1 >=1 (so the first interval is valid). For example, if l=1, then the first interval [1,0] is invalid, so we skip adding events for that interval.
+
+Yes, in the code for the '=' No case, we check if a1 <= b1 before adding the events.
+
+So the code should handle that.
+
+Testing the code with the samples.
+
+Sample 1:
+
+Test case 1:
+
+k=2
+
+hints:
+
+< 100 No → operator <, 100, No → interval [100, INF]
+
+> 100 No → operator >, 100, No → [1, 100]
+
+So events for first interval: (100, +1), (INF+1, -1) → INF+1 is 1e18+1.
+
+Second interval: (1, +1), (101, -1).
+
+Events sorted:
+
+(1, 1), (100,1), (101,-1), (1e18+1, -1).
+
+Line sweep:
+
+prev_x = None.
+
+Process (1,1):
+
+prev_x is None. Apply delta → current_active=1. prev_x=1.
+
+Next event (100,1):
+
+prev_x=1. Interval 1-99: coverage 1. So max_active=1.
+
+Apply delta → current_active=2. prev_x=100.
+
+Next event (101, -1):
+
+prev_x=100. Interval 100-100: coverage 2 → max_active=2.
+
+Apply delta → current_active=1. prev_x=101.
+
+Next event (1e18+1, -1):
+
+prev_x=101. Interval 101-1e18: coverage 1. So max remains 2.
+
+Apply delta → current_active=0. prev_x=1e18+1.
+
+So max_active is 2. lies 2-2=0. Correct.
+
+Sample 3:
+
+The third test case has hints that generate multiple events.
+
+In code, for the '=1 Yes' hints, the interval is [1,1], so events (1, +1), (2, -1).
+
+For the '>1 Yes' hints, interval is [2, INF], events (2, +1), (1e18+1, -1).
+
+So each of the six hints:
+
+H1: <2 Yes → [1,1] → events (1, +1), (2, -1).
+
+H2: >1 Yes → [2, INF] → (2, +1), (1e18+1, -1).
+
+H3: =1 Yes → [1,1] → (1, +1), (2, -1).
+
+H4: same as H3 → (1, +1), (2, -1).
+
+H5: same as H2 → (2, +1), (1e18+1, -1).
+
+H6: same as H3 → (1, +1), (2, -1).
+
+So events for x=1: four +1 events (H1, H3, H4, H6).
+
+x=2: four -1 events (H1, H3, H4, H6), and two +1 events (H2, H5).
+
+x=1e18+1: two -1 events (H2, H5).
+
+The line sweep:
+
+After x=1:
+
+current_active = 4. prev_x=1.
+
+Interval between 1 and 2 is 1. Coverage is 4 → max_active=4.
+
+Then, process x=2:
+
+delta is -1 four times. current_active becomes 0.
+
+Then, delta +1 twice → current_active=2.
+
+prev_x=2.
+
+Interval between 2 and 1e18+1 is [2, 1e18]. Coverage is 2. But max_active is already 4.
+
+So lies is 6-4=2. Correct.
+
+So the code should work.
+
+Now, considering edge cases.
+
+Edge Case 1: All hints are impossible to satisfy.
+
+For example, two hints:
+
+=5 Yes
+
+=5 No.
+
+These two hints can't be satisfied. So the minimal lies is 1.
+
+But according to the code:
+
+The first hint's interval is [5,5]. The second's intervals are [1,4] and [6, INF]. The maximum coverage is 1 (either 5 in the first hint, or 4 in the second, etc.). So lies is 2-1=1.
+
+But what if there are two hints that are conflicting, but it's possible to choose one as correct and the other as a lie.
+
+Yes. So the code will compute maximum coverage as 1.
+
+Edge Case 2: All hints are '=1 No'. So any n except 1 is correct. But there's k such hints. So any n except 1 will satisfy all k hints. So the maximum coverage is k. So lies is 0.
+
+But according to the code, each '=1 No' will create two intervals: [1,0] (invalid) and [2, INF]. So for each of these k hints, the code adds events (2, +1), (1e18+1, -1).
+
+So all events are (2, +k) and (1e18+1, -k).
+
+In the line sweep, during processing, the interval between 2 and 1e18 is covered by k. So max_active is k. So lies is 0.
+
+Yes.
+
+Another edge case: k=1, hint is '=5 Yes'. The code generates interval [5,5]. So events (5, +1), (6, -1). The maximum coverage is 1. So lies is 0.
+
+If the hint is '=5 No', then the code creates two intervals: [1,4] and [6, INF]. The maximum coverage is 1. So for any n in those intervals, the coverage is 1. So lies is 0.
+
+So the code should handle these cases.
+
+Now, the code needs to read input from stdin and output to stdout.
+
+The code should read t test cases. For each test case:
+
+Read k.
+
+Then read k lines, each containing operator, li, logical_value.
+
+Process each test case and output k - max_active.
+
+But in Python, reading large inputs can be slow if using input() for each line.
+
+So, to handle large k (1e5), it's better to read all input at once and process it.
+
+But for the code, perhaps using sys.stdin.
+
+So, the code would be:
+
+import sys
+
+INF = 10**18
+
+def main():
+    import sys
+    input = sys.stdin.read().split()
+    ptr = 0
+    t = int(input[ptr])
+    ptr +=1
+    for _ in range(t):
+        k = int(input[ptr])
+        ptr +=1
+        hints = []
+        for _ in range(k):
+            op = input[ptr]
+            l_str = input[ptr+1]
+            val = input[ptr+2]
+            ptr +=3
+            hints.append( (op, l_str, val) )
+        # process the hints and generate events
+        events = []
+        for op, l_str, val in hints:
+            l = int(l_str)
+            if op == '<':
+                if val == 'Yes':
+                    a = 1
+                    b = l -1
+                else:
+                    a = l
+                    b = INF
+            elif op == '>':
+                if val == 'Yes':
+                    a = l +1
+                    b = INF
+                else:
+                    a = 1
+                    b = l
+            else: # '='
+                if val == 'Yes':
+                    a = l
+                    b = l
+                else:
+                    # add two intervals
+                    a1 = 1
+                    b1 = l-1
+                    if a1 <= b1:
+                        events.append( (a1, 1) )
+                        events.append( (b1 +1, -1) )
+                    a2 = l+1
+                    b2 = INF
+                    events.append( (a2, 1) )
+                    events.append( (b2 +1, -1) )
+                    continue
+            # for cases other than '=' No:
+            if a > b:
+                continue
+            events.append( (a, 1) )
+            events.append( (b+1, -1) )
+        # sort events
+        events.sort()
+        max_active = 0
+        current = 0
+        prev_x = None
+        for x, delta in events:
+            if prev_x is not None and x > prev_x:
+                if current > max_active:
+                    max_active = current
+            current += delta
+            prev_x = x
+        print(k - max_active)
+
+if __name__ == '__main__':
+    main()
+
+Wait, but the code for the '=' No case adds two intervals. But in the code above, when val is 'No' and op is '=', the code adds the two intervals and continues, thus skipping the code below for adding events. So for '=' No, the code adds the two intervals and continues.
+
+Yes, this is correct.
+
+Testing this code with the samples should give the correct outputs.
+
+For the third sample, the code should generate 4 events for x=1 (four +1) and events for x=2 (four -1 and two +1). The line sweep will compute the maximum coverage as 4, leading to lies of 2.
+
+This seems correct.
+
+Now, to handle large k (1e5), the code should read the input efficiently. Using sys.stdin.read().split() is the way to go, as it's faster.
+
+Thus, this code should work.
+</think>
+To solve this problem, we need to determine the minimum number of lies Johnny told Alice based on the given hints. The approach involves converting each hint into intervals of possible values for the integer n and then finding the value of n that satisfies the maximum number of hints, which minimizes the number of lies.
+
+### Approach
+1. **Convert Hints to Intervals**: Each hint is converted into one or more intervals of values for n where the hint would be true. For example, a hint "> 5 Yes" translates to the interval [6, ∞).
+2. **Generate Events**: For each interval, generate start and end events. These events help track when the interval starts and ends.
+3. **Line Sweep Algorithm**: Use a line sweep algorithm to process these events and determine the maximum number of overlapping intervals at any point, which corresponds to the maximum number of correct hints.
+4. **Calculate Minimum Lies**: Subtract the maximum number of correct hints from the total number of hints to get the minimum number of lies.
+
+### Solution Code
+```python
+import sys
+
+INF = 10**18
+
+def main():
+    input = sys.stdin.read().split()
+    ptr = 0
+    t = int(input[ptr])
+    ptr += 1
+    for _ in range(t):
+        k = int(input[ptr])
+        ptr += 1
+        hints = []
+        for _ in range(k):
+            op = input[ptr]
+            l_str = input[ptr + 1]
+            val = input[ptr + 2]
+            ptr += 3
+            hints.append((op, l_str, val))
+        events = []
+        for op, l_str, val in hints:
+            l = int(l_str)
+            if op == '<':
+                if val == 'Yes':
+                    a = 1
+                    b = l - 1
+                else:
+                    a = l
+                    b = INF
+            elif op == '>':
+                if val == 'Yes':
+                    a = l + 1
+                    b = INF
+                else:
+                    a = 1
+                    b = l
+            else:  # '='
+                if val == 'Yes':
+                    a = l
+                    b = l
+                else:
+                    a1, b1 = 1, l - 1
+                    if a1 <= b1:
+                        events.append((a1, 1))
+                        events.append((b1 + 1, -1))
+                    a2, b2 = l + 1, INF
+                    events.append((a2, 1))
+                    events.append((b2 + 1, -1))
+                    continue
+            if a > b:
+                continue
+            events.append((a, 1))
+            events.append((b + 1, -1))
+        events.sort()
+        max_active = current = 0
+        prev_x = None
+        for x, delta in events:
+            if prev_x is not None and x > prev_x:
+                if current > max_active:
+                    max_active = current
+            current += delta
+            prev_x = x
+        print(k - max_active)
+
+if __name__ == '__main__':
+    main()
+```
+
+### Explanation
+1. **Reading Input**: The input is read all at once for efficiency, especially for large inputs.
+2. **Processing Hints**: Each hint is processed to generate intervals. For example, a hint "= 3 No" generates two intervals: [1, 2] and [4, ∞).
+3. **Generating Events**: For each interval, start and end events are created. The line sweep algorithm processes these events to find the maximum number of overlapping intervals.
+4. **Line Sweep Algorithm**: This algorithm processes the events in sorted order, maintaining a count of active intervals. The maximum count during this process gives the maximum number of correct hints.
+5. **Output**: The result for each test case is calculated as the total number of hints minus the maximum number of correct hints, giving the minimum number of lies.
+
+This approach efficiently handles up to 100,000 hints per test case, ensuring optimal performance even for large inputs.
+</bot>

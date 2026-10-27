@@ -1,0 +1,1167 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.One common way of digitalizing sound is to record sound intensity at particular time moments. For each time moment intensity is recorded as a non-negative integer. Thus we can represent a sound file as an array of n non-negative integers.
+
+If there are exactly K distinct values in the array, then we need k = ⌈ log_{2} K ⌉ bits to store each value. It then takes nk bits to store the whole file.
+
+To reduce the memory consumption we need to apply some compression. One common way is to reduce the number of possible intensity values. We choose two integers l ≤ r, and after that all intensity values are changed in the following way: if the intensity value is within the range [l;r], we don't change it. If it is less than l, we change it to l; if it is greater than r, we change it to r. You can see that we lose some low and some high intensities.
+
+Your task is to apply this compression in such a way that the file fits onto a disk of size I bytes, and the number of changed elements in the array is minimal possible.
+
+We remind you that 1 byte contains 8 bits.
+
+k = ⌈ log_{2} K ⌉ is the smallest integer such that K ≤ 2^{k}. In particular, if K = 1, then k = 0.
+
+Input
+
+The first line contains two integers n and I (1 ≤ n ≤ 4 ⋅ 10^{5}, 1 ≤ I ≤ 10^{8}) — the length of the array and the size of the disk in bytes, respectively.
+
+The next line contains n integers a_{i} (0 ≤ a_{i} ≤ 10^{9}) — the array denoting the sound file.
+
+Output
+
+Print a single integer — the minimal possible number of changed elements.
+
+Examples
+
+Input
+
+
+6 1
+2 1 2 3 4 3
+
+
+Output
+
+
+2
+
+
+Input
+
+
+6 2
+2 1 2 3 4 3
+
+
+Output
+
+
+0
+
+
+Input
+
+
+6 1
+1 1 2 2 3 3
+
+
+Output
+
+
+2
+
+Note
+
+In the first example we can choose l=2, r=3. The array becomes 2 2 2 3 3 3, the number of distinct elements is K=2, and the sound file fits onto the disk. Only two values are changed.
+
+In the second example the disk is larger, so the initial file fits it and no changes are required.
+
+In the third example we have to change both 1s or both 3s.
+</user>
+<bot>
+<think>
+Okay, so I need to solve this programming problem. Let's read the problem carefully.
+
+The problem is about compressing an array of sound intensities by adjusting the values so that after compression, all values are within a certain range [l, r]. Values below l are clamped to l, those above to r. The goal is to choose l and r such that the number of distinct elements after compression (K) allows the total storage to fit into a disk of size I bytes. At the same time, we want the minimal number of elements changed.
+
+The storage calculation is done as follows: For K distinct elements, each element takes k = ceil(log2 K) bits. The total bits needed are n * k. Since I is in bytes, the maximum allowed bits is I * 8. So we need to find a range [l, r] such that the number of distinct elements in the compressed array (K) satisfies n * ceil(log2 K) <= I*8. Among all such possible ranges, we need the one with the least number of elements changed (i.e., elements not already in [l, r]).
+
+Hmm. So the steps I need to take are:
+
+1. Preprocess the array: sort it and count the frequencies of each element. Because when selecting a range [l, r], we can look for the elements within this range. The number of elements outside this range (those less than l or greater than r) need to be clamped, contributing to the number of changes.
+
+2. Since the array can be large (up to 4e5 elements), I need an efficient way to compute the minimal changes. The approach should probably involve sliding a window over the sorted unique elements to find the best possible [l, r] window where the required k is within the allowed bits, and the number of changes (sum of elements outside the window) is minimized.
+
+Wait, but the problem allows l and r to be any integers, not necessarily present in the array. However, it's optimal to choose l and r such that l is the left end of some existing element's occurrence, and r is the right end. Because if we choose l between two existing elements, say a and b (a < b), then setting l to a would include all elements >=a, which would cover more elements (since elements between a and l would be clamped up to l). Similarly for r. So the optimal l and r must be such that l is a value present in the array (or perhaps the minimum possible), but perhaps it's better to process the unique sorted elements.
+
+Therefore, first, I should sort the array and create a list of the unique elements, along with their counts.
+
+For example, for the first sample input: [2, 1, 2, 3, 4, 3]. The sorted array is [1, 2, 2, 3, 3, 4]. The unique elements sorted are [1,2,3,4], with counts 1,2,2,1. When choosing l=2 and r=3, the compressed array has K=2 distinct elements (2 and 3). The elements changed are the 1 (changed to 2) and the 4 (changed to 3), total of 2 changes.
+
+So the approach is to find a window in the unique elements list such that the number of distinct elements in the window is K, and K satisfies n * ceil(log2 K) <= I*8 bits. Then, the sum of elements outside this window (i.e., elements before the window's start and after the window's end) is the number of changes needed. We need to minimize this sum.
+
+Therefore, the steps are:
+
+- Sort the array and compute the frequency of each unique element. Let's call the sorted unique elements 'unique' and their prefix sums 'pre_sum', which can be used to quickly calculate the sum of frequencies in a window.
+
+- Precompute the prefix sums of the frequencies. pre_sum[i] is the sum of frequencies of the first i elements. Then, for any window from index i to j, the sum of frequencies in the window is pre_sum[j+1] - pre_sum[i].
+
+- The total elements not in the window is n - (pre_sum[j+1] - pre_sum[i]). These are the elements that need to be clamped (so they contribute to the changes).
+
+- For each possible window (i, j) in the unique list, compute K = (j - i + 1) (number of unique elements in the window). Then, check if n * ceil(log2 K) <= I * 8. If yes, then this window is a candidate. The minimal changes required would be n - sum_in_window.
+
+But how to find K correctly? Because K can be any value, but the window may have multiple unique elements. Wait, no: the window is a consecutive sequence of unique elements in the sorted list. So the number of distinct elements in the compressed array would be the number of unique elements in the window, because when you clamp, the elements in the window remain as they are (since they are within [l, r]), and others are clamped to l or r. Wait, no. Wait, the problem states that after clamping, the distinct values are all values in [l, r], but if l and r are chosen such that there are existing elements in the array between l and r, but also some elements not in the array but within [l, r]. Wait, but the problem states that the array after compression is modified such that any element less than l becomes l, any greater than r becomes r, and elements between are unchanged. So the compressed array's elements are in [l, r]. The number of distinct values in the compressed array would be the number of unique elements in the original array that are in [l, r], plus possibly 1 if there's a gap between l and the first element in the window, or between the last element and r. Wait, no. Because even if the original array has elements that are in [l, r], but after clamping, the distinct values are all the original elements in that range plus l and r if there are elements outside the range. Wait, no. Let me think again.
+
+Suppose the original array has elements 1, 2, 4, 5. If we choose l=2, r=4. Then elements 1 become 2, elements 5 become 4. The compressed array is 2,2,4,4. So the distinct elements are 2 and 4. So K is 2. But in the original array, elements 2 and 4 are present. So K is the number of distinct elements in the original array that are in [l, r], plus the number of elements clamped to l or r. Wait, no. Because any element in the original array that is in [l, r] remains. Elements below l become l, elements above r become r. So the distinct elements in the compressed array are:
+
+All elements in the original array that are in [l, r], plus l (if there are elements clamped to l) and r (if there are elements clamped to r). Wait, but l and r could be part of the original array. For example, if the window is exactly [2,4] in the original array (with 2 and 4 present), then the compressed array would have 2,4. If the window is [3,4], but the original array has elements 2 (clamped to 3) and 4. Then the compressed array has 3 and 4.
+
+So K is the number of unique elements in the original array that are in [l, r] plus possibly 1 if there are elements clamped to l (but l is not in the original array's elements in the window), and similarly for r. Wait, this complicates things.
+
+But perhaps the optimal approach is to choose l and r such that l is the left endpoint of the window (the smallest unique element in the window) and r is the right endpoint (the largest unique element in the window). Because if you choose l and r to be elements outside the window, then the number of distinct values could be larger, which is worse. For example, in the first example, choosing l=2 and r=3 (the window is 2 and 3), the compressed array's distinct elements are 2 and 3. If the window is 2 and 3, then K is 2. But if l=1 and r=3, then K is 3 (the elements 1, 2, 3), but the disk space would be higher. So, to minimize k (ceil(log2 K)), we need K to be as small as possible, but that's not the primary constraint. The primary constraint is that the required disk space (n * k) must be <= I *8. Then, among all possible K that satisfy this, we choose the one that requires the least changes.
+
+Wait, but the problem is that K can vary depending on how l and r are chosen. However, when we choose l and r as the left and right endpoints of a window of unique elements, then K is the number of unique elements in the window. Because when you clamp the elements to l and r (the window's endpoints), the elements in the window (the unique elements between l and r) are left as is. So the distinct elements in the compressed array are exactly the unique elements in the window, plus l (if there are elements clamped to l) and r (if there are elements clamped to r). Wait, no. Because in that case, if l is part of the window (i.e., the window starts with l), then elements below l are clamped to l, but l is already present. So in the compressed array, the distinct elements are those in the window plus l if there are elements clamped to l (but l is already in the window). Wait, no. Let me think:
+
+Suppose the window is the unique elements [a, b, c], sorted. Then l = a, r = c. Then any element less than a is clamped to a. Any element greater than c is clamped to c. Elements in [a, c] remain as their original values. So the compressed array's distinct elements are the original elements in [a, c] plus a (if any elements were clamped to a) and c (if any elements were clamped to c). Wait, no. For example, if the original array has elements less than a, they are clamped to a. So in the compressed array, those elements are a, which is already part of the window (since a is in the window). Similarly, elements greater than c are clamped to c, which is in the window. So the distinct elements are exactly the elements in the window. Because a and c are already part of the window.
+
+Wait, because the window is the sorted unique elements. So l is the first element of the window, r is the last element. So any element in the original array that is clamped to l would be set to l, which is part of the window. So the compressed array's distinct elements are exactly the elements in the window. Because:
+
+- Elements within [l, r] are left as their original values. So any element in the window's elements is present.
+
+- Elements below l are set to l, which is part of the window.
+
+- Elements above r are set to r, which is part of the window.
+
+Therefore, the number of distinct elements K after compression is equal to the number of unique elements in the window. Because all clamped elements are set to l or r, which are in the window. So K is the size of the window.
+
+Therefore, the initial approach is correct. We can model K as the number of elements in the window. So the steps are:
+
+1. Sort the array and get the list of unique elements in sorted order, along with their counts. Let's call this list 'unique' and their counts 'freqs'.
+
+2. Compute the prefix sums of the counts for efficient range sum queries.
+
+3. For each possible window [i, j] in the unique list, compute K = j - i + 1. Check if n * ceil(log2 K) <= I*8. If yes, then compute the number of elements outside the window (n - sum of counts in the window). We want the minimal such value.
+
+4. Find the minimal (n - sum) across all valid windows.
+
+But how to efficiently find all possible windows where K satisfies the condition?
+
+First, let's compute the maximum possible K allowed. Let's compute the maximum K such that ceil(log2 K) <= (I*8)/n. Wait, but K must be an integer >=1.
+
+Wait, the required condition is n * ceil(log2 K) <= I * 8.
+
+But if I*8 is very large (like when I is 1e8), then this could be up to 8e8 bits, which for n up to 4e5 would allow K up to 2^(8e8/4e5) = 2^2000, which is way larger than any possible K (since the maximum K is the number of unique elements in the array, say U). So in such cases, we can just set K to U and not change any elements, leading to 0 changes.
+
+So first, calculate the maximum allowed K.
+
+Let me calculate the maximum allowed k_bits (each element takes k bits), where k_bits is ceil(log2 K). The total bits is n*k_bits <= I*8. So k_bits <= (I*8)/n. But since k_bits is the smallest integer such that K <= 2^k_bits. Wait, k_bits is the ceiling of log2(K), so K <= 2^k_bits.
+
+Wait, for K=1, k_bits is 0. So if K=1, then 0 bits per element. So the maximum allowed k_bits is floor((I*8)/n). Because if (I*8) bits is >= n * k_bits, then it's allowed.
+
+Wait, but k_bits is determined by K. So for a given K, the required k_bits is ceil(log2 K). So to find the maximum K allowed, we need to find the largest K such that ceil(log2 K) <= (I*8) // n. Wait, because n * ceil(log2 K) <= I*8.
+
+But let's compute the maximum possible K allowed:
+
+Let total_bits = I * 8.
+
+Each element uses k_bits = ceil(log2 K). So total_bits_needed = n * k_bits.
+
+We need total_bits_needed <= total_bits.
+
+So the maximum possible K is the largest K for which ceil(log2 K) <= (total_bits) // n.
+
+But how to compute this?
+
+Let's compute the maximum allowed k_bits as:
+
+If n == 0: not possible (since n >=1 in input)
+
+Otherwise, max_k_bits = total_bits // n.
+
+But if max_k_bits is 0, then K can be at most 1 (since ceil(log2 K) =0 implies K <=1).
+
+So, for example, when total_bits is 8 (I=1), and n=6 (as in the first example), 8*1 =8 bits. 6 * k_bits <=8. So k_bits can be 1 (since 8//6=1.333, floor is 1). So ceil(log2 K) <=1. So K can be at most 2^1=2.
+
+So in the first example, the maximum allowed K is 2. So we need to find a window of size <=2. But the original array has 4 unique elements, so to fit into K=2, we need to choose a window of size 2, and the number of changes is n - sum of counts in that window.
+
+So the problem reduces to finding the largest possible window of unique elements (i.e., maximum sum of counts) where the window size (number of unique elements) is <= allowed_K. Then the minimal changes is n - sum_of_counts_in_window.
+
+Wait, no. Because allowed_K is the maximum K such that ceil(log2 K) <= (I*8)/n. But if (I*8)/n is larger than log2(U), where U is the number of unique elements in the original array, then K can be U, and no changes are needed. So the minimal changes is 0.
+
+So the approach is:
+
+Compute the maximum allowed k_bits as max_k = floor(I *8 / n). Then the maximum allowed K is 2^max_k.
+
+Wait, no. Because ceil(log2 K) <= max_k. So K can be up to 2^max_k. For example, if max_k is 3, then K can be 8, since log2(8)=3, and ceil(3)=3.
+
+Wait, wait:
+
+ceil(log2 K) <= max_k --> log2 K <= max_k --> K <= 2^max_k.
+
+But for example, if K is 5, log2 5 is ~2.32, ceil is 3. So if max_k is 3, then 5 is allowed. So the maximum possible K is 2^max_k.
+
+Wait, no. Because if max_k is 3, then K can be up to 8 (since ceil(log2 8)=3 <=3). So the maximum allowed K is 2^max_k.
+
+Wait, let's clarify.
+
+If max_k is the maximum allowed value of ceil(log2 K), then K can be up to 2^max_k. But if max_k is the maximum allowed value for k_bits (ceil(log2 K)), then the maximum K allowed is 2^max_k.
+
+But how to compute the maximum K allowed?
+
+Let me think. Suppose the allowed k_bits is m. Then K can be any integer such that ceil(log2 K) <= m. The maximum K possible for that is 2^m.
+
+For example, m=3: K can be up to 8 (since ceil(log2 8) =3). So allowed K is up to 8.
+
+So, the maximum K allowed is min(2^m, U), where U is the number of unique elements in the original array. But wait, if 2^m >= U, then K can be U, so no need to clamp. Otherwise, we need to select a K <=2^m, which is possible by clamping.
+
+So the first step is to compute m = (I *8) // n. Wait, no. Because m is the maximum allowed k_bits. So m is the maximum integer such that m <= (I*8) /n. Because n * m <= I*8.
+
+Wait, m is the maximum possible k_bits, so m is floor( (I*8) /n ). For example, if I=1, n=6: I*8=8, n=6. 8/6 =1.333, so m=1. So ceil(log2 K) must be <=1. So K can be at most 2^1=2.
+
+So the algorithm is:
+
+1. Compute the maximum allowed k_bits: m = (I *8) // n. But if I*8 < n, then m is zero. For example, if I=0, but according to the problem statement, I >=1.
+
+Wait, problem statement says I >=1. So m can be computed as floor( (I*8) /n ).
+
+But when n is 0? Well, n is given as >=1.
+
+So m is the maximum allowed k_bits. Then the maximum allowed K is 2^m. Except when m is zero: in that case, K must be 1 (since ceil(log2 K) =0 only when K=1).
+
+So, for m=0: K can be 1.
+
+So, the allowed K is up to min(2^m, U), but since after clamping, K can be anything up to U (the number of unique elements in the original array), but we can clamp to reduce K. So the problem is to select a window where the number of unique elements in the window (K') is <= 2^m. Then, the minimal changes is the minimal (n - sum of elements in the window) across all possible K' <= 2^m.
+
+Wait, no. The K in the compressed array is the number of unique elements in the window (since all elements are clamped to l and r, which are the window's endpoints). Wait, no. As discussed earlier, when you choose the window [a, b], then l is a and r is b. All elements in the original array that are in [a, b] are kept as is. Elements less than a are clamped to a, which is part of the window. Elements larger than b are clamped to b, which is part of the window. So the distinct elements after clamping are exactly the unique elements in the window. Because:
+
+- The elements in the window (a, ..., b) are present.
+
+- The elements clamped to a or b are present as a and b, which are part of the window.
+
+So the K is the number of unique elements in the window.
+
+Wait, no. For example, if the window is [2,3], and the original array has elements 1,2,3,4. After clamping to l=2, r=3, the compressed array will have 2,2,3,3. So K is 2 (elements 2 and 3), which is the size of the window.
+
+Another example: window is [2,4], and the original array has elements 2,4. Clamp l=2, r=4. So K is 2. So the K is the number of unique elements in the window.
+
+So the K after clamping is exactly the number of unique elements in the window. Therefore, when we choose a window of size s (number of unique elements), the K is s, and it must satisfy s <= 2^m. Then, we need to find the window with the maximum possible sum of frequencies (so that the number of elements not changed is maximized), hence the number of changes is minimized.
+
+So the problem reduces to: find the maximum sum of frequencies in any window of the unique elements list where the window's size (number of elements) is <= 2^m. Then, the minimal changes is n minus that maximum sum.
+
+But how to compute this efficiently?
+
+The unique elements list is sorted. So the sliding window approach can be applied here.
+
+For example, if the unique list is sorted, then we can slide a window [i, j] such that the number of elements in the window (j-i+1) is <= allowed_K (which is 2^m). We need to find the window with the maximum sum of frequencies. The sum can be calculated using the prefix sums array.
+
+So the steps are:
+
+1. Sort the array and compute the unique elements and their frequencies.
+
+2. Compute the prefix sum array of the frequencies.
+
+3. Compute m = (I*8) // n. If m is 0, then allowed_K is 1. Else, allowed_K is 2^m.
+
+4. allowed_K = 2^m, but if m >= log2(U), where U is the number of unique elements in the array, then allowed_K can be U. But if allowed_K is larger than U, then the maximum possible window size is U, and the sum is the entire array, leading to zero changes.
+
+So in code:
+
+Compute allowed_K = min(2^m, U), but U is the number of unique elements.
+
+Wait, no. For example, if m=3, allowed_K is 8. If the number of unique elements is 5, then allowed window size can be up to 5 (since 5 <=8). So the allowed window size can be any window with size <= allowed_K. So the maximum window size is allowed_K. But the allowed window can be up to allowed_K, but the unique list may have more elements than allowed_K, so we can't take all of them.
+
+So the allowed window size (s) is s <= allowed_K. So the sliding window approach is to find the maximum sum of any s consecutive elements in the sorted unique list, where s <= allowed_K. Then, the minimal changes is n - this maximum sum.
+
+But how to compute the allowed_K correctly?
+
+Let me code this step by step.
+
+First, compute m = (I *8) // n. But what if (I*8) is not divisible by n? For example, I=1, n=6. I*8=8, n=6. 8//6=1. So m=1. allowed_K is 2^1=2.
+
+But if the allowed_K is 2^m, then for example, if m=2, allowed_K=4. So any window of size <=4 is allowed.
+
+But if the original array's unique elements count (U) is 3, then allowed_K is 4. So the window can be up to size 3 (since U=3), which is allowed. So the maximum sum is sum of all elements, leading to 0 changes.
+
+So the allowed_K is 2^m, but the actual maximum possible window size is min(2^m, U).
+
+But how?
+
+Wait, allowed_K is 2^m. So the window size must be <= allowed_K. So even if U is larger than allowed_K, we can choose a window of size allowed_K.
+
+But if U is less than allowed_K, then the maximum window size is U. So the maximum window size is min( allowed_K, U ).
+
+Wait, but allowed_K is 2^m, which may be larger than U. For example, if U=3 and allowed_K=4, then the maximum window size can be 3.
+
+But in such a case, the allowed window can be of any size up to 3, but in this case, U is 3, so the maximum possible sum is the sum of all elements. So the minimal changes would be 0.
+
+So, the steps are:
+
+Compute m = (I*8) // n. allowed_K = 2^m.
+
+But if allowed_K >= U, then the maximum sum is the sum of all elements (window of size U), leading to changes of n - sum_all =0. So output 0.
+
+Otherwise, allowed_K is 2^m, and U > allowed_K. So we need to find the maximum sum of any window of size allowed_K.
+
+Wait, no. Because the allowed window size can be up to allowed_K. So if allowed_K is 3, then any window with size 1, 2, 3 is allowed. But the maximum sum may come from a window of size 3. So the best approach is to check all possible window sizes up to allowed_K and find the maximum sum.
+
+But that's not feasible for large U. So to optimize, the sliding window approach with window size up to allowed_K.
+
+Wait, but if allowed_K is 2^m, which could be up to 2^ (I*8/n). For example, if I*8 is 8e5 and n is 1, then allowed_K is 8e5, which is 800000, but the unique elements may be up to 4e5. So for large allowed_K, the code could take O(U) time.
+
+But when allowed_K is >= U, then the maximum sum is sum of all elements. So we can handle this case first.
+
+So the approach is:
+
+- Sort the array and compute the unique elements and their counts. Let U be the number of unique elements.
+
+- Compute prefix sums.
+
+- Compute m = (I *8) //n.
+
+- If m >=30, then allowed_K could be 2^30, which is larger than any possible U (since U is up to 4e5). So in that case, allowed_K is U. So output 0.
+
+But wait, let's compute m for different I and n.
+
+For example, when I=1e8 and n=4e5: I*8=8e8, n=4e5. 8e8 /4e5 = 2000. So m=2000. 2^2000 is way larger than any possible U (since U can be up to 4e5). So allowed_K would be 4e5. So we can take the entire array, no changes.
+
+So, in code, compute allowed_K = 2^m. But if allowed_K >= U, then the maximum window is U, sum is sum_all.
+
+Else, allowed_K is 2^m, and we need to find the maximum sum of a window of size allowed_K.
+
+Wait, no. Because the window size can be up to allowed_K, but not exactly allowed_K. For example, if allowed_K is 3, but the maximum sum is from a window of size 2.
+
+So we need to find all possible window sizes from 1 to allowed_K, and find the maximum sum in any window of size up to allowed_K.
+
+But how to do this efficiently?
+
+The sliding window approach for maximum sum in a window of size up to K can be done with a deque, but perhaps the simplest way is to iterate for each possible window size from 1 to allowed_K, and find the maximum sum for each window size, then take the maximum over all.
+
+But when allowed_K is up to 4e5, this would take O(U * allowed_K) time, which is 4e5 *4e5=1.6e11 operations. Which is way too slow.
+
+So this approach is not feasible.
+
+Alternative approach: find the maximum sum of any window with size <= allowed_K. This can be done in O(U) time using a sliding window.
+
+Wait, here's a better approach: since the array is sorted, and the unique elements are sorted, we can use a sliding window where the window can expand as long as the number of elements in the window is <= allowed_K.
+
+Wait, no. Because the window can be of any size up to allowed_K. For example, allowed_K=3, and we can choose window of size 2, 3, etc.
+
+So the maximum sum for any window of size up to allowed_K.
+
+But how to find this efficiently?
+
+Alternatively, the maximum sum for any window of size exactly s (1<=s <= allowed_K). Then, the maximum over all s.
+
+But again, this is O(U*allowed_K), which is not feasible.
+
+Alternative idea: the optimal window will be a window of size allowed_K. Because if allowed_K is the maximum possible window size, then a larger window (up to allowed_K) would capture more elements, hence a higher sum. Wait, but not necessarily. For example, if the allowed_K is 3, and the elements have frequencies 1, 100, 1, 100. Then a window of size 2 (sum 101) is better than window of size 3 (sum 102). But allowed_K is 3. So in this case, the maximum sum is 102, but perhaps a larger sum could be obtained by a window of size 3. Wait, in this example:
+
+allowed_K is 3. The array is [1, 100, 1, 100]. Possible window sizes up to 3.
+
+The sum for window size 3:
+
+The maximum sum is the sum of 100+1+100=201.
+
+But for window size 2, there are two options: 1+100=101, 100+1=101, 1+100=101. So the maximum is 201 (window size 3) in this case. So the window size allowed is 3, and the maximum sum is obtained by the window of size 3.
+
+Another example:
+
+allowed_K=3. Elements are [1, 2, 3, 4]. Frequencies [1, 2, 3, 4].
+
+sum for window size 3: 2+3+4=9. For window size 2: 3+4=7. So the maximum is 9.
+
+But perhaps, if the allowed_K is 3, the maximum sum is achieved by window size 3.
+
+But is this always the case?
+
+Suppose allowed_K is 3, and the frequencies are [10, 1, 1, 10]. The possible window sizes:
+
+window size 3: [10,1,1] sum 12, or [1,1,10] sum 12. window size 2: [10,1] sum 11, [1,10] sum 11, or [1,10] sum 11. Or window size 1: 10 or 1 or 1 or 10. So maximum sum is 12 (window size 3). But if the allowed_K is 3, and the window size is 3, then the sum is 12. But if there's a window of size 2 with sum 20 (e.g., frequencies [5, 15, 5, 15], allowed_K=2), then the sum for window size 2 (15+5=20) is better than any window of size 2.
+
+Wait, in this example, allowed_K=2. So the maximum window size is 2. Then, the best sum would be 15+5=20, but maybe there's a window of size 1 with 15.
+
+So in this case, the best sum is 20.
+
+Hmm. So the conclusion is that the maximum sum is not necessarily achieved by the largest possible window size. So to find the maximum sum over all possible window sizes up to allowed_K, we need to consider all possible window sizes.
+
+But for large allowed_K, this is not feasible.
+
+Alternative idea: For the sorted list of unique elements, the maximum sum for a window of size s can be found by sliding a window of size s and finding the maximum sum. The sum of a window of size s can be computed using the prefix sum array. So for each possible s from 1 to allowed_K, compute the maximum sum of any window of size s. Then take the maximum over all these s.
+
+But if allowed_K is up to 4e5, this would be O(U * allowed_K) which is 4e5 *4e5=1.6e11 operations, which is way too slow.
+
+This approach is not feasible.
+
+Alternative approach: Since the array is sorted, the frequencies are contiguous. So maybe the best window of size s is the one with the s highest frequencies. But no, because the window must consist of consecutive elements in the sorted unique list. For example, the sorted unique list could be [1,2,3,4], and frequencies [1, 100, 1, 100]. The best window of size 2 is 2 and4 (sum 200), but they are not consecutive. So the consecutive requirement is important.
+
+So we need to find consecutive elements in the sorted unique list.
+
+Therefore, the sliding window approach must be applied.
+
+But how to do this efficiently.
+
+Let me think: allowed_K is up to 2^m. Let's compute the maximum window size allowed, which is allowed_K. Then, find the maximum sum of consecutive elements in the unique list with window size up to allowed_K.
+
+Wait, but how to find the maximum sum of any consecutive elements with window size <= allowed_K.
+
+This is a classic problem. The solution is to use a sliding window to find the maximum sum of any subarray with length up to allowed_K.
+
+This can be done using a sliding window and a deque to keep track of the minimum prefix sum in the current window.
+
+Alternatively, here's a way to compute it:
+
+We can precompute the prefix sum array. For each j, we want to find the maximum sum for a window ending at j, with length up to allowed_K. The maximum sum is prefix[j+1] - prefix[j+1 - L], where L ranges from 1 to allowed_K. So for each j, we need to find the minimum prefix in the range (j - allowed_K, j).
+
+But this can be done efficiently using a deque to track the minimum prefix in a sliding window of size allowed_K.
+
+Wait, but here's the approach:
+
+The maximum sum for a subarray ending at j with length up to allowed_K is prefix[j+1] - min(prefix[j - k + 1] ... prefix[j]), where k ranges from 1 to allowed_K.
+
+So for each j, we can maintain a deque that stores the indices of the minimum prefix in the current window of size allowed_K.
+
+But I'm not sure. Let me think again.
+
+Alternatively, since the array is the prefix sum array, and we want to find for each j the maximum (prefix[j] - prefix[i]) where j - i <= allowed_K and i <= j -1. The maximum sum is the maximum of prefix[j] - min_prefix, where min_prefix is the minimum prefix in the range [j - allowed_K, j -1].
+
+So for each j, we need to find the minimum prefix in the window [max(0, j - allowed_K), j-1].
+
+If we can compute this efficiently for all j, then we can find the maximum sum.
+
+To compute this, we can use a deque that keeps track of the minimum elements in the sliding window.
+
+The algorithm is as follows:
+
+Initialize a deque that stores indices of the prefix array in a way that their corresponding prefix values are increasing. For each j, we:
+
+1. While the deque is not empty and the current prefix[j] is less than or equal to the prefix value at the back of the deque, remove the back. This ensures that the deque remains in increasing order.
+
+2. Add j to the deque.
+
+3. Remove indices from the front of the deque that are out of the current window (i < j - allowed_K).
+
+4. The minimum prefix for the current window is prefix[deque[0]].
+
+5. The current maximum sum is prefix[j] - prefix[deque[0]].
+
+We can keep track of the maximum sum found this way.
+
+But this approach finds the maximum sum of any subarray with length <= allowed_K.
+
+Yes, this approach is O(n), and works because the deque maintains the minimum prefix in the window.
+
+So applying this to our problem:
+
+The array is the prefix sum of the frequencies. For example, if the frequencies are [1,2,3], the prefix sum is [0,1,3,6].
+
+We can compute the maximum sum of any consecutive frequencies in a window of size up to allowed_K (i.e., j-i+1 <= allowed_K).
+
+So applying the sliding window approach on the prefix sum array.
+
+Once we have the maximum sum of frequencies, the minimal changes is n - maximum sum.
+
+But this approach works only if the allowed_K is at least 1. Because when allowed_K is 0, but according to the problem statement, allowed_K is 1 in that case (since m = (I*8) //n could be 0, but allowed_K is 2^0=1).
+
+Wait, m is (I*8) //n. So when m=0, allowed_K is 1.
+
+So the code steps are:
+
+1. Sort the original array and compute the unique elements and their frequencies.
+
+2. Compute the prefix sum array of the frequencies.
+
+3. Compute m = (I *8) //n.
+
+4. allowed_K = 1 if m ==0 else 2^m.
+
+5. If allowed_K >= len(unique_elements), then the answer is 0.
+
+6. Else:
+
+   a. Use the sliding window approach on the prefix sum array to compute the maximum sum of any subarray with length up to allowed_K.
+
+   b. The minimal changes is n - maximum_sum.
+
+But how to compute allowed_K correctly?
+
+Wait, when m=0, allowed_K=1. Because 2^0=1.
+
+Yes.
+
+But let's test with the first sample input:
+
+Sample input 1:
+
+6 1
+
+2 1 2 3 4 3
+
+Sorted array: [1,2,2,3,3,4]
+
+Unique elements: [1,2,3,4], frequencies [1,2,2,1]
+
+n=6, I=1. I*8=8. m =8//6=1. allowed_K=2^1=2.
+
+So allowed_K=2. len(unique)=4>2. So need to find the maximum sum of a window of size up to 2.
+
+The maximum sum is the sum of 2 and 3 (frequencies 2+2=4). So the changes are 6-4=2.
+
+Which matches the sample.
+
+Another example:
+
+Sample input 3:
+
+6 1
+
+1 1 2 2 3 3
+
+Sorted array: [1,1,2,2,3,3]
+
+Unique elements: [1,2,3], frequencies [2,2,2].
+
+m= (1*8)/6=1. allowed_K=2. So allowed_K=2.
+
+len(unique)=3>2. So find maximum sum of a window of size up to 2.
+
+Possible windows:
+
+[1,2] sum 4, [2,3] sum 4, [1] sum 2, [2] sum 2, [3] sum 2. So maximum sum is 4.
+
+So changes are 6-4=2. Which matches the sample.
+
+So the approach works.
+
+Now, the code steps:
+
+1. Sort the array.
+
+2. Compute the unique elements and their counts.
+
+3. Compute the prefix sum array.
+
+4. Compute allowed_K.
+
+5. Check if allowed_K >= len(unique). If yes, output 0.
+
+6. Else, compute the maximum sum of any consecutive subarray in the prefix sum array with window length up to allowed_K.
+
+7. Output n - maximum_sum.
+
+Now, implementing the sliding window with the deque for the prefix sums.
+
+Let's think about the prefix sum array.
+
+Let's say the frequencies are [1,2,2,1].
+
+The prefix sum array is [0,1,3,5,6].
+
+We need to find the maximum (prefix[j] - prefix[i]) where j-i <= allowed_K.
+
+allowed_K=2.
+
+For example, allowed window lengths up to 2.
+
+For j from 1 to 4:
+
+j=1: can take i from 0 to 0 (j-i=1). sum=1-0=1.
+
+j=2: can take i from 0 to 1. sum=3-0=3, 3-1=2. Max 3.
+
+j=3: can take i from 1 to 2. sum=5-1=4, 5-3=2. Max 4.
+
+j=4: can take i from 2 to 3. sum=6-3=3, 6-5=1. Max 3.
+
+So the maximum sum is 4 (j=3, i=1: sum is 5-1=4, which is the sum of frequencies 2 and 2 (elements 2 and 3)).
+
+So maximum sum is 4. Changes 6-4=2.
+
+Which is correct.
+
+So the code needs to compute this.
+
+The sliding window approach with deque.
+
+Let's code this.
+
+Now, code steps:
+
+Read n and I.
+
+Read the array, sort it.
+
+Compute the unique elements and counts.
+
+Compute the prefix sum.
+
+Compute m = (I*8) //n.
+
+allowed_K = 1 if m ==0 else 2**m.
+
+If allowed_K >= len(unique):
+
+    print(0)
+
+else:
+
+    compute maximum sum for any window up to allowed_K in the prefix sum array.
+
+    print(n - max_sum)
+
+Now, how to compute max_sum?
+
+We need to apply the sliding window approach to find the maximum sum for subarrays with length up to allowed_K.
+
+Implementing the sliding window with deque:
+
+Initialize deque, max_sum, prefix array.
+
+max_sum = 0
+
+deque = deque()
+
+prefix = [0]
+
+for num in counts:
+
+    prefix.append(prefix[-1] + num)
+
+allowed_K is the maximum window size allowed.
+
+for j in range(1, len(prefix)):
+
+    # j is the current end of the subarray (prefix[j] is sum up to j-th element)
+
+    # We need to find the minimum prefix[i] where i >= j - allowed_K and i <= j-1.
+
+    while deque and prefix[j-1] <= prefix[deque[-1]]:
+
+        deque.pop()
+
+    deque.append(j-1)
+
+    # Remove elements out of the window [j - allowed_K, j-1]
+
+    while deque and deque[0] < (j-1 - allowed_K):
+
+        deque.popleft()
+
+    current_min = prefix[deque[0]]
+
+    current_sum = prefix[j] - current_min
+
+    if current_sum > max_sum:
+
+        max_sum = current_sum
+
+Thus, this approach should work.
+
+Wait, but for j=1, allowed_K=2:
+
+The window for i is j-1 - allowed_K +1?
+
+Wait, the window for j is j-1 - (allowed_K-1) to j-1.
+
+But perhaps not. Let's think.
+
+The allowed window length is up to allowed_K. So for a subarray ending at j (prefix[j] - prefix[i]), the length is j -i. We need j-i <= allowed_K. So i >= j - allowed_K.
+
+So for each j, the i can be from max(0, j - allowed_K) to j-1.
+
+So the deque must contain indices in this range.
+
+But the code above appends j-1 to the deque (since prefix[j-1] is the sum before the current j). Then, when j increases, the allowed i is up to j-1.
+
+But I'm not sure. Let's test the code with the sample.
+
+Sample input 1:
+
+prefix is [0,1,3,5,6].
+
+allowed_K=2.
+
+For j from 1 to 4:
+
+j=1:
+
+The allowed i is j- allowed_K =1-2= -1. So i can be 0.
+
+Deque is empty. Add j-1=0.
+
+deque is [0].
+
+current_min is prefix[0] =0.
+
+current_sum =1-0=1. max_sum=1.
+
+j=2:
+
+allowed i is 2-2=0. So i can be 0 or 1.
+
+Append j-1=1.
+
+But before appending, check if prefix[1] <= prefix[deque[-1]]. deque is [0]. prefix[1] is 1. prefix[0] is 0. So 1>0, so no popping. append 1. deque is [0,1].
+
+Then, check if deque[0] < j-1 - allowed_K. j=2, allowed_K=2. j-1 - allowed_K =1-2=-1. deque[0] is 0 >= -1. So no removal.
+
+current_min is prefix[0] =0. current_sum=3-0=3. max_sum=3.
+
+j=3:
+
+allowed i is 3-2=1. So i can be 1 or 2.
+
+Append j-1=2.
+
+prefix[2] is 3. Check deque: [0,1]. The last element in deque is 1, which has prefix 1. 3>1, so append 2. deque becomes [0,1,2].
+
+Check if deque[0] < j-1 - allowed_K. j=3: j-1=2. allowed_K=2. 2-2=0. deque[0]=0 >=0. So no removal.
+
+current_min is prefix[0]=0. current_sum=5-0=5. But allowed_K is 2. But the window size is j-i=3-0=3, which is larger than allowed_K=2. So this is incorrect.
+
+Ah, so the code is missing the window size constraint.
+
+The problem is that the current approach allows any i up to j-1, but we need i >= j - allowed_K.
+
+So in the code, after adding j-1 to the deque, we need to remove any elements in the deque that are before j - allowed_K.
+
+Wait, in the code:
+
+while deque and deque[0] < (j - allowed_K):
+
+    deque.popleft()
+
+For example, when j=3, allowed_K=2:
+
+j - allowed_K =3-2=1. So deque[0] is 0, which is <1. So we remove 0. deque becomes [1,2].
+
+current_min is prefix[1]=1.
+
+current_sum =5-1=4. which is correct (window size 3-1=2).
+
+So the code should have:
+
+while deque and deque[0] < (j - allowed_K):
+
+    deque.popleft()
+
+So, modifying the code:
+
+for j in range(1, len(prefix)):
+
+    while deque and prefix[j-1] <= prefix[deque[-1]]:
+
+        deque.pop()
+
+    deque.append(j-1)
+
+    # Ensure deque contains only i >= j - allowed_K
+
+    while deque and deque[0] < (j - allowed_K):
+
+        deque.popleft()
+
+    current_min = prefix[deque[0]] if deque else 0
+
+    current_sum = prefix[j] - current_min
+
+    if current_sum > max_sum:
+
+        max_sum = current_sum
+
+Wait, but (j - allowed_K) is the lower bound for i. Because i >= j - allowed_K.
+
+Yes.
+
+So for j=3, allowed_K=2:
+
+j - allowed_K=3-2=1. So i must be >=1.
+
+The deque is [0,1,2]. After removing elements <1, deque becomes [1,2].
+
+current_min is prefix[1] =1.
+
+current_sum=5-1=4.
+
+Which is correct.
+
+Thus, this code will correctly compute the maximum sum for windows of size up to allowed_K.
+
+Now, handling allowed_K=0: but according to the problem statement, allowed_K can't be zero. Because when m=0, allowed_K is 1.
+
+So the code should handle allowed_K=1.
+
+Another test case: sample input3:
+
+unique elements [1,2,3], counts [2,2,2], prefix [0,2,4,6].
+
+allowed_K=2.
+
+For j=1: allowed i >=0 (since j=1, allowed_K=2. j - allowed_K=1-2 =-1. So i can be 0.
+
+current_sum=2-0=2.
+
+j=2: i >=0. The deque is [0,1]. Remove elements < j - allowed_K =2-2=0. So deque[0] is 0 >=0. current_sum=4-0=4.
+
+j=3: i >=1 (3-2=1). deque after appending 2: [0,1,2]. Then remove elements <1. So deque becomes [1,2]. current_sum=6-4=2.
+
+So the maximum sum is 4.
+
+Which is correct.
+
+So the code should work.
+
+Now, handling large allowed_K: for example, allowed_K=1e5. But the code uses a deque, and each element is added once and removed once. So the code is O(n) time.
+
+Now, what about when allowed_K is very large, but U is small? For example, allowed_K=1e9 and U=3. The code will handle it by checking if allowed_K >= U, in which case output 0.
+
+So the code should handle all cases.
+
+Now, implementing this in Python.
+
+But there's a potential issue with calculating 2^m when m is large. For example, m=1e5, then 2^m is a huge number, but in Python, exponentiating is possible but might take time. However, since we check if allowed_K >= len(unique_elements), which is up to 4e5, even if m is large (like 30, 2^30 is about 1e9), which is larger than 4e5. So in such cases, allowed_K >= len(unique), and the code outputs 0.
+
+So in code:
+
+Compute m = (I *8) //n.
+
+if m ==0:
+
+    allowed_K =1
+
+else:
+
+    allowed_K = 1 << m  # 2^m.
+
+But for m=20, 1<<20 is 1 million.
+
+But if allowed_K exceeds the maximum possible integer (which is impossible in Python), but allowed_K can be up to 1e30, but when compared to U (up to 4e5), it's just a matter of a comparison.
+
+Now, code.
+
+Also, note that when allowed_K is zero. But according to the problem statement, I >=1. So when n is 4e5 and I=1, I*8=8, 8//4e5=0. So allowed_K=1.
+
+Another case: if n=1 and I=1. I*8=8. m=8. allowed_K=2^8=256. If the array has one element, allowed_K=256 >=1. So output 0.
+
+So code steps:
+
+Read n, I.
+
+Read array, sort.
+
+Compute the unique elements and counts.
+
+Compute prefix sums.
+
+Compute allowed_K.
+
+If allowed_K >= len(unique_elements):
+
+    print(0)
+
+else:
+
+    compute maximum sum using sliding window.
+
+    print(n - max_sum)
+
+Now, code.
+
+Testing sample input1.
+
+Sample input1:
+
+6 1
+
+2 1 2 3 4 3
+
+sorted array: [1,2,2,3,3,4]
+
+unique elements: [1,2,3,4], counts [1,2,2,1].
+
+prefix: [0,1,3,5,6].
+
+allowed_K=2.
+
+max_sum is 4 (sum of 2 and 2, which is counts[1] + counts[2] =2+2=4.
+
+n -4=2. Correct.
+
+Another sample input3:
+
+6 1
+
+1 1 2 2 3 3
+
+sorted array: [1,1,2,2,3,3]
+
+unique elements: [1,2,3], counts [2,2,2]. prefix [0,2,4,6].
+
+allowed_K=2.
+
+max_sum is 4 (sum of 2+2).
+
+n -4=2. Correct.
+
+Another test case where allowed_K is 3.
+
+For example:
+
+n=5, I=3.
+
+I*8=24. m=24/5=4.8 → m=4. allowed_K=16.
+
+But if the array has 10 unique elements, then allowed_K=16>10 → output 0.
+
+So the code works.
+
+Now, code implementation.
+
+Edge case when m is large but allowed_K is larger than U.
+
+Another edge case when allowed_K=1.
+
+For example, array with two unique elements. allowed_K=1. So need to choose a window of size 1, which element has the highest count.
+
+So the minimal changes is total elements - max count.
+
+For example, array [1,1,2,2]. counts [2,2]. allowed_K=1.
+
+The maximum sum is 2 (either 2 or 2). So changes are 4-2=2.
+
+So code would output 2.
+
+But if the array is [1,1,1,2], allowed_K=1. counts [3,1]. maximum sum is3. changes 4-3=1.
+
+So code works.
+
+Thus, the code should handle all cases.
+
+Now, the code:
+
+Read n and I from stdin.
+
+Sort the array.
+
+Compute the unique elements and their frequencies.
+
+Compute the prefix sum.
+
+Compute allowed_K.
+
+Check if allowed_K >= len(unique). If yes, output 0.
+
+Else, compute the maximum sum using the sliding window approach.
+
+Now, the code.
+
+But in Python, how to compute allowed_K=2^m when m can be up to 1e8?
+
+Well, but when m is 1e8, allowed_K is 2^1e8, which is a very big number, but when len(unique) is up to 4e5, allowed_K >=4e5 is true, so output 0.
+
+Thus, code:
+
+import sys
+from collections import deque
+
+def main():
+    n, I = map(int, sys.stdin.readline().split())
+    a = list(map(int, sys.stdin.readline().split()))
+    a.sort()
+
+    # Compute unique elements and their counts
+    unique = []
+    counts = []
+    prev = a[0]
+    count = 1
+    for num in a[1:]:
+        if num == prev:
+            count +=1
+        else:
+            unique.append(prev)
+            counts.append(count)
+            prev = num
+            count =1
+    unique.append(prev)
+    counts.append(count)
+
+    U = len(unique)
+    if U ==0:
+        print(0)
+        return
+
+    prefix = [0]*(U+1)
+    for i in range(U):
+        prefix[i+1] = prefix[i] + counts[i]
+
+    # Compute allowed_K
+    total_bits = I *8
+    m = total_bits // n
+    if m >=20:
+        # 2^20 is 1,048,576. If U <=1e6, allowed_K is larger.
+        # So check if allowed_K >=U
+        # Since allowed_K is 2^m, which is >=2^20, which is >=4e5 (U<=4e5)
+        print(0)
+        return
+    allowed_K = 1 << m if m !=0 else 1
+
+    if allowed_K >= U:
+        print(0)
+        return
+
+    # Compute maximum sum using sliding window
+    max_sum =0
+    dq = deque()
+
+    for j in range(1, U+1):
+        # j is the current end of the prefix sum (prefix[j])
+        # i can be from max(0, j - allowed_K) to j-1
+        # Maintain deque with indices in the current window, increasing prefix[i]
+
+        # Add j-1 to the deque
+        while dq and prefix[j-1] <= prefix[dq[-1]]:
+            dq.pop()
+        dq.append(j-1)
+
+        # Remove elements out of the window [j - allowed_K, j-1]
+        while dq and dq[0] < (j - allowed_K):
+            dq.popleft()
+
+        if dq:
+            current_min = prefix[dq[0]]
+            current_sum = prefix[j] - current_min
+            if current_sum > max_sum:
+                max_sum = current_sum
+
+    print(n - max_sum)
+
+if __name__ == "__main__":
+    main()
+
+But wait, when m is 20, allowed_K is 2^20 =1,048,576. If U is 4e5, then allowed_K is larger than U. So the code checks if allowed_K >= U, which is true, and output 0.
+
+But what if m is 20 and U is larger than 1e6? Then allowed_K=1e6, but U is 2e6. But U can't be larger than 4e5. Because the array has n up to 4e5 elements, so the unique elements can't exceed 4e5. So for m>=20, allowed_K is 2^20=1e6, which is larger than 4e5. Thus, in this case, allowed_K >=U (since U <=4e5), so output 0.
+
+Thus, the code handles m >=20 by checking allowed_K >=U and outputting 0.
+
+Thus, the code should work.
+
+Now, testing sample input 1:
+
+Sample input1:
+
+6 1
+
+2 1 2 3 4 3
+
+allowed_K=2.
+
+After processing, the code will compute the maximum sum as 4. 6-4=2.
+
+Sample input2:
+
+6 2
+
+2 1 2 3 4 3
+
+I=2. I*8=16. m=16//6=2. allowed_K=4.
+
+The unique elements are 4. allowed_K=4 >=4. So output 0.
+
+Sample input3:
+
+6 1
+
+1 1 2 2 3 3.
+
+allowed_K=2. unique elements count 3>2.
+
+maximum sum is 4. changes 6-4=2.
+
+All samples pass.
+
+Another test case where allowed_K=3, but the best window is 3.
+
+So code works.
+
+Thus, the code should be correct.
+</think>
+To solve this problem, we need to compress an array of sound intensities such that the compressed array fits onto a disk of a given size while minimizing the number of elements changed. The compression involves clamping values to a range [l, r], and the goal is to find the optimal range that meets the disk size constraint with the least changes.
+
+### Approach
+1. **Sort and Count Frequencies**: First, sort the array and compute the frequencies of each unique element.
+2. **Prefix Sum Array**: Construct a prefix sum array from the frequencies to efficiently compute the sum of any subarray.
+3. **Determine Allowed K**: Calculate the maximum number of distinct values (K) allowed after compression based on the disk size. This is derived from the maximum bits per element that can fit into the disk.
+4. **Sliding Window Technique**: Use a sliding window approach on the prefix sum array to find the maximum sum of frequencies for any subarray of length up to the allowed K. This helps determine the optimal range [l, r] that minimizes changes.
+
+### Solution Code
+```python
+import sys
+from collections import deque
+
+def main():
+    n, I = map(int, sys.stdin.readline().split())
+    a = list(map(int, sys.stdin.readline().split()))
+    a.sort()
+
+    # Compute unique elements and their counts
+    unique = []
+    counts = []
+    if not a:
+        print(0)
+        return
+    prev = a[0]
+    count = 1
+    for num in a[1:]:
+        if num == prev:
+            count += 1
+        else:
+            unique.append(prev)
+            counts.append(count)
+            prev = num
+            count = 1
+    unique.append(prev)
+    counts.append(count)
+
+    U = len(unique)
+    if U == 0:
+        print(0)
+        return
+
+    prefix = [0] * (U + 1)
+    for i in range(U):
+        prefix[i + 1] = prefix[i] + counts[i]
+
+    # Compute allowed_K
+    total_bits = I * 8
+    m = total_bits // n
+    allowed_K = 1 << m if m != 0 else 1  # Equivalent to 2^m or 1 if m is 0
+
+    if allowed_K >= U:
+        print(0)
+        return
+
+    # Compute maximum sum using sliding window
+    max_sum = 0
+    dq = deque()
+
+    for j in range(1, U + 1):
+        # Maintain deque to track the minimum prefix in the valid window
+        while dq and prefix[j - 1] <= prefix[dq[-1]]:
+            dq.pop()
+        dq.append(j - 1)
+
+        # Remove indices that are out of the allowed window [j - allowed_K, j-1]
+        while dq and dq[0] < (j - allowed_K):
+            dq.popleft()
+
+        if dq:
+            current_min = prefix[dq[0]]
+            current_sum = prefix[j] - current_min
+            if current_sum > max_sum:
+                max_sum = current_sum
+
+    print(n - max_sum)
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Sorting and Counting**: The array is sorted to group identical elements. Frequencies of each unique element are counted to form a list of counts.
+2. **Prefix Sum Array**: This array helps quickly compute the sum of any subarray, which is essential for efficiently determining the sum of elements in any range.
+3. **Allowed K Calculation**: The maximum allowed number of distinct values (K) is determined based on the disk size. This is derived using bit manipulation to compute \(2^m\) where \(m\) is the bits per element.
+4. **Sliding Window**: Using a deque, the algorithm efficiently finds the maximum sum of frequencies for any subarray of length up to K. This determines the optimal range [l, r] that minimizes changes by maximizing the number of elements within the range.
+
+This approach ensures that we efficiently find the optimal compression range while adhering to the disk size constraints, resulting in minimal changes to the original array.
+</bot>

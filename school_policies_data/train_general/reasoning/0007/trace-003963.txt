@@ -1,0 +1,1372 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Our smart travel agent, Mr. X's current assignment is to show a group of tourists a distant city. As in all countries, certain pairs of cities are connected by two-way roads. Each pair of neighboring cities has a bus service that runs only between those two cities and uses the road that directly connects them. Each bus service has a particular limit on the maximum number of passengers it can carry. Mr. X has a map showing the cities and the roads connecting them, as well as the service limit for each bus service.
+
+It is not always possible for him to take all tourists to the destination city in a single trip. For example, consider the following road map of seven cities, where the edges represent roads and the number written on each edge indicates the passenger limit of the associated bus service.
+
+In the diagram below, It will take at least five trips for Mr. X. to take 99 tourists from city 1 to city 7, since he has to ride the bus with each group. The best route to take is 1 - 2 - 4 - 7.
+
+Problem:
+What is the best way for Mr. X to take  all tourists to the destination city in the minimum number of trips?
+
+[Input]:
+The first line will contain two integers: N (N ≤ 100) and R, representing the number of cities and the number of road segments, respectively. Each of the next R lines will contain three integers (C1, C2, and P) where C1 and C2 are the city numbers and P (P > 1) is the maximum number of passengers that can be carried by the bus service between the two cities. City numbers are positive integers ranging from 1 to N. The (R+1)th line will contain three integers (S, D, and T) representing, respectively, the starting city, the destination city, and the number of tourists to be guided.
+
+[Output]:
+The output should contain 2 lines - the first line giving the route taken and the second line giving the minimum number of trips
+
+[Note]:
+If multiple solutions exist . Print lexicographically-smallest path .
+Agent is also travelling in the same path so he has to be counted while travelling in that path for each trip.
+
+*Problem provided by JDA
+
+SAMPLE INPUT
+7 10
+1 2 30
+1 3 15
+1 4 10
+2 4 25
+2 5 60
+3 4 40
+3 6 20
+4 7 35
+5 7 20
+6 7 30
+1 7 99
+
+SAMPLE OUTPUT
+1 2 4 7
+5
+</user>
+<bot>
+<think>
+Okay, let's see. I need to solve this problem where Mr. X has to take all tourists from the starting city to the destination city in the minimum number of trips. The key here is that each bus service along the chosen route has a passenger limit, and the number of trips depends on the minimum capacity among those buses. Because the agent has to ride along each time, each trip can carry (min_capacity - 1) passengers. So, the total trips would be ceil(T / (min_capacity - 1)). Wait, right. Because the agent is counted as one passenger each trip, so the actual number of tourists per trip is (min_capacity - 1). So for T tourists, the number of trips is (T + (min_capacity-1 - 1)) // (min_capacity-1) ), which simplifies to ceil(T/(min_capacity-1)).
+
+So the problem reduces to finding the path from S to D where the minimum bus capacity along the path is as large as possible. Because a higher minimum capacity would reduce the number of trips. Because even if one edge has a low capacity, that becomes the bottleneck. So the optimal path is the one with the maximum possible minimum edge capacity along the path. Then, once we find that path, we calculate the required number of trips.
+
+But also, if there are multiple such paths (with the same maximum minimum capacity), we need to choose the lexicographically smallest one. Lex order for paths is determined by comparing city numbers at the first differing position, choosing the one with the smaller number.
+
+So the steps I need to take are:
+
+1. For each possible path from S to D, find the minimum capacity of edges on that path.
+2. Find the maximum possible such minimum capacity (let's call it max_min_cap).
+3. Among all paths that have max_min_cap as their minimum edge, select the lex smallest path.
+4. Then compute the number of trips as ceil(T / (max_min_cap - 1)).
+
+But how to efficiently find such a path? The constraints are N up to 100. So maybe a modified Dijkstra's algorithm can work here.
+
+Wait, Dijkstra's is typically for finding the shortest path, but here we want to maximize the minimum edge along the path. So this is similar to the problem where the path's value is determined by the minimum edge weight, and we want the maximum possible such value. That's a classic problem where we can adapt Dijkstra's approach.
+
+In this problem, for each node, we track the maximum possible minimum capacity to reach that node. Then, for each step, we explore edges that can potentially improve this value.
+
+Let me think. Let's model the problem as a graph where each edge has a capacity. We need to find the path from S to D where the minimum capacity on the path is as large as possible. This is known as the maximum capacity path problem.
+
+The standard approach for this is similar to Dijkstra's algorithm but with a priority queue that selects the next node with the highest possible current minimum. For each node, we keep track of the highest minimum capacity possible to reach it. When processing an edge from node u to v with capacity c, the possible new capacity for v is min(current_max_min[u], c). If this is higher than the current known max_min for v, then we update v and add it to the priority queue.
+
+Additionally, when multiple paths have the same max_min capacity, we need to track the lex smallest path. So, for each node, along with the max_min value, we also need to store the path taken to reach it, and when a new path with the same max_min is found, we check if it's lex smaller than the current stored path, and update accordingly.
+
+This complicates things because storing the entire path for each node could be memory-intensive. Alternatively, for each node, we can keep track of the predecessor that leads to the lex smallest path, given that the max_min is the same.
+
+So the algorithm steps could be:
+
+- Initialize a max_min array where max_min[u] is the maximum minimum capacity to reach u. Initialize all to 0 except S which is infinity (since we start there).
+- Also, a path array (or predecessor array) to track the path.
+- Use a priority queue (max-heap) that processes nodes in order of their current max_min value. Start with S.
+- For each node u extracted from the heap, for each neighbor v:
+   - The candidate capacity is min(max_min[u], capacity of u-v).
+   - If candidate > max_min[v], then update max_min[v] to candidate, set predecessor[v] to u, and add v to the heap.
+   - If candidate == max_min[v], then check if the path through u is lex smaller than the existing path to v. If yes, update predecessor[v] to u.
+- Once all nodes are processed, reconstruct the path from D using the predecessors.
+
+But how to determine if the path through u is lex smaller than the existing path? Since the lex order is determined by the earliest differing city, we need to compare the paths. However, storing the entire path for each node is not efficient.
+
+An alternative approach is to track the predecessors in a way that the path can be reconstructed in lex order. For the lex order, when multiple predecessors are possible with the same max_min, we need to choose the one with the smallest city number.
+
+Wait, but lex order for the path is such that when comparing two paths, the first differing city is the one that's smaller. For example, 1-2-4-7 is lex smaller than 1-3-... because at the second position, 2 < 3.
+
+So during the traversal, whenever there's a tie in max_min, we need to prefer the path that is lex smaller. So when building the predecessor array, whenever a node can be reached via multiple predecessors with the same max_min, we pick the one with the smallest city number.
+
+So the approach is to track for each node u, the best predecessor, which is the one that not only gives the maximum max_min but also, in case of ties, the one that leads to the lex smallest path.
+
+Therefore, when processing an edge u->v, if the candidate capacity (min(current u's max_min, edge capacity)) is equal to the existing max_min of v, then we need to compare the path to v through u and the existing path. If the path through u is lex smaller, then we update the predecessor of v to u.
+
+But how to compare the lex order of the path without storing the entire path?
+
+Hmm. One way is to note that the lex order of the path can be determined by the order in which the cities are chosen at each step. So, when building the path, if at any node, there's a choice between multiple predecessors (with same max_min), the lex order is determined by the earliest possible choice of the smallest city.
+
+So, for example, when a node v can be reached from u1 and u2, both with the same max_min, then the predecessor should be the smallest possible u. But that may not be sufficient. Because the path to u1 could be lex smaller than the path to u2 even if u1 is larger than u2. Wait, no. Let's think. For example, suppose node v can be reached via u1 (path ... a, u1, v) or via u2 (path ... b, u2, v). If a < b, then the first path is better even if u1 > u2. But how can we track that?
+
+This seems tricky. Storing the entire path for each node is not feasible with N=100 and possible paths up to N-1 steps. So perhaps we can use a BFS-like approach where when multiple predecessors have the same max_min, we select the one that allows the lex smallest path. To do this, when there is a tie in the max_min, we choose the predecessor with the smallest city number. However, this approach may not always work because the path through a larger city number might have a lex smaller path earlier on.
+
+Alternatively, perhaps the correct approach is to process the nodes in a way that when there are multiple predecessors with the same max_min, the lex order is enforced by choosing the predecessor with the smallest city number. But I'm not sure if that's sufficient.
+
+Alternatively, we can model the problem by, for each node, keeping track of the lex smallest path that gives the maximum possible max_min. So when a new path to v is found with the same max_min as existing, we compare the paths and choose the lex smaller one.
+
+But how to compare the paths without storing them? Let's think recursively. The path to v through u is the path to u followed by u and then v. The lex order of the path to v is the lex order of the path to u, then u, then v. So if the path to u is lex smaller than the path to another u', then the path through u would be lex smaller than through u'.
+
+Wait, but the path through u would be path_u + [v], and through u' would be path_u' + [v]. So when comparing these two, the lex order is determined by the path up to u and u'.
+
+Therefore, if the path to u is lex smaller than the path to u', then the path through u is lex smaller than through u', regardless of u and u' themselves. But that's not necessarily the case. Suppose path to u is [1,3,5] and path to u' is [1,2,4]. Then the path through u is [1,3,5, v], and through u' is [1,2,4, v]. The latter is lex smaller because at the second element, 2 < 3. So even if u (5) is larger than u' (4), the path through u' is lex smaller.
+
+So, the problem is that the lex order of the entire path depends on all elements, not just the predecessor. Therefore, to determine which path is lex smaller, we need to compare the entire path up to that node. However, storing the entire path for each node is possible, given N up to 100. But for 100 nodes, each with a path of up to 100 steps, the memory might be manageable.
+
+Alternatively, for each node, we can store the path as a list. But for 100 nodes, each path can be up to 100 elements. So 100 * 100 = 10,000 elements. That's manageable.
+
+But how to implement this efficiently in code. Let's think.
+
+So, for each node, we need to track:
+
+- The maximum minimum capacity (max_min) to reach it.
+
+- The lex smallest path (as a list of city numbers) that achieves this max_min.
+
+So, when processing an edge u -> v with capacity c, the candidate capacity is min(current max_min[u], c). If this candidate is greater than the current max_min[v], then we update max_min[v] to candidate, and set the path to v as the path to u followed by v. Also, add v to the priority queue.
+
+If the candidate is equal to the current max_min[v], then we need to check if the path through u is lex smaller than the current path of v. If yes, then update the path to v.
+
+So the steps would be:
+
+Initialize for all nodes:
+
+max_min = 0 (or -infinity)
+
+path = empty list
+
+For the start node S:
+
+max_min[S] = infinity (or some large number, but in reality, the max_min is initialized to a high value. Wait, actually, for the start node, the max_min is infinity (since there's no edges, but the path is just [S]. Then, when moving to neighbors, the max_min becomes the capacity of the edge. So perhaps initializing the max_min array to 0 for all except S, which is initialized to a very high value (like infinity) would work. Then, for each neighbor of S, the candidate capacity is min(infinity, c) = c. So that's correct.
+
+Wait, but the start node's max_min should be infinity, because the minimum capacity of the path (only S) is undefined. So perhaps, the initial max_min for S is a very large number (like 1e18) so that when taking the first edge, the min between that and the edge's capacity is just the edge's capacity.
+
+So, the algorithm:
+
+1. Read all edges and build an adjacency list. Also, for each edge between C1 and C2 with P, store it in both directions since roads are two-way.
+
+2. Initialize a max_min array where max_min[u] is the maximum minimum capacity for the path from S to u. Initialize all to 0, except S which is set to a large value (like 1e18).
+
+3. Initialize a path array where path[u] is the list representing the lex smallest path to u with the maximum min capacity. All are empty except path[S] which is [S].
+
+4. Use a priority queue (max-heap) that orders nodes based on their current max_min. The queue initially contains S with its max_min.
+
+5. While the queue is not empty:
+
+   a. Extract the node u with the highest current max_min.
+
+   b. For each neighbor v of u:
+
+      i. Compute the candidate capacity: min(max_min[u], capacity of u-v).
+
+      ii. If candidate > max_min[v]:
+
+          - Update max_min[v] to candidate.
+
+          - Update path[v] to path[u] + [v].
+
+          - Add v to the priority queue.
+
+      iii. Else if candidate == max_min[v]:
+
+          - Check if the new path (path[u] + [v]) is lex smaller than the existing path[v].
+
+          - If yes, update path[v] to the new path.
+
+          - But since the priority queue may have old entries, but since this is a same max_min value, perhaps we don't need to process this again. Wait, but how to handle this? Because if a node is already processed, but a new path with the same max_min but lex smaller path is found, we need to update the path even if the node was already processed.
+
+          However, in standard Dijkstra's algorithm, once a node is processed (i.e., extracted from the priority queue), we don't process it again. But here, even after processing a node, there may be alternative paths with the same max_min but lex smaller paths. So the standard Dijkstra approach may not capture that.
+
+          Therefore, perhaps the algorithm needs to allow for revisiting nodes even if their max_min hasn't changed, but there's a possibility of a lex smaller path.
+
+          But how to manage that efficiently. Because if we allow nodes to be added multiple times to the priority queue when lex order can be improved, the algorithm's time complexity could increase.
+
+          Hmm, this complicates things. For N=100, it's manageable, but needs careful handling.
+
+          So, the priority queue could have multiple entries for the same node with the same max_min. When such entries are processed, even if the max_min hasn't changed, we need to check if the path is lex smaller and update accordingly.
+
+          So, in the priority queue, each entry is a tuple of (current_max_min, node, path). But storing the path in the queue would be memory-intensive.
+
+          Alternative approach:
+
+          Instead of storing the path in the priority queue, the algorithm tracks for each node the best path (lex smallest) given the max_min. So whenever a node is processed (extracted from the queue), we check all its neighbors. For each neighbor, compute candidate capacity. If it's higher than neighbor's current max_min, process as before. If equal, check if the new path is lex smaller. If yes, update the neighbor's path and possibly reinsert it into the priority queue, but since the max_min hasn't changed, the priority queue (which is ordered by max_min) may not process it again. This is a problem.
+
+          Therefore, perhaps the lex order can't be handled properly in a Dijkstra-like approach. So maybe we need to use a BFS approach for the same max_min values, tracking the lex order.
+
+          Alternatively, here's a possible solution:
+
+          Once the maximum possible max_min is determined, find the lex smallest path among all paths that have that max_min.
+
+          So first, find the maximum possible max_min using the modified Dijkstra's algorithm. Then, among all paths that have this max_min, find the lex smallest one.
+
+          So this splits the problem into two steps:
+
+          1. Find the maximum possible max_min (the bottleneck capacity) from S to D.
+
+          2. Among all paths from S to D where each edge has capacity >= max_min, and the bottleneck is exactly max_min, find the lex smallest path.
+
+          Wait, no. Because the bottleneck is the minimum edge along the path. So for a path to have the maximum possible max_min, the path's minimum edge must be exactly max_min. So the problem becomes, after determining max_min, find the lex smallest path from S to D where each edge in the path has capacity >= max_min, and at least one edge has capacity exactly max_min. Because the path's minimum is the max_min.
+
+          Wait, no. The maximum min is the largest possible minimum. So the path must have all edges >= that value, and at least one edge equals it. Otherwise, the minimum would be higher than the supposed max_min, which is a contradiction.
+
+          So, once we have the max_min, we can construct a subgraph that includes all edges with capacity >= max_min. Then, in this subgraph, the path from S to D must have at least one edge with capacity exactly max_min (since otherwise, the min would be higher). So the problem is to find the lex smallest path in this subgraph, but also ensuring that the path includes at least one edge of capacity max_min.
+
+          Wait, but in the original problem, the max_min is the maximum possible min edge capacity. So the path that achieves this has all edges >= max_min, and the min is exactly max_min. So the subgraph for this is all edges with capacity >= max_min. But the path must have at least one edge with capacity exactly max_min.
+
+          However, that may not be necessary. For example, if there is a path where all edges have capacities higher than the max_min. Then, the min would be higher than the max_min, which contradicts the initial assumption that max_min is the maximum possible. Therefore, in such a case, the max_min is not correct. Therefore, the correct approach is that after finding the max_min (say, X), all edges in the path have capacity >= X, and at least one edge has capacity exactly X. Otherwise, X is not the minimal edge of that path.
+
+          So, the steps would be:
+
+          1. Find X, the maximum possible minimal edge capacity along any path from S to D.
+
+          2. Find the lex smallest path from S to D in the subgraph of edges with capacity >= X. Also, ensure that at least one edge in the path has capacity X.
+
+          Wait, but the maximum possible X is determined such that there exists a path where all edges have capacity >= X, and the minimal edge is X. So the subgraph would include all edges >= X, and the path must have at least one edge equal to X.
+
+          So, after determining X, we need to find the lex smallest path in the subgraph of edges >= X, and that path must have at least one edge of capacity X.
+
+          But how to ensure that the path has at least one edge of X? Because in the subgraph, edges can be >= X. So the path could have all edges > X. But that's impossible because if there's a path with all edges > X, then the minimal edge would be higher than X, which would contradict X being the maximum possible.
+
+          Therefore, once X is determined, all paths in the subgraph (edges >= X) have a minimal edge of X. Because if there's a path with minimal edge higher than X, then X is not the maximum possible. So X is the maximum possible. Therefore, the subgraph must have at least one path where the minimal edge is X, and all other paths in the subgraph will have minimal edge >= X. But since X is the maximum possible, the minimal edge of such paths must be X.
+
+          Wait, this is getting confusing. Let's think again.
+
+          X is the maximum possible minimal edge along any path. So, in other words, X is the largest value such that there exists a path from S to D where every edge in the path has capacity >= X, and the minimal edge in the path is X. So there exists at least one path where the minimal edge is X, and there's no path where the minimal edge is greater than X.
+
+          Therefore, once X is found, the subgraph of edges >= X must contain at least one path from S to D (the one that gives X as the minimal). Any other path in this subgraph will have minimal edge >= X, but since X is the maximum possible, their minimal edge can't be higher than X. Therefore, any path in this subgraph must have a minimal edge exactly X. So, to find the lex smallest path, it's sufficient to find the lex smallest path in the subgraph of edges >= X.
+
+          So the second step is to find the lex smallest path from S to D in the subgraph of edges with capacity >= X. Because the lex order is determined by the earliest differing city, and the cities are numbered from 1 to N, the lex order can be found using BFS, always exploring neighbors in sorted order.
+
+          So, here's the plan:
+
+          1. Find X, the maximum possible minimal edge capacity along any path from S to D.
+
+          2. Then, find the lex smallest path from S to D in the graph consisting of edges with capacity >= X.
+
+          So, the first step can be done using a modified Dijkstra's algorithm to find X.
+
+          The second step is a standard BFS, but always choosing the lex smallest next node (i.e., visiting neighbors in sorted order) to find the lex smallest path.
+
+          Let's think about step 1: finding X.
+
+          The modified Dijkstra's algorithm for maximum capacity path:
+
+          Initialize max_min array. Start with S having max_min of infinity (since it's the start). For all other nodes, initial max_min is 0. The priority queue is a max-heap.
+
+          For each node u extracted from the queue, for each neighbor v:
+
+              candidate = min(max_min[u], capacity[u][v])
+
+              if candidate > max_min[v]:
+
+                  update max_min[v] to candidate
+
+                  add v to the queue
+
+              else if candidate == max_min[v]:
+
+                  // do nothing here; but for lex order, this may require additional steps
+
+          So the Dijkstra's step will find X as the max_min[D].
+
+          Once X is known, we build the subgraph consisting of edges with capacity >= X.
+
+          Then, perform BFS on this subgraph, always visiting nodes in sorted order (so that the first path found is lex smallest).
+
+          Let's test this approach with the sample input.
+
+          Sample Input:
+
+          7 10
+
+          The edges are:
+
+          1-2 (30)
+
+          1-3 (15)
+
+          1-4 (10)
+
+          2-4 (25)
+
+          2-5 (60)
+
+          3-4 (40)
+
+          3-6 (20)
+
+          4-7 (35)
+
+          5-7 (20)
+
+          6-7 (30)
+
+          S=1, D=7, T=99.
+
+          Let's compute X. The maximum possible minimal edge is the maximum of the minimal edges of all possible paths.
+
+          Let's look for the path 1-2-4-7. The edges are 30, 25, 35. The minimal is 25. Another possible path is 1-3-4-7: edges 15,40,35 → min is 15. Or 1-2-5-7: 30,60,20 → min 20. Or 1-3-6-7: 15,20,30 → min 15. So the path 1-2-4-7 has min 25. Are there other paths with higher min?
+
+          For example, 1-2-4-7: min 25.
+
+          What about 1-2-5-7? min is 20 (the edge 5-7 has capacity 20). No, that's worse.
+
+          What about 1-3-4-7? min is 15 (edge 1-3). So no. So the path 1-2-4-7 gives X=25.
+
+          Are there any other paths with higher X?
+
+          Let's think: what is the maximum possible X such that there's a path with all edges >= X.
+
+          For example, if X=25, the edges in the subgraph must have capacity >=25.
+
+          The edges that are >=25 are:
+
+          1-2 (30)
+
+          2-4 (25)
+
+          2-5 (60)
+
+          3-4 (40)
+
+          4-7 (35)
+
+          5-7 (20) → no, 20 is less than 25. So not included.
+
+          6-7 (30).
+
+          So edges >=25 are:
+
+          1-2 (30)
+
+          2-4 (25)
+
+          2-5 (60)
+
+          3-4 (40)
+
+          4-7 (35)
+
+          6-7 (30)
+
+          So in this subgraph, can we find a path from 1 to 7?
+
+          Let's see. The possible paths:
+
+          1-2-4-7: yes, all edges >=25. So X=25.
+
+          Are there other paths in this subgraph with higher X? Let's see. Suppose X=30.
+
+          Then edges >=30 are:
+
+          1-2 (30)
+
+          2-5 (60)
+
+          3-4 (40)
+
+          4-7 (35) (35 >=30 yes)
+
+          6-7 (30)
+
+          So edges >=30 are:
+
+          1-2 (30)
+
+          2-5 (60)
+
+          3-4 (40)
+
+          4-7 (35)
+
+          6-7 (30)
+
+          So possible paths from 1 to 7:
+
+          1-2-5-7: no, because 5-7 is 20 <30.
+
+          1-2-4-7: 2-4 is 25 <30, so this edge is not in the subgraph. So path 1-2-4-7 is not possible in X=30.
+
+          Another path: 1-2-5-7: but 5-7 is 20.
+
+          What about 1-3-4-7: 3-4 is 40 >=30, 4-7 is 35 >=30. But 1-3 is 15 <30, so that edge is not included. So no path in X=30.
+
+          So the maximum X is 25.
+
+          Therefore, in the sample input, X is 25.
+
+          Now, the second step is to find the lex smallest path in the subgraph of edges >=25.
+
+          The edges in this subgraph are:
+
+          For X=25, edges with capacity >=25 are:
+
+          1-2 (30)
+
+          2-4 (25)
+
+          2-5 (60)
+
+          3-4 (40)
+
+          4-7 (35)
+
+          5-7 (20) → no.
+
+          6-7 (30) → yes, 30 >=25.
+
+          So the edges are:
+
+          1-2 (30)
+
+          2-4 (25)
+
+          2-5 (60)
+
+          3-4 (40)
+
+          4-7 (35)
+
+          6-7 (30).
+
+          Now, find the lex smallest path from 1 to 7.
+
+          To find the lex smallest path, BFS should process the cities in order. For each node, when exploring its neighbors, visit them in sorted order. Because lex smallest requires that at each step, the smallest possible city is chosen first.
+
+          So, starting at 1:
+
+          neighbors are 2 (capacity 30), 3 (capacity 15 <25 → excluded), 4 (capacity 10 <25 → excluded). So only 2 is available.
+
+          So the path starts with 1 → 2.
+
+          From 2, neighbors are 4 (25),5 (60), and possibly 1 (30, but already visited).
+
+          So process 4 and 5. But in sorted order, 4 comes before 5. So next node is 4.
+
+          Current path: 1 → 2 →4.
+
+          From 4, neighbors are 2 (25), 3 (40 >=25), 7 (35).
+
+          Process in sorted order: 2 is already visited. Next is 3? Or 7?
+
+          Wait, the neighbors of 4 in the subgraph are:
+
+          connected to 4 are nodes 2 (25), 3 (40), 7 (35). So sorted order is 2,3,7. But 2 is already in the path.
+
+          So next nodes to visit are 3 and 7. But since we are looking for lex order, the next step would be to check 3 first, but the target is 7.
+
+          So from 4, the next node is 7 (since 7 is in the neighbors and is the destination). So the path 1-2-4-7 is found. But also, 4 can go to 3, then to 4-3-4-7? Not sure. Wait, the BFS approach is to track the earliest path.
+
+          So in BFS, each node is visited once, but for lex order, we need to process the neighbors in sorted order. So when adding nodes to the queue, we add them in sorted order.
+
+          So let's model the BFS:
+
+          Start with node 1. Path is [1].
+
+          Queue: [1].
+
+          Dequeue 1. Check its neighbors in sorted order (since cities are numbered 1-7). The only neighbor in the subgraph is 2 (since 3 and 4 are excluded in X=25).
+
+          So enqueue 2 with path [1,2].
+
+          Dequeue 2. Check its neighbors in sorted order (4,5, ...). Wait, the edges from 2 in the subgraph are 2-4 (25) and 2-5 (60). So neighbors are 4 and 5, sorted as 4,5.
+
+          So enqueue 4 with path [1,2,4], then enqueue 5 with [1,2,5].
+
+          Next, dequeue 4 (since it's first in the queue when sorted). Check its neighbors: 2 (already visited), 3 (capacity 40 >=25), 7 (35 >=25).
+
+          So neighbors are 3 and 7. Sorted order is 3,7.
+
+          So enqueue 3 with path [1,2,4,3], then 7 with [1,2,4,7]. 
+
+          Now, 7 is the destination. So the first time we reach 7 is via [1,2,4,7]. So that's the lex smallest path.
+
+          So the path is 1 2 4 7, which matches the sample output.
+
+          So this approach works.
+
+          Therefore, the steps are:
+
+          1. Find X, which is the maximum possible minimum edge capacity along the path from S to D.
+
+          2. Build a subgraph consisting of all edges with capacity >= X.
+
+          3. Find the lex smallest path in this subgraph using BFS, visiting neighbors in sorted order.
+
+          So now, the code steps.
+
+          First, read N and R. Then read R edges. Then read S, D, T.
+
+          Then compute X using the modified Dijkstra's algorithm for maximum capacity path.
+
+          Then build the subgraph of edges with capacity >= X.
+
+          Then perform BFS on this subgraph, always visiting the neighbors in sorted order, to find the lex smallest path.
+
+          Now, code implementation.
+
+          Let's think about data structures.
+
+          For Dijkstra's step:
+
+          - Adjacency list: for each node, a list of (neighbor, capacity).
+
+          - max_min array: initialized to 0 except S is infinity.
+
+          - Priority queue: a max-heap. In Python, since the default heapq is min-heap, we can invert the values (store as negative numbers).
+
+          But in Python, the priority queue can be managed using a heap that stores tuples of (-current_max_min, node), so that the largest max_min is popped first.
+
+          So:
+
+          import heapq
+
+          adj = [[] for _ in range(n+1)]  # cities are 1-based.
+
+          for each edge C1, C2, P:
+
+              adj[C1].append( (C2, P) )
+
+              adj[C2].append( (C1, P) )
+
+          max_min = [0] * (n+1)
+
+          max_min[S] = float('inf')
+
+          heap = [ (-max_min[S], S) ]
+
+          while heap is not empty:
+
+              current_neg, u = heapq.heappop(heap)
+
+              current_max = -current_neg
+
+              if current_max < max_min[u]:
+
+                  continue  # this is an old entry, skip
+
+              for v, cap in adj[u]:
+
+                  candidate = min(current_max, cap)
+
+                  if candidate > max_min[v]:
+
+                      max_min[v] = candidate
+
+                      heapq.heappush(heap, (-candidate, v))
+
+                  elif candidate == max_min[v]:
+
+                      # but since we use a heap, we can't track lex order here. So this is for the first step.
+
+          After this, X is max_min[D].
+
+          Then, build the subgraph where edges have capacity >= X.
+
+          For BFS:
+
+          Create adjacency lists where each edge is present only if capacity >= X.
+
+          Then, perform BFS, keeping track of the path. For each node, when visiting neighbors, process them in sorted order. The first time we reach D, the path is the lex smallest.
+
+          So:
+
+          sub_adj = [[] for _ in range(n+1)]
+
+          for u in range(1, n+1):
+
+              for v, cap in adj[u]:
+
+                  if cap >= X:
+
+                      sub_adj[u].append(v)
+
+          Then, for each u in sub_adj, sort the list of neighbors. This way, during BFS, we process them in sorted order.
+
+          Then perform BFS:
+
+          from collections import deque
+
+          visited = [False] * (n+1)
+
+          parent = { S: None }
+
+          queue = deque()
+
+          queue.append( (S, [S]) )
+
+          found = False
+
+          result_path = []
+
+          while queue and not found:
+
+              u, path = queue.popleft()
+
+              if u == D:
+
+                  result_path = path
+
+                  found = True
+
+                  break
+
+              # Sort the neighbors of u in sub_adj in ascending order.
+
+              neighbors = sorted(sub_adj[u])
+
+              for v in neighbors:
+
+                  if v not in parent:
+
+                      parent[v] = u
+
+                      new_path = path + [v]
+
+                      queue.append( (v, new_path) )
+
+          Wait, but in BFS, the first time D is reached, the path is the shortest, but for lex order, it's necessary to explore all possible paths in sorted order. But perhaps in BFS, the first occurrence of D is the lex smallest path.
+
+          However, the problem is that BFS processes nodes level by level. But lex order is not necessarily based on the length of the path. For example, a longer path might be lex smaller than a shorter one. For example, path 1-2-4-7 is lex smaller than 1-3-7 (if such a path exists). But BFS may find the shorter path first. Wait, but in our case, since we are building the subgraph, and the BFS processes neighbors in sorted order, the first path to reach D is the lex smallest.
+
+          For example, in the sample input, the path 1-2-4-7 is found before any other paths. Because when processing the node 4, the neighbor 7 is processed in sorted order (since neighbors of 4 in the sub_adj are 2,3,7 (sorted as 2,3,7?), but 2 is already visited. Wait, in the code above, the sub_adj is built for each node's neighbors with capacity >=X. So for node 4, the neighbors are 2,3,7 (assuming X=25). But 2's edge is 25, 3's edge is 40, 7's edge is 35. So in the sub_adj for node 4, the neighbors are 2,3,7 (but when building the adjacency list, perhaps the sub_adj is stored as a list of the nodes connected to u via edges >=X. So for each edge (u, v, cap), if cap >=X, add v to sub_adj[u].
+
+          So when building sub_adj for u=4, the neighbors are 2 (from 2-4 edge),3 (from 3-4 edge),7 (from 4-7 edge). So sorted as 2,3,7.
+
+          When processing node 4's neighbors, in the BFS, after u=4 is dequeued, we process its neighbors in sorted order: 2,3,7.
+
+          But 2 is already visited (since we came from 2). So when processing 2, it's already in the parent map. So we skip.
+
+          Next is 3. So new path is 1-2-4-3. Then, for node3's neighbors, sorted order.
+
+          Then, next is 7. So we add 1-2-4-7 to the queue. Then, when processing this, since u=7 is the destination, the path is found.
+
+          So the BFS will find 1-2-4-7 as the first occurrence of D=7, which is indeed the lex smallest.
+
+          So the BFS approach, where neighbors are added in sorted order, ensures that the first time D is visited is via the lex smallest path.
+
+          Therefore, the code for BFS is:
+
+          sub_adj = [[] for _ in range(n+1)]
+
+          for u in range(1, n+1):
+
+              for v, cap in adj[u]:
+
+                  if cap >= X:
+
+                      sub_adj[u].append(v)
+
+          for u in range(1, n+1):
+
+              sub_adj[u].sort()  # to ensure neighbors are processed in sorted order
+
+          Then, BFS:
+
+          from collections import deque
+
+          visited = [False]*(n+1)
+
+          queue = deque()
+
+          queue.append( [S] )
+
+          while queue:
+
+              path = queue.popleft()
+
+              u = path[-1]
+
+              if u == D:
+
+                  # found the path
+
+                  result_path = path
+
+                  break
+
+              for v in sub_adj[u]:
+
+                  if not visited[v]:
+
+                      visited[v] = True  # mark as visited to avoid revisiting
+
+                      new_path = path + [v]
+
+                      queue.append(new_path)
+
+          Wait, but this marks nodes as visited once they are added to the queue. However, this could miss other paths that reach the same node via a lex smaller path but later. But in BFS, the first time a node is visited is via the shortest path (in terms of steps), but for lex order, it may not be the case. So marking visited as soon as we process the node could lead to incorrect lex order.
+
+          For example, suppose there's a path 1-3-2-4 and another 1-2-4. The lex order would prefer 1-2-4 if possible. But if 3 is processed first and marks 2 as visited, the 1-3-2-4 path would be considered even though 1-2-4 is lex smaller.
+
+          So, in order to find the lex smallest path, the BFS must explore all possible paths in a way that ensures that the lex smallest path is found first. One way to do this is to allow multiple entries into the queue for the same node, but track the path taken. But this is inefficient. Alternatively, since we are processing nodes in sorted order, the first time a node is visited is via the lex smallest path.
+
+          So, for the BFS:
+
+          Use a queue that stores paths. For each node, when expanding, process the neighbors in sorted order. The first time the destination is reached, that's the lex smallest path.
+
+          Because when processing neighbors in sorted order, the first path to reach D must be the lex smallest.
+
+          For example:
+
+          When processing node u, and the neighbors are sorted, the first neighbor in the list is the smallest possible next node. So when building the path, the first occurrence of D is via the lex smallest path.
+
+          So the code should be:
+
+          queue = deque()
+
+          queue.append( [S] )
+
+          found = False
+
+          result_path = []
+
+          while queue and not found:
+
+              path = queue.popleft()
+
+              u = path[-1]
+
+              if u == D:
+
+                  result_path = path
+
+                  found = True
+
+                  break
+
+              # Get sorted neighbors
+
+              neighbors = sorted(sub_adj[u])
+
+              for v in neighbors:
+
+                  if v not in path:  # to avoid cycles
+
+                      new_path = path + [v]
+
+                      queue.append(new_path)
+
+          Wait, but this could have cycles. For example, 1-2-4-2-... So we need to prevent revisiting nodes that have already been in the path.
+
+          So when building the new path, we check if v is not already in the path to avoid cycles.
+
+          However, this approach could work, but for large N, it may be inefficient. However, given the constraints (N=100), and for each node, the maximum path length is 100, this is manageable.
+
+          Alternatively, track a visited array for each node. But that may not work because the same node can be visited via different paths.
+
+          So, using the path checking approach (v not in path) ensures that we don't have cycles. But this may not be efficient. However, given the problem constraints, it's manageable.
+
+          So, in the sample input, when processing node 4, the neighbors are 2,3,7. Since 2 is already in the path (path is [1,2,4]), adding 2 to the new path would be [1,2,4,2], which is not allowed. So only 3 and 7 are considered. 7 is added to the queue, and when processed, the path is [1,2,4,7], which is the correct path.
+
+          Therefore, this approach should work.
+
+          Putting it all together:
+
+          The code steps are:
+
+          1. Read input.
+
+          2. Build adjacency list.
+
+          3. Compute X using modified Dijkstra.
+
+          4. Build sub_adj for edges >= X.
+
+          5. BFS in sub_adj with sorted neighbors to find lex smallest path.
+
+          6. Calculate the number of trips: ceil(T / (X-1)).
+
+          Now, handling edge cases:
+
+          - What if X is 1? Then X-1 is zero, division by zero. But according to the input constraints, P >1, so X must be at least 2. So this case is impossible.
+
+          Wait, the input says P>1. So each bus service has a passenger limit of P>1. So X will be at least the minimal possible edge on the path. Since the path must have at least one edge, which is >= X. Since all edges have P>1, X will be >=2. So X-1 is at least 1. No division by zero.
+
+          So the number of trips is (T + (X-2)) // (X-1). Because ceil(a/b) is equal to (a + b-1) // b.
+
+          So the code for calculating the trips is:
+
+          trips = (T + (X - 1 - 1)) // (X - 1)
+
+          Which is (T + X-2) // (X-1)
+
+          In the sample input, T=99, X=25. So trips = (99 +23)/24 = (122)/24=5.083 → 5 trips.
+
+          Which matches the sample output.
+
+          Now, coding all of this in Python.
+
+          Let's outline the code.
+
+          First, read N and R. Then read R edges.
+
+          Then read S, D, T.
+
+          Then, compute X using modified Dijkstra.
+
+          Then, build the sub_adj.
+
+          Then BFS to find the path.
+
+          Then, compute trips.
+
+          Now, implement this.
+
+          Also, the code needs to read from stdin and print the path and trips.
+
+          The code structure:
+
+          import heapq
+          from collections import deque
+
+          n, r = map(int, input().split())
+
+          adj = [[] for _ in range(n+1)]
+
+          for _ in range(r):
+              c1, c2, p = map(int, input().split())
+              adj[c1].append( (c2, p) )
+              adj[c2].append( (c1, p) )
+
+          S, D, T = map(int, input().split())
+
+          # Step 1: Find X using modified Dijkstra's algorithm
+          max_min = [0] * (n+1)
+          max_min[S] = float('inf')
+          heap = [ (-max_min[S], S) ]
+          heapq.heapify(heap)
+
+          while heap:
+              current_neg, u = heapq.heappop(heap)
+              current_max = -current_neg
+
+              if current_max < max_min[u]:
+                  continue
+
+              for v, cap in adj[u]:
+                  candidate = min(current_max, cap)
+                  if candidate > max_min[v]:
+                      max_min[v] = candidate
+                      heapq.heappush(heap, (-candidate, v))
+
+          X = max_min[D]
+
+          # Step 2: Build sub_adj with edges >= X
+          sub_adj = [[] for _ in range(n+1)]
+          for u in range(1, n+1):
+              for v, cap in adj[u]:
+                  if cap >= X:
+                      sub_adj[u].append(v)
+
+          # Step 3: BFS to find lex smallest path
+          queue = deque()
+          queue.append( [S] )
+          result_path = []
+
+          while queue:
+              path = queue.popleft()
+              u = path[-1]
+
+              if u == D:
+                  result_path = path
+                  break
+
+              # Get sorted neighbors
+              neighbors = sorted(sub_adj[u])
+              for v in neighbors:
+                  if v not in path:  # avoid cycles
+                      new_path = path + [v]
+                      queue.append(new_path)
+
+          # Calculate trips
+          trips = (T + (X-1 -1)) // (X-1)
+
+          # Print the path and trips
+          print(' '.join(map(str, result_path)))
+          print(trips)
+
+          Wait, but in the BFS step, the code uses 'if v not in path' to prevent cycles. But this can be inefficient for large paths. However, given N=100, and path lengths up to 100, it's manageable.
+
+          Testing the sample input:
+
+          The code should output the path 1 2 4 7 and 5 trips.
+
+          Let's see:
+
+          For the BFS step, after building the sub_adj for X=25:
+
+          sub_adj for 1 is [2], since edges from 1 are 2 (30), 3 (15),4 (10). Only 2 is >=25.
+
+          sub_adj for 2 is [4,5], as 1's edge is 30 (included?), but in the adj list, each edge is stored in both directions. Wait, when building the sub_adj, for each u, v, cap in adj[u], if cap >=X, add v to sub_adj[u].
+
+          So for u=1, the edges are 2 (30), 3 (15),4 (10). Only 2 is >=25. So sub_adj[1] = [2].
+
+          For u=2, the edges are 1 (30),4 (25),5 (60). All >=25. So sub_adj[2] = [1,4,5]. But when sorted, it becomes [1,4,5].
+
+          But during BFS, when processing node 2, the code generates neighbors in sorted order: 1,4,5. However, 1 is already in the path (path is [1,2]), so 'if v not in path' skips 1. So the neighbors processed are 4 and 5.
+
+          So the queue after processing 1 is [[1,2]].
+
+          Then, when processing [1,2], the neighbors are 1 (skipped),4 (not in path),5 (not in path). So new paths are [1,2,4], [1,2,5].
+
+          The queue is now [[1,2,4], [1,2,5]].
+
+          Processing [1,2,4], the last node is 4. sub_adj[4] includes 2 (25),3 (40),7 (35). So sorted neighbors are 2,3,7. 2 is in the path, so skipped. 3 and 7 are added. So new paths are [1,2,4,3], [1,2,4,7].
+
+          The queue is now [1,2,5], [1,2,4,3], [1,2,4,7].
+
+          Processing [1,2,5], the last node is 5. sub_adj[5] has edges >=25. For example, if 5 has edges like 2 (60), and maybe others. But according to the sample input, 5-7 has capacity 20, which is <25. So in the sub_adj[5], the edges are 2 (60). So neighbors are [2]. But 2 is in the path, so no new paths.
+
+          So queue becomes [1,2,4,3], [1,2,4,7].
+
+          Processing [1,2,4,3], the last node is 3. sub_adj[3] includes edges >=25. From the sample input, 3's edges are 1 (15),4 (40),6 (20). So in sub_adj[3], only 4 (40) is >=25. So neighbors of 3 are [4]. But 4 is in the path, so skipped.
+
+          Then, queue is [1,2,4,7].
+
+          Processing [1,2,4,7], which is the destination. So the result_path is [1,2,4,7], which is correct.
+
+          So the code works for the sample.
+
+          Now, edge cases.
+
+          Test case where there are multiple paths with the same X but different lex order.
+
+          For example:
+
+          N=3, R=3.
+
+          Edges:
+
+          1-2 (10)
+
+          1-3 (10)
+
+          2-3 (10)
+
+          S=1, D=3, T=5.
+
+          Then X=10. All edges are >=10. The possible paths are 1-2-3, 1-3. The lex smallest is 1-2-3? No, wait, no. The path 1-3 is lex smaller than 1-2-3. Because at position 2, 3 comes after 2? Wait, no. Wait, the path 1-3 is shorter and has cities 1,3. The other path is 1-2-3. Comparing the two: the first differing city is the second element, 2 vs 3. So 1-2-3 is lex smaller than 1-3? No. Because 1-3 is shorter and at position 2, 3 is compared to nothing. Wait, no. When comparing paths of different lengths, the lex order is determined by the elements up to the shorter length, and then the longer path is considered larger. For example, [1,2] is considered smaller than [1,2,3], but [1,3] is considered larger than [1,2].
+
+          Wait, no. According to lex order, when comparing two lists, the first element where they differ determines the order. So for example, [1,3] is lex larger than [1,2,3], because at position 2, 3 > 2. So the lex smallest path is 1-2-3, even though it's longer. But in this test case, the possible paths are 1-3 and 1-2-3. So 1-3 is shorter, but in lex order, 1-2-3 comes after 1-3.
+
+          Wait, no. Lex order compares elements one by one. For example, comparing 1-3 and 1-2-3:
+
+          The first element is 1 for both.
+
+          The second element is 3 vs 2. 2 is smaller than 3. So 1-2-3 is lex smaller than 1-3. But wait, the path 1-2-3 is longer. So when comparing 1-3 and 1-2-3:
+
+          path1 = [1,3]
+
+          path2 = [1,2,3]
+
+          Comparing elements:
+
+          position 0: 1 vs 1 → same.
+
+          position 1: 3 (path1) vs 2 (path2). 2 is smaller. So path2 is lex smaller. But path1 is shorter. So in this case, the BFS approach would find path1 first? Or path2?
+
+          Wait, in BFS:
+
+          Start with [1]. Expand to neighbors sorted: 2,3.
+
+          So queue becomes [ [1,2], [1,3] ].
+
+          Processing [1,2]: neighbors are 1 (already in path) and 3. So new path is [1,2,3]. Add to queue.
+
+          Then processing [1,3], which is the destination. So the path [1,3] is found first. So the code would output [1,3], but according to lex order, [1,2,3] is smaller.
+
+          This suggests that the code's BFS approach is incorrect.
+
+          So what's wrong?
+
+          Because the code's BFS processes paths in order of their length. The shortest path is found first. But according to lex order, a longer path may be lex smaller than a shorter one.
+
+          So the code's approach is incorrect in this case.
+
+          This indicates a problem with the BFS approach.
+
+          So the code's BFS finds the shortest path first, which may not be the lex smallest.
+
+          For example, in this test case:
+
+          Path 1-3 is shorter but lex larger than 1-2-3.
+
+          So the code's BFS would output 1-3, but the correct lex smallest path is 1-2-3.
+
+          So the code's approach is flawed.
+
+          Hmm, this is a problem.
+
+          So what's wrong with the BFS approach?
+
+          The code's BFS processes paths in the order of their length, and for each node, the neighbors are processed in sorted order. But in cases where a longer path is lex smaller than a shorter one, the code will not find it.
+
+          So the BFS approach as written may not work.
+
+          So what's the correct way to find the lex smallest path, even if it's longer?
+
+          For example, in the test case above, the lex smallest path is 1-2-3, which is longer than 1-3. So how to find this path.
+
+          The problem is that the BFS finds the shortest path first, but in lex order, the path may not be the smallest.
+
+          So we need to modify the approach to prioritize lex order regardless of path length.
+
+          One way to do this is to use a priority queue that orders paths lex smallest first. But in Python, comparing lists lex order is supported.
+
+          So for example, a priority queue where the first element is the path. When adding to the queue, paths are ordered lex order.
+
+          So the smallest lex path is processed first.
+
+          However, the problem with this approach is that the priority queue can become very large, but for N=100, perhaps it's manageable.
+
+          So here's an alternative approach:
+
+          Use a priority queue (min-heap) where the paths are ordered lex order. The priority is the path itself. When you enqueue a new path, it's compared to other paths lex order, and the smallest path is processed first.
+
+          So in the example test case:
+
+          After processing [1], the queue has [1,2], [1,3]. Between these two, [1,2] is lex smaller than [1,3], so it's processed first.
+
+          Then, expanding [1,2], you add [1,2,3], which is the destination. So the path [1,2,3] is found first.
+
+          So this approach would work.
+
+          So the correct approach is to use a priority queue that orders paths lex order. But in Python, implementing a priority queue where the elements are lists and compared lexicographically is possible using a heap, but the heapq module compares elements based on their natural ordering.
+
+          So the code can be modified as follows:
+
+          Instead of a deque, use a priority queue (heap) that stores the paths. When a new path is generated, it's added to the heap, and the heap is ordered such that the lex smallest path is processed first.
+
+          However, this approach can be computationally expensive for large N, but for N=100 and small paths, it's manageable.
+
+          So in code:
+
+          import heapq
+
+          heap = []
+          heapq.heappush(heap, [S])
+
+          while heap:
+
+              path = heapq.heappop(heap)
+
+              u = path[-1]
+
+              if u == D:
+
+                  result_path = path
+
+                  break
+
+              for v in sorted(sub_adj[u]):
+
+                  if v not in path:
+
+                      new_path = path + [v]
+
+                      heapq.heappush(heap, new_path)
+
+          This way, the lex smallest path is processed first.
+
+          Let's test this with the previous example.
+
+          Paths in the heap:
+
+          Initial heap: [ [1] ]
+
+          Pop [1]. Expand to 2 and 3. Add [1,2] and [1,3]. The heap now has [ [1,2], [1,3] ]. The next pop is [1,2], which is lex smaller.
+
+          Expand [1,2] to 3. Add [1,2,3]. Now, heap has [ [1,2,3], [1,3] ].
+
+          Pop [1,2,3], which is the destination. So the correct path is found.
+
+          So this approach works.
+
+          But what about the sample input?
+
+          In the sample input, after finding X=25, the sub_adj for 4's neighbors is sorted as 2,3,7. So when expanding the path [1,2,4], the next step is to add [1,2,4,2], [1,2,4,3], [1,2,4,7]. But [1,2,4,2] is skipped because 2 is already in the path. The other two are added. But the priority queue ensures that the lex smallest path is processed first.
+
+          So when expanding [1,2,4], the next step is to push [1,2,4,3], [1,2,4,7]. But [1,2,4,3] is lex smaller than [1,2,4,7], so the heap processes [1,2,4,3] first. But this path does not lead to D. So eventually, when it's processed, it adds other paths. But the path [1,2,4,7] is added to the heap, and since it is the lex smallest path that reaches D, it will be processed next.
+
+          But how? Because [1,2,4,7] is lex larger than [1,2,4,3], but when added to the heap, [1,2,4,3] is processed first. However, when processing [1,2,4,3], the code adds new paths like [1,2,4,3,4], which is invalid, and other paths. But in the end, the path [1,2,4,7] will be processed after all smaller paths are exhausted.
+
+          So this approach may not work for the sample input. Because the code would find the path [1,2,4,7], but in the heap, it's possible that other paths are processed first.
+
+          Wait, no. The sample input's correct path is 1-2-4-7. Let's see:
+
+          After expanding [1], the heap has [1,2], [1,3], [1,4] (if any). But in the sub_adj for X=25, only 1's neighbor is 2. So after expanding [1], the heap has [1,2].
+
+          Then, expanding [1,2], we process neighbors in sorted order (4,5). So new paths are [1,2,4], [1,2,5]. These are added to the heap. Now the heap has [1,2,4], [1,2,5].
+
+          The next path is [1,2,4], which is popped. Neighbors are 2 (ignored),3,7. Sorted as 3,7. So new paths are [1,2,4,3], [1,2,4,7].
+
+          Now, the heap has [1,2,4,3], [1,2,4,7], [1,2,5].
+
+          The next path to be popped is [1,2,4,3], since it's lex smallest. This path ends at 3. Neighbors of 3 are sorted. Let's assume in the sub_adj for 3, neighbors are 4 (40 >=25). So the new path is [1,2,4,3,4], which is skipped because 4 is already in the path. So no new paths added.
+
+          Then, the next path in the heap is [1,2,4,7], which ends at 7. So this is the correct path.
+
+          So the code would output [1,2,4,7], which is correct.
+
+          So the priority queue approach (using lex order) works.
+
+          Therefore, the correct approach for step 3 is to use a priority queue (min-heap) where the paths are stored and ordered lex smallest first.
+
+          So the code for step 3 should be modified as follows:
+
+          import heapq
+
+          # Step 3: Find lex smallest path using a priority queue
+          heap = []
+          heapq.heappush(heap, [S])
+          found = False
+          result_path = []
+
+          while heap and not found:
+              path = heapq.heappop(heap)
+              u = path[-1]
+
+              if u == D:
+                  result_path = path
+                  found = True
+                  break
+
+              # Generate neighbors in sorted order
+              for v in sorted(sub_adj[u]):
+                  if v not in path:
+                      new_path = path + [v]
+                      heapq.heappush(heap, new_path)
+
+          This way, the lex smallest path is guaranteed to be found first.
+
+          So, this adjustment is crucial for handling cases where a longer path is lex smaller than a shorter one.
+
+          So the final code should incorporate this change.
+
+          So putting it all together:
+
+          The code reads the input, computes X via modified Dijkstra, builds the subgraph, and then uses a priority queue (lex order) to find the path.
+
+          Let's update the code accordingly.
+
+          The code for step 3 becomes:
+
+          import heapq
+
+          # Step 3: Find lex smallest path using a priority queue
+          heap = []
+          heapq.heappush(heap, [S])
+          result_path = None
+
+          while heap:
+              path = heapq.heappop(heap)
+              u = path[-1]
+
+              if u == D:
+                  result_path = path
+                  break
+
+              # Generate neighbors in sorted order to maintain lex order
+              for v in sorted(sub_adj[u]):
+                  if v not in path:
+                      new_path = path + [v]
+                      heapq.heappush(heap, new_path)
+
+          Now, testing the earlier example:
+
+          N=3, R=3
+
+          Edges:
+
+          1-2 10
+
+          1-3 10
+
+          2-3 10
+
+          S=1, D=3, T=5.
+
+          X is 10.
+
+          sub_adj includes all edges.
+
+          The code would generate the path 1-2-3, which is lex smaller than 1-3.
+
+          So the code now works correctly.
+
+          Therefore, the code is correct with this adjustment.
+
+          Now, this handles all cases where the lex smallest path may be longer.
+
+          So the final code is:
+
+          import heapq
+
+          n, r = map(int, input().split())
+
+          adj = [[] for _ in range(n+1)]
+
+          for _ in range(r):
+              c1, c2, p = map(int, input().split())
+              adj[c1].append( (c2, p) )
+              adj[c2].append( (c1, p) )
+
+          S, D, T = map(int, input().split())
+
+          # Step 1: Find X using modified Dijkstra's algorithm
+          max_min = [0] * (n+1)
+          max_min[S] = float('inf')
+          heap = [ (-max_min[S], S) ]
+          heapq.heapify(heap)
+
+          while heap:
+              current_neg, u = heapq.heappop(heap)
+              current_max = -current_neg
+
+              if current_max < max_min[u]:
+                  continue
+
+              for v, cap in adj[u]:
+                  candidate = min(current_max, cap)
+                  if candidate > max_min[v]:
+                      max_min[v] = candidate
+                      heapq.heappush(heap, (-candidate, v))
+
+          X = max_min[D]
+
+          # Step 2: Build sub_adj with edges >= X
+          sub_adj = [[] for _ in range(n+1)]
+          for u in range(1, n+1):
+              for v, cap in adj[u]:
+                  if cap >= X:
+                      sub_adj[u].append(v)
+
+          # Step 3: Find lex smallest path using a priority queue
+          heap_paths = []
+          heapq.heappush(heap_paths, [S])
+          result_path = None
+
+          while heap_paths and not result_path:
+              path = heapq.heappop(heap_paths)
+              u = path[-1]
+
+              if u == D:
+                  result_path = path
+                  break
+
+              # Generate neighbors in sorted order to maintain lex order
+              for v in sorted(sub_adj[u]):
+                  if v not in path:  # avoid cycles
+                      new_path = path + [v]
+                      heapq.heappush(heap_paths, new_path)
+
+          # Calculate trips
+          trips = (T + (X - 2)) // (X - 1)
+
+          # Print the path and trips
+          print(' '.join(map(str, result_path)))
+          print(trips)
+
+          This should handle all cases correctly.
+</think>
+To solve this problem, we need to determine the optimal route for Mr. X to guide all tourists from a starting city to a destination city with the minimum number of trips. The key challenge is to find the route where the bus service with the smallest passenger limit (bottleneck) is as large as possible, and then use this route to calculate the minimum number of trips required.
+
+### Approach
+1. **Identify the Bottleneck Capacity (X):** Use a modified Dijkstra's algorithm to find the maximum possible minimum passenger limit (X) along any path from the starting city (S) to the destination city (D). This ensures that the bottleneck capacity is maximized.
+2. **Construct Subgraph:** Build a subgraph consisting only of edges with a passenger limit greater than or equal to X. This helps in ensuring that any path in this subgraph will have the bottleneck capacity X.
+3. **Find Lexicographically Smallest Path:** Use a priority queue-based approach to explore paths in lexicographical order within the subgraph. This ensures that the first valid path found to the destination is the lexicographically smallest.
+
+### Solution Code
+```python
+import heapq
+
+def main():
+    import sys
+    input = sys.stdin.read().split()
+    idx = 0
+    n = int(input[idx])
+    idx += 1
+    r = int(input[idx])
+    idx += 1
+
+    adj = [[] for _ in range(n + 1)]
+    for _ in range(r):
+        c1 = int(input[idx])
+        idx += 1
+        c2 = int(input[idx])
+        idx += 1
+        p = int(input[idx])
+        idx += 1
+        adj[c1].append((c2, p))
+        adj[c2].append((c1, p))
+
+    S = int(input[idx])
+    idx += 1
+    D = int(input[idx])
+    idx += 1
+    T = int(input[idx])
+    idx += 1
+
+    # Step 1: Find X using modified Dijkstra's algorithm
+    max_min = [0] * (n + 1)
+    max_min[S] = float('inf')
+    heap = [(-max_min[S], S)]
+    heapq.heapify(heap)
+
+    while heap:
+        current_neg, u = heapq.heappop(heap)
+        current_max = -current_neg
+
+        if current_max < max_min[u]:
+            continue
+
+        for v, cap in adj[u]:
+            candidate = min(current_max, cap)
+            if candidate > max_min[v]:
+                max_min[v] = candidate
+                heapq.heappush(heap, (-candidate, v))
+
+    X = max_min[D]
+
+    # Step 2: Build sub_adj with edges >= X
+    sub_adj = [[] for _ in range(n + 1)]
+    for u in range(1, n + 1):
+        for v, cap in adj[u]:
+            if cap >= X:
+                sub_adj[u].append(v)
+
+    # Step 3: Find lex smallest path using a priority queue
+    heap_paths = []
+    heapq.heappush(heap_paths, [S])
+    result_path = None
+
+    while heap_paths and not result_path:
+        path = heapq.heappop(heap_paths)
+        u = path[-1]
+
+        if u == D:
+            result_path = path
+            break
+
+        # Generate neighbors in sorted order to maintain lex order
+        for v in sorted(sub_adj[u]):
+            if v not in path:  # avoid cycles
+                new_path = path + [v]
+                heapq.heappush(heap_paths, new_path)
+
+    # Calculate trips
+    trips = (T + (X - 2)) // (X - 1)
+
+    # Print the results
+    print(' '.join(map(str, result_path)))
+    print(trips)
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Modified Dijkstra's Algorithm:** This algorithm is used to determine the maximum possible minimum passenger limit (X) along any path from S to D. This is done by maintaining a max-heap where each node's value is the smallest passenger limit encountered along the path to that node.
+2. **Subgraph Construction:** After determining X, we build a subgraph that includes only those edges with a passenger limit of at least X. This ensures that any path in this subgraph will have a bottleneck capacity of X.
+3. **Lexicographical Path Finding:** Using a priority queue, we explore paths in lexicographical order. This ensures that the first valid path found to the destination is the lexicographically smallest, even if it is longer than other potential paths.
+
+By following this approach, we efficiently determine the optimal route and the minimum number of trips required, ensuring both correctness and optimal performance.
+</bot>

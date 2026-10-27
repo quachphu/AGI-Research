@@ -1,0 +1,845 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Find the number of integers between 1 and N (inclusive) that contains exactly K non-zero digits when written in base ten.
+
+Constraints
+
+* 1 \leq N < 10^{100}
+* 1 \leq K \leq 3
+
+Input
+
+Input is given from Standard Input in the following format:
+
+
+N
+K
+
+
+Output
+
+Print the count.
+
+Examples
+
+Input
+
+100
+1
+
+
+Output
+
+19
+
+
+Input
+
+25
+2
+
+
+Output
+
+14
+
+
+Input
+
+314159
+2
+
+
+Output
+
+937
+
+
+Input
+
+9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999
+3
+
+
+Output
+
+117879300
+</user>
+<bot>
+<think>
+Okay, let's see. I need to find the number of integers between 1 and N (inclusive) that have exactly K non-zero digits. The constraints are that N can be up to 10^100, which is way too big to handle with brute force. So I need a dynamic programming approach here, probably digit DP.
+
+Hmm, digit DP is used for counting numbers with certain digit properties up to a given number. Since K can be 1, 2, or 3, I'll need to track the count of non-zero digits so far. Also, the number can be up to 10^100 digits long, so handling it as a string is necessary.
+
+The main idea is to process each digit of N one by one, keeping track of the number of non-zero digits used, whether the current prefix is already less than N's prefix (so that the remaining digits can be anything), and leading zeros.
+
+Wait, leading zeros might be a problem because numbers can't have leading zeros, but when building the number digit by digit, leading zeros are allowed until the first non-zero digit. So maybe we need a state that tracks whether we've started the number (i.e., whether leading zeros are still allowed).
+
+So the DP state could be something like:
+
+- Position in the digit string.
+- Count of non-zero digits so far.
+- Tight constraint (whether the previous digits match exactly with N's prefix, so the next digit can't exceed the corresponding digit in N).
+- Leading zeros flag (whether we are still in leading zeros, so adding a zero here doesn't contribute to the non-zero count).
+
+Let's formalize the state parameters. Let's say dp[pos][count][tight][leading_zero] represents the number of ways to fill the digits up to position pos, with 'count' non-zero digits so far, under the tight constraint (if tight is 1, we have to follow the N's digits up to this point), and leading_zero indicates if we are still in leading zeros.
+
+For example, leading_zero is True (or 1) means that all previous digits were zero. Once a non-zero digit is placed, leading_zero becomes False (0).
+
+So the transitions would be:
+
+For each position, iterate through possible digits that can be placed there. The allowed digits depend on the tight constraint. If tight is 1, the next digit can be up to the corresponding digit in N. Otherwise, it can be 0-9.
+
+When placing a digit, if leading_zero is True and the current digit is 0, then leading_zero remains True and the count doesn't increase. If the current digit is non-zero, then leading_zero becomes False, and the count increases by 1. If leading_zero is already False, then any non-zero digit increases the count by 1, and zeros leave the count as is.
+
+The base case is when we've processed all digits (pos == len(N)), then we check if the count is exactly K and leading_zero is False (since leading zeros would represent the number 0, which is not in the range 1..N). Wait, but N could be up to 1e100, but the numbers considered are 1 to N. So the 0 is excluded. So in the end, the count must be exactly K, and leading_zero must be False (i.e., the number is at least 1).
+
+Wait, but the numbers start from 1. So when building the DP, leading_zero is allowed in the initial stages, but the final number must have at least one non-zero digit. So in the end, leading_zero is False, and the count is exactly K.
+
+So the DP will track all possibilities, and the final answer is the sum of all dp[...] where count is K and leading_zero is 0.
+
+Now, the steps to implement this:
+
+1. Convert N into a list of its digits as a string.
+
+2. Initialize the DP memo table. Since N can be up to 100 digits long, the pos can be up to 100, K up to 3. Tight is 0 or 1, leading_zero is 0 or 1. So the dimensions are manageable.
+
+3. Implement the DP using memoization, possibly with memoization via a 4-dimensional array or a dictionary.
+
+But in Python, for memoization with multiple parameters, using lru_cache might be feasible, but since the digits of N can be up to 100, that's 100 positions. For each position, count can be up to K, which is up to 3. Tight is 0 or 1, leading_zero is 0 or 1. So total possible states are 100 * 4 * 2 * 2 = 1600 per N. Which is acceptable.
+
+So the plan is to write a recursive DP function with memoization.
+
+Let's outline the parameters:
+
+pos: current digit position being processed (starting from 0).
+
+count: the number of non-zero digits used so far.
+
+tight: a flag indicating whether the current number is constrained by N's digits. If tight is True, the next digit can't exceed N[pos]; otherwise, it can be 0-9.
+
+leading_zero: a flag indicating whether the current number is still all zeros so far.
+
+The recursive function will return the number of valid numbers from the current state.
+
+Base case: if pos == len(N), then if leading_zero is False and count == K, return 1. Otherwise, return 0.
+
+For the recursive case:
+
+We loop through all possible digits d that can be placed at this position.
+
+If tight is True, the maximum allowed digit is the current digit of N (n_digit = int(N[pos])). Otherwise, it's 9.
+
+For each possible d in 0..max_d:
+
+If leading_zero is True:
+
+   if d is 0: new_leading_zero remains True, new_count is count (still leading zeros).
+
+   else: new_leading_zero is False, new_count is count + 1.
+
+Else:
+
+   if d is 0: new_leading_zero is False (since leading_zero was already False), new_count is count.
+
+   else: new_count is count + 1.
+
+Wait, leading_zero is only True if all previous digits were zero. Once a non-zero digit is placed, leading_zero becomes False. So once leading_zero is False, it remains False for all subsequent digits.
+
+So when leading_zero is True and d is 0: new_leading_zero remains True.
+
+If leading_zero is True and d is non-zero: new_leading_zero becomes False, and count increases by 1.
+
+When leading_zero is False and d is 0: count remains the same, leading_zero is False.
+
+When leading_zero is False and d is non-zero: count increases by 1.
+
+Now, the new_tight flag: if tight was True and d == n_digit, then new_tight is True. Otherwise, it's False.
+
+So, for each transition:
+
+new_tight = tight and (d == n_digit)
+
+But wait, only if the previous tight was True. If tight was False, then new_tight remains False regardless of d.
+
+So, in code:
+
+if tight:
+
+   max_d = int(N[pos])
+
+else:
+
+   max_d = 9
+
+for d in 0 to max_d:
+
+   new_tight = tight and (d == max_d)
+
+   new_leading_zero = leading_zero and (d == 0)
+
+   if leading_zero and (d != 0):
+
+       new_count = count + 1
+
+       new_leading_zero = False
+
+   elif not leading_zero and (d != 0):
+
+       new_count = count + 1
+
+   else:
+
+       new_count = count
+
+   But wait, in the case where leading_zero is True and d is 0, new_leading_zero remains True, and count remains as is.
+
+So the new_count is:
+
+if leading_zero:
+
+   if d == 0:
+
+       new_count = count
+
+       new_leading_zero = True
+
+   else:
+
+       new_count = count + 1
+
+       new_leading_zero = False
+
+else:
+
+   if d == 0:
+
+       new_count = count
+
+   else:
+
+       new_count = count + 1
+
+So, putting it all together:
+
+if leading_zero is True:
+
+   new_leading_zero = (d == 0)
+
+   if d == 0:
+
+       new_count = count
+
+   else:
+
+       new_count = count + 1
+
+       new_leading_zero = False
+
+else:
+
+   new_leading_zero = False
+
+   new_count = count + (d != 0)
+
+Wait, that's a simpler way to compute new_count. For example, in the non-leading_zero case, if d is non-zero, add 1 to count. Otherwise, same as before.
+
+So, for new_count:
+
+if leading_zero:
+
+   if d == 0:
+
+       new_count = count
+
+   else:
+
+       new_count = count + 1
+
+else:
+
+   new_count = count + (1 if d !=0 else 0)
+
+But leading_zero can only transition to False once a non-zero digit is added.
+
+So the new_leading_zero is:
+
+if leading_zero and (d ==0):
+
+   new_leading_zero = True
+
+else:
+
+   new_leading_zero = False
+
+Wait, yes. Because if leading_zero was True and you add a 0, then leading_zero remains True. Otherwise, if leading_zero was True and you add a non-zero, leading_zero becomes False. If leading_zero was False, it remains False.
+
+So new_leading_zero is leading_zero and (d == 0).
+
+So putting this all together.
+
+Now, the transitions would be:
+
+for each possible d (from 0 to max_d):
+
+   compute new_tight, new_leading_zero, new_count.
+
+   then, if new_count exceeds K, we can skip this transition (since we're looking for exactly K non-zero digits). So if new_count > K, skip.
+
+   else, proceed to add the number of ways from the next state.
+
+So during the iteration, for each d, check if adding this digit would cause new_count to exceed K, and if so, skip.
+
+This is an optimization to avoid unnecessary recursion.
+
+So in code, during the loop over d, after calculating new_count, if new_count > K, skip.
+
+So the steps for the transition are:
+
+current state (pos, count, tight, leading_zero)
+
+for d in 0..max_d:
+
+   new_tight = tight and (d == max_d)
+
+   new_leading_zero = leading_zero and (d == 0)
+
+   if leading_zero:
+
+       if d == 0:
+
+           new_count = count
+
+       else:
+
+           new_count = count + 1
+
+   else:
+
+       new_count = count + (d != 0)
+
+   if new_count > K:
+
+       continue
+
+   then, proceed to the next state (pos+1, new_count, new_tight, new_leading_zero)
+
+   accumulate the results from the next state into the current state's count.
+
+So the recursive function will return the sum of all valid transitions.
+
+Now, the initial call is to the first position (pos=0), count=0, tight=True (since we have to start by considering the first digit's constraint), leading_zero=True.
+
+But wait, the initial state is leading_zero=True, because we haven't added any digits yet. So for pos=0, leading_zero is True, and the first digit can be 0 (but then leading_zero remains True), but if the first digit is non-zero, leading_zero becomes False.
+
+Wait, but leading_zero is allowed only for the entire number. For example, if N is 100, then leading zeros would be allowed for digits beyond the first, but the number can't be 0. So the DP has to track whether the number is still all zeros so far. Once a non-zero is added, leading_zero becomes False.
+
+So the initial state is pos=0, count=0, tight=True (assuming N is a string, and the first digit is being considered under tight constraint), leading_zero=True.
+
+Now, the code structure:
+
+Read N as a string, K as integer.
+
+Implement the DP with memoization. Since Python's recursion stack is limited, but the maximum pos is 100, which is manageable.
+
+But recursion may hit stack limits for N with 100 digits. So perhaps an iterative DP approach is better. Alternatively, use memoization with lru_cache, but with the parameters converted to hashable types.
+
+In Python, using lru_cache with parameters that are integers (pos, count, tight as 0/1, leading_zero as 0/1) should be manageable.
+
+So, the code outline:
+
+from functools import lru_cache
+
+def solve():
+
+    N = input().strip()
+
+    K = int(input())
+
+    n = len(N)
+
+    @lru_cache(maxsize=None)
+
+    def dp(pos, count, tight, leading_zero):
+
+        if pos == n:
+
+            # Check if the count is exactly K and leading_zero is False (number is non-zero)
+
+            return 1 if (count == K and not leading_zero) else 0
+
+        res = 0
+
+        max_d = int(N[pos]) if tight else 9
+
+        for d in range(0, max_d + 1):
+
+            new_tight = tight and (d == max_d)
+
+            new_leading_zero = leading_zero and (d == 0)
+
+            if leading_zero:
+
+                if d == 0:
+
+                    new_count = count
+
+                else:
+
+                    new_count = count + 1
+
+            else:
+
+                new_count = count + (d != 0)
+
+            if new_count > K:
+
+                continue
+
+            res += dp(pos + 1, new_count, new_tight, new_leading_zero)
+
+        return res
+
+    # The initial state is pos=0, count=0, tight=True, leading_zero=True.
+
+    print(dp(0, 0, True, True))
+
+But wait, let's test this against the sample inputs.
+
+First sample:
+
+Input:
+
+100
+
+1
+
+Expected output: 19.
+
+The numbers are 1-9 (9 numbers), 10-90 (9 numbers), 100 (1 number). Wait 9+9+1 = 19. Correct.
+
+But according to the code, let's see. The code counts numbers with exactly 1 non-zero digit. So for example, 100 has one non-zero digit.
+
+So when the code runs for N=100, K=1.
+
+Another sample:
+
+Input: 25, K=2. Output is 14.
+
+Numbers between 1 and 25 with exactly two non-zero digits. These would be all two-digit numbers from 10 to 25, but excluding those with two non-zero digits. Wait, wait:
+
+Wait 10: has one non-zero digit (1). So not included.
+
+Numbers like 11: two non-zero digits. So included. Similarly, 12, ..., 19, 21, 22, ..., 25. Let's count:
+
+Numbers from 11 to 19: 9 numbers (each has two non-zero digits).
+
+Numbers from 21 to 25: 5 numbers (each has two digits, both non-zero). So total 9+5=14. Correct.
+
+So the code should compute 14 here.
+
+Now, let's see how the code would handle this.
+
+But perhaps the code has a bug. For example, leading_zero is True initially, but in the first position (pos=0), when leading_zero is True and d=0, then leading_zero remains True, but the number is zero so far. But when leading_zero is True and d is non-zero (like 1), then leading_zero becomes False, count increases by 1.
+
+But in the code's initial state, leading_zero is True. So when processing the first digit (digit '2' in N=25), max_d for the first position is 2 (since tight is True).
+
+So for the first digit, possible d is 0,1,2.
+
+If d=0: leading_zero remains True, count remains 0. Then the next digit can be up to 5 (since tight was tight and d=0 < 2, so new_tight is False for the next positions? Wait, no. Let's see:
+
+In the first position (digit is 2 of N=25), tight is True. So max_d is 2.
+
+If d is 0, then new_tight is tight (True) and (d == max_d) → 0 == 2 → false. So new_tight becomes False.
+
+So the next position (pos=1) will have tight=False, so digits can be 0-9.
+
+But leading_zero is True, since leading_zero was True (initial) and d=0.
+
+So for the first digit d=0, leading_zero is True, count is 0. Then in pos=1, leading_zero is True, and processing the next digit.
+
+But when leading_zero is True, adding a 0 keeps leading_zero True. But any non-zero digit in the next position would set leading_zero to False and count to 1.
+
+So for example, for numbers starting with 0 (like 05, which is 5), but since leading_zero is allowed, but when the entire number is 05, it's considered as 5. So the code is counting numbers, not digit strings with leading zeros. Because leading_zero is tracked as part of the state, but the actual number is formed by the digits, ignoring leading zeros.
+
+Wait, but how does the code handle leading zeros? For example, the number 05 is 5, which is allowed.
+
+Wait, the code's leading_zero flag is True only when all digits so far are zero. So when a non-zero digit is added, leading_zero becomes False and the count increases. But when leading_zero is True, the digits processed so far are all zeros. So the code's count of non-zero digits is accurate.
+
+So, for example, when leading_zero is True, and the digits so far are 0, the count is zero. When a non-zero digit is added, count becomes 1, and leading_zero is False.
+
+Thus, numbers like 05 (the digit sequence 0 and 5) would be handled as leading_zero becomes False at the second digit, and count increases to 1. So the code would treat 05 as 5, which is part of the count. But the problem statement says that numbers are between 1 and N inclusive. So numbers like 5 are counted once, regardless of leading zeros in their digit representation.
+
+So the code correctly counts numbers, not their digit sequences. Because leading zeros are allowed in the digit DP, but the actual number is the one formed by the digits (without leading zeros). So the code is correct in this aspect.
+
+So, the code's approach should work.
+
+But let's check the first sample input.
+
+Sample Input 1:
+
+100
+
+1
+
+The code's DP function would start with pos=0, count=0, tight=True, leading_zero=True.
+
+At pos=0, N is '1', so max_d is 1.
+
+Possible d: 0,1.
+
+For d=0:
+
+new_tight becomes tight (True) and d == 1? 0 ==1 → no → new_tight is False.
+
+new_leading_zero is True (since leading_zero was True and d=0).
+
+count remains 0.
+
+Proceed to pos=1, count=0, tight=False (since new_tight is False), leading_zero=True.
+
+At pos=1, N's digit is 0. But since tight is False, max_d is 9.
+
+So for each d in 0-9:
+
+If leading_zero is True, and d is 0 → new_leading_zero True, count 0.
+
+If d is non-zero → count becomes 1, leading_zero False.
+
+But since K=1, the new_count must be 1.
+
+For example, in pos=1, tight is False, leading_zero is True.
+
+d can be 0-9.
+
+If d is 0: new_count=0, leading_zero remains True. Then, in pos=2, leading_zero is True, count 0.
+
+At pos=2, tight is False (since pos=1's tight was False). So max_d is 9.
+
+d can be 0-9.
+
+If leading_zero is True (count 0), then:
+
+- if d=0: new_leading_zero True, count remains 0. At pos=3 (after processing all digits), check count=0. Not K=1 → add 0.
+
+- if d is non-zero: new_count becomes 1, leading_zero False. Then at pos=3, count is 1, leading_zero False → meets K=1 → add 1.
+
+So for d=0 in pos=0, the path is 0 → 0 → d (pos=2).
+
+But leading_zero is True for the first two digits (0 and 0). Then, at pos=2, d can be 1-9 (since leading_zero is True and d=1-9). So for d in pos=2:
+
+each of 1-9 contributes 1 to the count, leading to 9 possibilities. So for the path d=0 in pos=0 and d=0 in pos=1, the total is 9 (from pos=2 d=1-9).
+
+So in this case, the code would accumulate 9 for this path.
+
+But wait, the code would calculate this as part of the transitions:
+
+For the initial path where d=0 in pos=0:
+
+then pos=1, tight=False, leading_zero=True.
+
+At pos=1, for each d in 0-9:
+
+If d is 0: leading_zero remains True, count 0. Then in pos=2:
+
+for each d in 0-9, if leading_zero is True:
+
+   if d is 0: count remains 0. At pos=3, count is 0 → not counted.
+
+   if d is non-zero: count becomes 1. At pos=3, count=1, leading_zero False → count +=1.
+
+So for d=0 in pos=1, the count is 9 (from pos=2, d=1-9).
+
+If d in pos=1 is non-zero (d=1-9), then new_count becomes 1 (since leading_zero was True and d is non-zero). leading_zero becomes False. Then pos=2, tight is False.
+
+At pos=2, d can be 0-9. Since count is 1, adding any non-zero would make count=2 (exceeding K=1). So in pos=2, d can only be 0.
+
+So for each d in pos=1 (non-zero), the path is:
+
+pos=1: count=1, leading_zero=False.
+
+At pos=2, tight is False.
+
+d can be 0-9.
+
+new_count = 1 + (d != 0).
+
+But since K=1, new_count must be <=1 → d must be 0.
+
+So for each of d=1-9 in pos=1 (there are 9 possibilities), the count in pos=2 is 1 (d=0) → contributes 1 each.
+
+So total for pos=1, d=1-9 → 9 * 1 =9.
+
+Thus, for pos=0, d=0, the total from pos=1 is 9 (from d=0 in pos=1) + 9 (from d=1-9 in pos=1) → 18.
+
+But wait, when pos=1 is processed with d=0, leading to pos=2, which contributes 9 (d=1-9). And when pos=1 is processed with d=1-9, leading to pos=2 with d=0 (only possible choice), which contributes 1 per d in pos=1. So total for pos=0, d=0 is 9 (from d=0 in pos=1) * 9 (d=1-9 in pos=2) → no. Wait, no: pos=0 d=0 → pos=1, tight=False.
+
+At pos=1, tight is False, so max_d is 9.
+
+For d=0 in pos=1:
+
+   leading_zero remains True, count=0.
+
+   proceed to pos=2.
+
+At pos=2, tight is False. So can choose any d from 0-9.
+
+For each d in 0-9:
+
+   leading_zero is True (since previous digits are 0 and 0).
+
+   if d=0: new_count=0. At pos=3, returns 0.
+
+   if d=1-9: new_count=1. At pos=3, returns 1.
+
+So for pos=1 d=0, in pos=2, there are 9 possibilities (d=1-9) → contributes 9.
+
+For pos=1 d=1-9 (9 options):
+
+   count becomes 1, leading_zero=False.
+
+   in pos=2, d can be 0-9. But new_count must be <=1. So d can only be 0 (adding 0 to the count remains 1).
+
+   So for each of these 9 options, in pos=2, d=0 → 1 possibility.
+
+   So 9 * 1 =9.
+
+So total for pos=0 d=0 is 9 (d=0 in pos=1) + 9 (d=1-9 in pos=1) → 18.
+
+Now, for pos=0 d=1:
+
+new_tight is (tight was True and d == 1 → 1 ==1 → yes) → new_tight is True.
+
+leading_zero becomes False (since d=1 is non-zero). count becomes 1.
+
+So in pos=1, tight is True (since new_tight is True), and N's next digit is 0. So max_d is 0.
+
+Possible d is 0.
+
+Then, pos=1, d=0:
+
+new_count = 1 (since leading_zero is False, d=0 → count remains 1).
+
+new_tight is True and d ==0 → yes.
+
+proceed to pos=2, which has N's digit 0. tight is True → max_d=0.
+
+d can be 0.
+
+new_count becomes 1 (since d=0, count remains 1.
+
+At pos=3, count=1 → returns 1.
+
+So for pos=0 d=1, the path is 1 0 0 → which is 100. So this contributes 1.
+
+Also, in pos=1, d=0, then in pos=2, d=0.
+
+So for pos=0 d=1, the total is 1.
+
+Thus, the total for the first sample is 18 (from pos=0 d=0) + 1 (from pos=0 d=1) → 19. Which matches the sample. So the code works.
+
+Another test case: N=25, K=2.
+
+Let's see. The code should return 14.
+
+The code's approach should calculate the numbers with exactly two non-zero digits between 1 and 25.
+
+These are:
+
+11, 12, ..., 19 → 9 numbers.
+
+21, 22, 23, 24, 25 → 5 numbers.
+
+Total 14.
+
+Now, how does the code compute this?
+
+N is '25', len 2.
+
+Initial state: pos=0, count=0, tight=True, leading_zero=True.
+
+At pos=0, max_d is 2 (since tight is True and N[0] is '2').
+
+Possible d: 0,1,2.
+
+Case 1: d=0 (pos=0):
+
+new_tight is tight (True) and d=0 ==2 → no. new_tight is False.
+
+leading_zero remains True (since d=0).
+
+count remains 0.
+
+proceed to pos=1 (tight=False, leading_zero=True).
+
+At pos=1, tight is False → max_d is9.
+
+For each d in 0-9:
+
+If d is 0 → leading_zero remains True, count remains 0. Then pos=2 (which is beyond len(2)), check count=0 and leading_zero is False → no.
+
+If d is non-zero (1-9):
+
+leading_zero becomes False, count becomes 1.
+
+Proceed to pos=2.
+
+At pos=2, count is 1. Now, K=2 → need to add another non-zero digit.
+
+But pos is beyond len(N) (2 digits). So when processing pos=2 (n is len(N)=2?), wait, pos is 0-based. So for N of length 2, pos ranges from 0 to 1.
+
+So when pos=1, after processing, pos+1 is 2, which is equal to len(N). So the base case is pos=2.
+
+So for the case where d=0 in pos=0, and d=5 (for example) in pos=1:
+
+count becomes 1. But in the base case, count is 1, which is less than K=2. So no contribution.
+
+Thus, the path where pos=0 d=0 would contribute numbers with exactly one non-zero digit (from leading_zero being False, and count=1), but since K=2, they are not counted.
+
+Thus, the code would not count these. So the d=0 in pos=0 contributes 0 for K=2.
+
+Case 2: d=1 in pos=0.
+
+new_tight is False (since 1 <2).
+
+leading_zero becomes False (d=1 is non-zero).
+
+count becomes 1.
+
+proceed to pos=1, tight=False.
+
+At pos=1, max_d is9.
+
+For each d in 0-9:
+
+count is 1. Adding d=0 → count remains 1. Adding d !=0 → count becomes 2.
+
+But K=2, so only d !=0 contributes.
+
+Thus, for d in 1-9 (9 options), new_count is 2. For each, in pos=2, returns 1.
+
+So for pos=0 d=1, pos=1:
+
+sum over d=1-9 → 9 possibilities. Each contributes 1. So 9.
+
+Also, d=0 in pos=1:
+
+new_count is 1 → no.
+
+So total for pos=0 d=1 is 9.
+
+Case 3: d=2 in pos=0.
+
+new_tight is True (since d=2 ==2).
+
+leading_zero becomes False (d=2 is non-zero).
+
+count becomes 1.
+
+proceed to pos=1, tight is True (since new_tight is True), so max_d is 5 (N[1] is '5').
+
+At pos=1, d can be 0-5.
+
+For each d in 0-5:
+
+if d is 0:
+
+new_count =1. At pos=2, returns 0 (count is 1 < K=2).
+
+if d is non-zero (1-5):
+
+new_count =1+1=2. So at pos=2, returns 1.
+
+Thus, for d=2 in pos=0, the contributions are from d=1-5 in pos=1 → 5 possibilities. So 5.
+
+Thus, total from pos=0:
+
+d=0 → 0.
+
+d=1 →9.
+
+d=2 →5.
+
+Total 14. Which matches the sample.
+
+Thus, the code works for this case.
+
+Another sample is N=314159, K=2 → output 937. And the last sample is large, but the code should handle it efficiently.
+
+Now, code must handle N as a string. The code is written to process N as a string, and read it properly.
+
+Potential edge cases:
+
+- N is 1, K=1 → output 1.
+
+- N is 9, K=3 → output 0.
+
+- N is 10^100 -1 (all 9s), K=3 → must count all numbers with exactly 3 non-zero digits.
+
+The code should handle leading zeros correctly.
+
+Thus, the code should be correct.
+</think>
+To solve this problem, we need to count the number of integers between 1 and N (inclusive) that contain exactly K non-zero digits when written in base ten. Given the constraints where N can be extremely large (up to 10^100), a brute force approach is infeasible. Instead, we use a dynamic programming (DP) approach known as digit DP to efficiently count the valid numbers.
+
+### Approach
+1. **Digit DP Concept**: This technique involves processing each digit of the number N one by one while keeping track of certain states such as the number of non-zero digits encountered, whether the current number being formed is still constrained by the digits of N, and whether leading zeros are still allowed.
+2. **State Tracking**: The states we track are:
+   - **Position (pos)**: The current digit position being processed.
+   - **Count**: The number of non-zero digits encountered so far.
+   - **Tight Constraint (tight)**: A flag indicating if the current number being formed is still constrained by the digits of N.
+   - **Leading Zero (leading_zero)**: A flag indicating if the number formed so far consists only of leading zeros.
+3. **Recursive DP with Memoization**: Using memoization, we avoid recalculating states by storing results of subproblems, which significantly improves efficiency.
+
+### Solution Code
+```python
+from functools import lru_cache
+
+def main():
+    import sys
+    N = sys.stdin.readline().strip()
+    K = int(sys.stdin.readline())
+    n_len = len(N)
+    
+    @lru_cache(maxsize=None)
+    def dp(pos, count, tight, leading_zero):
+        if pos == n_len:
+            return 1 if (count == K and not leading_zero) else 0
+        
+        limit = int(N[pos]) if tight else 9
+        total = 0
+        
+        for d in range(0, limit + 1):
+            new_tight = tight and (d == limit)
+            new_leading_zero = leading_zero and (d == 0)
+            
+            if leading_zero:
+                if d == 0:
+                    new_count = count
+                else:
+                    new_count = count + 1
+                    new_leading_zero = False
+            else:
+                new_count = count + (1 if d != 0 else 0)
+            
+            if new_count > K:
+                continue
+            
+            total += dp(pos + 1, new_count, new_tight, new_leading_zero)
+        
+        return total
+    
+    print(dp(0, 0, True, True))
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Reading Input**: The input values N and K are read from standard input. N is treated as a string to handle its large size, and K is converted to an integer.
+2. **Memoized DP Function**: The `dp` function is defined with memoization to store results of previously computed states. This function is called recursively to explore all valid numbers.
+3. **Base Case**: When all digits have been processed (pos equals the length of N), we check if the count of non-zero digits is exactly K and if the number formed is non-zero (leading_zero is False).
+4. **Digit Processing**: For each digit position, we determine the maximum digit allowed (based on the tight constraint). We then iterate through all possible digits, updating the state variables accordingly.
+5. **State Transitions**: For each digit, we update the tight constraint, leading zero status, and count of non-zero digits. If the count exceeds K, we skip further processing for that digit path.
+
+This approach efficiently counts valid numbers by leveraging dynamic programming and memoization, ensuring that even very large values of N are handled within feasible time and space complexity.
+</bot>

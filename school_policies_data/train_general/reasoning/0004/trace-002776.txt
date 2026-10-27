@@ -1,0 +1,981 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Rachel works at a big Raf Laurens. There is a big event coming up and she has to select dresses for an exhibition.
+She has N dresses numbered 1 to N. There are total 62 types of dresses, each represented by a different alphanumeric character (a-z, A-Z, 0-9). The N dresses are represented by a string S of length N of alphanumeric characters. The ith character of S denotes the type of the ith dress. Rachel will select two integers, A and B such that 1 ≤ A ≤ B ≤ N and take the dresses numbered from A to B to the exhibition.
+
+Out of the 62 dress types, K dress types are special. Find the number of values of A and B possible such that the total number of special dresses of any type selected are atleast L and atmost R.
+
+Input:
+
+The first line of the input contains T, the number of test cases. The first line of each test case contains N, K, L and R. The second line of each test case contains the string of length N that denotes the type of the N dresses. The third line contains another string of length K, denoting the types of the special dresses
+
+Output:
+
+For each test case, output the number of ways to select A and B.
+
+Constraints:
+
+1 ≤ T ≤ 100
+1 ≤ N ≤ 104
+1 ≤ K ≤ 62
+0 ≤ L ≤ R ≤ N
+S contains alphanumeric characters: (a-z, A-Z and 0-9)
+
+SAMPLE INPUT
+2
+5 3 3 4
+AbcAb
+AbZ
+9 2 1 2
+adebfgbhd
+ab
+
+SAMPLE OUTPUT
+3
+33
+</user>
+<bot>
+<think>
+Okay, let's see. The problem is to find the number of substrings (contiguous sequences) of dresses where the count of special dresses is between L and R inclusive. So for each test case, we need to process N dresses, each of which is a character, and K special characters. Then, count all possible A and B such that the number of special dresses from A to B (inclusive) is at least L and at most R.
+
+First, let's parse the input. For each test case, we get N, K, L, R. Then the string S of length N, then a string of K characters that are the special ones. So, the first step is to process each test case, create a set of the special characters for quick lookup.
+
+The main challenge is efficiently calculating the number of substrings (or intervals A-B) that meet the criteria. Since N can be up to 10^4, a brute-force approach checking all possible O(N^2) intervals would be O(10^8) operations, which might be acceptable for Python given that T is up to 100. But wait, 100 * 1e8 is 1e10 operations, which is way too slow. So we need a more efficient approach.
+
+Hmm. So the brute-force approach is O(T*N^2), which for T=100 and N=1e4 would be 1e10 operations. That's way too slow. So we need a better approach.
+
+Alternative idea: precompute the prefix sums of the number of special dresses. Then, for each possible start A (i.e., the starting index), find all B >= A such that the count is between L and R. Using prefix sums, the count for [A,B] is prefix[B] - prefix[A-1]. So for each A, we need to find the range of B where this difference is between L and R.
+
+Let's think about the prefix sum array. Let's denote prefix[0] = 0, and prefix[i] is the number of special dresses in the first i dresses (1-based to i). Then for the interval [A, B], the count is prefix[B] - prefix[A-1]. We need this value to be >= L and <= R.
+
+So for each possible A (from 1 to N), we need to find all B >= A such that prefix[B] is in [prefix[A-1] + L, prefix[A-1] + R]. Because the prefix array is non-decreasing (since each element is 0 or 1 added each step?), wait, no. Each element in S can be 0 or 1 (if the dress is special or not). Wait, no. Wait, the count is how many special dresses are in the interval. So the prefix sum is the cumulative sum up to each position. So each element in the prefix array is the sum up to that index, so the array is non-decreasing, since each step adds a 0 or 1.
+
+Wait, but the dresses can be any alphanumeric character, but the special dresses are a subset. So for each position in S, we check if the character is in the special set, and if so, it contributes 1 to the prefix sum. So the prefix sum array is non-decreasing because each step adds either 0 or 1.
+
+So the prefix sum array is a non-decreasing array. That's important. So for each A, the required B's must be such that prefix[B] is in [prefix[A-1]+L, prefix[A-1]+R], and B >= A. So since the prefix array is non-decreasing, for a given A, the B's that satisfy this condition form a contiguous range. Wait, not necessarily. Because the prefix array can have steps of 0 or 1, but it's possible that the same value appears multiple times. For example, if there are consecutive non-special dresses, the prefix sum remains the same. But since it's non-decreasing, once the prefix sum increases beyond the upper bound, all further B's will not satisfy the condition.
+
+So for a given A, we can binary search the lower and upper bounds for B. Because the prefix array is non-decreasing, the values of B where prefix[B] >= (prefix[A-1] + L) start at some index, and the values where prefix[B] <= (prefix[A-1] + R) end at some index. So for each A, the number of B's is the count of B's in that range, but also B must be >= A.
+
+So the plan is:
+
+1. Precompute the prefix array.
+2. For each A in 1..N:
+   a. Compute the target lower and upper: target_low = prefix[A-1] + L, target_high = prefix[A-1] + R.
+   b. Find the smallest B_start where prefix[B] >= target_low and B >= A.
+   c. Find the largest B_end where prefix[B] <= target_high and B >= A.
+   d. The count for this A is max(0, B_end - B_start + 1) if B_start <= B_end. Otherwise 0.
+   But wait, how to find B_start and B_end?
+
+But since the prefix array is non-decreasing, for a given A, the B's that are >=A, and prefix[B] >= target_low. So B_start is the first position >= A where prefix[B] >= target_low. Similarly, B_end is the last position >= A where prefix[B] <= target_high. Then, the number of valid B's is B_end - B_start + 1 if B_start <= B_end and prefix[B_end] <= target_high and prefix[B_start] >= target_low. Otherwise, 0.
+
+But how do we compute B_start and B_end efficiently for each A?
+
+Since the prefix array is non-decreasing, for a given target_low, the first B >= A where prefix[B] >= target_low can be found using binary search. Similarly for the target_high, the last B >=A where prefix[B] <= target_high can be found via binary search.
+
+But the array is 1-based? Let's clarify.
+
+Suppose the prefix array is 0-based, with prefix[0] = 0, prefix[1] is the count after first element, up to prefix[N]. Then for interval [A, B], the sum is prefix[B] - prefix[A-1]. So A ranges from 1 to N, B ranges from A to N.
+
+So for each A (1-based), target_low = prefix[A-1] + L, target_high = prefix[A-1] + R.
+
+We need to find B in [A, N] where prefix[B] >= target_low and prefix[B] <= target_high.
+
+So for the prefix array (which is non-decreasing), the B's satisfying this are those in the range [B_low, B_high], where B_low is the first index >=A where prefix[B] >= target_low, and B_high is the last index <=N where prefix[B] <= target_high.
+
+But if target_low > prefix[N], then there's no solution. Similarly, if target_high < prefix[A], then also no solution.
+
+Wait, but target_high is prefix[A-1] + R. So the maximum possible sum for any B >= A is prefix[N] - prefix[A-1]. So if target_high is larger than prefix[N] - prefix[A-1], then we cap it to that value. Wait, no. The target_high is a fixed value for the current A: prefix[A-1] + R. So if prefix[A-1] + R > prefix[N], then the upper bound is prefix[N]. So the valid B's would have prefix[B] <= prefix[N], but since prefix is non-decreasing, the upper bound for B is the maximum B where prefix[B] <= target_high. So even if target_high is higher than prefix[N], the B_high is N.
+
+So, for each A:
+
+Calculate target_low and target_high.
+
+But first, for the current A, we can only have B >= A. So we need to search in the subarray prefix[A ... N].
+
+So for B_start, we need the first index in [A, N] where prefix[B] >= target_low.
+
+Similarly, B_end is the last index in [A, N] where prefix[B] <= target_high.
+
+Then, the count is max(0, B_end - B_start + 1) if B_start <= B_end, else 0.
+
+So the steps for each A are:
+
+1. Compute target_low = prefix[A-1] + L.
+
+   target_high = prefix[A-1] + R.
+
+2. For B_start: find the minimal B in [A, N] where prefix[B] >= target_low. If none, then B_start is N+1 (invalid).
+
+3. For B_end: find the maximal B in [A, N] where prefix[B] <= target_high. If none, B_end is A-1 (invalid).
+
+4. If B_start <= B_end and B_start <= N and B_end >=A, then the count is B_end - B_start + 1. Else 0.
+
+So the problem reduces to efficiently finding B_start and B_end for each A.
+
+Since the prefix array is non-decreasing, we can use binary search for these steps.
+
+So how to perform the binary search for B_start and B_end.
+
+For B_start:
+
+We need the first B >= A where prefix[B] >= target_low.
+
+Since the prefix array is non-decreasing, once it reaches or exceeds target_low, all subsequent elements are >= target_low.
+
+So in the subarray from B = A to N, the first occurrence of prefix[B] >= target_low can be found via binary search.
+
+Similarly, for B_end: the last occurrence of prefix[B] <= target_high in [A, N].
+
+Since the prefix array is non-decreasing, all elements after B_end will be > target_high.
+
+So, for B_start, using bisect_left on the subarray [A, N] for target_low.
+
+Wait, but the prefix array is 0-based. So for example, the array is prefix[0], prefix[1], ..., prefix[N]. The length is N+1. So for A from 1 to N, B can be from A to N. So the prefix[B] corresponds to the sum up to B elements (since each B is the end index of the interval [A, B]).
+
+So for each A, the B ranges from A to N, and we need to look at prefix[A] to prefix[N].
+
+Wait, the prefix array is such that prefix[0] = 0, prefix[1] is the count of special dresses in the first 1 dress (index 1?), and so on. So the interval [A, B] (1-based) has sum prefix[B] - prefix[A-1].
+
+So for example, A=1, B=1: sum is prefix[1] - prefix[0].
+
+So for each A in 1..N, the possible B is from A to N.
+
+So for B_start, the search starts from A (B >=A) and ends at N.
+
+The target is to find the smallest B in [A, N] where prefix[B] >= target_low.
+
+Similarly for B_end: find the largest B in [A, N] where prefix[B] <= target_high.
+
+So how to implement this.
+
+In Python, the bisect module can be used. Let's think.
+
+For B_start:
+
+We need to find the leftmost index in the range [A, N] where prefix[index] >= target_low.
+
+The bisect_left function returns the insertion point for target_low in a sorted array. Since the prefix array is non-decreasing, this is the first index where the value is >= target_low. However, we need to search only in the [A, N] range of the prefix array.
+
+So the code for B_start would be:
+
+low = A
+
+high = N
+
+We can perform a binary search here.
+
+Similarly for B_end: find the rightmost index in [A, N] where prefix[index] <= target_high.
+
+Which can be found using bisect_right for target_high, then subtract one.
+
+But the prefix array is up to index N. So for example, the entire array is prefix[0...N].
+
+So, code steps:
+
+Compute the prefix array.
+
+For each test case:
+
+- Read N, K, L, R.
+
+- Read S and the special string.
+
+- Create a set of special characters.
+
+- Compute prefix array.
+
+Then for each A from 1 to N:
+
+Compute target_low = prefix[A-1] + L
+
+target_high = prefix[A-1] + R
+
+Now, find B_start in [A, N] where prefix[B] >= target_low.
+
+If no such B exists, then continue (no count for this A).
+
+Else, find B_end in [A, N] where prefix[B] <= target_high.
+
+If B_end < A, then continue.
+
+Else, the number of B's is B_end - B_start + 1.
+
+Sum all such counts for all A.
+
+Now, the key is to compute B_start and B_end efficiently.
+
+For B_start:
+
+We can use bisect_left on the prefix array, with lo=A and hi=N+1 (since the bisect module in Python uses [lo, hi) ranges).
+
+For example:
+
+import bisect
+
+B_start = bisect.bisect_left(prefix, target_low, A, N+1)
+
+But since the prefix array is 0-based and of length N+1 (prefix[0] to prefix[N]), the indices in the prefix array are from 0 to N. So for A=1, we start searching from index 1 (prefix[1]) up to index N (prefix[N]).
+
+So the bisect_left call would be:
+
+B_start_candidate = bisect.bisect_left(prefix, target_low, A, N+1)
+
+But if B_start_candidate > N, then there is no B in [A, N] that satisfies prefix[B] >= target_low. So B_start is None or invalid.
+
+Similarly for B_end:
+
+We need the largest index in [A, N] where prefix[B] <= target_high.
+
+This can be found using bisect_right, which gives the insertion point after existing entries of target_high. Then subtract 1.
+
+B_end_candidate = bisect.bisect_right(prefix, target_high, A, N+1) - 1
+
+But we have to ensure that B_end_candidate >= A.
+
+Wait, let's see. For example, in the array [2,3,3,4], looking for <=3 in the subarray [0,1,2,3], starting at index 2.
+
+bisect_right for 3 in the array starting at index 2 (values 3,3,4) would be 3 (since the insertion point is after the two 3s). So bisect_right returns 3, subtract 1 gives 2, which is the index 2 (value 3).
+
+So for the entire array, the code would be:
+
+B_end_candidate = bisect.bisect_right(prefix, target_high, A, N+1) - 1
+
+But then we need to check if B_end_candidate >= A and also that B_end_candidate <= N.
+
+If B_end_candidate >=A and <=N, then it's valid.
+
+So for each A:
+
+Compute target_low and target_high.
+
+Compute B_start = bisect_left(prefix, target_low, A, N+1)
+
+If B_start > N: no B_start.
+
+Else, B_start is the first B >=A where prefix[B] >= target_low.
+
+Then, B_end is bisect_right(prefix, target_high, A, N+1) -1.
+
+But if B_end < A, then no.
+
+If B_end < A, then invalid.
+
+Else, the valid B's are from B_start to B_end, inclusive.
+
+So the number of valid B's is max(0, B_end - B_start + 1) if B_start <= B_end and B_start <= N and B_end >=A.
+
+Wait, but B_end can be <= N. So if B_start <= B_end and B_start >=A and B_end >=A, then the count is B_end - B_start +1.
+
+But since B_start is found in [A, N], and B_end is in [A, N], perhaps we can proceed.
+
+Wait, no. For example, suppose target_high is very low. Suppose that for A=5 (N=10), the target_high is 3, and the prefix array for B >=5 is [5,6,7,8,9,10]. Then B_end_candidate would be the index where prefix[B] <=3. If all prefix[B] from 5 onwards are 5 and above, then bisect_right would return 5 (starting from A=5), subtract 1 gives 4. But 4 is less than A=5, so B_end is invalid. So the count is zero.
+
+So in code:
+
+B_start = bisect.bisect_left(prefix, target_low, A, N+1)
+
+if B_start > N:
+
+    continue
+
+B_end = bisect.bisect_right(prefix, target_high, A, N+1) -1
+
+if B_end < A:
+
+    continue
+
+if B_start > B_end:
+
+    continue
+
+count += B_end - B_start + 1
+
+So this seems correct.
+
+Now, the next step is to precompute the prefix array.
+
+For example, in the first sample input:
+
+Test case 1:
+
+5 3 3 4
+
+S = 'AbcAb'
+
+Special = 'AbZ'
+
+So the special characters are 'A', 'b', 'Z'. Note that the case matters. So in S, the characters are 'A', 'b', 'c', 'A', 'b'.
+
+Wait, the problem says that the string S is alphanumeric. So case-sensitive. So 'A' and 'a' are different.
+
+So for the first test case:
+
+S = 'AbcAb'
+
+So the indices (1-based?) So let's process S as a 0-based or 1-based array? The problem says "the ith character of S denotes the type of the ith dress". So S is 0-based in the input string, but the dresses are numbered 1 to N. So for i from 0 to N-1 in the string S, the dress number is i+1.
+
+But in the prefix array, prefix[0] = 0, and prefix[1] is 1 if the first dress is special. So let's compute the prefix sum.
+
+So for each dress in 1..N (i=1 to N), check if S[i-1] is in the special set.
+
+In the first test case, S is 'AbcAb' (so 5 characters). The special set is {'A', 'b', 'Z'}.
+
+So:
+
+Dress 1: 'A' is special. So prefix[1] = 1.
+
+Dress 2: 'b' is special. So prefix[2] = 2.
+
+Dress 3: 'c' is not special. So prefix[3] = 2.
+
+Dress 4: 'A' is special. So prefix[4] =3.
+
+Dress 5: 'b' is special. So prefix[5] =4.
+
+So the prefix array is [0,1,2,2,3,4].
+
+Now for L=3, R=4.
+
+For each A from 1 to 5:
+
+A=1:
+
+target_low = prefix[0] +3 =0+3=3.
+
+target_high =0+4=4.
+
+Looking for B in 1..5 where prefix[B] >=3 and <=4.
+
+The prefix array for B >=1 is [1,2,2,3,4].
+
+Wait, no. The prefix array for B=1 is 1, B=2 is 2, etc. So for A=1, the B ranges from 1 to 5.
+
+So in the prefix array, the B's are 1 to5.
+
+Looking for B where prefix[B] >=3 and <=4.
+
+So possible B's are 4 (prefix[4]=3) and 5 (prefix[5]=4).
+
+So B_start is the first B >=1 where prefix[B] >=3. The first is B=4.
+
+B_end is the last B >=1 where prefix[B] <=4. That's B=5.
+
+So the count is 5-4 +1=2.
+
+Wait, but B_start=4, B_end=5: 5-4 +1=2.
+
+So for A=1, there are 2 valid B's:4 and5.
+
+But let's see. The sum for [1,4] is prefix[4] - prefix[0] =3-0=3 (which is >=3 and <=4).
+
+The sum for [1,5] is4-0=4, which is also valid.
+
+So 2 possibilities.
+
+But according to the sample output, the answer is3. So I'm probably missing something here.
+
+Wait the sample input's first test case output is 3. So maybe my approach is missing some cases.
+
+Wait the first sample input:
+
+Sample Input:
+
+2
+
+5 3 3 4
+
+AbcAb
+
+AbZ
+
+Sample Output:3
+
+Wait, according to the first test case, the answer is 3. But according to the calculation for A=1, there are 2 B's. Let's check other A's.
+
+A=2:
+
+prefix[A-1] = prefix[1] =1.
+
+target_low =1+3=4.
+
+target_high=1+4=5.
+
+Looking for B >=2 where prefix[B] >=4 and <=5.
+
+prefix[B] for B=2 is 2, B=3 is2, B=4 is3, B=5 is4.
+
+So the prefix[B] >=4 is only at B=5 (prefix[5]=4). So B_start=5, B_end is bisect_right(5,5) which is 6. 6-1=5. So B_end=5. So count is1.
+
+So for A=2, count is1.
+
+A=3:
+
+prefix[A-1] is prefix[2] =2.
+
+target_low=2+3=5.
+
+target_high=2+4=6.
+
+Looking for B >=3 (i.e., B ranges from3 to5).
+
+prefix[B] for B=3 is2, B=4 is3, B=5 is4. All <5. So no B's. So count 0.
+
+A=4:
+
+prefix[A-1] is prefix[3]=2.
+
+target_low=2+3=5.
+
+target_high=2+4=6.
+
+B >=4: B=4,5.
+
+prefix[4] =3, prefix[5]=4. Both <5. So no.
+
+A=5:
+
+prefix[A-1] is prefix[4] =3.
+
+target_low=3+3=6.
+
+target_high=3+4=7.
+
+B can be5. prefix[5] is4 <6. So no.
+
+So total count is 2 (A=1) +1 (A=2) =3. Which matches the sample. So the approach is correct.
+
+So the code as per the approach would give the correct answer.
+
+Now, the second test case:
+
+9 2 1 2
+
+adebfgbhd
+
+ab
+
+The special characters are 'a' and 'b'.
+
+S is 'adebfgbhd' (9 characters).
+
+Let's compute the prefix array.
+
+Dress 1: 'a' is special. prefix[1] =1.
+
+Dress 2: 'd' not. prefix[2]=1.
+
+Dress3: 'e' no. prefix3=1.
+
+Dress4: 'b' yes. prefix4=2.
+
+Dress5: 'f' no. prefix5=2.
+
+Dress6: 'g' no. prefix6=2.
+
+Dress7: 'b' yes. prefix7=3.
+
+Dress8: 'h' no. prefix8=3.
+
+Dress9: 'd' no. prefix9=3.
+
+So the prefix array is [0,1,1,1,2,2,2,3,3,3].
+
+L=1, R=2.
+
+We need to find all A,B where the sum of special dresses in [A,B] is between1 and2 inclusive.
+
+For each A from1 to9:
+
+For each A, compute target_low = prefix[A-1]+1, target_high = prefix[A-1]+2.
+
+Then find B >=A where prefix[B] is in [target_low, target_high].
+
+Let's compute for each A:
+
+A=1:
+
+prefix[0]=0. target_low=1, target_high=2.
+
+Looking for B in 1-9 where prefix[B] >=1 and <=2.
+
+prefix[B] values:
+
+1,1,1,2,2,2,3,3,3.
+
+So B_start is first B>=1 where prefix[B] >=1: B=1.
+
+B_end is last B>=1 where prefix[B] <=2: B=6 (prefix[6] is2).
+
+So B ranges from1 to6. So count is6-1+1=6.
+
+But wait, in the prefix array, B=6 is prefix[6]=2. So for B from1 to6, the sum is prefix[B] - prefix[0], which is 1,1,1,2,2,2. So the counts are all >=1 and <=2.
+
+So for A=1, B can be 1,2,3,4,5,6: 6 options.
+
+A=2:
+
+prefix[1] =1. target_low=1+1=2. target_high=1+2=3.
+
+Looking for B >=2 where prefix[B] >=2 and <=3.
+
+prefix[B] for B=2:1. No. B=3:1. B=4:2. So B_start=4. B_end is the last B where prefix[B] <=3. Which is9, since prefix[9]=3.
+
+So B_end is9.
+
+So the valid B's are from4 to9. So count 9-4+1=6.
+
+But wait, the sum here is prefix[B] - prefix[1] = (prefix[B] -1). So for B=4: 2-1=1, which is >=1 and <=2. But target_low is2. Wait, no. Wait, for A=2, target_low is prefix[1]+1=2. So the sum (prefix[B] - prefix[1]) >=1 would be sum >=1. But according to the code's logic, target_low is prefix[A-1]+L. Wait, wait, in this case, L is1. So target_low is prefix[A-1] + L. So for A=2, target_low =1+1=2. So the sum must be >=2 and <=3 (target_high=1+2=3).
+
+So the sum (prefix[B] - prefix[1]) must be >=2 and <=3.
+
+So for B >=2:
+
+At B=4: sum is2-1=1 <2. So not in target_low.
+
+Wait, this is a problem. Because the code computes B_start as the first B where prefix[B] >= target_low (2). So for A=2:
+
+target_low=2, target_high=3.
+
+So we look for B where prefix[B] >=2 and <=3.
+
+In the prefix array for B>=2:
+
+prefix[2]=1, prefix[3]=1, prefix4=2, prefix5=2, prefix6=2, prefix7=3, etc.
+
+So the B_start is4 (prefix4=2 >=2). B_end is9 (prefix9=3 <=3). So B can be4-9, which is6 elements. But wait, the sum for B=4 is prefix4 - prefix1=2-1=1, which is 1. But target_low is2. So why does the code think it's valid?
+
+Wait wait, this is a problem. Because the code is using prefix[B] >= target_low (which is prefix[A-1]+L). But the actual sum is prefix[B] - prefix[A-1]. So target_low is sum >= L. So sum >= L implies prefix[B] - prefix[A-1] >= L => prefix[B] >= prefix[A-1] + L. So the code is correct here.
+
+But in this case, for A=2, target_low is prefix[1] +L=1+1=2. So the code looks for prefix[B] >=2. So for B=4, prefix[B] is2 >=2: yes. Then sum is2-1=1, which is less than L=1?
+
+Wait, wait, no. L is1. So sum >=1. So in this case, sum is1 >=1: yes. But target_low is2. Wait, this is a contradiction. What's wrong here?
+
+Oh wait, I think I made a mistake here.
+
+Ah! Wait, the code is using target_low and target_high as:
+
+target_low = prefix[A-1] + L
+
+target_high = prefix[A-1] + R
+
+But this is only correct if the sum (prefix[B] - prefix[A-1]) is between L and R inclusive. So sum >= L implies prefix[B] - prefix[A-1] >= L → prefix[B] >= prefix[A-1] + L.
+
+Similarly, sum <= R → prefix[B] <= prefix[A-1] + R.
+
+So the code's logic is correct.
+
+But in this case, for A=2:
+
+sum is prefix[B] - prefix[1] = prefix[B] -1.
+
+We need sum >=1 (L=1) and <=2 (R=2).
+
+So sum can be 1, 2.
+
+So target_low is prefix[A-1] + L =1 +1=2.
+
+target_high is prefix[A-1] + R =1+2=3.
+
+So code is looking for prefix[B] >=2 and <=3.
+
+But the sum (prefix[B] -1) can be 1 (when prefix[B] is2), which is >=1. But according to the code's logic, B_start is4, which prefix[B] is2. So sum is1, which is within L and R.
+
+But the code's B_start is4, which is correct because prefix[B] >= target_low (2), but sum is1. Which is >= L=1, but according to the code's target_low, sum must be >= L. So why is the code's target_low =2?
+
+This is a mistake. Oh no! Here's the problem.
+
+The code's approach is wrong. Because the sum is (prefix[B] - prefix[A-1]). We want this sum to be >=L and <=R.
+
+But the code is calculating target_low as prefix[A-1] + L. Which is equivalent to sum >= L → prefix[B] >= prefix[A-1] + L.
+
+But wait, the sum is (prefix[B] - prefix[A-1]) >= L → prefix[B] >= prefix[A-1] + L. That's correct.
+
+But in this case, L=1. So sum >=1. So target_low for A=2 is 1 +1=2. So code looks for B where prefix[B] >=2. But for B=4, prefix[B]=2, sum is1 (2-1=1), which is >=1. So the code is including this B, but according to the code's target_low, it's correct. Because sum is1, which is >= L=1.
+
+Wait, no. Wait, sum is1, which is >=L=1. So the code's condition is correct. So why the code's target_low is2?
+
+Ah! Because target_low is prefix[A-1] + L. So for A=2, prefix[A-1] = prefix[1] =1. L=1. So 1+1=2. So the code is looking for prefix[B] >=2, which implies sum (prefix[B] -1) >=1. Which is correct. Because prefix[B] >=2 → sum >=1.
+
+But in this case, prefix[B] >=2 includes all B where sum >=1.
+
+Wait, yes. Because sum is prefix[B] - prefix[A-1]. So if we require sum >=1, that's equivalent to prefix[B] >= prefix[A-1] +1. So the code's logic is correct.
+
+But in this case, the sum is1 when prefix[B]=2. So the code's logic is correctly finding all B where sum >=1, but using target_low = prefix[A-1] + L.
+
+So the code is correct here.
+
+But let's see why for A=2 in the second test case, the code would count B from4 to9. Let's see:
+
+prefix[B] for B=4 is2, which is >=2 (target_low). For B=7, it's3, which is >=2. So the code's B_start is4 (the first B >=A=2 where prefix[B]>=2). B_end is9 (the last B >=2 where prefix[B] <=3).
+
+So B can be4,5,6,7,8,9. So 6 B's.
+
+The sum for each of these B's is:
+
+B=4:2-1=1 (valid).
+
+B=5:2-1=1 (valid).
+
+B=6:2-1=1 (valid).
+
+B=7:3-1=2 (valid).
+
+B=8:3-1=2 (valid).
+
+B=9:3-1=2 (valid).
+
+All 6 are valid. So the code counts 6 here.
+
+So for A=2, count is6.
+
+Then, let's check for other A's.
+
+A=3:
+
+prefix[A-1] =prefix[2] =1.
+
+target_low=1+1=2.
+
+target_high=1+2=3.
+
+B >=3.
+
+Looking for prefix[B] >=2 and <=3.
+
+In the prefix array, for B >=3:
+
+prefix[3]=1, prefix4=2, prefix5=2, prefix6=2, prefix7=3, prefix8=3, prefix9=3.
+
+So B_start=4, B_end=9. Count 6.
+
+Sum for B=4:2-1=1 >=1 (valid).
+
+So this is correct.
+
+So for A=3, count is6.
+
+A=4:
+
+prefix[A-1]=prefix[3]=1.
+
+target_low=1+1=2.
+
+target_high=1+2=3.
+
+B >=4.
+
+prefix[B] for B>=4:
+
+prefix4=2, 5=2, 6=2,7=3,8=3,9=3.
+
+So B_start=4, B_end=9. Count 6.
+
+Sum for B=4:2-1=1 (valid).
+
+Again, 6 B's.
+
+A=4: count is6.
+
+A=5:
+
+prefix[A-1]=prefix[4] =2.
+
+target_low=2+1=3.
+
+target_high=2+2=4.
+
+Looking for B >=5 where prefix[B] >=3 and <=4.
+
+prefix[B] for B>=5:
+
+prefix5=2 (no), 6=2 (no),7=3,8=3,9=3.
+
+So B_start=7. B_end is9. So count 3 (7,8,9). The sum is3-2=1,3-2=1,3-2=1. So sum=1 which is >=1 and <=2. So these are valid. So count3.
+
+A=5: count3.
+
+A=6:
+
+prefix[A-1] =prefix[5]=2.
+
+target_low=2+1=3.
+
+target_high=2+2=4.
+
+B >=6.
+
+prefix[B] for B>=6:6=2,7=3,8=3,9=3.
+
+B_start=7. B_end=9. count3.
+
+Same as A=5.
+
+A=6: count3.
+
+A=7:
+
+prefix[A-1] =prefix[6]=2.
+
+target_low=3. target_high=4.
+
+B >=7. prefix[B] for B=7 is3,8=3,9=3.
+
+So B_start=7. B_end=9. count3.
+
+Sum is3-2=1.
+
+Valid.
+
+A=7: count3.
+
+A=8:
+
+prefix[A-1]=prefix[7]=3.
+
+target_low=3+1=4. target_high=3+2=5.
+
+B >=8.
+
+prefix[B]=3 (B=8 and9).
+
+So prefix[B] <4. So no B's. Count0.
+
+A=9:
+
+prefix[A-1]=prefix[8]=3.
+
+target_low=4, target_high=5.
+
+prefix[9]=3. So no.
+
+So total count:
+
+A=1:6.
+
+A=2:6.
+
+A=3:6.
+
+A=4:6.
+
+A=5:3.
+
+A=6:3.
+
+A=7:3.
+
+A=8:0.
+
+A=9:0.
+
+Total sum:6+6+6+6+3+3+3 = 33, which matches the sample output.
+
+So the code works correctly.
+
+So now, implementing this approach in Python.
+
+Steps:
+
+Read T test cases.
+
+For each test case:
+
+Read N, K, L, R.
+
+Read S.
+
+Read the special string, create a set.
+
+Compute the prefix sum array.
+
+Compute prefix[0] =0.
+
+For i from1 to N:
+
+prefix[i] = prefix[i-1] + (1 if S[i-1] in special_set else 0).
+
+Then, for each A in 1..N:
+
+target_low = prefix[A-1] + L.
+
+target_high = prefix[A-1] + R.
+
+Find B_start via bisect_left(prefix, target_low, A, N+1).
+
+If B_start >N: continue.
+
+Find B_end via bisect_right(prefix, target_high, A, N+1) -1.
+
+If B_end <A: continue.
+
+If B_start > B_end: continue.
+
+count += B_end - B_start +1.
+
+Sum all counts.
+
+Finally, print the count.
+
+Now, in Python, the bisect module has bisect.bisect_left and bisect.bisect_right.
+
+So the code would look something like:
+
+import bisect
+
+t = int(input())
+for _ in range(t):
+    n, k, l, r = map(int, input().split())
+    s = input().strip()
+    special = input().strip()
+    special_set = set(special)
+    prefix = [0]*(n+1)
+    for i in range(1, n+1):
+        prefix[i] = prefix[i-1] + (1 if s[i-1] in special_set else 0)
+    total =0
+    for a in range(1, n+1):
+        prev = prefix[a-1]
+        target_low = prev + l
+        target_high = prev + r
+        # Find B_start >= a where prefix[B] >= target_low
+        B_start = bisect.bisect_left(prefix, target_low, a, n+1)
+        if B_start >n:
+            continue
+        # Find B_end <=n where prefix[B] <= target_high, and >=a
+        B_end = bisect.bisect_right(prefix, target_high, a, n+1) -1
+        if B_end <a:
+            continue
+        if B_start > B_end:
+            continue
+        total += B_end - B_start +1
+    print(total)
+
+This code should work.
+
+Testing with sample input:
+
+First test case:
+
+n=5, k=3, l=3, r=4.
+
+s= 'AbcAb' → ['A','b','c','A','b']
+
+special = 'AbZ' → {'A','b','Z'}
+
+prefix array: [0,1,2,2,3,4]
+
+For A=1:
+
+target_low=0+3=3. bisect_left(prefix,3,1,6) → in the subarray prefix[1..5] = [1,2,2,3,4]. Looking for first >=3. Which is index4 (prefix[4]=3).
+
+B_start=4.
+
+bisect_right for target_high=0+4=4, a=1.
+
+In subarray [1,2,2,3,4], the bisect_right for 4 is5. 5-1=4. B_end=4.
+
+So B_start=4, B_end=4. Count 1.
+
+But wait, earlier manual calculation said for A=1, B can be4 and5. So why?
+
+Ah, no. The prefix array is for B=1 to5. So for B=5, prefix[B]=4. So in the code:
+
+target_high =0+4=4. So code is looking for prefix[B] <=4. Which is all B. So B_end would be bisect_right(prefix,4, 1,6) -1.
+
+The bisect_right for 4 in the entire prefix array (which is [0,1,2,2,3,4]) is6 (since inserting 4 after the last element). So for the subarray starting at a=1 and ending at n+1=6 (exclusive), the prefix array from index1 to5 is [1,2,2,3,4]. The bisect_right for4 is5. So 5-1=4. So B_end=5.
+
+Wait, because in bisect_right, for the array [1,2,2,3,4], the bisect_right for4 is5 (the index after the last element in this subarray). So when we subtract 1, it becomes4. But prefix[5] is4. So B_end=5.
+
+Wait, the code has:
+
+B_end = bisect.bisect_right(prefix, target_high, a, n+1) -1.
+
+In this case, a=1, n+1=6.
+
+So the bisect_right is applied to the prefix array, in the slice [a : n+1], which is indexes1 to5 (values1,2,2,3,4). The target_high is4.
+
+bisect_right(prefix,4, 1,6) → the insertion point in the slice. The slice is the array [1,2,2,3,4], and bisect_right for4 would be5. So the index in the original array is1 +5=6? Or wait, the bisect module uses the parameters as lo and hi, where the array is considered as [array[lo], array[lo+1], ..., array[hi-1]]. So for lo=a, hi=n+1, the indices considered are a, a+1, ...,n.
+
+So for the bisect_right in this case, when the code does bisect_right(prefix, target_high, a, n+1), the code is searching in the subarray from a to n (inclusive). So for a=1, n+1=6, the code looks at indices1-5.
+
+So the bisect_right returns the insertion point within the subarray. For example, in the subarray [1,2,2,3,4], the insertion point for4 is5 (after all elements). So the original index is1 +5-1=5. Because the insertion point in the subarray is5, which corresponds to index a + insertion_point_in_subarray -1.
+
+Wait, no. The bisect module's bisect_right returns the insertion point in the original array. For example:
+
+If the entire array is [0,1,2,2,3,4], and we call bisect.bisect_right(prefix,4, 1,6), the lo is1, hi is6. So it searches the slice prefix[1:6], which is [1,2,2,3,4]. The value4 is at index5 in the original array. So bisect_right returns5+1=6? Or what?
+
+Wait, the bisect module's bisect_right finds the insertion point in the entire array, but constrained to the range [lo, hi).
+
+For example, in the array [0,1,2,2,3,4], when we call bisect_right(4,1,6), it looks in the indices1 to5 (since hi is6), and finds the insertion point. The value4 is at index5. So bisect_right returns5+1=6. So the insertion point is6. Then, subtract1 gives5. So B_end=5.
+
+So in this case, B_end=5.
+
+So B_start=4, B_end=5. So count is5-4+1=2. Which matches the manual calculation.
+
+So why in the code for the first test case, the code would return3.
+
+Yes. So the code should work correctly.
+
+Therefore, the code as written should handle the problem correctly.
+</think>
+To solve this problem, we need to determine the number of valid substrings (contiguous sequences) of dresses such that the count of special dresses within each substring falls within a given range [L, R]. The solution involves using prefix sums and binary search to efficiently compute the valid substrings.
+
+### Approach
+1. **Prefix Sum Array**: Compute a prefix sum array where each element at index `i` represents the cumulative count of special dresses from the start up to the `i`-th dress.
+2. **Binary Search**: For each starting index `A`, use binary search to determine the valid ending indices `B` such that the count of special dresses in the substring [A, B] lies within the range [L, R]. This involves:
+   - Finding the first index `B_start` where the count of special dresses is at least `L`.
+   - Finding the last index `B_end` where the count of special dresses is at most `R`.
+3. **Efficiency**: By leveraging the non-decreasing property of the prefix sum array, binary search operations can be performed in logarithmic time, making the solution efficient even for large input sizes.
+
+### Solution Code
+```python
+import bisect
+
+def count_valid_substrings():
+    import sys
+    input = sys.stdin.read().split()
+    ptr = 0
+    T = int(input[ptr])
+    ptr += 1
+    for _ in range(T):
+        N = int(input[ptr])
+        K = int(input[ptr+1])
+        L = int(input[ptr+2])
+        R = int(input[ptr+3])
+        ptr +=4
+        S = input[ptr]
+        ptr +=1
+        special_chars = input[ptr]
+        ptr +=1
+        special_set = set(special_chars)
+        # Compute prefix array
+        prefix = [0] * (N + 1)
+        for i in range(1, N+1):
+            prefix[i] = prefix[i-1] + (1 if S[i-1] in special_set else 0)
+        total = 0
+        for A in range(1, N+1):
+            prev = prefix[A-1]
+            target_low = prev + L
+            target_high = prev + R
+            # Find B_start >= A where prefix[B] >= target_low
+            B_start = bisect.bisect_left(prefix, target_low, A, N+1)
+            if B_start > N:
+                continue
+            # Find B_end >= A where prefix[B] <= target_high
+            B_end = bisect.bisect_right(prefix, target_high, A, N+1) - 1
+            if B_end < A:
+                continue
+            if B_start > B_end:
+                continue
+            total += B_end - B_start + 1
+        print(total)
+
+count_valid_substrings()
+```
+
+### Explanation
+1. **Reading Input**: The input is read in one go for efficiency, especially given the constraints.
+2. **Prefix Sum Calculation**: The prefix sum array is built by iterating through the dress string and checking if each dress type is special.
+3. **Binary Search for Valid Substrings**: For each starting index `A`, the target range for the prefix sum of the ending index `B` is calculated. Using binary search, we determine the valid range of `B` values efficiently.
+4. **Summing Valid Substrings**: The count of valid substrings for each starting index `A` is accumulated to get the final result for each test case.
+
+This approach ensures that we efficiently count valid substrings without checking each possible substring individually, leading to a time complexity of O(N log N) per test case, which is feasible for large input sizes.
+</bot>

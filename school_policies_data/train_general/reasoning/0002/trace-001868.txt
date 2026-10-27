@@ -1,0 +1,670 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.You are given two arrays a and b, each contains n integers.
+
+You want to create a new array c as follows: choose some real (i.e. not necessarily integer) number d, and then for every i ∈ [1, n] let c_i := d ⋅ a_i + b_i.
+
+Your goal is to maximize the number of zeroes in array c. What is the largest possible answer, if you choose d optimally?
+
+Input
+
+The first line contains one integer n (1 ≤ n ≤ 2 ⋅ 10^5) — the number of elements in both arrays.
+
+The second line contains n integers a_1, a_2, ..., a_n (-10^9 ≤ a_i ≤ 10^9).
+
+The third line contains n integers b_1, b_2, ..., b_n (-10^9 ≤ b_i ≤ 10^9).
+
+Output
+
+Print one integer — the maximum number of zeroes in array c, if you choose d optimally.
+
+Examples
+
+Input
+
+
+5
+1 2 3 4 5
+2 4 7 11 3
+
+
+Output
+
+
+2
+
+
+Input
+
+
+3
+13 37 39
+1 2 3
+
+
+Output
+
+
+2
+
+
+Input
+
+
+4
+0 0 0 0
+1 2 3 4
+
+
+Output
+
+
+0
+
+
+Input
+
+
+3
+1 2 -1
+-6 -12 6
+
+
+Output
+
+
+3
+
+Note
+
+In the first example, we may choose d = -2.
+
+In the second example, we may choose d = -1/13.
+
+In the third example, we cannot obtain any zero in array c, no matter which d we choose.
+
+In the fourth example, we may choose d = 6.
+</user>
+<bot>
+<think>
+Okay, so I need to find the maximum number of zeros that can be in array c when I choose d optimally. Let's see. The array c is formed by c_i = d * a_i + b_i. So for each element to be zero, d must satisfy d = -b_i / a_i, provided a_i is not zero. If a_i is zero, then for c_i to be zero, b_i must also be zero. But if a_i is zero and b_i is non-zero, then there's no way to get c_i as zero, no matter what d we choose.
+
+So the problem breaks down into two parts:
+
+1. Handle the cases where a_i is zero:
+   - For each such i, if b_i is also zero, then this element can always be zero (since 0*d +0=0). So these contribute to the count for any d.
+   - If a_i is zero and b_i is non-zero, then this element can't be zero in c, regardless of d. So these never contribute.
+
+2. For the cases where a_i is non-zero, each such i gives a possible d value of -b_i/a_i. If we choose this d, then this element will be zero. However, other elements with a_j non-zero will only be zero if their corresponding d is the same. So the maximum number of zeros is the maximum frequency of any such d (from the non-zero a_i's) plus the count of a_i=0 and b_i=0.
+
+So the approach would be:
+
+- Count the number of elements where a_i is zero and b_i is zero. Let's call this count_zero.
+- For all elements where a_i is not zero, compute the ratio d_i = -b_i / a_i. But since these are floating-point numbers, directly comparing them might lead to precision errors. Instead, we can represent each d_i as a fraction in its simplest form. To avoid division and keep it precise, we can represent each ratio as a pair (numerator, denominator), stored in a normalized form (like, with the denominator positive and the pair being co-prime).
+
+Wait, but fractions can be represented as pairs (a, b) where the ratio is a/b, but we need to handle them correctly to avoid different representations of the same value. For example, 2/4 and 1/2 should be considered the same. So we need to normalize each pair by dividing both numerator and denominator by their greatest common divisor (gcd), and ensure the denominator is positive. If the denominator is zero, that's not possible here since a_i is non-zero in this part.
+
+So for each i where a_i != 0:
+
+- Compute numerator = -b_i
+- denominator = a_i
+- Then, we need to reduce this fraction to its simplest form. To do that, compute the gcd of numerator and denominator. But also, we need to handle the sign. For example, if the denominator is negative, we can multiply both numerator and denominator by -1 to make the denominator positive. Then divide both by their gcd.
+
+For example, if the numerator is 4 and denominator is -6. Then, first multiply numerator and denominator by -1 to get -4 and 6. Then compute gcd of 4 and 6 (which is 2). Then divide both by 2 to get 2/3. Wait, wait, wait. Wait, the original ratio is 4 / (-6) which is equal to -2/3. But when we represent it as a fraction, how do we handle the signs?
+
+Wait, the key is to represent the ratio in a way that equivalent ratios are represented by the same pair. So, for example, 4/-6 and -2/3 should be considered the same. So to normalize, we can make the denominator positive. So for any denominator that is negative, multiply numerator and denominator by -1. Then, compute the gcd of the absolute values of numerator and denominator, then divide both by that gcd.
+
+Wait, here's the step-by-step normalization:
+
+Given a ratio of numerator / denominator (denominator is a_i, which is not zero):
+
+1. If denominator is negative, multiply numerator and denominator by -1. This way denominator becomes positive.
+2. Compute the GCD of the absolute values of the numerator and denominator.
+3. Divide both numerator and denominator by this GCD. The result is a simplified fraction with positive denominator.
+
+For example:
+
+- Original ratio: -4 / 6. Then, denominator is 6 (positive). GCD of 4 and 6 is 2. So simplified to -4/6 → -2/3. But when stored as a pair (-2, 3), that's correct. Wait, but maybe we should make the numerator's sign such that the denominator is positive. So in this case, the denominator is already positive (6). The GCD of 4 and 6 is 2. So divide numerator by 2 (4 becomes 2) and denominator by 2 (6 becomes 3). So the ratio is -4/6 → simplified as -2/3. But in terms of the pair, we can represent it as (-2, 3). Wait, but if another ratio is 2/-3, which after normalization becomes denominator positive (3), so multiply numerator and denominator by -1: (-2, 3). Then same as before. So yes, this normalization would correctly group equivalent ratios.
+
+So for each non-zero a_i, compute the ratio as described, normalize it, and then count the frequency of each normalized ratio. The maximum frequency among these ratios is the maximum number of elements that can be made zero by choosing d as that ratio. Then, add the count_zero (the number of elements where a_i and b_i are both zero) to this maximum frequency. The sum is the answer.
+
+But there's a case when count_zero is possible. For example, suppose there are elements where a_i=0 and b_i=0. These elements contribute to count_zero, and they can be added to the maximum frequency of the ratio chosen. Because when you choose any d, these elements are already zero. So if the maximum frequency is 3 and count_zero is 2, then the total is 3+2=5.
+
+Wait, but in the third example:
+
+Input:
+
+4
+
+0 0 0 0
+
+1 2 3 4
+
+All a_i are zero, but their corresponding b_i are non-zero. So count_zero is zero. So the answer is zero.
+
+In the fourth example:
+
+Input:
+
+3
+
+1 2 -1
+
+-6 -12 6
+
+For each i:
+
+i=0: a=1, b=-6. d=6/1=6. So ratio is 6/1.
+
+i=1: a=2, b=-12. d=12/2=6. So ratio is 6/1.
+
+i=2: a=-1, b=6. d= -6/-1 =6. So ratio is 6/1. So all three have the same ratio, so max frequency is 3. count_zero is zero. So answer is 3.
+
+Yes, correct.
+
+So the plan is:
+
+- Initialize count_zero to 0.
+
+- For each element i:
+
+   if a_i is zero:
+
+      if b_i is zero: count_zero +=1
+
+      else: ignore (since it can't contribute to zeros)
+
+   else:
+
+      compute numerator = -b_i
+
+      denominator = a_i
+
+      then normalize this fraction.
+
+      To normalize:
+
+         if denominator <0:
+
+             multiply numerator and denominator by -1 (so denominator becomes positive)
+
+         compute g = gcd(abs(numerator), abs(denominator))
+
+         simplified_num = numerator // g
+
+         simplified_den = denominator // g
+
+         add (simplified_num, simplified_den) to a dictionary, tracking the frequency.
+
+- The maximum frequency is the maximum value in the dictionary (or 0 if the dictionary is empty).
+
+- The answer is maximum frequency + count_zero.
+
+But wait, in the fourth example, when a_i is -1 and b_i is6, the ratio is -6 / (-1) =6. So numerator is -6 (since -b_i is -6), denominator is -1. Then, since denominator is negative, we multiply numerator and denominator by -1: numerator becomes 6, denominator becomes 1. Then compute gcd(6,1)=1. So the pair is (6,1). So all three ratios are (6,1), hence frequency 3.
+
+So the approach works.
+
+But how to handle the GCD calculation, especially for negative numbers? Let's think about it.
+
+Wait, when denominator is a_i. So for a_i non-zero.
+
+For each such i:
+
+numerator = -b_i
+
+denominator = a_i
+
+If denominator is negative, then multiply numerator and denominator by -1. So denominator becomes positive.
+
+But since we are to compute the fraction as (numerator, denominator), after adjusting the signs, we can then compute the GCD of their absolute values and divide both by that GCD.
+
+So for example:
+
+Original a_i = 2, b_i =4. So numerator is -4, denominator is 2. denominator is positive. GCD of 4 and 2 is 2. So simplified_num = -4/2 = -2. simplified_den=2/2=1. So the pair is (-2, 1).
+
+But wait, that's equivalent to -2. But if another element has a_i=1 and b_i=2, then numerator is -2, denominator is 1. GCD(2,1)=1. Pair is (-2,1). So same as before. So choosing d=-2 would make both zeros.
+
+But in the first example, for the first test case:
+
+Input:
+
+5
+
+1 2 3 4 5
+
+2 4 7 11 3
+
+The a array is [1,2,3,4,5], b is [2,4,7,11,3]. So for each element:
+
+i=0: a=1, b=2 → numerator is -2, denominator=1. positive denominator. GCD(2,1) is 1. So pair (-2,1).
+
+i=1: a=2, b=4 → numerator=-4, denominator=2. denominator is positive. GCD(4,2)=2. So simplified_num=-4/2 =-2, denominator 2/2=1. Pair (-2,1). So same as before.
+
+i=2: a=3, b=7 → numerator=-7, denominator=3. GCD(7,3)=1. Pair (-7,3).
+
+i=3: a=4, b=11 → numerator=-11, denominator=4. GCD(11,4)=1. Pair (-11,4).
+
+i=4: a=5, b=3 → numerator=-3, denominator=5. Pair (-3,5).
+
+So the frequencies are: (-2,1) → 2, others 1. So maximum is 2. count_zero is zero. So answer 2.
+
+Which matches the first example.
+
+So the approach seems correct.
+
+Now, the problem is how to compute this efficiently, considering that n can be up to 2e5. So the solution must be O(n) time.
+
+The main steps are:
+
+1. Iterate through all elements, handling a_i=0 and a_i≠0.
+
+2. For a_i≠0, compute the normalized ratio as described.
+
+3. Use a hash map (like a Python dictionary) to count the frequencies of each normalized ratio.
+
+4. The maximum frequency plus the count_zero is the answer.
+
+Now, the key challenge is to compute the normalized ratio correctly, especially handling the signs and GCD.
+
+In Python, the fractions module could be used, but for performance reasons (since n is up to 2e5), using the module might be slow. So better to compute it manually.
+
+But wait, in Python, even with 2e5 elements, using a dictionary with tuples as keys should be manageable, but the GCD calculation for each element needs to be efficient.
+
+Let's think about the steps for each a_i and b_i where a_i is not zero:
+
+Compute numerator = -b_i
+
+denominator = a_i
+
+If denominator < 0:
+
+    numerator = -numerator
+
+    denominator = -denominator
+
+Then compute the GCD of numerator and denominator. Wait, but numerator could be negative here. Because when denominator was positive, but numerator could be negative. For example, if a_i is 3, b_i is 5. Then numerator is -5, denominator is 3. denominator is positive. GCD of 5 and 3 is 1. So the pair is (-5,3). But wait, the GCD should be calculated as the GCD of absolute values.
+
+Yes. So the GCD is computed as the GCD of the absolute values of numerator and denominator.
+
+So, for example:
+
+numerator = -4, denominator = 2.
+
+denominator is positive. GCD of 4 and 2 is 2.
+
+So simplified_num = (-4)/2 = -2, denominator 2/2=1. So pair (-2,1).
+
+But another case where denominator is positive, numerator is negative. For example, numerator is -6, denominator is 4. GCD(6,4) is 2. So simplified_num is -6/2 = -3, denominator 4/2=2. So pair (-3,2).
+
+But wait, GCD is computed as GCD(abs(numerator), denominator). Because denominator is positive here.
+
+So, in code:
+
+from math import gcd
+
+But Python's gcd returns the absolute value, but when working with negative numbers, we need to take care.
+
+Wait, in Python 3.5+, math.gcd returns the absolute value of the GCD. So, for example, gcd(-6,4) is 2.
+
+So, in code:
+
+numerator = -b_i
+
+denominator = a_i
+
+if denominator ==0: skip (since a_i is zero in this part)
+
+if denominator <0:
+
+    numerator = -numerator
+
+    denominator = -denominator
+
+g = gcd(abs(numerator), denominator)
+
+simplified_num = numerator // g
+
+simplified_den = denominator // g
+
+So the key is to compute GCD of absolute values.
+
+Wait, for example:
+
+numerator = -6, denominator = 4.
+
+After processing denominator (since 4 is positive, no change). Then compute g = gcd(6,4) = 2. simplified_num = -6//2 = -3, denominator 4//2=2. So pair (-3, 2).
+
+Another example:
+
+numerator = 6, denominator = -4. Since denominator is negative, we multiply numerator and denominator by -1: numerator becomes -6, denominator becomes 4. Then compute g = gcd(6,4)=2. simplified_num = (-6)/2 = -3, denominator 4/2=2. Pair (-3,2).
+
+Which is the same as the previous case.
+
+So the code steps are correct.
+
+Now, code outline:
+
+Read n.
+
+Read a list.
+
+Read b list.
+
+count_zero =0
+
+frequency = defaultdict(int)
+
+max_freq =0
+
+for i in range(n):
+
+    ai = a[i]
+
+    bi = b[i]
+
+    if ai ==0:
+
+        if bi ==0:
+
+            count_zero +=1
+
+        # else: no contribution
+
+    else:
+
+        numerator = -bi
+
+        denominator = ai
+
+        # process denominator to be positive
+
+        if denominator <0:
+
+            numerator *= -1
+
+            denominator *= -1
+
+        # compute GCD of absolute values of numerator and denominator
+
+        g = math.gcd(abs(numerator), denominator)
+
+        simplified_num = numerator // g
+
+        simplified_den = denominator // g
+
+        # use a tuple (simplified_num, simplified_den) as the key
+
+        key = (simplified_num, simplified_den)
+
+        frequency[key] +=1
+
+        # update max_freq if needed
+
+        if frequency[key] > max_freq:
+
+            max_freq = frequency[key]
+
+answer = max_freq + count_zero
+
+print(answer)
+
+Wait, but in the code, for each key, we can track the max frequency. Or, alternatively, after processing all elements, we take the maximum value in the frequency.values(), defaulting to 0.
+
+But in the code above, during the loop, we track the max_freq. That's more efficient, as we don't need to loop through the dictionary again.
+
+But in the case where all elements have a_i=0 and b_i=0, then count_zero is the answer, as max_freq remains 0.
+
+Yes.
+
+So this code should handle all cases.
+
+Testing the fourth example:
+
+Input:
+
+3
+
+1 2 -1
+
+-6 -12 6
+
+So a is [1,2,-1], b is [-6,-12,6].
+
+For each i:
+
+i=0: a=1, b=-6. ai !=0.
+
+numerator = -(-6) =6. denominator=1. positive.
+
+gcd(6,1)=1. key is (6,1). frequency becomes 1. max_freq=1.
+
+i=1: a=2, b=-12. numerator=12, denominator=2.
+
+denominator is positive. gcd(12,2)=2. simplified_num=12//2=6, denominator=2//2=1. key (6,1). frequency becomes 2. max_freq=2.
+
+i=2: a=-1, b=6. denominator is -1.
+
+denominator is <0, so multiply numerator (which is -6) by -1 → numerator=6. denominator=1.
+
+gcd(6,1)=1. key (6,1). frequency becomes 3. max_freq=3.
+
+count_zero is zero. So answer is 3+0=3.
+
+Which is correct.
+
+Another test case:
+
+Third input:
+
+4
+
+0 0 0 0
+
+1 2 3 4
+
+All a_i are zero. For each, check if b_i is zero. All are non-zero. So count_zero remains 0. So answer is 0+0=0.
+
+Second example:
+
+Input:
+
+3
+
+13 37 39
+
+1 2 3
+
+a array is [13,37,39], b is [1,2,3].
+
+For each i:
+
+i=0: a=13, b=1. numerator=-1, denominator=13. denominator is positive. GCD(1,13)=1. key (-1,13).
+
+i=1: a=37, b=2. numerator=-2, denominator=37. GCD(2,37)=1. key (-2,37).
+
+i=2: a=39, b=3. numerator=-3, denominator=39. GCD(3,39)=3. simplified_num= -3//3 = -1, denominator 39//3=13. key (-1,13).
+
+So frequency for (-1,13) is 2 (i=0 and i=2). So max_freq is 2. count_zero is 0. answer 2.
+
+Which matches the example.
+
+Now, handling the case where a_i is zero and b_i is zero. For example, if two elements have a_i=0 and b_i=0, and other elements contribute a max_freq of 3. Then answer is 3+2=5.
+
+So the code should be correct.
+
+Now, possible edge cases:
+
+- All a_i are zero and b_i are zero. Then count_zero =n, answer is n.
+
+- Some a_i are zero and some have d ratios. For example, 2 elements with a_i=0 and b_i=0, plus 3 elements with same ratio. Answer is 2+3=5.
+
+Another edge case: when a_i is zero and b_i is zero, but there are other elements that can be zero with some d.
+
+But according to the logic, these count_zero elements are added to the maximum frequency. Because when you choose a d that makes x elements zero (from the non-zero a_i's), then all count_zero elements are also zero. So the code correctly adds them.
+
+Yes.
+
+Now, code in Python:
+
+Need to read n, then the a array and b array.
+
+But in the input, the third example has a array of 0 0 0 0. So code reads that correctly.
+
+In Python, the code:
+
+import sys
+import math
+from collections import defaultdict
+
+def main():
+    n = int(sys.stdin.readline())
+    a = list(map(int, sys.stdin.readline().split()))
+    b = list(map(int, sys.stdin.readline().split()))
+    
+    count_zero = 0
+    freq = defaultdict(int)
+    max_freq = 0
+    
+    for i in range(n):
+        ai = a[i]
+        bi = b[i]
+        if ai == 0:
+            if bi == 0:
+                count_zero +=1
+        else:
+            numerator = -bi
+            denominator = ai
+            if denominator < 0:
+                numerator = -numerator
+                denominator = -denominator
+            g = math.gcd(abs(numerator), denominator)
+            simplified_num = numerator // g
+            simplified_den = denominator // g
+            key = (simplified_num, simplified_den)
+            freq[key] +=1
+            if freq[key] > max_freq:
+                max_freq = freq[key]
+                
+    print(max_freq + count_zero)
+    
+main()
+
+Wait, but in the code, for each element with non-zero a_i, the key is computed and added to the frequency. The max_freq is tracked as the maximum during the loop.
+
+Yes.
+
+Testing the third example, all a_i are zero and b_i non-zero. So count_zero remains 0. max_freq is 0. So output 0.
+
+Another test case: if all a_i are zero and b_i are zero. Then count_zero is n. So output n.
+
+Another case where a_i and b_i are zero for some elements, and others have ratios. For example, two elements with a_i=0 and b_i=0, and three elements with the same ratio. Then answer is 3+2=5.
+
+Yes.
+
+Now, in the code, math.gcd requires that the arguments are positive. But according to Python's math.gcd documentation, the function returns the greatest common divisor of the absolute values of the inputs. So math.gcd(-6,4) is 2.
+
+So in the code, when we compute g = math.gcd(abs(numerator), denominator), since denominator is made positive by the code. So after processing, denominator is positive. So denominator can be treated as a positive integer.
+
+So for example, numerator is -6, denominator is 4. Then, abs(numerator) is 6. math.gcd(6,4) is 2. So correct.
+
+So the code should be correct.
+
+Now, let's test the fourth example:
+
+Input:
+
+3
+
+1 2 -1
+
+-6 -12 6
+
+As before, the code should compute for each element:
+
+i=0: a=1, b=-6 → numerator=6, denominator=1 → gcd(6,1)=1 → key (6,1).
+
+i=1: a=2, b=-12 → numerator=12, denominator=2 → denominator is 2 (positive). GCD(12, 2)=2 → 12/2=6, 2/2=1. key (6,1).
+
+i=2: a=-1, b=6 → numerator=-6 → denominator is -1. So denominator <0 → multiply numerator and denominator by -1 → numerator=6, denominator=1. GCD(6,1)=1. Key (6,1). So all three keys are (6,1). So max_freq=3. count_zero=0. answer 3.
+
+Yes.
+
+Another test case:
+
+Input:
+
+2
+
+0 5
+
+0 3
+
+Then, the first element a_i=0, b_i=0 → count_zero=1. The second element: a_i=5, b_i=3. numerator=-3, denominator=5. GCD(3,5)=1. key (-3,5). max_freq is 1. So answer 1+1=2.
+
+But wait, for the second element, can we choose d such that 5d +3=0 → d= -3/5. Then, the first element is 0*d +0=0. So two zeros. Correct.
+
+So code returns 2.
+
+Another example where a_i is zero and b_i is zero, plus some other elements with same ratio.
+
+Yes.
+
+So the code should be correct.
+</think>
+To solve this problem, we need to determine the maximum number of zeros that can be obtained in an array `c` formed by the equation `c_i = d * a_i + b_i` for some real number `d`. The optimal choice of `d` will maximize the number of zeros in `c`.
+
+### Approach
+1. **Identify Zero Contributions**: Elements where both `a_i` and `b_i` are zero will always contribute to the count of zeros in `c` regardless of `d`.
+2. **Normalize Ratios**: For elements where `a_i` is non-zero, compute the ratio `d = -b_i / a_i`. To handle precision and equivalence, normalize this ratio by converting it into a fraction in its simplest form. This involves:
+   - Adjusting the sign to ensure the denominator is positive.
+   - Simplifying the fraction using the greatest common divisor (GCD).
+3. **Track Frequencies**: Use a dictionary to track the frequency of each normalized ratio. The highest frequency plus the count of elements that are always zero gives the solution.
+
+### Solution Code
+```python
+import sys
+import math
+from collections import defaultdict
+
+def main():
+    n = int(sys.stdin.readline())
+    a = list(map(int, sys.stdin.readline().split()))
+    b = list(map(int, sys.stdin.readline().split()))
+    
+    count_zero = 0
+    freq = defaultdict(int)
+    max_freq = 0
+    
+    for i in range(n):
+        ai = a[i]
+        bi = b[i]
+        if ai == 0:
+            if bi == 0:
+                count_zero += 1
+        else:
+            numerator = -bi
+            denominator = ai
+            if denominator < 0:
+                numerator = -numerator
+                denominator = -denominator
+            g = math.gcd(abs(numerator), denominator)
+            simplified_num = numerator // g
+            simplified_den = denominator // g
+            key = (simplified_num, simplified_den)
+            freq[key] += 1
+            if freq[key] > max_freq:
+                max_freq = freq[key]
+    
+    print(max_freq + count_zero)
+
+main()
+
+```
+
+### Explanation
+1. **Reading Input**: The input is read using standard input functions for efficiency with large datasets.
+2. **Handling Zero Elements**: Elements where `a_i` is zero are checked to see if `b_i` is also zero. These contribute to `count_zero`.
+3. **Normalization Process**: For non-zero `a_i`, compute the ratio and normalize it by adjusting signs and simplifying using the GCD. This ensures equivalent ratios are tracked consistently.
+4. **Frequency Tracking**: The frequencies of each normalized ratio are tracked using a dictionary. The maximum frequency found during iteration is combined with `count_zero` to determine the result.
+
+This approach efficiently handles up to the maximum constraints, ensuring optimal performance with a time complexity of O(n).
+</bot>

@@ -1,0 +1,587 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.The Little Elephant loves to play with color cards.
+
+He has n cards, each has exactly two colors (the color of the front side and the color of the back side). Initially, all the cards lay on the table with the front side up. In one move the Little Elephant can turn any card to the other side. The Little Elephant thinks that a set of cards on the table is funny if at least half of the cards have the same color (for each card the color of the upper side is considered).
+
+Help the Little Elephant to find the minimum number of moves needed to make the set of n cards funny.
+
+Input
+
+The first line contains a single integer n (1 ≤ n ≤ 105) — the number of the cards. The following n lines contain the description of all cards, one card per line. The cards are described by a pair of positive integers not exceeding 109 — colors of both sides. The first number in a line is the color of the front of the card, the second one — of the back. The color of the front of the card may coincide with the color of the back of the card.
+
+The numbers in the lines are separated by single spaces.
+
+Output
+
+On a single line print a single integer — the sought minimum number of moves. If it is impossible to make the set funny, print -1.
+
+Examples
+
+Input
+
+3
+4 7
+4 7
+7 4
+
+
+Output
+
+0
+
+
+Input
+
+5
+4 7
+7 4
+2 11
+9 7
+1 1
+
+
+Output
+
+2
+
+Note
+
+In the first sample there initially are three cards lying with colors 4, 4, 7. Since two of the three cards are of the same color 4, you do not need to change anything, so the answer is 0.
+
+In the second sample, you can turn the first and the fourth cards. After that three of the five cards will be of color 7.
+</user>
+<bot>
+<think>
+Okay, I need to solve this problem where I have to find the minimum number of moves (flips) to make at least half of the cards show the same color. Let's break down the problem.
+
+First, the goal is to have at least half of the cards (ceil(n/2)) have the same color on their upper side. The initial state is all cards front side up. Flipping a card changes its current color to the other one.
+
+So, the approach would be to consider each possible color that could be the dominant one (appearing in at least half the cards) and calculate the minimum flips needed to achieve that. Then pick the minimum among all possible colors.
+
+But how do I efficiently find all possible colors to consider? Because the number of possible colors could be huge (since each color is up to 1e9), but maybe only the colors present in the cards' front or back are candidates. Because any other color not present in either side of any card can't be made dominant by flipping. So for each card, there are two possible colors. So the candidate colors are the union of all front and back colors of all cards.
+
+Wait, but even that could be up to 2e5 colors (since n is 1e5). For each of those colors, we need to check if it's possible to get enough cards showing it, and compute the minimum flips needed.
+
+So the plan is:
+
+1. Collect all possible candidate colors from the front and back of all cards.
+2. For each candidate color c:
+   a. Count how many cards already have c on front (without flipping).
+   b. For the remaining cards that don't have c on front, check if they have c on the back. Those can be flipped, adding to the count.
+   c. The total possible maximum count for c is the sum of the initial count and the possible flips. We need this total to be at least required = (n+1)//2 (since it's the ceiling of n/2).
+   d. If the sum is >= required, then calculate the minimal flips needed. Because to reach the required count, we might need to flip some of the possible candidates. The minimal flips would be the minimal number of flips required to reach the required count. For example, if initial count is x, and there are y possible flips (cards that have c on back but not on front), then we need to take (required - x) flips from y. But only if x + (required -x) <= x + y. So if (x + y) >= required, then possible. The required flips are max(0, required - x). Then the minimal flips for this c is that max value.
+3. Among all possible candidate colors, find the one with the minimal flips. If no candidate can meet the required count, return -1.
+
+But wait, how do we efficiently collect the counts for each color?
+
+Let's think about data structures. For each card, we have front and back. For a given color c, the number of cards that have front == c is the initial count. Then, the number of cards that have back == c but front != c is the possible flips. So for each c, we need:
+
+initial_count = sum of 1 for each card where front is c.
+
+possible_flips = sum of 1 for each card where back is c and front is not c.
+
+Then, the maximum possible for c is initial_count + possible_flips. If this is >= required, then the minimal flips needed is max(0, required - initial_count).
+
+So the steps are:
+
+- Compute required = (n + 1) // 2.
+
+- For each candidate color c (from all front and back colors):
+
+   - calculate initial_count (how many cards have front == c)
+
+   - possible_flips: number of cards where back == c and front != c.
+
+   - total_possible = initial_count + possible_flips
+
+   if total_possible >= required:
+
+       needed_flips = max(0, required - initial_count)
+
+       track the minimal needed_flips across all c.
+
+If no color c meets total_possible >= required, return -1.
+
+So, the key is to collect all the candidate colors, and for each, compute initial_count and possible_flips.
+
+But how to do this efficiently?
+
+We can use dictionaries to count:
+
+- Create a frequency dictionary for front colors. For example, front_counts[c] = number of cards with front c.
+
+- For each card, we also need to track which colors are in the back. So, for each card, if front is not c, but back is c, then it's a possible flip.
+
+But how to compute possible_flips for each c?
+
+We can create a back_counts dictionary, but that's not sufficient. Because for a given c, possible_flips is the number of cards where back is c and front is not c.
+
+So perhaps, for each color c, possible_flips is the number of cards where back is c, minus the number of cards where both front and back are c (since those would have front == c, and hence not contribute to possible_flips).
+
+Wait, for a card where front is c and back is c, flipping it doesn't change the color. So such a card would contribute 1 to initial_count, and possible_flips for c would be the number of cards where back is c and front != c. But in this case, if front and back are both c, then back is c but front is c, so it's not part of possible_flips.
+
+So possible_flips for c is the total number of cards where back is c (back_counts[c]) minus the number of cards where front is c and back is c (overlap).
+
+So to compute possible_flips:
+
+possible_flips = back_counts[c] - same_counts[c]
+
+where same_counts[c] is the number of cards where front and back are both c.
+
+But how do we compute this?
+
+Alternatively, for each card, if back is c, and front is not c, then it's a possible flip. So for each c, possible_flips is the sum over all cards where back is c and front != c.
+
+Hmm. So maybe for each card, when we process it, we can track for each color in the back, how many times it's the back color but front is different.
+
+Alternatively, create a dictionary back_not_front_counts[c], which counts how many cards have back = c and front != c.
+
+Yes, that's a possible approach. So during processing the input, for each card:
+
+front_color = a, back_color = b.
+
+front_counts[a] +=1
+
+back_counts[b] +=1
+
+if a != b:
+
+   back_not_front_counts[b] +=1
+
+But wait, no. For a given c, the back_not_front_counts[c] is the count of cards where back is c and front is not c. So for each card, if back is b, and front a != b, then back_not_front_counts[b] increases by 1.
+
+So during processing, for each card:
+
+a, b = front and back.
+
+front_counts[a] +=1
+
+back_counts[b] +=1
+
+if a != b:
+
+   back_not_front[b] +=1
+
+Wait, but back_not_front is a dictionary that for each color c, gives the number of cards where back is c and front is different from c.
+
+So for a card with back color c, if front is not equal to c, then back_not_front[c] increases by 1. So that's correct.
+
+Then, for any candidate color c, possible_flips is back_not_front.get(c, 0).
+
+Because possible_flips is the count of cards where back is c and front != c.
+
+So with these dictionaries:
+
+front_counts: count of front colors.
+
+back_not_front: count of back colors where front is different.
+
+So for a given color c:
+
+initial_count = front_counts.get(c, 0)
+
+possible_flips = back_not_front.get(c, 0)
+
+So total_possible = initial_count + possible_flips.
+
+If total_possible >= required, then the minimal flips needed is max(0, required - initial_count).
+
+But wait, required is (n +1)//2. So for example, if n is 3, required is 2.
+
+So for each color c:
+
+if initial_count + possible_flips >= required, then the minimal flips is (required - initial_count) if possible_flips >= (required - initial_count). Because possible_flips is the maximum number of flips we can do (each of those cards can be flipped once to get c).
+
+So, the minimal flips would be max(0, required - initial_count), but only if possible_flips >= (required - initial_count). Wait, no. Because possible_flips is the maximum number of cards that can contribute. So if (required - initial_count) is more than possible_flips, then it's impossible. But wait, the total possible is initial_count + possible_flips. If total_possible >= required, then (required - initial_count) could be up to possible_flips. Because possible_flips is the maximum number of flips available. So required - initial_count can't be larger than possible_flips, because initial_count + possible_flips >= required. So (required - initial_count) is <= possible_flips. So max(0, required - initial_count) is the correct number of flips needed.
+
+For example, if initial_count is 2, required is 3, possible_flips is 2. Then 2 +2 >=3. So required - initial_count is 1. So flips needed is 1.
+
+Yes.
+
+So the steps for each color c:
+
+compute initial_count (front_counts[c])
+
+possible_flips (back_not_front[c])
+
+total_possible = initial_count + possible_flips
+
+if total_possible >= required:
+
+   needed_flips = max(0, required - initial_count)
+
+   keep track of the minimal needed_flips.
+
+So the problem reduces to iterating over all candidate colors (all front and back colors) and compute this.
+
+Now, the key is to collect all possible candidate colors. Which are all the front colors and back colors of the cards.
+
+So for all cards, collect all front and back colors into a set, and iterate through each.
+
+This is O(n) for collecting the candidates, and O(n) for each step.
+
+But since n can be up to 1e5, and each card contributes 2 colors, the candidate set can be up to 2e5. So 2e5 iterations.
+
+Each iteration is O(1) using the dictionaries.
+
+So the total time is O(n), which is acceptable.
+
+Now, the steps to implement:
+
+1. Read n.
+
+2. Read n lines, each with two integers a and b.
+
+3. For each card, update front_counts, back_counts, and back_not_front.
+
+   Also, track all unique colors from front and back.
+
+4. Compute required = (n +1) // 2.
+
+5. Initialize min_flips to some large value (like infinity).
+
+6. Iterate over each candidate color c in the set of all colors.
+
+7. For each c:
+
+   initial = front_counts.get(c, 0)
+
+   possible = back_not_front.get(c, 0)
+
+   total = initial + possible
+
+   if total >= required:
+
+       needed = max(0, required - initial)
+
+       if needed < min_flips:
+
+           min_flips = needed
+
+8. After checking all candidates, if min_flips is still infinity, return -1. Else, return min_flips.
+
+So, for the first example:
+
+Input:
+
+3
+
+4 7
+
+4 7
+
+7 4
+
+front_counts: 4:2,7:1 (since first two cards have front 4, third has front 7).
+
+back_not_front: for each back color:
+
+First card: back 7, front 4. 4 !=7, so back_not_front[7] +=1.
+
+Second card: back 7, front 4. same as above. back_not_front[7] becomes 2.
+
+Third card: back 4, front 7. 7 !=4, so back_not_front[4] +=1.
+
+So possible_flips for 4:
+
+front_counts[4] is 2. possible_flips is back_not_front[4] =1.
+
+So total is 2+1=3 >= required (2). needed is max(0, 2-2)=0.
+
+For 7: front_counts[7] is 1. possible_flips is back_not_front[7] is 2. total 3 >=2. needed is max(0,2-1)=1.
+
+So the minimal is 0.
+
+Which matches the example.
+
+Second example:
+
+5
+
+4 7
+
+7 4
+
+2 11
+
+9 7
+
+1 1
+
+required is (5+1)//2 =3.
+
+Colors are 4,7,2,11,9,1.
+
+Check for 7:
+
+front_counts[7] is 0 (first card's front is 4, second is7, third is2, fourth is9, fifth is1). Wait, no:
+
+Wait the cards are:
+
+Card1: front 4, back 7.
+
+Card2: front7, back4.
+
+Card3: front2, back11.
+
+Card4: front9, back7.
+
+Card5: front1, back1.
+
+So front_counts:
+
+4:1 (card1)
+
+7:1 (card2)
+
+2:1 (card3)
+
+9:1 (card4)
+
+1:1 (card5)
+
+back_not_front:
+
+For each card:
+
+card1: back7. front4 !=7. So back_not_front[7] +=1.
+
+card2: back4. front7 !=4. back_not_front[4] +=1.
+
+card3: back11. front2 !=11. back_not_front[11] +=1.
+
+card4: back7. front9 !=7. back_not_front[7] +=1.
+
+card5: back1. front1 ==1. so no addition to back_not_front.
+
+So back_not_front:
+
+7: 1 (card1) + 1 (card4) =2.
+
+4:1 (card2).
+
+11:1 (card3).
+
+others: 0.
+
+So for color 7:
+
+front_counts[7] is 1 (card2's front is7).
+
+possible_flips is back_not_front[7] =2.
+
+Total possible: 1 +2 =3 >=3.
+
+needed_flips: 3-1=2.
+
+Which is the answer.
+
+So the code should handle this correctly.
+
+Now, edge cases to consider:
+
+Case where n=1. required is 1. So for the only card, either front or back.
+
+If front color is c, then initial count is 1. So required is 1. So 0 flips.
+
+If the card's front and back are different. Then possible candidates are front and back. For front: initial count 1 >=1. So 0. For back: possible_flips is 1 (since back is c and front is not). So initial_count is 0. possible_flips is 1. total 0+1=1 >=1. needed_flips 1-0=1. So min between 0 and 1 is 0. So answer 0.
+
+Another edge case: when the card's front and back are same. Then possible_flips for that color is 0 (since front == back, flipping doesn't change). So for example, if n=2, required is 2. All cards have front and back same color. If two cards have front 5. Then initial count is 2. So required is 2. So 0 flips.
+
+Another case where multiple colors are possible. For example, n=4, required is 2.
+
+Cards:
+
+1 2
+
+2 3
+
+3 4
+
+4 1.
+
+So for each color, front counts are 1,1,1,1. possible_flips for 2: back_not_front[2] is 1 (card1's back is2, front is1). So possible_flips is1. So total 1+1=2 >=2. needed is 2-1=1. Similarly for other colors.
+
+So the minimal would be 1.
+
+Now, code steps.
+
+In Python, dictionaries can be implemented with defaultdict from collections.
+
+So:
+
+Read n.
+
+Then read n lines. For each line, split into a and b.
+
+We need to collect all colors (a and b) into a set.
+
+Then, for front_counts: a defaultdict(int) that increments for each a.
+
+back_not_front: defaultdict(int), for each b in a card where a !=b, increment back_not_front[b].
+
+Now, code:
+
+import sys
+from collections import defaultdict
+
+def main():
+    n = int(sys.stdin.readline())
+    front_counts = defaultdict(int)
+    back_not_front = defaultdict(int)
+    colors = set()
+    for _ in range(n):
+        a, b = map(int, sys.stdin.readline().split())
+        front_counts[a] +=1
+        colors.add(a)
+        colors.add(b)
+        if a != b:
+            back_not_front[b] +=1
+    required = (n +1) // 2
+    min_flips = float('inf')
+    for c in colors:
+        initial = front_counts[c]
+        possible = back_not_front.get(c,0)
+        total = initial + possible
+        if total >= required:
+            needed = max(0, required - initial)
+            if needed < min_flips:
+                min_flips = needed
+    if min_flips == float('inf'):
+        print(-1)
+    else:
+        print(min_flips)
+
+if __name__ == "__main__":
+    main()
+
+Testing this code against the examples:
+
+First example:
+
+Input:
+
+3
+
+4 7
+
+4 7
+
+7 4
+
+front_counts will be 4:2,7:1.
+
+colors = {4,7}.
+
+For c=4:
+
+initial=2, possible= back_not_front[4] is the cards where back is4 and front !=4. The third card has back4 and front7 !=4, so back_not_front[4] is 1. So total 2+1=3 >= required (2). needed is 0. min_flips is 0.
+
+For c=7:
+
+initial is 1. possible is back_not_front[7] is 2 (card1 and card2: their back is7 and front is4). So total 3. needed is 2-1=1. So min remains 0.
+
+So output is 0.
+
+Second example:
+
+5
+
+4 7
+
+7 4
+
+2 11
+
+9 7
+
+1 1
+
+front_counts for 4 is 1, 7 is1, 2 is1,9 is1,1 is1.
+
+colors:4,7,2,11,9,1.
+
+For c=7:
+
+front_counts[7] is 1 (second card's front is7).
+
+back_not_front[7] is 2 (card1 and card4's back is7, front !=7).
+
+Total 3 >=3. needed is 3-1=2. So min is 2.
+
+Other colors may not reach required.
+
+So output is 2.
+
+Another test case: n=1, card is 5 5. So required is 1. front_counts[5] is1. possible_flips 0. total 1. needed 0. So output 0.
+
+Another case: n=1, card is 5 6. required 1.
+
+Check colors 5 and6.
+
+For 5: initial 1, possible 0. total 1. needed 0.
+
+For 6: initial 0, possible 1 (since back is6 and a!=b). total 0+1=1. needed 1-0=1. So min is 0. So output 0.
+
+So code should handle this.
+
+Another case where it's impossible: n=3, all cards are (1,2), (3,4), (5,6). Then required is 2. For any color, initial + possible <=1. So output -1.
+
+The code should return -1.
+
+Thus, the code should be correct.
+</think>
+To solve this problem, we need to determine the minimum number of card flips required to make at least half of the cards show the same color on their front side. The solution involves analyzing each possible color from both the front and back sides of the cards and calculating the minimum flips needed to achieve the required count of cards showing that color.
+
+### Approach
+1. **Collect Data**: Read the input values and collect the counts of each color appearing on the front and back sides of the cards. Track all unique colors encountered.
+2. **Calculate Required Count**: Determine the minimum number of cards needed to form the majority, which is `(n + 1) // 2` where `n` is the total number of cards.
+3. **Evaluate Each Color**: For each unique color, calculate how many cards already show this color on their front (initial count) and how many cards can be flipped to show this color (possible flips).
+4. **Determine Feasibility**: Check if the sum of the initial count and possible flips for each color meets the required majority. If it does, compute the minimum flips needed and track the minimum across all colors.
+5. **Output Result**: If no color meets the requirement, return -1. Otherwise, return the minimum flips needed.
+
+### Solution Code
+```python
+import sys
+from collections import defaultdict
+
+def main():
+    n = int(sys.stdin.readline())
+    front_counts = defaultdict(int)
+    back_not_front = defaultdict(int)
+    colors = set()
+    
+    for _ in range(n):
+        a, b = map(int, sys.stdin.readline().split())
+        front_counts[a] += 1
+        colors.add(a)
+        colors.add(b)
+        if a != b:
+            back_not_front[b] += 1
+    
+    required = (n + 1) // 2
+    min_flips = float('inf')
+    
+    for c in colors:
+        initial = front_counts.get(c, 0)
+        possible = back_not_front.get(c, 0)
+        total = initial + possible
+        if total >= required:
+            needed = max(0, required - initial)
+            if needed < min_flips:
+                min_flips = needed
+    
+    print(-1 if min_flips == float('inf') else min_flips)
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+- **Data Collection**: We use dictionaries to count occurrences of each color on the front side (`front_counts`) and track how many times a color appears on the back side when the front side is different (`back_not_front`).
+- **Required Count Calculation**: The required count of cards to form a majority is computed using integer division to handle both even and odd numbers of cards.
+- **Color Evaluation**: For each unique color, we check if combining the existing front occurrences and possible flips can meet the required count. The minimum flips needed for each feasible color is determined and tracked.
+- **Result Determination**: The minimum flips across all feasible colors is outputted, or -1 if no color can form the majority.
+
+This approach efficiently checks all possible colors and ensures we find the optimal solution with minimal computational overhead, making it suitable for large input sizes up to 100,000 cards.
+</bot>

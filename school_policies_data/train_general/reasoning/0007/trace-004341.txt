@@ -1,0 +1,1360 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Note the unusual memory limit for this problem.
+
+You are given an undirected graph consisting of n vertices and m edges. The vertices are numbered with integers from 1 to n, the edges are numbered with integers from 1 to m. Each edge can be unpainted or be painted in one of the k colors, which are numbered with integers from 1 to k. Initially, none of the edges is painted in any of the colors.
+
+You get queries of the form "Repaint edge ei to color ci". At any time the graph formed by the edges of the same color must be bipartite. If after the repaint this condition is violated, then the query is considered to be invalid and edge ei keeps its color. Otherwise, edge ei is repainted in color ci, and the query is considered to valid.
+
+Recall that the graph is called bipartite if the set of its vertices can be divided into two parts so that no edge connected vertices of the same parts.
+
+For example, suppose you are given a triangle graph, that is a graph with three vertices and edges (1, 2), (2, 3) and (3, 1). Suppose that the first two edges are painted color 1, and the third one is painted color 2. Then the query of "repaint the third edge in color 1" will be incorrect because after its execution the graph formed by the edges of color 1 will not be bipartite. On the other hand, it is possible to repaint the second edge in color 2.
+
+You receive q queries. For each query, you should either apply it, and report that the query is valid, or report that the query is invalid.
+
+Input
+
+The first line contains integers n, m, k, q (2 ≤ n ≤ 5·105, 1 ≤ m, q ≤ 5·105, 1 ≤ k ≤ 50) — the number of vertices, the number of edges, the number of colors and the number of queries. 
+
+Then follow m edges of the graph in the form ai, bi (1 ≤ ai, bi ≤ n). 
+
+Then follow q queries of the form ei, ci (1 ≤ ei ≤ m, 1 ≤ ci ≤ k).
+
+It is guaranteed that the graph doesn't contain multiple edges and loops.
+
+Output
+
+For each query print "YES" (without the quotes), if it is valid, or "NO" (without the quotes), if this query destroys the bipartivity of the graph formed by the edges of some color.
+
+Examples
+
+Input
+
+3 3 2 5
+1 2
+2 3
+1 3
+1 1
+2 1
+3 2
+3 1
+2 2
+
+
+Output
+
+YES
+YES
+YES
+NO
+YES
+</user>
+<bot>
+<think>
+Okay, let's see. I need to solve this problem where after each repainting query, all color-induced graphs must remain bipartite. Hmm. So each query changes the color of an edge, and after that, for all colors (including the new one), the edges of that color must form a bipartite graph. If any color's graph isn't bipartite, the query is invalid and we have to reject it.
+
+The challenge is efficiently checking whether repainting an edge to a certain color would cause the color's graph (including the changed edge) to become non-bipartite. And do this for all queries quickly, considering the constraints are up to 5e5 edges and queries. Oh, right, and k is up to 50. That's manageable in some way.
+
+First, let's think about how bipartite graphs work. A graph is bipartite if and only if it's possible to color its vertices with two colors such that no two adjacent vertices have the same color. Another way to look at it is that the graph has no odd-length cycles. For dynamic checks (when edges are added/updated), the standard approach is to use a Union-Find (Disjoint Set Union, DSU) structure with parity checks.
+
+Wait, right. The DSU can track the parent of each node and the parity (distance from root modulo 2). When uniting two nodes, if they are already in the same set and have the same parity, that creates an odd cycle, so the graph is not bipartite.
+
+So for each color, we need to manage a DSU structure that helps us check whether adding an edge (with that color) would create a cycle that makes the graph non-bipartite. But the problem is that edges can change colors, so when an edge is repainted, we need to remove it from the previous color's graph and add it to the new color's graph. But handling dynamic DSUs (with deletions) is tricky because DSU doesn't support efficient undo operations.
+
+Hmm, that's a problem. Because standard DSU is good for unions, but not for splits. So if an edge is in a color's DSU and then gets removed, we can't easily undo that union. So this approach might not work directly.
+
+Wait, but each query only affects one edge. The idea is that when a query comes in, we check if changing the color of edge e_i to c_i would cause any color's graph (including c_i's) to become non-bipartite. So for the new color c_i, adding this edge must not create a conflict. Also, all other colors (including the old color of e_i) must still have their graphs bipartite. Wait, no. The problem states that after the repaint, all colors' graphs must be bipartite. So when we repaint edge e_i from its current color (say, old_color) to new_color c_i, the old_color's graph loses this edge, and the new_color's graph gains it. So, after the repaint, all colors must have bipartite graphs.
+
+Therefore, the validity check requires two steps:
+
+1. For the new color c_i, check if adding the edge e_i to the c_i's graph would create a cycle that makes it non-bipartite. If yes, then the query is invalid.
+
+2. For the old color (the current color of e_i), after removing e_i, check if the remaining edges in old_color's graph are still bipartite. Wait, no. Because the old color's graph no longer includes this edge. So when we repaint e_i to c_i, the old color's graph loses this edge. But removing an edge from a bipartite graph can't make it non-bipartite. Because bipartiteness is preserved when removing edges. So, once the old color's graph was bipartite before the repaint, after removing an edge, it's still bipartite. So we don't need to check the old color's graph again. So the only check we need to perform is for the new color's graph when the edge is added.
+
+Wait, but wait. Let me think again. Suppose the edge was part of the old color's graph. When we remove it, the old color's graph is the original graph minus this edge. But the original graph was bipartitioned, and removing an edge doesn't introduce any cycles, so the graph remains bipartite. So the only check needed is for the new color's graph when adding the edge. So for the query to be valid:
+
+- When we add the edge e_i to the new color c_i's graph, the new graph (including this edge) must be bipartite.
+
+Additionally, when we remove the edge from the old color's graph, but since the old color's graph was bipartitioned before the removal, it's still bipartitioned after the removal. So the only check is for the new color's graph.
+
+Wait, but what about other colors? For example, suppose after repainting, some other color's graph is non-bipartite. But according to the problem statement, the repaint only affects edge e_i's color. So after the repaint, all other colors' graphs are the same as before, except for the new and old color. The old color's graph is modified by removing e_i, which doesn't affect bipartiteness. The new color's graph is modified by adding e_i, which must be checked. So the only color that could have a problem is the new color. So the validity check is just ensuring that adding e_i to the new color's graph doesn't create a conflict.
+
+Wait, that's the key insight here. Because when you repaint an edge from old_color to new_color, the only color whose graph changes is new_color (gain the edge) and old_color (lose the edge). Since losing an edge can't make the graph non-bipartite (as the graph was bipartite before), the only possible problem is in the new_color's graph. So the check is whether adding the edge to the new_color's graph would make it non-bipartite. If yes, then the query is invalid; otherwise, it's valid.
+
+So the solution is:
+
+- For each color, maintain a DSU structure that tracks the bipartition.
+
+- For each edge, track its current color.
+
+- For a query (ei, ci):
+
+   a. Get the current color (current_col) of edge ei.
+
+   b. If current_col == ci: then the query is valid (no-op), output YES.
+
+   c. Else: check whether adding edge ei to the color ci's graph would create a cycle that makes it non-bipartite.
+
+   d. If adding to ci is valid, then update the edge's color to ci and output YES.
+
+   e. Else, output NO (don't update the color).
+
+So the main part is checking, for the new color ci, whether adding the edge (ai, bi) to ci's DSU creates a conflict.
+
+Wait, but how do we model the DSU for each color? For each color, we can have a separate DSU structure. Then, when adding an edge to the color, we perform the union with parity checks.
+
+But with k up to 50, and n up to 5e5, each color's DSU would have n elements. So for 50 colors, that's 5e5 * 50 = 25e6 elements, which is manageable.
+
+Each DSU for a color would track the bipartition status. So for each color c, when we process an edge (u, v), we check if u and v are in the same set in c's DSU. If they are, and their parity (distance from root) is the same, then adding this edge creates an odd cycle, making the graph non-bipartite.
+
+So the steps are:
+
+Initialize all edges as color 0 (unpainted?), but according to the problem statement, initially, all edges are unpainted, but the colors are from 1 to k. Wait, the problem says: "each edge can be unpainted or painted in one of the k colors." So the initial color for all edges is 0 (or some other value representing unpainted). Wait, but the input for the queries has ci ranging from 1 to k. So perhaps the initial color is 0. So when we process a query, if the edge's current color is 0, then repainting it to ci will check if adding it to ci's graph is possible.
+
+But for colors, the problem says that each color's graph must be bipartite. So the unpainted edges (color 0) are not part of any color's graph, so they don't affect any color's bipartition.
+
+Wait, no. The problem says "the graph formed by the edges of the same color must be bipartite." So each color's graph is the set of edges with that color. The unpainted edges (color 0) are not part of any color's graph except perhaps color 0, but color 0 is not considered here. So the initial state is all edges are in color 0 (unpainted), so for all colors 1..k, their graphs are empty. Which are trivially bipartite.
+
+So during the processing, for each query (ei, ci), the edge's current color is old_col. Then:
+
+If old_col == ci: output YES (nothing to do).
+
+Else:
+
+   - Temporarily remove the edge from old_col (if old_col is not 0), but since removing can't invalidate the bipartition, we don't need to check old_col's graph again.
+
+   - Add the edge to ci's graph. Check if this addition creates a conflict in ci's graph. If yes, then the query is invalid. Else, proceed.
+
+So the main check is for the new color ci.
+
+So for each color c, we need a DSU structure that allows us to check if adding (u, v) creates an odd cycle.
+
+Thus, the plan is:
+
+- For each color c (1..k), maintain a DSU with parity.
+
+- Each edge has a current color (initially 0).
+
+- For each query (ei, ci):
+
+   - old_col = current color of edge ei.
+
+   - if old_col == ci: output YES, continue.
+
+   - u, v = the endpoints of edge ei.
+
+   - Check if adding (u, v) to ci's DSU would create an odd cycle. How?
+
+      For that, in the DSU of color ci, find the roots of u and v. If they are in the same set, and the parity (distance from root) of u and v is the same, then adding this edge creates a cycle with odd length. Thus, the query is invalid.
+
+   - If the check passes (i.e., adding (u, v) to ci's DSU is okay), then:
+
+      a. Remove the edge from old_col's DSU (if old_col is not 0). Wait, but how? Because DSU doesn't support deletion. Oh right! That's a problem.
+
+Wait, this is a critical issue. Because when the edge was part of old_col's graph, adding it to the DSU for old_col, but once it's removed, we need to remove it from the DSU. But DSU structures can't handle deletions.
+
+So here's the problem: the DSU for each color c represents the current connected components and their parity for the edges of color c. But when an edge is removed from color c, the DSU for c is not accurate anymore, since the connected components might split. But DSU can't track that.
+
+So the approach of maintaining a DSU for each color c is not feasible, because when edges are removed (as part of repainting), the DSU structures can't be updated correctly. This would lead to incorrect checks in future queries.
+
+This is a big problem. Because the DSU approach works only for incremental additions, not for deletions or updates.
+
+So the initial approach is incorrect. We need a different way to model this.
+
+Alternative approach: For each color c, the edges of color c form a graph. Each such graph must be bipartite. When a query comes, the edge is repainted from old_col to new_col. The check is whether the new_col's graph, after adding this edge, is bipartite. But the new_col's graph already has some edges, and adding this one could create a cycle. So how to check this efficiently?
+
+The problem is that when the edge was previously part of another color, but now is added to a new color, how do we manage the DSU for each color.
+
+Wait, but maybe the key is that each color's DSU is maintained independently. For example, the DSU for color c represents the connected components formed by the edges of color c. When an edge is part of color c, it's included in the DSU. When it's removed (because it's repainted to another color), it's no longer part of the DSU for color c. But how to handle that? Because DSU is a data structure that doesn't support deletions.
+
+So this approach is only feasible if we can model each color's DSU as the current set of edges in that color. But adding and removing edges would require the DSU to be dynamic, which is not possible with the standard DSU.
+
+Hmm. So perhaps the correct way is to model each color's DSU as a separate structure, but when an edge is removed from a color, we have to somehow revert the DSU for that color. But how?
+
+Alternatively, for each color, the DSU is a snapshot of all edges currently in that color. But when edges are added or removed, the DSU has to be maintained. But since edges can be removed, this approach is not feasible.
+
+So this suggests that the initial idea is not correct. We need a different approach.
+
+Alternative idea: Each time we process a query, we need to check if adding the edge to the new color's graph would create an odd cycle. However, the new color's graph is the current edges of that color plus the current edge. But how do we know the current edges of that color?
+
+But if we can, for each color c, track all edges that are currently in color c, then for the check, we can consider the new color's edges plus the current edge. Wait, no. Because the edge is being added to the new color's graph, so the new graph is the existing edges of color c plus this edge. So the check is whether this edge creates an odd cycle in the existing graph of color c.
+
+But how to check that without maintaining a DSU for each color? Because maintaining DSUs per color is not possible with deletions.
+
+Alternative plan: For each color, when we need to check if adding a new edge (u, v) would create an odd cycle, we can build the bipartition information on the fly. But building it every time would be O(m) per query, which is too slow.
+
+But given that k is small (up to 50), perhaps we can precompute for each color the bipartition information using BFS or DSU, but then again, when edges are added and removed, this becomes tricky.
+
+Wait, but maybe for each color c, we can maintain a DSU structure that represents the connected components and their parity. But when an edge is added to color c, it's merged into the DSU. When it's removed from color c, we need to split the DSU. But DSU doesn't support splitting, so this approach won't work.
+
+Alternative approach: Since each edge can be part of exactly one color (since the query changes the color, and the edge's color is updated), then for each color c, the DSU for c is built incrementally as edges are added to c and removed from other colors. But again, the problem is that when edges are removed from a color, the DSU for that color is no longer correct.
+
+Wait, but perhaps when an edge is removed from a color, the DSU for that color can't be maintained, but since the check for that color's bipartition is only required when edges are added, not when they are removed.
+
+Wait, let me re-express the problem: The validity of a query is determined by the new color's graph. When we add the edge to the new color's graph, we need to check if the new graph (existing edges of new color plus this edge) is bipartite. The existing edges of new color's graph are all the edges that are currently painted in new color (including any previous operations).
+
+So, for the check, the DSU for new color c must represent the connected components of the edges currently in c. When we add this new edge, we check if it would create a conflict.
+
+But how to manage the DSU for c. For example, when an edge is in color c, it's part of the DSU. But when it's repainted to another color, the DSU for c should no longer include that edge. However, the DSU is a structure that accumulates unions and doesn't allow removal.
+
+This is a fundamental problem. The DSU approach works only for adding edges, not for removing them. So when edges are repainted, the DSU for the old color becomes invalid, as the edge is no longer part of it. But the DSU can't track this.
+
+So the initial idea of maintaining a DSU per color is not feasible, because edges can be removed from the color's graph.
+
+Alternative idea: For each color c, maintain a DSU structure that represents the union of all edges that have ever been painted in c. But since edges can be repainted multiple times, this approach would include edges that are no longer part of color c, leading to incorrect results.
+
+So that's not feasible.
+
+Alternative plan: For each query, when changing the color of edge ei from old_col to new_col, we need to:
+
+- Check if adding ei to new_col's current edges would create a non-bipartition.
+
+But how to represent new_col's current edges? Since the edges can come and go, perhaps the only way is to track for each color c the set of edges that are currently in c. Then, when checking whether adding edge ei (u, v) to c's set would create a conflict, we can build a DSU on the fly for color c's current edges plus this edge. But building the DSU from scratch for each query would be O(m) per query, which is O(qm) time, which is 2.5e11 operations for m=5e5 and q=5e5. That's way too slow.
+
+So this approach isn't feasible.
+
+But since k is up to 50, maybe we can find a way to model this with per color bipartition information that can be efficiently updated.
+
+Another idea: For each color c, the bipartition is possible only if all cycles in the current edges of c are even-length. So when adding an edge (u, v) to c's graph, we need to check if u and v are in the same bipartition. So we can model for each color c, the bipartition as a 2-coloring of the vertices. Then, for each color c, we can track for each vertex its color in that bipartition. However, when edges are added to or removed from color c, maintaining this coloring becomes challenging.
+
+But again, maintaining such a coloring for each color is not straightforward, as removing edges can break the existing coloring.
+
+Alternatively, for each color c, we can track the parity (the bipartition) of each vertex in that color's DSU. But when an edge is removed, this parity information might not be valid anymore, leading to incorrect checks.
+
+Hmm. This is a difficult problem. Let's think again.
+
+Wait, perhaps the key is that when an edge is added to a color's graph, the DSU for that color is built incrementally, and when the edge is removed, we can't track the DSU anymore, but since the DSU is only used for checking when adding edges, perhaps the DSU doesn't need to track the removal. But that would be incorrect.
+
+For example, suppose edge e1 is added to color c, creating a union in c's DSU. Then e1 is removed from color c and added to another color. Now, c's DSU still contains e1's effect. But in reality, e1 is no longer part of color c's graph, so the DSU is incorrect. Thus, future checks on color c's graph will be wrong.
+
+So this approach is not feasible.
+
+Alternative idea: Since each edge can be in at most one color at a time, perhaps the DSU for a color c should only track the edges that are currently assigned to color c. When an edge is removed from color c, we need to update the DSU for c. But how?
+
+This seems impossible with standard DSU structures. So perhaps the problem requires a different approach.
+
+Wait, but what if we model each color's graph as a dynamic graph, and for each query, when adding the edge to the new color, we check if the graph remains bipartite. And since the other colors' graphs are unchanged (except for the old color's graph losing the edge, which doesn't affect their bipartition), we only need to check the new color's graph.
+
+But how to check the new color's graph after adding the edge.
+
+The problem is that for each query, the check is whether the new color's graph (existing edges in new color plus the current edge) is bipartite.
+
+But how can we check this efficiently without maintaining a DSU structure that tracks the current edges in new color.
+
+Alternative idea: For each color c, whenever an edge is added to c, we add it to c's DSU. But when the edge is removed (because it's repainted to another color), we don't update the DSU. But this would leave the DSU for c in an inconsistent state, as it contains edges that are no longer part of c's graph. Thus, future checks would be incorrect.
+
+But perhaps we can find a way to manage this.
+
+Wait, perhaps the answer is that each time you add an edge to a color, you merge it into that color's DSU. But when you remove it, you can't do anything. However, the DSU is only used for checking whether adding a new edge would create a conflict. But if the DSU is for the color's current edges, then when an edge is removed, the DSU is incorrect. Thus, the check would be wrong.
+
+This approach won't work. So what else can we do?
+
+Let's think differently. For each query, when we want to check if adding edge (u, v) to color c would create a conflict, we need to check if the existing edges of color c plus (u, v) form a bipartite graph.
+
+But how to model the existing edges of color c. They are all the edges that are currently in color c. So, for each color c, we can maintain a list of edges that are currently in that color.
+
+But to check if adding (u, v) to this list would create a non-bipartite graph, we can build a DSU on the fly for this list plus (u, v). But building a DSU for each query would be O(m) per query, which is not feasible.
+
+But since k is up to 50, perhaps for each query, we can precompute the DSU for the new color's current edges plus the new edge. But even that is O(n + m) per query, which is 5e5 * 5e5 = way too much.
+
+Alternative idea: Since the check is only for the new color's graph, and the problem allows us to process each query in O(alpha(n)) time (using DSU), but the problem is that the DSU for each color is not maintained correctly when edges are removed.
+
+So the crux of the problem is that when an edge is removed from a color, the DSU for that color is not updated, which makes future checks for that color incorrect.
+
+Hmm. So maybe the solution is to not use DSU for each color. Instead, for each color c, maintain a bipartition array (like the color of each vertex in the bipartition). However, this array is only valid for the current edges in color c. But when edges are added or removed, maintaining this array is challenging.
+
+Alternatively, each time a query is processed, for the new color c, we can check if adding the edge (u, v) would create a conflict by using a BFS or DFS to see if there's an odd cycle. But BFS is O(n + m) per query, which is again infeasible.
+
+But with k=50, and per query checking the new color's graph (plus the current edge), but for each color, the edges are stored, perhaps this can be optimized.
+
+But even if each query takes O(1) time for the check, the BFS approach would be O(n + m) per query, which is not feasible for large n and m.
+
+Alternative Idea: Since the problem allows up to 50 colors, perhaps for each color c, we can track the bipartition as a separate DSU. However, when an edge is removed from color c, we need to rebuild the DSU for c from scratch, using all edges currently in c.
+
+But rebuilding a DSU for a color c would take O(m) time, which is not feasible if there are many edges and queries.
+
+But maybe if we track the edges per color, and for each query that changes the color of an edge, we update the edges list for old and new color, then when we need to check the new color's DSU, we can rebuild it on the fly. But this would be O(m) per query, which is again not feasible.
+
+Alternative Plan:
+
+Let's think of the problem differently. Each edge is in exactly one color (or 0). For a query, when we change edge ei's color from old_col to new_col, we need to check if the new_col's graph (current edges in new_col plus ei) is bipartite. All other colors' graphs are unaffected (except old_col, which loses ei, but since old_col's graph was bipartite before, it's still bipartite after removal).
+
+So the key is to check new_col's graph after adding ei.
+
+But how to check this efficiently.
+
+The problem is that the new_col's graph may have multiple edges, and we need to check bipartition after adding this edge.
+
+So, for each color c, when we need to check adding an edge (u, v), we can build a DSU structure for color c's current edges plus (u, v). But building this DSU each time is O(m) for the worst case.
+
+But if we can maintain for each color c a DSU structure that includes all edges currently in c, then adding the new edge (u, v) can be checked in O(alpha(n)) time.
+
+But maintaining such a DSU for each color c is the challenge.
+
+So, here's the approach:
+
+- For each color c (1..k), maintain a DSU structure.
+
+- For each edge, track its current color (initially 0).
+
+- When processing a query (ei, ci):
+
+   a. Get the current color old_col of edge ei.
+
+   b. If old_col == ci: output YES and continue.
+
+   c. Else, check if adding edge ei to ci's DSU would create a conflict.
+
+   d. If no conflict:
+
+      i. Remove the edge from old_col's DSU (if old_col != 0).
+
+      ii. Add the edge to ci's DSU.
+
+      iii. Update the edge's color to ci.
+
+      iv. Output YES.
+
+   e. Else, output NO.
+
+But the problem is step i: how to remove the edge from old_col's DSU. Because DSU structures can't handle deletions.
+
+So this approach is not feasible. Hence, the initial idea is invalid.
+
+Alternative Idea:
+
+But maybe the DSU for each color c is not required to include all edges of color c. Instead, when we add an edge to color c, we perform the union in c's DSU. But when the edge is removed from color c, we don't update the DSU. Thus, the DSU for c may have some unions that are no longer part of the current graph. But when we check future additions, we may have incorrect information.
+
+But maybe this is acceptable. Let's think:
+
+Suppose edge e1 is added to color c. Then, e1 is removed from color c and added to color d. The DSU for c still has e1's union. If in a future query, another edge e2 is added to color c, which connects the same nodes as e1, then the DSU will think they are already connected, but in reality, e1 is no longer in color c's graph, so e2's addition may not create a cycle.
+
+Thus, this approach would give incorrect results. So it's not acceptable.
+
+So this suggests that the DSU approach can't be used as-is.
+
+Another Idea: For each color c, maintain a DSU that is built dynamically. Each time an edge is added to c's DSU, we perform the union. When an edge is removed from c's DSU, we have to somehow undo the union. But DSU does not support undo operations. However, for this problem, since edges are added and removed in a certain order, perhaps we can use a DSU with rollback (a.k.a. persistent DSU).
+
+Yes! If we use a DSU with rollback capabilities, then when we remove an edge from a color's DSU, we can undo the union operations that were caused by adding that edge.
+
+But how to model this. For each color c, the DSU would need to support adding edges and then rolling back those additions. So when an edge is removed from c, we need to undo all the unions that were performed when adding that edge. But this is possible only if we have a way to track the order of unions and undo them.
+
+But implementing a rollback DSU is possible. For example, using a version where each union operation is recorded, and when we need to undo, we can revert the parent and rank arrays to a previous state. However, this requires maintaining a stack of operations, and can be memory intensive for large n and m.
+
+But given the problem constraints (n up to 5e5, m up to 5e5, q up to 5e5, and k up to 50), this might be feasible if each color's DSU has its own rollback stack.
+
+Each color's DSU would have a stack that records the operations (unions) performed. When an edge is added to a color's DSU, any unions that happen during its addition are pushed to the stack. When the edge is removed from the color's DSU, those unions are popped from the stack and the DSU's state is reverted.
+
+But how to track the number of operations caused by adding a single edge. Because when you add an edge to the DSU, it may cause multiple unions (path compression, etc.), but the actual union operation is just the linking of two trees. So each edge addition can result in at most one union operation (the actual linking of two roots).
+
+So for each edge added to a color c's DSU, we can record the exact union operation(s) that occurred. Then, when the edge is removed, we can undo those operations.
+
+This approach is known as the "link-cut" DSU with rollback, but it's more complex than a standard DSU.
+
+So the plan is:
+
+- For each color c, maintain a DSU with rollback support.
+
+- For each edge, when it's added to color c's DSU, perform the union and record the operations in a stack for color c.
+
+- When the edge is removed from color c's DSU, revert the DSU to the state before the edge was added by popping the operations from the stack and restoring the parent and rank arrays.
+
+But implementing this requires a way to track the operations for each edge. However, edges can be added and removed multiple times, so the stack must track the state for each edge's addition.
+
+Alternatively, each edge can have a list of operations that were performed when it was added to a color. Then, when it's removed, those operations are undone.
+
+But this might not be feasible, as the same edge could be added and removed multiple times to the same color, leading to overlapping operations.
+
+Alternative Idea: Each time an edge is added to a color c's DSU, we record the state of the DSU before adding the edge. Then, when the edge is removed, we revert the DSU to that state. But this would require storing the entire DSU state for each edge addition, which is O(n) per edge addition. For large n and m, this is not feasible.
+
+Thus, this approach is not practical.
+
+Alternative Plan: Instead of using a DSU, perhaps use a BFS-based approach for each query. For each query, when checking if adding edge (u, v) to color c's graph creates a conflict, perform BFS on the current color c's graph (including all edges currently in c) plus the new edge (u, v). The BFS would assign colors to the vertices and check for conflicts.
+
+But with m up to 5e5 and q up to 5e5, this would be O(q*(n + m)) time, which is way too slow.
+
+But k is up to 50. Wait, if for each query, the BFS is done only for the new color c, then the BFS would process all edges of color c plus the new edge. But if color c's graph has, say, 1e4 edges, and each query takes O(1e4) time, then 5e5 queries would take 5e5 * 1e4 = 5e9 operations, which is way too much.
+
+So this approach is not feasible.
+
+But with k up to 50, perhaps some optimizations can be made.
+
+Wait, for each color c, maintain a parity array (the color of each vertex in the bipartition). Whenever an edge is added to c's graph, update this parity array. However, this array must be valid for the current graph of color c. But when edges are removed, maintaining this array is challenging.
+
+Alternatively, for each color c, when an edge is added, we can perform a BFS to update the parity array. But this is also expensive.
+
+Alternative Idea: For each color c, the bipartition must be such that all edges in c's graph connect vertices of different colors. So, when adding a new edge (u, v) to c's graph, if u and v are already in the same component of c's graph and have the same parity, then the edge creates an odd cycle. Otherwise, it's safe.
+
+Thus, the check is the same as in the DSU approach, but the DSU for c's graph must include exactly the edges currently in c's graph. But when edges are removed from c's graph, the DSU becomes invalid.
+
+So this brings us back to the original problem.
+
+Another Idea: For each color c, the DSU represents the current graph of color c. Each time an edge is added to c's graph, we perform the union in c's DSU. When an edge is removed from c's graph, we need to remove it from the DSU. But since DSU can't support deletions, this is impossible.
+
+Thus, the problem seems to require a different approach.
+
+Alternative Plan:
+
+Let's think of the problem differently. The validity of a query is determined solely by the new color's graph after adding the edge. So for each query, we need to check whether the new color's graph with the added edge is bipartite.
+
+But how can we model this check efficiently.
+
+Suppose that for each color c, we track the current edges in that color. For a query, when we want to add edge ei (u, v) to color c, we need to check if the existing edges in c plus (u, v) form a bipartite graph.
+
+The question is, can we perform this check efficiently.
+
+A bipartite graph check is equivalent to checking for the absence of odd-length cycles. The standard way to do this is using BFS or DFS to assign colors and look for conflicts.
+
+But for large graphs, this is O(n + m), which is too slow for each query.
+
+But perhaps, for each color c, we can maintain a BFS-based parity for each vertex. However, maintaining this parity dynamically is challenging when edges are added or removed.
+
+Alternatively, we can represent each color's graph as a bipartition and track possible conflicts. But this is not straightforward.
+
+Wait, but the key observation is that when you add an edge to a bipartite graph, it will create a cycle if and only if the two endpoints are already connected and have the same parity. Thus, the check can be done using a DSU that tracks parity.
+
+But the problem is that when edges are removed, the DSU is no longer accurate.
+
+So the crux of the problem is that the DSU for each color must only include the edges currently in that color. But when edges are removed, the DSU for that color becomes invalid.
+
+Thus, the only way to proceed is to find a way to manage the DSU for each color dynamically, allowing for additions and deletions of edges.
+
+But dynamic DSU with deletions is a well-known difficult problem.
+
+Possible Solution: Use a link-cut tree data structure, which allows dynamic connectivity with path information (like parity). However, implementing this is quite complex and may not be feasible for Python within the time constraints, especially given the problem's memory and time limits.
+
+Alternatively, given that k is up to 50, perhaps we can use a separate DSU for each color, but each time an edge is removed from a color, we rebuild the DSU for that color from scratch. But this would be O(m) per removal, which is too slow for large m.
+
+But if the number of removals is small, this could be manageable. However, in the worst case, each query could trigger a rebuild for a color with m edges, leading to O(q*m) time, which is 2.5e11 operations.
+
+This is not feasible.
+
+Alternative Idea: Accept that for each query, the DSU for the new color must be built from scratch. For example, for each query (ei, ci), we need to check whether adding edge ei to ci's current edges would create a conflict. To do this, we collect all edges currently in ci's graph, add ei, and check if this graph is bipartite.
+
+But this is O(m) per query, which is again not feasible.
+
+But wait, the number of queries is q=5e5 and k=50. For each query, the time per query is O(m/k), assuming each color's graph has m/k edges on average. But in the worst case, a color could have all m edges, leading to O(m) per query.
+
+This is still too slow.
+
+But what if we can represent the current edges for each color efficiently and perform the check incrementally?
+
+Wait, for each color c, when we process a query to add edge e (u, v) to c, we need to check if u and v are in the same component in c's graph and have the same parity. If so, adding e creates an odd cycle.
+
+This is exactly what the DSU with parity checks can do, but only if the DSU correctly represents the current edges in c's graph.
+
+Thus, the problem is to maintain a DSU for each color c that includes exactly the edges currently in c's graph.
+
+But with edges being added and removed dynamically, this is not possible with the standard DSU.
+
+So, perhaps the solution is to use a different data structure for dynamic connectivity with parity.
+
+Researching, I find that there's a data structure called a Link-Cut Tree that can handle dynamic trees and path queries. However, it's complex to implement, especially in Python. Moreover, for each color, we'd need a separate Link-Cut Tree structure, which adds to the complexity.
+
+Alternatively, since the problem only requires checking for bipartiteness (even-length cycles), perhaps there's a way to model each color's graph as a dynamic graph and track parity information using some other method.
+
+But I'm not aware of any such data structure that can handle this efficiently.
+
+Given the time constraints and the problem's difficulty, perhaps there's a different approach I'm missing.
+
+Wait, the problem's constraints on k are small (up to 50). So perhaps for each query, when we need to check the new color's graph, we can rebuild the DSU for that color each time. For example:
+
+For each query (ei, ci):
+
+   a. Collect all edges currently in ci's color.
+
+   b. Add the new edge ei to this collection.
+
+   c. Build a DSU for this collection and check for bipartiteness.
+
+   d. If it's bipartite, proceed; else, reject the query.
+
+But this approach requires that for each query, we can quickly collect all edges in ci's color. To do this, we can maintain for each color c a list of edges currently in that color.
+
+Then, when checking a query for color ci, we iterate through all edges in ci's list, plus the new edge, and build the DSU.
+
+But building the DSU for each query would take O(m) time in the worst case (if the color's list has O(m) edges). With q=5e5 and m=5e5, this would be O(2.5e11) operations, which is way too slow.
+
+But given the time constraints of programming competitions, this approach is not feasible.
+
+Alternative Idea: Since each edge can change its color up to q times, and each color's DSU must be rebuilt when edges are added or removed, perhaps we can find a way to model the DSU per color incrementally.
+
+But I'm not sure.
+
+Another Idea: The key insight is that when an edge is repainted from old_col to new_col, the new_col's graph must be bipartite after adding the edge. The old_col's graph is irrelevant after the repaint.
+
+Thus, the only check needed is whether adding the edge to new_col's current graph creates a cycle.
+
+But the problem is that the new_col's current graph may have edges that were added previously. So how to check this.
+
+But if we can model the new_col's graph with a DSU that includes all edges currently in new_col, then the check is O(1) time.
+
+Thus, the problem reduces to maintaining a DSU per color, but with the ability to add and remove edges.
+
+But again, the DSU cannot handle removals.
+
+Alternative Idea: Perhaps, for each color c, the DSU is a structure that includes all edges that have been added to c, but the DSU is invalid when edges are removed. However, when edges are removed, they are marked as inactive, and when checking for the current DSU, we ignore the inactive edges.
+
+But this is not possible with standard DSU, as the union operations are merged and cannot be easily undone.
+
+Thus, this approach is not feasible.
+
+At this point, I'm stuck. Let's look for hints or similar problems.
+
+Wait, the problem's constraints on k being up to 50 is a clue. Maybe we can model each color's graph as a separate DSU, but with the DSU being rebuilt each time the edge is added. But that doesn't make sense.
+
+Wait, another Idea: When a query comes, the edge is added to the new color's DSU. The old color's DSU is not modified. But when an edge is in a color's DSU, it's considered part of that color's graph. But if the edge's current color is not the color of the DSU, then that edge is not part of the graph. Thus, the DSU for color c would include all edges that have ever been painted in c. But this is incorrect because when an edge is repainted, it's no longer part of c's graph.
+
+But in this case, the DSU for c would include edges not in the current graph, leading to incorrect checks.
+
+Thus, this approach is incorrect.
+
+Alternative Idea: For each query, when checking if adding the edge to new_col's graph is possible, we can:
+
+1. Temporarily add the edge to new_col's DSU and check for a conflict.
+
+2. If it's valid, then we need to permanently add the edge to new_col's DSU and remove it from old_col's DSU.
+
+But how to remove from old_col's DSU?
+
+As before, this is not possible.
+
+Thus, perhaps the only way is to ignore the old_col's DSU and only check the new_col's DSU.
+
+But this would lead to incorrect results because the new_col's DSU includes all edges that were ever added to it, even if they are now painted to other colors.
+
+Thus, this approach is incorrect.
+
+At this point, I'm stuck. Maybe I need to look for a different approach.
+
+Wait, another Idea: The problem requires that after each query, all color's graphs are bipartite. But when you repaint an edge from old_col to new_col, the only check needed is whether the new_col's graph, after adding the edge, is bipartite. The old_col's graph loses the edge, but since it was bipartite before, losing an edge can't make it non-bipartite.
+
+Thus, the only check needed is whether the new_col's graph plus the current edge is bipartite.
+
+So, for the new_col's graph, the current edge is being added, and the existing edges are all the edges in new_col's current graph. So, to check this, the new_col's graph must be bipartite when this edge is added.
+
+Thus, the problem reduces to:
+
+For each query (ei, ci), check if the graph formed by all edges currently in ci plus edge ei is bipartite. If yes, then the query is valid; else, invalid.
+
+The key is to check this efficiently.
+
+The challenge is to model the existing edges in ci and quickly determine if adding edge ei would create an odd cycle.
+
+But how?
+
+If we can maintain for each color c a DSU structure that includes all edges currently in c, then the check is O(alpha(n)) per query.
+
+But maintaining such a DSU is the crux.
+
+But how to handle the dynamic addition and removal of edges from the DSU.
+
+The answer is to use a DSU with rollback functionality, which allows us to undo previous union operations. This is known as a DSU with rollback or a persistent DSU.
+
+Yes! Here's the plan:
+
+- For each color c, maintain a DSU with rollback capability.
+
+- For each edge, track its current color. Initially, all edges are in color 0.
+
+- For each query (ei, ci):
+
+   a. Let old_col be the current color of ei.
+
+   b. If old_col == ci: output YES and continue.
+
+   c. Check if adding edge ei to ci's DSU would create a conflict.
+
+   d. To do this:
+
+      i. Save the current state of ci's DSU.
+
+      ii. Add edge ei to ci's DSU. This involves performing a union and path compression. The DSU with rollback allows this.
+
+      iii. Check if the union caused a conflict (i.e., the two nodes are already in the same set and have the same parity).
+
+      iv. Rollback the DSU to the saved state (undoing the union).
+
+   e. If there's no conflict:
+
+      i. Remove the edge from old_col's DSU (if old_col != 0). This involves rolling back all unions that were done when adding the edge to old_col.
+
+      ii. Add the edge to ci's DSU by performing the union again, this time without rolling back.
+
+      iii. Update the edge's color to ci.
+
+      iv. Output YES.
+
+   f. Else:
+
+      i. Output NO.
+
+But how to implement this. In Python, implementing a DSU with rollback would require maintaining a stack of operations and being able to undo them.
+
+Here's how it can be done:
+
+Each DSU for a color c will have a parent array and a rank array, and a parity array (to track the distance from the root modulo 2). Additionally, for each edge added to the DSU, we can track the stack of operations (i.e., the parent and rank changes) that occurred during the union steps. When the edge is removed, we can pop these operations from the stack and revert the parent and rank arrays.
+
+However, path compression makes this difficult, as it changes the parent of nodes during find operations. Thus, rollback becomes complicated because path compression operations are not part of the union steps.
+
+Thus, to make the DSU rollback possible, we need to use a DSU without path compression during find, but that would make the find operation O(log n) per step. Alternatively, use a DSU with path compression, but track all the changes made during find and union operations so that they can be rolled back.
+
+This is complex, but manageable.
+
+The implementation steps are:
+
+Implement a DSU with rollback for each color. Each time a union is performed, record the changes to the parent and rank arrays. When rolling back, revert these changes.
+
+But this requires for each DSU instance to have its own stack of changes.
+
+For each DSU (per color), the stack will contain the changes made during each union operation.
+
+When adding an edge to the DSU:
+
+   - Perform the find on u and v with their parity.
+
+   - If they are in different sets, merge them, and push the changes (old parent and rank of the merged roots) to the stack.
+
+   - If they are in the same set and have the same parity, a conflict is detected.
+
+When removing an edge from the DSU:
+
+   - Pop the changes from the stack and revert the parent and rank arrays.
+
+But this only works if each edge's addition corresponds to a single union operation. However, if during the find operations, path compression is used, this would also modify the parent array, which would need to be rolled back. This complicates things.
+
+Thus, to implement rollback correctly, the DSU must avoid path compression during find operations. Otherwise, the changes caused by path compression would need to be tracked and rolled back, which is not feasible.
+
+Thus, the solution is to use a DSU without path compression. This makes the find operation slower (O(log n) per step), but allows us to track union operations and roll them back.
+
+Alternatively, use a DSU with path compression but track all changes made during find and union, which is very complex.
+
+Given the time constraints, perhaps the best approach is to use a DSU without path compression for each color. This way, each union operation can be rolled back by simply reverting the parent and rank arrays.
+
+Thus, the DSU for each color would be implemented with:
+
+- parent: array where parent[i] is the parent of node i.
+
+- rank: array where rank[i] is the rank (used for union by rank).
+
+- parity: array where parity[i] is the parity (distance from root modulo 2).
+
+The find function would be implemented without path compression. For a node u, find(u) returns the root and the parity.
+
+When performing a union(u, v), we:
+
+   - Find the roots of u and v.
+
+   - If roots are different, link one to the other and record the changes (old parent and rank of the roots) in the stack.
+
+Thus, when we need to rollback, we can restore the parent and rank of the roots.
+
+But this approach will have a find function that is O(log n) per step, but without path compression, the worst case could be O(n) per find.
+
+But given that k is up to 50, and n is up to 5e5, this may be manageable.
+
+But in practice, for large n, this approach might be too slow.
+
+But given the problem constraints and the time available, this is the best approach I can think of.
+
+So the steps are:
+
+For each color c (1..k):
+
+   - Maintain a DSU without path compression.
+
+   - Maintain a stack of union operations for each edge added to the color.
+
+When processing a query (ei, ci):
+
+   - Get the edge's current color old_col.
+
+   - If old_col == ci: output YES.
+
+   - Else:
+
+      a. Check if adding the edge to ci's DSU would cause a conflict.
+
+      b. To do this:
+
+         i. For ci's DSU, perform find on u and v.
+
+         ii. If same root and same parity: conflict, output NO.
+
+         iii. Else: no conflict, proceed.
+
+      c. If no conflict:
+
+         i. If old_col != 0: remove the edge from old_col's DSU by popping the stack entries for that edge.
+
+         ii. Add the edge to ci's DSU by performing the union and pushing the changes to ci's stack.
+
+         iii. Update the edge's color to ci.
+
+         iv. Output YES.
+
+      d. Else:
+
+         i. Output NO.
+
+Wait, but the find operation for step a.b.i. requires checking the current state of ci's DSU. However, if the edge was added to ci's DSU in a previous query and then removed, the DSU would have been rolled back. Thus, the find operation would correctly reflect the current state of ci's DSU.
+
+Yes. Because the DSU for ci only contains the unions that are part of the current edges in ci's color. When an edge is removed from ci's color, the DSU is rolled back to exclude that edge's unions.
+
+Thus, the find operation in step a.b.i. would correctly reflect the current state of ci's DSU.
+
+Thus, the approach is:
+
+Each DSU per color supports:
+
+- find(u) to get the root and parity.
+
+- union(u, v) which returns whether a conflict is created (i.e., same root and same parity) and records the changes in the stack.
+
+- When an edge is added to the color, the union is performed and the stack is updated.
+
+- When the edge is removed, the stack is used to roll back the union.
+
+But how to track which stack entries correspond to which edge.
+
+Ah, each edge added to a color's DSU may involve multiple union operations (e.g., adding an edge may cause merging of two trees, but adding a different edge may cause more unions). But we need to track which stack entries correspond to each edge's addition.
+
+This is not possible unless each edge's addition is tracked separately.
+
+Thus, for each edge, when it's added to a color's DSU, the union operations that occur as a result are recorded in a stack specific to that edge. When the edge is removed, the stack for that edge is rolled back.
+
+But this would require maintaining a stack for each edge in each color. For m edges and k colors, this would be O(m*k) space, which is 5e5 * 50 = 2.5e7, which is manageable.
+
+But this requires a lot of bookkeeping.
+
+Alternatively, for each color c, maintain a stack of operations, and for each edge added to c, track the number of operations pushed to the stack. When the edge is removed, pop those operations.
+
+But this assumes that the order of removal is the reverse of addition. This is possible if edges are removed in LIFO order. But in our case, edges can be added and removed in any order. So this approach would not work.
+
+Thus, this approach is not feasible.
+
+Alternative Idea: Each time an edge is added to a color's DSU, any union operations performed are recorded in a list associated with that edge. When the edge is removed, the unions are rolled back by reverting the parent and rank arrays for each union in the list (in reverse order).
+
+This way, each edge's addition can have its own list of union operations to roll back.
+
+For example:
+
+When adding edge e to color c:
+
+   - Perform find on u and v.
+
+   - If roots are different, merge them and record the old parent and rank of the merged root.
+
+   - Store this information in a list associated with edge e for color c.
+
+When removing edge e from color c:
+
+   - Iterate through the list of union operations in reverse order.
+
+   - For each operation, restore the parent and rank arrays.
+
+Thus, this approach requires for each edge and color, a list of the union operations that occurred when the edge was added to the color.
+
+But in the worst case, each edge could be added and removed multiple times to the same color, which would require storing multiple lists per edge and color.
+
+This could lead to high memory usage.
+
+But given that k is small (50), and m is 5e5, the total memory would be 5e5 * 50 * average unions per edge addition.
+
+But each edge addition to a color's DSU can cause at most one union operation (since adding an edge can only connect two components), so the list per edge and color has at most one entry.
+
+Wait, when you add an edge to a DSU, you perform a union between the two endpoints. The union operation may merge two trees, which involves changing the parent of one root to another. This is a single union operation.
+
+Thus, for each edge addition to a color's DSU, there is at most one union operation to record. Thus, the per-edge per-color list has at most one entry.
+
+Thus, this approach is feasible.
+
+Thus, the steps are:
+
+For each color c:
+
+   - Maintain parent, rank, parity arrays.
+
+   - For each edge e, when added to c's DSU, record any union operation (the old parent and rank of the merged roots) in a dictionary, e.g., edge_unions[e][c] = list of unions.
+
+When adding edge e (u, v) to c's DSU:
+
+   - Find the roots of u and v.
+
+   - If roots are different:
+
+      a. Perform the union by rank, recording the old parent and rank of the roots.
+
+      b. Store this information in edge_unions[e][c].
+
+   - If roots are the same and parity is same: conflict.
+
+When removing edge e from c's DSU:
+
+   - Retrieve the list of unions stored in edge_unions[e][c].
+
+   - For each union in reverse order:
+
+      a. Restore the parent and rank of the roots.
+
+   - Clear the list for edge e in c.
+
+Thus, this approach allows adding and removing edges from the DSU, rolling back the unions.
+
+The find function must be implemented without path compression to avoid changes to the parent array that are not recorded in the union operations.
+
+But without path compression, the find function will be slower.
+
+But given that k is up to 50 and q is up to 5e5, this may be manageable.
+
+Now, let's outline the code:
+
+We need to:
+
+- For each color c in 1..k, maintain a DSU with parent, rank, parity.
+
+- For each edge e, track its current color.
+
+- For each query (ei, ci):
+
+   - Get edge e's current color old_col.
+
+   - If old_col == ci: output YES.
+
+   - Else:
+
+      a. Check if adding e to ci's DSU would create a conflict.
+
+      b. To check this:
+
+         i. Find the roots of u and v in ci's DSU.
+
+         ii. If same root and parity of u and v is the same: conflict.
+
+      c. If no conflict:
+
+         i. Remove e from old_col's DSU (if old_col != 0).
+
+         ii. Add e to ci's DSU by performing union and recording the union steps.
+
+         iii. Update e's color to ci.
+
+         iv. Output YES.
+
+      d. Else:
+
+         i. Output NO.
+
+But how to implement the find function without path compression.
+
+The find function for a node u in DSU c would be:
+
+def find(c, u):
+
+    if parent[c][u] == u:
+
+        return (u, 0)
+
+    else:
+
+        p, parity = find(c, parent[c][u])
+
+        # parity is the parity from parent[c][u] to its root.
+
+        # So the parity from u to root is (parity + parity[c][u]) % 2.
+
+        current_parity = (parity + parity[c][u]) % 2
+
+        return (p, current_parity)
+
+But since we are not using path compression, the parent pointers are not updated, so the find function is O(log n) time per call.
+
+But without path compression, the time complexity is higher.
+
+But given that k is 50, and per query we perform two find operations (for u and v) per color, this may be manageable.
+
+Now, the code structure:
+
+In Python, we can represent each color's DSU as a list of dictionaries or separate arrays. But since k is up to 50, using lists for parent, rank, and parity, each of size n+1, for each color.
+
+But in Python, with n up to 5e5, creating 50 copies of these arrays would take 5e5 * 50 * 3 = 75e6 entries, which is manageable.
+
+But for memory efficiency, perhaps use a list of lists:
+
+parent = [ [i for i in range(n+1)] for _ in range(k+1) ]
+
+Similarly for rank and parity.
+
+But initializing this would take O(n*k) time, which for n=5e5 and k=50 is 2.5e7 operations, which is acceptable.
+
+But in Python, list comprehensions are efficient.
+
+Once the DSU structures are initialized, for each query:
+
+For example, consider the first sample input:
+
+3 3 2 5
+
+Edges:
+
+1 2 (edge 1)
+
+2 3 (edge 2)
+
+1 3 (edge 3)
+
+Queries:
+
+1 1 → repaint edge 1 to color 1.
+
+Check if adding edge 1 (u=1, v=2) to color 1's DSU creates a conflict. Initially, color 1's DSU is empty.
+
+So find(1, 1) returns (1, 0), find(1, 2) returns (2, 0). Roots are different, so no conflict. Add the edge by unioning them.
+
+Then, for edge 2 to color 1: check adding 2-3. Roots are 2 and 3. Different roots. Union.
+
+Then, query 3 2: repaint edge 3 to color 2. Check adding edge 3 (1-3) to color 2's DSU. Initially, color 2's DSU is empty. So no conflict.
+
+Then, query 3 1: repaint edge 3 to color 1. Now, color 1's DSU contains edges 1-2, 2-3, and adding 1-3.
+
+Check in color 1's DSU:
+
+Find 1: root is 1, parity 0.
+
+Find 3: root is 2, parity 1.
+
+So when adding 1-3, their parity is 0 (1's parity) + 1 (3's parity) + 1 (the edge's parity), but wait, how is parity tracked.
+
+Wait, in the DSU's parity array, parity[u] represents the parity from u to its parent. So when find is called, the total parity is the sum from u to root modulo 2.
+
+Thus, when adding edge (u, v), we need to check if u and v have the same parity. If they are in the same set and parity[u] == parity[v], then adding this edge would create an odd cycle.
+
+Thus, the check during a query is:
+
+ru, pu = find(ci, u)
+
+rv, pv = find(ci, v)
+
+if ru == rv and pu == pv:
+
+    # conflict
+
+else:
+
+    # no conflict
+
+Thus, in the example where adding edge 3 (1-3) to color 1's DSU:
+
+After edges 1 and 2 are added to color 1, the DSU for color 1 has:
+
+1's root is 1 (after union with 2 and 3).
+
+Wait, after adding edge 1 (1-2), the roots of 1 and 2 are merged. Let's say 1 becomes the root of 2. Then adding edge 2 (2-3) would merge 2's root (1) and 3's root (3). So 3's parent becomes 1.
+
+Now, when adding edge 3 (1-3):
+
+ru = find(1, 1) → root is 1, parity 0.
+
+rv = find(1, 3) → parent of 3 is 1, parity is 0 + parity[3] (which is 1) → total parity 1.
+
+So pu is 0, pv is 1. Since ru == rv (both are 1), but pu != pv, no conflict.
+
+Thus, adding edge 3 to color 1's DSU is allowed.
+
+Wait, but in the sample input, the query 3 1 is rejected (outputs NO). Wait, this suggests a mistake in the example.
+
+Sample Input:
+
+After three queries:
+
+1 1 → valid (YES)
+
+2 1 → valid (YES)
+
+3 2 → valid (YES)
+
+Then, query 3 1: repaint edge 3 to color 1.
+
+At this point, color 1's graph includes edges 1-2 and 2-3 (edges 1 and 2). Adding edge 3 (1-3) to color 1's graph would create a triangle (1-2-3-1), which is an odd cycle. Thus, the query is invalid.
+
+But according to the check:
+
+After adding edges 1 and 2 to color 1:
+
+- Edge 1: 1-2. DSU for color 1 has 1 and 2 connected.
+
+- Edge 2: 2-3. DSU for color 1 has 2 and 3 connected, so 1, 2, 3 are connected.
+
+Now, when adding edge 3 (1-3) to color 1's DSU:
+
+find(1,1) gives root 1, parity 0.
+
+find(1,3) gives root 1, parity 0 + parity[3] (which is 1) → parity 1.
+
+So ru == rv (1 and 1), and pu (0) != pv (1). Thus, no conflict. So adding this edge is allowed. But this is incorrect, because the actual graph would have a cycle of length 3.
+
+Ah, this suggests that the approach is incorrect.
+
+Wait, what's the mistake here.
+
+When the three edges are in color 1's graph:
+
+1-2, 2-3, and 1-3. This forms a triangle. Adding the third edge (1-3) would create a cycle of length 3.
+
+But according to the DSU check, since 1 and 3 are in the same component and their parities are different, adding the edge would create an even cycle (length 3 + 1? No, this is not how parity works).
+
+Wait, parity is the sum of the parities along the path. Let's see:
+
+Edge 1-2: after adding, 1 is the root. Parity for 2 is 1 (since it's connected via one edge).
+
+Edge 2-3: when added, 2's root is 1, 3's root is 3. So they are merged. The parity for 3 is set to 1 (since the edge is between 2 (parity 1) and 3. So the parity for 3 is 1 + 1 (edge's parity 0) mod 2 = 0. Wait, I think I'm getting the parity logic wrong.
+
+Let me re-express:
+
+The parity for a node u is the XOR of the edges along the path from u to the root. For an edge (u, v), when merging, we set the parity of the parent such that the parity from u to v is 1 (since the edge represents a connection between two different partitions).
+
+So when we add an edge between u and v:
+
+- If u and v are in different sets:
+
+   a. The parity of u is pu.
+
+   b. The parity of v is pv.
+
+   c. The edge (u, v) requires that pu XOR 1 == pv.
+
+   d. So when merging, we adjust the parity of the merged root to maintain this.
+
+Thus, the DSU with parity correctly tracks whether the addition of edges creates an odd cycle.
+
+But in the example above, adding the third edge would create a cycle where the sum of the parities is 1 + 1 + 1 = 3 mod 2 = 1, which indicates an odd cycle.
+
+But according to the DSU check, adding the third edge (u=1, v=3):
+
+find(1) returns root 1, parity 0.
+
+find(3) returns root 1, parity 1.
+
+So pu (0) XOR 1 (the edge's parity) should be equal to pv (1). 0 XOR 1 = 1, which equals pv. So no conflict. So the DSU allows the addition, which is incorrect.
+
+Ah, here's the mistake. The DSU approach assumes that adding the edge would connect the two nodes with a parity difference of 1. But in the existing structure, the parity from 1 to 3 is already 1, so adding the edge (1-3) with parity 1 would create a cycle where the sum of the parities is 0 (1 to 3) + 1 (edge's parity) = 1 mod 2, which is an odd cycle.
+
+But according to the DSU check, since the existing parity from 1 to 3 is 1, adding an edge with parity 1 would require that pu XOR 1 == pv. pu is 0 (parity of 1), pv is 1 (parity of 3). 0 XOR 1 = 1, which equals pv. Thus, no conflict. But this is incorrect.
+
+Thus, the DSU approach is not correctly detecting the odd cycle in this case.
+
+This suggests that the approach is incorrect.
+
+What's the problem here?
+
+The DSU with parity tracks the parity as the sum of the edges along the path. When adding an edge (u, v), it requires that the parity from u to v in the DSU is 1 (since the edge represents a bipartition). So, if in the DSU, the current parity from u to v is already 1, adding the edge is allowed. Otherwise, it's not.
+
+But in the example, the existing parity from u to v is 1. Adding the edge would create a cycle with sum 1 + 1 = 0 mod 2, which is even. So why is the cycle odd?
+
+Ah, this is the mistake. The parity in the DSU represents the sum of the edges along the path. Each edge in the graph contributes a parity of 1. So, the parity from u to v is the number of edges in the path mod 2. If adding an edge (u, v) would create a cycle, the total parity is the parity of the cycle. The cycle's parity is the sum of the existing path's parity plus the new edge's parity.
+
+In the example, the existing path from 1 to 3 is 1-2-3, which has two edges. Thus, parity is 0 mod 2. Adding the edge 1-3 creates a cycle of length 3, which has parity 1 mod 2 (since 3 edges). But according to the DSU check:
+
+Existing parity from 1 to 3 is 0 (path of two edges). Adding the new edge with parity 1 (since it's an edge), the total parity is 0 + 1 = 1 mod 2, which is an odd cycle.
+
+But according to the DSU's check, when adding the edge (u, v), we check if u and v are in the same set and their parities are the same. If so, then adding the edge would create an odd cycle.
+
+In the example:
+
+u's parity is 0 (path from 1 to root 1 is 0 edges).
+
+v's parity is 1 (path from 3 to root 1 is 3's parent is 2, which has parity 1. 2's parent is 1, which has parity 0. So parity of 3 is 1 (from 3 to 2) + 0 (from 2 to 1) = 1 mod 2.
+
+Thus, u and v have parities 0 and 1. Since they are in the same set (root 1), but their parities are different, adding the edge (u, v) with parity 1 would require that the parity of u XOR 1 equals the parity of v. 0 XOR 1 = 1, which equals v's parity. Thus, the DSU allows the addition. However, this creates a cycle with parity 1, which is an odd cycle.
+
+Thus, the DSU approach is incorrect in this case.
+
+This suggests that the DSU with parity approach is not sufficient to detect all odd cycles.
+
+This is a critical error in the approach.
+
+The DSU with parity approach works for incremental additions when the edges are added in a way that maintains bipartition. However, in this example, the approach fails to detect the odd cycle, leading to an incorrect result.
+
+Thus, the DSU approach is not correct for this problem.
+
+This indicates that the problem requires a different approach.
+
+Given the time constraints, perhaps the correct solution is to use a DSU with rollback and avoid path compression, and correctly model the parity checks. However, the example above shows that the DSU approach may not work.
+
+Alternatively, perhaps the DSU approach is correct, and the example analysis is incorrect.
+
+Wait, let's re-express the example:
+
+After adding edges 1-2 and 2-3 to color 1's DSU:
+
+- The DSU for color 1 has 1 as the root of 2 and 3.
+
+- Edge 1-2: when added, 1 and 2 are merged. The parity of 2 is set to 1 (since it's an edge between 1 and 2).
+
+- Edge 2-3: when added, 2's root is 1, 3's root is 3. When merging, we set 3's parent to 1. The parity of 3 is set to parity of 2 (1) plus 1 (since the edge is between 2 and 3), which is 0 mod 2.
+
+Thus, the parity of 3 is 0.
+
+Now, adding edge 1-3:
+
+- find(1) returns (1, 0).
+
+- find(3) returns (1, 0).
+
+- Since roots are the same and parities are equal, adding this edge creates a conflict. Thus, the query should be invalid.
+
+But according to the previous analysis, the find(3) would return parity 0.
+
+Ah, this is correct. So the parity of 3 is 0. Thus, when adding edge 1-3:
+
+ru is 1, parity 0.
+
+rv is 1, parity 0.
+
+Thus, since they are in the same set and have the same parity, adding this edge would create an odd cycle. Thus, the query is invalid.
+
+But why the previous analysis was incorrect?
+
+Because after adding edges 1-2 and 2-3, the parity of 3 is 0, not 1.
+
+Thus, the DSU approach correctly detects the conflict.
+
+Thus, the example analysis was incorrect. The DSU approach works correctly.
+
+Thus, the problem can be solved using the DSU with rollback approach.
+
+Thus, the code must correctly model the DSU with parity, and the rollback for each edge.
+
+Now, the code implementation:
+
+First, read the input.
+
+Then, for each color (1..k), initialize parent, rank, and parity arrays.
+
+For each color c:
+
+   parent[c][i] = i
+
+   rank[c][i] = 1
+
+   parity[c][i] = 0
+
+For each edge, store the endpoints.
+
+For each query:
+
+   ei, ci = input
+
+   old_col = current color of edge ei
+
+   if old_col == ci:
+
+       print("YES")
+
+       continue
+
+   u, v = edges[ei-1]
+
+   # Check if adding to ci's DSU is valid
+
+   valid = True
+
+   # Check if adding (u, v) to ci's DSU creates a cycle
+
+   ru, pu = find(ci, u)
+
+   rv, pv = find(ci, v)
+
+   if ru == rv:
+
+       if (pu + pv) % 2 == 0: # parity of u and v must be different
+
+           valid = False
+
+   # If valid, proceed
+
+   if valid:
+
+       # Remove from old_col
+
+       if old_col != 0:
+
+           # Rollback the union operations stored for this edge in old_col
+
+           if ei in edge_unions[old_col]:
+
+               for (root, old_parent, old_rank) in reversed(edge_unions[old_col][ei]):
+
+                   parent[old_col][root] = old_parent
+
+                   rank[old_col][root] = old_rank
+
+               del edge_unions[old_col][ei]
+
+       # Add to ci's DSU
+
+       ru, pu = find(ci, u)
+
+       rv, pv = find(ci, v)
+
+       if ru != rv:
+
+           if rank[ci][ru] < rank[ci][rv]:
+
+               ru, rv = rv, ru
+
+               pu, pv = pv, pu
+
+               u, v = v, u
+
+           parent[ci][rv] = ru
+
+           # The parity of rv's parent (ru) is such that pu + parity[ci][v] == pv + 1 (since edge u-v)
+
+           # So parity[ci][rv] = (pv + 1 - pu) % 2
+
+           parity[ci][rv] = (pv + 1 - pu) % 2
+
+           if rank[ci][ru] == rank[ci][rv]:
+
+               rank[ci][ru] += 1
+
+           # Record the union operation in edge_unions[ci][ei]
+
+           if ei not in edge_unions[ci]:
+
+               edge_unions[ci][ei] = []
+
+           edge_unions[ci][ei].append( (rv, parent[ci][rv], rank[ci][ru]) )
+
+       # Update the edge's color
+
+       current_color[ei] = ci
+
+       print("YES")
+
+   else:
+
+       print("NO")
+
+But this code needs to be implemented with care.
+
+The find function must not use path compression to avoid modifying the parent array.
+
+The edge_unions is a dictionary for each color, mapping edge indices to a list of union operations (each storing the root, old parent, and old rank).
+
+Thus, in Python, we can represent edge_unions as a list of dictionaries for each color.
+
+Finally, after processing all queries, the code must print the results.
+
+But implementing this correctly requires careful handling of the DSU and rollback.
+
+Now, putting it all together in Python code.
+</think>
+To solve this problem, we need to ensure that after each repaint query, the graph formed by edges of each color remains bipartite. A bipartite graph can be divided into two sets of vertices such that no two vertices within the same set are adjacent. 
+
+### Approach
+1. **Union-Find Data Structure with Rollback**: For each color, maintain a Union-Find (Disjoint Set Union, DSU) structure to track connected components and parity checks to detect odd-length cycles. This helps in efficiently checking if adding an edge to a color's graph would create a non-bipartite component.
+2. **Rollback Mechanism**: Since edges can be repainted multiple times, we need to handle dynamic addition and removal of edges. A rollback mechanism is implemented to revert the DSU state when an edge is removed from a color's graph.
+3. **Edge Tracking**: Track the current color of each edge and maintain a record of union operations for each edge in each color to facilitate rollback.
+
+### Solution Code
+```python
+import sys
+from sys import stdin
+from collections import defaultdict
+
+def main():
+    sys.setrecursionlimit(1 << 25)
+    n, m, k, q = map(int, stdin.readline().split())
+    edges = []
+    for _ in range(m):
+        a, b = map(int, stdin.readline().split())
+        edges.append((a, b))
+    
+    max_color = k
+    # Initialize DSU structures for each color (1-based)
+    parent = [ [i for i in range(n+1)] for _ in range(max_color+1)]  # parent[c][u]
+    rank = [ [1]*(n+1) for _ in range(max_color+1) ]
+    parity = [ [0]*(n+1) for _ in range(max_color+1) ]
+    # To track the union operations for each edge in each color
+    edge_unions = [ defaultdict(list) for _ in range(max_color+1) ]  # edge_unions[c][ei] = list of (root, old_parent, old_rank)
+    current_color = [0] * (m + 1)  # 1-based
+    
+    def find(c, u):
+        original_u = u
+        p = u
+        p_parity = 0
+        while parent[c][p] != p:
+            p_parity ^= parity[c][p]
+            p = parent[c][p]
+        return (p, p_parity)
+    
+    for _ in range(q):
+        parts = stdin.readline().split()
+        while len(parts) < 2:
+            parts += stdin.readline().split()
+        ei, ci = map(int, parts)
+        ei_ = ei
+        old_col = current_color[ei_]
+        if old_col == ci:
+            print("YES")
+            continue
+        u, v = edges[ei_ - 1]
+        
+        # Check if adding to ci is valid
+        valid = True
+        ru, pu = find(ci, u)
+        rv, pv = find(ci, v)
+        if ru == rv:
+            if (pu + pv) % 2 == 0:
+                valid = False
+        else:
+            valid = True
+        
+        if not valid:
+            print("NO")
+            continue
+        
+        # Proceed to add to ci and remove from old_col
+        # Remove from old_col if necessary
+        if old_col != 0:
+            # Rollback the unions for this edge in old_col
+            if ei_ in edge_unions[old_col]:
+                # Iterate in reverse order to undo
+                for record in reversed(edge_unions[old_col][ei_]):
+                    r, old_p, old_r = record
+                    parent[old_col][r] = old_p
+                    rank[old_col][r] = old_r
+                del edge_unions[old_col][ei_]
+        
+        # Add to ci's DSU
+        ru, pu = find(ci, u)
+        rv, pv = find(ci, v)
+        if ru != rv:
+            # Ensure ru is the root with higher rank
+            if rank[ci][ru] < rank[ci][rv]:
+                ru, rv = rv, ru
+                pu, pv = pv, pu
+                u, v = v, u  # swap u and v to keep ru as the new root
+            # Merge rv into ru
+            # Record the old parent and rank of rv and ru
+            edge_unions[ci][ei_].append( (rv, parent[ci][rv], rank[ci][ru]) )
+            parent[ci][rv] = ru
+            parity[ci][rv] = (pv + 1 - pu) % 2
+            if rank[ci][ru] == rank[ci][rv]:
+                rank[ci][ru] += 1
+        
+        current_color[ei_] = ci
+        print("YES")
+    
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Union-Find with Rollback**: Each color maintains a DSU to track connected components. The `find` function checks the root and parity of a node without path compression to allow rollback.
+2. **Handling Queries**: For each query, check if repainting an edge to a new color would create an odd cycle using the DSU. If valid, update the DSU and track the union operations for potential rollback.
+3. **Rollback Mechanism**: When an edge is removed from a color's graph, the union operations for that edge are reverted to maintain the correct state of the DSU for that color.
+
+This approach efficiently handles dynamic edge additions and removals while ensuring each color's graph remains bipartite.
+</bot>

@@ -1,0 +1,590 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Let us see how search engines work. Consider the following simple auto complete feature. When you type some characters in the text bar, the engine automatically gives best matching options among it's database. Your job is simple. Given an incomplete search text, output the best search result.
+
+Each entry in engine's database has a priority factor attached to it. We consider a result / search suggestion best if it has maximum weight and completes the given incomplete search query. For each query in the input, print the maximum weight of the string in the database, that completes the given incomplete search string. In case no such string exists, print -1.
+
+INPUT
+
+First line contains two integers n and q, which represent number of database entries and number of search queries need to be completed. Next n lines contain a string s and an integer weight, which are the database entry and it's corresponding priority.
+
+Next q lines follow, each line having a string t, which needs to be completed.
+
+OUTPUT
+
+Output q lines, each line containing the maximum possible weight of the match for given query, else -1, in case no valid result is obtained.
+
+CONSTRAINTS
+
+1 ≤ n, weight, len(s), len(t) ≤ 10^6
+1 ≤ q ≤ 10^5
+total length of all strings in database entries ≤ 10^6
+total length of all query strings ≤ 10^6
+
+SAMPLE INPUT
+2 1
+hackerearth 10
+hackerrank 9
+hacker
+
+SAMPLE OUTPUT
+10
+</user>
+<bot>
+<think>
+Okay, let's tackle this problem. So the task is to implement an autocomplete feature where, for each query, we find the maximum weight among all database entries that start with the query string. If none exist, output -1. Hmm.
+
+First, I need to process the input efficiently. The constraints are tight. Let's see: n and q can be up to 1e6 and 1e5, respectively. And the total lengths of all strings are up to 1e6 each. So any solution that is O(n) per query is probably going to be too slow. For example, checking each database entry for each query by string prefix would be O(q * n), which for 1e5 queries and 1e6 entries would be 1e11 operations. That's way too slow.
+
+So, we need a data structure that allows efficient prefix lookups. Tries come to mind. Because a trie allows us to find all strings that start with a certain prefix. Then, for each node in the trie (which represents a prefix), we can keep track of the maximum weight in the subtree. That way, when a query comes in, we can traverse the trie according to the query string. If we reach a node (i.e., the query is a valid prefix), the max weight stored there would be the answer. If we can't traverse the entire query string (like if a character isn't found), then we return -1.
+
+So the steps are:
+
+1. Build a trie where each node stores the maximum weight of all the strings that pass through it. So for each character in the path of a string, we update the max weight in each node along that path.
+
+For example, inserting "hackerearth" with weight 10. Each node for h, a, c, k, e, r, etc., would have their max weight updated to 10 if it's higher than the current value. Then inserting "hackerrank" with 9: when we get to the 'r' node after 'hacke', the max would already be 10. Then when we proceed to 'k' (from 'hacker'), since 9 is less than 10, the nodes after that (like 'e' in 'hackerk') would have max 9 if their current value is lower. Wait, no. Wait, the 'hacker' part is common. So when inserting 'hackerearth', all the nodes along h->a->c->k->e->r would have their max updated to 10. Then inserting 'hackerrank', the same path up to 'r' (hacker) would compare 9 with the existing 10, so the max remains 10. Then the next characters in 'hackerrank' are 'r', 'a', etc. So each node after 'hacker' in that path would have their max set to 9. So for the query 'hacker', the max is 10. For the query 'hackerr', the max would be 9.
+
+So building the trie with each node storing the maximum weight encountered in any of its descendants (or itself) would allow us to answer queries in O(L) time, where L is the length of the query string.
+
+2. So the plan is to:
+
+   a. For each database entry, insert it into the trie. For each character in the string, traverse the trie, creating nodes as needed. For each node along the path (from root to the end of the string), update the max weight to be the maximum of the current value and the current entry's weight.
+
+   b. For each query, traverse the trie according to the query string. If at any point a character is not found, return -1. If we successfully traverse all characters of the query, then the max weight stored in that node is the answer.
+
+Now, the key is implementing the trie efficiently. Since the characters can be anything (assuming lowercase letters?), but the problem statement's sample uses lowercase. Wait, the problem statement's input: the database entries and queries are strings. The constraints mention len(s) can be up to 1e6, but no information on the character set. So perhaps the strings can consist of any printable characters. But for efficiency, we can use a dictionary-based approach for the trie nodes. However, using a dictionary (hash map) per node might be too slow for large data. Alternatively, since the problem doesn't specify the characters, perhaps we can assume that each character is a lowercase letter. But the problem statement's sample uses 'hackerearth', which is all lowercase. But the problem might not state that. Hmm. So perhaps we need to handle all possible ASCII characters.
+
+But handling all possible characters with a hash map (like a defaultdict) for each node's children could work. However, in Python, using dictionaries for trie nodes might be manageable, but we need to optimize for speed. Let's proceed.
+
+Each node is an object (or a dictionary) that has a dictionary mapping characters to child nodes, and a max_weight value.
+
+So the root is a dictionary (children) and a max_weight. Wait, but for each node, we can have children and a max_weight.
+
+So the root is a node. For inserting a string s with weight w, we start at the root. For each character in s:
+
+- If the character is not in the current node's children, create a new node (with empty children and max_weight 0).
+- Move to the child node.
+- Update the current node's max_weight to be the maximum of its current max_weight and w. Wait, no. Because each node along the path represents a prefix. So when inserting a string, all nodes along its path should have their max_weight set to the maximum between their current value and the new string's weight. For example, inserting 'apple' with weight 10, each node for 'a', 'ap', 'app', etc., would have their max_weight updated to 10. Then inserting 'app' with weight 15. The nodes for 'a', 'ap', 'app' would have their max_weights updated to 15, since 15 is larger than 10. So during insertion, for each character in the string, the current node's max_weight is the max of existing and the current weight.
+
+So during insertion:
+
+current_node = root
+
+for char in s:
+
+    if char not in current_node's children:
+
+        create a new node with empty children and max_weight 0.
+
+    current_node = current_node's children[char]
+
+    current_node.max_weight = max(current_node.max_weight, w)
+
+Wait, but this approach would only set the max_weight for the nodes along the string's path. However, suppose there's another string that shares a prefix. For example:
+
+Insert 'app' with weight 15. Then insert 'apple' with weight 10. The nodes a, ap, app will have max_weights 15. Then the nodes app->l, app->l->e will have max_weights 10. So the max weight for the prefix 'app' is 15, which is correct. For the query 'apple', the answer is 10, which is correct.
+
+So this approach works. Because when inserting a string, for each node along its path, we update the max_weight to the maximum between the existing value and the current string's weight. Therefore, each node's max_weight represents the maximum weight of all strings that pass through this node (i.e., all strings that have the prefix up to this node). Therefore, when a query comes in, as long as the query string is a prefix (i.e., we can traverse the trie along the query's characters), the max_weight at the final node will be the maximum among all possible completions.
+
+Yes, this makes sense.
+
+So the trie structure is built such that each node's max_weight is the maximum weight of any string that starts with the prefix leading to this node.
+
+Now, implementing this in Python. The challenge is to handle large data efficiently. Since n can be up to 1e6 and each string can be up to 1e6 characters, but the total length is up to 1e6. So the total number of nodes in the trie is up to 1e6 (since each character in all strings contributes to one node, but overlapping prefixes share nodes). So the total memory should be manageable.
+
+But in Python, using objects for nodes might be memory-intensive. An alternative is to represent the trie using dictionaries. Let's see.
+
+Let's represent each node as a dictionary with 'children' and 'max_weight'. So the root is initially:
+
+root = {'children': {}, 'max_weight': -1}
+
+Wait, but the root's max_weight is the maximum weight of all strings, but perhaps not. Wait, no. The root is the empty prefix. All strings pass through the root. So inserting any string would update the root's max_weight to the maximum of all inserted weights. But that's not correct. For example, suppose the first string is 'a' with weight 10. Then the root's max_weight is 10, and the 'a' node's max_weight is 10. Then inserting 'b' with 20. The root's max_weight would be updated to 20, and the 'b' node's max_weight is 20. So for query '', the max weight is 20, which is correct. But the problem states that the query must complete the incomplete string. So for example, if the query is empty, then all database entries are considered, and the max weight is the maximum of all. But according to the problem's description, the query is to find strings that start with the given text. So the empty string would match all entries, and the answer is the maximum weight in the entire database. But according to our trie structure, the root's max_weight would be the maximum of all entries, since every insertion updates the root's max_weight (as the first character's insertion step). Wait, no. Let's see:
+
+When inserting a string, we process each character in order. For the first character, we check if it's in root's children. Then, the root's max_weight is set to the max between its current value and the string's weight. Wait, no. Wait, the code for insertion would be:
+
+current_node = root
+
+for char in s:
+
+    if char not in current_node['children']:
+
+        current_node['children'][char] = {'children': {}, 'max_weight': -1}
+
+    current_node = current_node['children'][char]
+
+    current_node['max_weight'] = max(current_node['max_weight'], weight)
+
+Wait, no. Wait, when inserting the first character, after creating the child node (if needed), we move to that node and then update its max_weight. The root's max_weight remains unmodified. Wait, that's a problem. Because the root's max_weight is only updated if the string is empty. But in the problem, the strings can be empty? No, the constraints say len(s) is at least 1. So all database entries have len(s) >=1.
+
+So, the root's max_weight is never updated. So for the root, the max_weight remains -1. So if a query is the empty string, the answer would be the root's max_weight, which is -1, which is wrong. But according to the problem statement, the query strings can be of length 1. So perhaps the query can be empty? Let's check the problem statement.
+
+Problem statement says: "given an incomplete search text". So the query can be an empty string. Then, the answer would be the maximum weight in the entire database. But according to the current insertion logic, the root's max_weight is not being updated. So the code would return -1 even if there are entries, which is wrong.
+
+So the initial approach is incorrect. Because the insertion only updates the nodes along the path of the string, but the root's max_weight is not part of the insertion process. So, the code as written would not account for the root node's max_weight.
+
+Wait, no. Let's think again. For example, inserting the string 'a' with weight 10. The insertion process would start at the root. Then, the first character is 'a'. So:
+
+Check if 'a' is in root's children. If not, create a new node. Then move to that node and update its max_weight to 10. Then, since the string is 'a', the loop ends. So the root's max_weight is not modified. So for the root, the max_weight remains -1. But the root is the starting point for the query. So when the query is empty, the code would check the root's max_weight, which is -1, even though there's an entry 'a' with weight 10.
+
+This is a problem. So the approach is incorrect.
+
+Wait, no. Because the query is to find all strings that start with the given text. So for the empty string, all database entries are valid, since every string starts with the empty string. So the answer is the maximum weight of all entries. But according to the insertion logic as written, the root's max_weight is not being updated. So how can we track this?
+
+Ah, here's the mistake. Each node in the trie represents a prefix. The root represents the empty prefix. So when inserting a string, each node along the path (including the root?) No. Because the insertion starts by processing the first character. So the root's max_weight is not updated during the insertion. Only the nodes after the first character are considered. So the root's max_weight is not part of the insertion process.
+
+So for the empty string query, we need to return the maximum weight of all entries. But according to the trie as built, the root's max_weight is not set. So how can we track this?
+
+Hmm. So the current approach is flawed. The root node's max_weight is not being updated during insertion. So the solution is to track the root's max_weight as the maximum of all entries. But how?
+
+Alternatively, during insertion, after processing the entire string, we can update all the nodes along the path. Wait, but that's what we were doing. But the root is not part of the path. Because the path starts with the first character. So the root's max_weight remains unmodified.
+
+So perhaps the insertion logic needs to update the root's max_weight. How?
+
+Wait, the root is the node before the first character. So perhaps, during insertion, for the empty prefix (the root), we should also update its max_weight. Wait, but the empty prefix is not part of the string's path. Unless the string is empty, which it can't be. So perhaps, the root's max_weight is not being tracked, which is a problem.
+
+So the correct approach is to have each insertion start by updating the root's max_weight. Because any string (even the empty string, but according to constraints, len(s) >=1) starts with the empty prefix (the root), so the root's max_weight should be the maximum of all entries. Wait, no. Because the empty prefix is the root. So any string in the database starts with the empty string, so the root's max_weight should be the maximum of all database entries. But how to track that?
+
+Alternatively, during insertion, the root's max_weight should be updated with the current string's weight. But according to the insertion logic, the root's children are processed, but the root's own max_weight is not updated. So for the root to track the maximum of all entries, perhaps during insertion, after processing the entire string, we need to compare the root's max_weight with the current weight and update it. But that's not efficient.
+
+Wait, perhaps the problem is that the current approach does not track the maximum weight of all possible strings. For example, the empty query would require the maximum of all entries. But the current trie structure doesn't track that. So the root's max_weight is not being set. So the insertion logic is incomplete.
+
+Hmm. So to handle the case where the query is the empty string, we need to track the maximum weight of all entries, regardless of their content. So perhaps we need a separate variable that keeps track of the global maximum weight. Then, for an empty query, return that variable. But for non-empty queries, traverse the trie as before.
+
+But that's a possible solution. Let's think.
+
+So when inserting a string, we can keep a global_max variable that is the maximum of all weights. Then, for an empty query, the answer is global_max. For non-empty queries, traverse the trie as before, and if the traversal is successful, the node's max_weight is the answer, else -1.
+
+This way, the empty query is handled correctly.
+
+So steps:
+
+- Initialize global_max to -1.
+
+- For each database entry:
+
+   - Update global_max to be the maximum of global_max and the entry's weight.
+
+   - Insert the string into the trie, updating each node along the path (as before).
+
+So during insertion, for each node in the path (each character of the string), update the node's max_weight to the maximum between its current value and the entry's weight.
+
+Then, for a query:
+
+   - If the query is empty, return global_max (if global_max >=0 else -1).
+
+   - Else, traverse the trie character by character. If at any point a character is missing, return -1. Otherwise, after processing all characters, return the current node's max_weight.
+
+This handles the empty query case. For example, in the sample input, the entries have weights 10 and 9. So global_max is 10. The query is 'hacker', which is non-empty, and the traversal would reach the node after 'hacker', which has max_weight 10 (since the first entry is 'hackerearth' which is longer than 'hacker', so during insertion, the 'hacker' node's max_weight would be 10. Then inserting 'hackerrank', the 'hacker' node's max_weight remains 10. The nodes after that (like 'r' in 'hackerrank') would have max_weight 9.
+
+So for the sample input, the answer is 10, which is correct.
+
+But wait, how does the insertion process work for 'hackerearth'? Let's see:
+
+The string is 'hackerearth' (length 11). For each character h, a, c, k, e, r, e, a, r, t, h.
+
+Each node along the path is created if not present, and each node's max_weight is set to 10. So the node after 'hacker' (the first 6 characters) is at 'hacker', and its max_weight is 10.
+
+Then inserting 'hackerrank', which is 10 characters. The first 6 characters are 'hacker', same as before. The node for 'hacker' has max_weight 10. Now, the next character is 'r'. So we create a new node (if not exists) under 'hacker' for 'r', and set its max_weight to 9. Then the next characters are 'a', 'n', 'k', etc. So all the nodes after 'hacker' in 'hackerrank' would have max_weight 9.
+
+So for a query 'hacker', the node after 'hacker' has max_weight 10, which is the answer.
+
+So the insertion process correctly tracks the maximum in the nodes.
+
+So the problem is that the original approach does not account for the empty query. The solution is to track the global_max.
+
+So now, the steps for the code:
+
+Read n and q.
+
+Read n lines of strings and weights. Keep track of the global_max.
+
+For each (s, weight), insert into the trie as before, and update global_max.
+
+Read q queries. For each query t:
+
+   if t is empty string:
+
+       if global_max >=0: print(global_max)
+
+       else: print(-1)
+
+   else:
+
+       traverse the trie for each character in t.
+
+       if all characters are found, then the current node's max_weight is the answer (if it's >=0, else -1).
+
+       else, output -1.
+
+Now, implement this.
+
+But how to handle the empty string in the queries? The problem statement's sample input has a query of 'hacker' (non-empty). So the code would need to handle empty queries.
+
+Now, code structure.
+
+In Python, using dictionaries for the trie.
+
+But since the strings can be long, and the number of queries is high (1e5), the code needs to be efficient.
+
+Implementing the trie:
+
+Each node is a dictionary with 'children' (another dictionary) and 'max_weight'.
+
+But in Python, using a class for nodes would be more efficient. However, using dictionaries may be easier.
+
+Alternatively, we can represent each node as a dictionary with two keys: 'children' (another dict) and 'max_weight'.
+
+So the root is initialized as:
+
+root = {'children': {}, 'max_weight': -1}
+
+global_max = -1
+
+For each database entry:
+
+s, weight = input().split()
+
+weight = int(weight)
+
+global_max = max(global_max, weight)
+
+current_node = root
+
+for char in s:
+
+    if char not in current_node['children']:
+
+        current_node['children'][char] = {'children': {}, 'max_weight': -1}
+
+    current_node = current_node['children'][char]
+
+    current_node['max_weight'] = max(current_node['max_weight'], weight)
+
+Wait, but in the first iteration, current_node is the root. Then for the first character of s, we check if it's in the root's children. If not, create a new node. Then current_node is updated to that new node. Then, we update the new node's max_weight to max of current value (which is -1) and weight. So the new node's max_weight becomes weight.
+
+But the root's max_weight is not updated. So for example, inserting 'a' with weight 10:
+
+root's children has 'a' pointing to a node with max_weight 10.
+
+But the root's own max_weight remains -1.
+
+But in the case of an empty query, we would return global_max (10 in this case).
+
+So for empty query, it's handled correctly.
+
+For non-empty queries, we traverse the trie.
+
+So the code for queries:
+
+for each query t:
+
+    if t == "":
+
+        print(global_max if global_max != -1 else -1)
+
+    else:
+
+        current_node = root
+
+        found = True
+
+        for char in t:
+
+            if char not in current_node['children']:
+
+                found = False
+
+                break
+
+            current_node = current_node['children'][char]
+
+        if found:
+
+            print(current_node['max_weight'] if current_node['max_weight'] != -1 else -1)
+
+        else:
+
+            print(-1)
+
+But wait, what if a node's max_weight is zero? Because the problem says that the weight can be up to 1e6, but the constraints say weight ≥ 1. Wait, looking back:
+
+Constraints say 1 ≤ weight ≤ 1e6. So the weight is at least 1. So in the trie nodes, the max_weight can be 1 or higher. So during insertion, for each node in the path, the max_weight is set to the maximum of existing and the weight. So for a node along the path of a valid string, the max_weight is at least 1. So when a query is found (i.e., all characters are present), the node's max_weight is either the maximum possible weight among all strings with prefix t, or -1 if the node was created but no string was inserted that passes through it (but that's impossible, since insertion creates nodes along the path of the string and sets their max_weight to at least the weight of that string). So in the code, during insertion, the max_weight for each node in the path is set to the maximum of its current value and the weight, which is ≥1. So, for a node that exists (because the query was found), the max_weight is ≥1. So during the query processing, if found is True, the current_node's max_weight is the correct value (≥1) or -1 (if no entry exists, but that's impossible).
+
+Wait, no. For example, suppose a node is created during insertion, but the weight is 0 (but according to the problem statement, the weight is ≥1). So, in our code, the insertion step will set the node's max_weight to max(-1, weight). But weight is ≥1, so the max will be weight. So each node's max_weight is at least 1. So in the query processing, if found is True, the current_node's max_weight is at least 1, so we can safely print it. However, the code in the query step uses:
+
+print(current_node['max_weight'] if current_node['max_weight'] != -1 else -1)
+
+But in reality, the current_node's max_weight can't be -1 once a query is found. Because during insertion, when a string is inserted into the trie, all nodes along its path are created, and their max_weight is set to at least the weight of the string (which is ≥1). So for example, if a query is exactly the same as a string in the database, the node's max_weight is at least the weight of that string (which is ≥1). So in that case, the code can safely output the current_node's max_weight.
+
+But what if a query is a prefix of some strings but not present in the database? For example, inserting 'apple' with weight 10, then querying 'app' (which is a prefix of 'apple'). The 'app' node's max_weight is 10, so the output is 10. So that's correct.
+
+So the code should work.
+
+Testing the sample input:
+
+Sample Input:
+
+2 1
+
+hackerearth 10
+
+hackerrank 9
+
+hacker
+
+Processing the two entries:
+
+global_max starts as 10, then after second entry, remains 10.
+
+Inserting 'hackerearth':
+
+For each character in 'hackerearth', create nodes and set their max_weight to 10.
+
+Then inserting 'hackerrank':
+
+For the first 6 characters 'hacker', the nodes already exist. For each node, during insertion, the max_weight remains 10. Then, for 'r' (the 7th character of 'hackerrank'), the node is created if not exists. Then, the max_weight for the 'r' node is max(current, 9). Assuming the 'hackerearth' path didn't have 'r' here (since 'hackerearth' is 'hacker' followed by 'e', not 'r'). So the 'r' node is created, and its max_weight is 9.
+
+So when querying 'hacker', the code traverses each character 'h','a','c','k','e','r'. The current_node after 'r' has max_weight 10 (from the first insertion) or 9? Wait, no. The 'hacker' string is 'h','a','c','k','e','r' (6 characters). So when inserting 'hackerearth', each character is processed. The node for 'h' is created with max_weight 10. Then 'a' is created with max 10, etc. The node after the 6th character (the 'r') will have a max_weight of 10. Then inserting 'hackerrank' (length 10). The first 6 characters 'hacker' lead to the same node. The next character is 'r', so create a new node in 'hacker' node's children for 'r', set its max to 9. Then proceed. So the 'hacker' node (after 'r') has a max_weight of 10. So the query 'hacker' ends at that node, and the max_weight is 10. So output is 10, which matches the sample.
+
+So the code works for the sample.
+
+Now, handling empty queries. Suppose the input is:
+
+n=1, q=1
+
+s is 'a' with weight 5.
+
+query is empty.
+
+Then the output should be 5.
+
+In the code:
+
+global_max is 5. The query is empty, so output 5.
+
+Another test case: query is 'hackerrank' (length 10). The trie after inserting the two entries will have a node path for 'hackerrank'. The max_weight for the last node (the 'k' in 'rank') is 9. So the query returns 9.
+
+So the code should handle that.
+
+Now, considering the time constraints. Let's see:
+
+Each insertion is O(L), where L is the length of the string. For all n entries, total time is O(total length of all database strings) = O(1e6), which is acceptable.
+
+Each query is O(L), where L is the length of the query string. For q=1e5 queries, total time is O(total length of all queries) = O(1e6), which is acceptable.
+
+So the code should work within the time constraints.
+
+In Python, using dictionaries for the trie nodes can be efficient enough. However, using a class-based approach with objects might be slightly slower, but for the given constraints, it's manageable.
+
+Now, code:
+
+Read n and q.
+
+Read n lines, split into s and weight.
+
+global_max is updated as max(global_max, weight).
+
+Insert into trie.
+
+Read q queries, process as per code above.
+
+But in Python, for reading large inputs, it's better to read from stdin using sys.stdin, and split the entire input once.
+
+So the code can be written as:
+
+import sys
+
+def main():
+
+    import sys
+
+    root = {'children': {}, 'max_weight': -1}
+
+    global_max = -1
+
+    data = sys.stdin.read().split()
+
+    ptr = 0
+
+    n = int(data[ptr])
+
+    q = int(data[ptr+1])
+
+    ptr +=2
+
+    for _ in range(n):
+
+        s = data[ptr]
+
+        w = int(data[ptr+1])
+
+        ptr +=2
+
+        global_max = max(global_max, w)
+
+        current = root
+
+        for c in s:
+
+            if c not in current['children']:
+
+                current['children'][c] = {'children': {}, 'max_weight': -1}
+
+            current = current['children'][c]
+
+            current['max_weight'] = max(current['max_weight'], w)
+
+    for _ in range(q):
+
+        t = data[ptr]
+
+        ptr +=1
+
+        if not t:
+
+            # empty string case
+
+            print(global_max if global_max != -1 else -1)
+
+        else:
+
+            current = root
+
+            found = True
+
+            for c in t:
+
+                if c not in current['children']:
+
+                    found = False
+
+                    break
+
+                current = current['children'][c]
+
+            if found:
+
+                print(current['max_weight'] if current['max_weight'] != -1 else -1)
+
+            else:
+
+                print(-1)
+
+if __name__ == '__main__':
+
+    main()
+
+Wait, but in Python, splitting the input into data with split() may split lines into parts. For example, if a string has spaces in it, but the problem says that each database entry has a string and an integer. So the input lines for the database entries are of the form "string weight", where the string is a single token (without spaces). But the problem statement's sample input shows 'hackerearth 10' which is split into two parts. So the code assumes that each string is a single token (no spaces). Which is correct, because the problem's input format says each database entry has a string s and a weight. So s is a single string with no spaces. Otherwise, the code would fail.
+
+But according to the problem statement's input description, the database entries are given as "string s and integer weight", which implies that s is a single word. So the code's approach is correct.
+
+So the code reads the entire input into a list of tokens, then processes them in order. For each database entry, s is data[ptr], which is the next token, and weight is data[ptr+1]. Then ptr increments by 2.
+
+For the queries, each query is a single token (the string t). So the code reads data[ptr] and increments ptr by 1.
+
+Thus, the code should handle all cases correctly.
+
+Testing the sample input:
+
+Sample Input:
+
+2 1
+
+hackerearth 10
+
+hackerrank 9
+
+hacker
+
+The data list is:
+
+['2', '1', 'hackerearth', '10', 'hackerrank', '9', 'hacker']
+
+Processing n=2, q=1.
+
+Process first entry: s='hackerearth', w=10. global_max becomes 10.
+
+Inserting each character of 'hackerearth' into the trie.
+
+Then second entry: s='hackerrank', w=9. global_max remains 10.
+
+Process queries: 'hacker' is the query.
+
+Traversing 'h','a','c','k','e','r'.
+
+Each step finds the children, and the final node's max_weight is 10.
+
+So output is 10.
+
+Which matches the sample.
+
+Thus, the code should work.
+</think>
+To solve this problem, we need to implement an efficient autocomplete feature that, given an incomplete search query, returns the maximum weight of any database entry that starts with the given query string. The solution must handle large input sizes efficiently.
+
+### Approach
+1. **Trie Data Structure**: We use a trie (prefix tree) to store the database entries. Each node in the trie represents a prefix and stores the maximum weight of all entries that start with that prefix.
+2. **Global Maximum Weight**: Track the maximum weight of all entries to handle empty queries efficiently.
+3. **Efficient Insertion**: For each entry, insert it into the trie and update the maximum weight for each node along the insertion path.
+4. **Query Processing**: For each query, traverse the trie to find the node corresponding to the query. If the traversal is successful, return the maximum weight stored in that node; otherwise, return -1.
+
+### Solution Code
+```python
+import sys
+
+def main():
+    root = {'children': {}, 'max_weight': -1}
+    global_max = -1
+
+    data = sys.stdin.read().split()
+    ptr = 0
+    n = int(data[ptr])
+    q = int(data[ptr+1])
+    ptr += 2
+
+    for _ in range(n):
+        s = data[ptr]
+        w = int(data[ptr+1])
+        ptr += 2
+        if w > global_max:
+            global_max = w
+        current = root
+        for c in s:
+            if c not in current['children']:
+                current['children'][c] = {'children': {}, 'max_weight': -1}
+            current = current['children'][c]
+            if w > current['max_weight']:
+                current['max_weight'] = w
+
+    output = []
+    for _ in range(q):
+        t = data[ptr]
+        ptr += 1
+        if not t:
+            output.append(str(global_max) if global_max != -1 else '-1')
+        else:
+            current = root
+            found = True
+            for c in t:
+                if c not in current['children']:
+                    found = False
+                    break
+                current = current['children'][c]
+            if found:
+                res = current['max_weight']
+                output.append(str(res) if res != -1 else '-1')
+            else:
+                output.append('-1')
+    
+    print('\n'.join(output))
+
+if __name__ == '__main__':
+    main()
+```
+
+### Explanation
+1. **Trie Construction**: Each node in the trie is a dictionary with children nodes and a max_weight. As we insert each string into the trie, we update the max_weight for each node along the path to be the maximum of its current value and the new weight.
+2. **Global Maximum**: This is maintained to handle empty queries quickly, as all entries start with an empty string.
+3. **Query Handling**: For each query, we traverse the trie. If we successfully traverse all characters of the query, the max_weight at the final node is the result. If any character is missing during traversal, the result is -1.
+
+This approach ensures efficient insertion and query operations, making it suitable for large input sizes as specified in the problem constraints.
+</bot>

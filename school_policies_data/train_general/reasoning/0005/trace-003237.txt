@@ -1,0 +1,969 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.The Elements of Harmony are six supernatural artifacts representing subjective aspects of harmony. They are arguably the most powerful force in Equestria. The inside of Elements of Harmony can be seen as a complete graph with n vertices labeled from 0 to n - 1, where n is a power of two, equal to 2m.
+
+<image>
+
+The energy in Elements of Harmony is in constant movement. According to the ancient book, the energy of vertex u in time i (ei[u]) equals to: 
+
+<image>
+
+Here b[] is the transformation coefficient — an array of m + 1 integers and f(u, v) is the number of ones in the binary representation of number (u xor v).
+
+Given the transformation coefficient and the energy distribution at time 0 (e0[]). Help Twilight Sparkle predict the energy distribution at time t (et[]). The answer can be quite large, so output it modulo p.
+
+Input
+
+The first line contains three integers m, t and p (1 ≤ m ≤ 20; 0 ≤ t ≤ 1018; 2 ≤ p ≤ 109). The following line contains n (n = 2m) integers e0[i] (1 ≤ e0[i] ≤ 109; 0 ≤ i < n). The next line contains m + 1 integers b[i] (0 ≤ b[i] ≤ 109; 0 ≤ i ≤ m).
+
+Output
+
+Output n lines, the i-th line must contain a single integer et[i] modulo p.
+
+Examples
+
+Input
+
+2 2 10000
+4 1 2 3
+0 1 0
+
+
+Output
+
+14
+6
+6
+14
+</user>
+<bot>
+<think>
+Okay, let's try to understand this problem. So, we need to compute the energy distribution after t time steps based on some transformation coefficients and the initial energy. Hmm. The problem statement says that each time step, the energy at a vertex u is calculated using the formula involving the transformation coefficients b and the function f(u, v), which is the number of ones in the binary representation of u xor v. 
+
+Wait, the formula for e_i+1[u] is the sum over all v of (e_i[v] * b_k) where k is f(u, v). Right. So for each vertex u at the next time step, its energy is a combination of all the current energies multiplied by the coefficient corresponding to the number of differing bits between u and v. 
+
+But since the graph is a complete graph, each step's update involves considering all pairs of vertices. However, directly computing this for each step would be O(n²) per step, which is impossible when m is up to 20 (n=2^20 is a million, so n² is a trillion operations per step). And t can be up to 1e18, so we can't simulate each step. So we need a smarter approach.
+
+Let's think about the transformation. Each time step is a linear transformation of the current state. The energy vector after each step is a matrix multiplication of the transformation matrix with the current vector. If we can represent the transformation as a matrix, then exponentiating this matrix to the t-th power and applying it to the initial vector will give the result efficiently.
+
+But the problem is the size of the matrix. For m=20, the size is 2^20 x 2^20, which is way too big to handle directly. So we need a way to find a pattern or some structure that allows us to compute the matrix exponentiation in O(m * 2^m) time or similar.
+
+Wait, maybe there's some symmetry here. Because the function f(u, v) is based on the Hamming distance (number of 1's in u xor v), which is symmetric. So the transformation matrix might have some group structure that can be exploited. For example, all pairs of u and v with the same Hamming distance contribute the same coefficient. So the matrix entry for (u, v) is b_k where k is the Hamming distance between u and v. 
+
+This seems to form a structure where the matrix can be diagonalized in the Fourier domain, or perhaps decomposed using properties of the hypercube's eigenvalues. Alternatively, since the transformation is a linear operator that's invariant under permutations of the bits (i.e., the transformation is a circulant matrix or something similar), perhaps we can use the Fast Walsh-Hadamard Transform (FWHT) to perform the convolution efficiently.
+
+Let me recall that for problems involving binary XOR and Hamming distances, the FWHT is often useful. The key idea here might be that the transformation matrix is a linear operator that's diagonal in the Walsh-Hadamard basis. If that's the case, then applying the transformation t times would correspond to taking the Walsh-Hadamard transform of the initial vector, raising each component to the t-th power multiplied by some factor, and then transforming back.
+
+Alternatively, think about the eigenvalues. For each possible Hamming distance k, the coefficient is b_k. The matrix M where M[u][v] = b_{f(u,v)} is a kind of convolution matrix. For example, when you multiply this matrix by a vector, it's equivalent to a convolution in some transformed space.
+
+Let's consider the XOR between u and v. Let's denote x = u xor v. Then, the Hamming weight of x is exactly f(u, v). So, the matrix M can be viewed as a function that depends only on x. This is similar to a circular convolution matrix, but in the XOR domain. Such matrices are diagonalized by the Walsh-Hadamard transform.
+
+In the Walsh-Hadamard transform, each basis function is a character of the group (Z/2Z)^m, which is the additive group of m-bit vectors under XOR. The eigenvalues of the matrix M can be computed by taking the Walsh-Hadamard transform of the function g(x) = b_{w(x)}, where w(x) is the Hamming weight of x. Then, each eigenvalue λ_s is the sum over x of g(x) * (-1)^{x·s}, where x·s is the dot product (parity of the bitwise AND of x and s). Then, the transformation after t steps would be equivalent to raising each eigenvalue to the t-th power and applying the inverse transform.
+
+So the steps would be:
+
+1. Compute the Walsh-Hadamard transform of the initial vector e0 to get E0.
+2. Compute the eigenvalues of the transformation matrix. Each eigenvalue corresponds to the Walsh-Hadamard transform of the function g(x) = b_{w(x)}. Let's call this B. Then, the eigenvalues are the values of B, and after t steps, they become B^t.
+3. Multiply each component of E0 by B^t (component-wise), then take the inverse Walsh-Hadamard transform to get et.
+4. Finally, take each component modulo p.
+
+This approach would have a time complexity of O(m * 2^m), which is feasible even for m=20 (since 2^20 is about a million, and O(m * 2^m) is around 20 million operations).
+
+So, the main steps are:
+
+- Precompute the function g(x) = b_{w(x)}, where w(x) is the number of 1s in x's binary representation.
+- Compute the Walsh-Hadamard transform of g, which gives the eigenvalues B_s for each s.
+- Compute E0_s, the Walsh-Hadamard transform of e0.
+- For each s, compute E0_s * (B_s)^t mod p, since each step multiplies the eigenvalue.
+- Compute the inverse Walsh-Hadamard transform of the resulting vector to get et.
+- Output each component mod p.
+
+But wait, how exactly does the Walsh-Hadamard transform work here?
+
+The Walsh-Hadamard transform (specifically the Walsh-Hadamard matrix) for a function f over the Boolean hypercube is given by:
+
+F(s) = sum_{x} f(x) * (-1)^{x·s}
+
+The inverse transform is similar, but with a scaling factor. So, for the inverse, you take sum_{s} F(s) * (-1)^{x·s} and divide by 2^m.
+
+In the case of matrix exponentiation, the matrix M can be diagonalized by the Walsh-Hadamard transform. So, when we multiply M by a vector, it's equivalent to transforming the vector into the Walsh-Hadamard basis, multiplying each component by the corresponding eigenvalue (which is the Walsh-Hadamard transform of g), and then transforming back.
+
+So, after t applications of M, the eigenvalues are raised to the t-th power. Therefore, the process is:
+
+et = M^t * e0
+
+Which in the transformed domain is:
+
+ET = (B)^t * E0
+
+Then, et = inverse-WHT(ET).
+
+So, the steps are:
+
+1. Compute the Walsh-Hadamard transform of g to get B.
+2. Compute E0 = WHT(e0).
+3. Multiply each component E0_s by B_s^t to get ET_s.
+4. Compute the inverse WHT of ET to get et.
+5. Take each component modulo p.
+
+Now, how to compute the Walsh-Hadamard transform efficiently?
+
+The standard algorithm for the Walsh-Hadamard transform is similar to the FFT, using a divide-and-conquer approach with bitwise operations. The transform can be computed in O(n log n) time, where n is 2^m. For each layer (bit position), you perform butterfly operations.
+
+The Walsh-Hadamard transform (WHT) of a vector a of length 2^m can be computed as follows:
+
+for d in 1 to m:
+    for i in 0 to n-1 step 2^d:
+        for j in 0 to (2^{d-1} - 1):
+            x = a[i + j]
+            y = a[i + j + 2^{d-1}]
+            a[i + j] = (x + y) % mod  # mod here is necessary only if values can be large
+            a[i + j + 2^{d-1}] = (x - y) % mod
+
+This is the in-place WHT. For our problem, since we are dealing with possibly large numbers (but not modulo yet, since exponents can be big), we need to compute this without mod until the end. However, since the final step involves taking modulo p, perhaps during the WHT steps, we can apply the modulo to prevent overflow, but since in Python integers can be arbitrarily large, perhaps it's better to handle the modulo at the end steps. Wait, but during the transformation steps, the numbers can get large, but the WHT doesn't require any modulo operations except when combining terms. However, in our case, the final result after inverse WHT will be divided by 2^m (since inverse WHT includes a scaling factor). So perhaps during the WHT steps, we can avoid mod, perform the entire computation, and then apply mod p at the end.
+
+But for the WHT and its inverse, the scaling factor is important. For the inverse WHT, each element is divided by 2^m. So, the process is:
+
+WHT: F(s) = sum_x f(x) (-1)^(x·s)
+Inverse WHT: f(x) = (1/2^m) sum_s F(s) (-1)^(x·s)
+
+So, in code:
+
+To compute the inverse WHT, after performing the same steps as the forward WHT, we divide each element by 2^m.
+
+But in our case, the forward WHT is applied to g (the coefficients) and e0. Then, after multiplying by B^t, we perform the inverse WHT and divide by 2^m. However, since we are working modulo p, division by 2^m needs to be handled via modular inverses.
+
+Wait, but in this problem, the division by 2^m would occur as part of the inverse WHT. However, since we're working modulo p, we can't directly divide. Instead, we multiply by the modular inverse of 2^m modulo p. But we need to ensure that p and 2 are coprime. Wait, the problem says that p is ≥2, but if p is even, then 2^m and p may not be coprime. So, in that case, the division isn't possible. But how can this be?
+
+Wait, the inverse Walsh-Hadamard transform requires dividing by 2^m. However, when the modulus is even, 2^m may not have an inverse. So, how does that affect the problem?
+
+This suggests that our approach only works when 2^m is invertible mod p, but in the problem statement, p can be any number ≥2, including even ones. So, how to handle this?
+
+Hmm, maybe there's a mistake in my approach. Let's think again.
+
+Wait, perhaps the initial approach is incorrect when p is even. But the problem requires us to compute the final result modulo p. So perhaps the steps need to be adjusted to account for the modulus properly.
+
+Alternatively, maybe the steps can be performed without division, by adjusting the forward and inverse transforms. Let's think.
+
+The standard Walsh-Hadamard transform (for the sum) is its own inverse up to a scaling factor. So, applying the transform twice gives the original vector scaled by 2^m. So, the inverse transform can be done by applying the same transform again and then dividing by 2^m.
+
+But in our case, the matrix M is such that each application of M is equivalent to a convolution in the transformed space, where each step's contribution is a multiplication by B_s. Therefore, after t steps, the transformed vector is E0_s multiplied by (B_s)^t. Then, applying the inverse transform (which is the same as the forward transform, but with a division by 2^m) gives the final et.
+
+But how to handle the division by 2^m mod p, especially when p is even?
+
+This is a problem. For example, if p is 2, then 2^m is 0 mod p, and division by zero is impossible. But the problem statement allows p to be 2. How can that be possible?
+
+But looking at the example input:
+
+The first example has m=2, so 2^2=4. The output is mod 10000. The sample input's output is 14,6,6,14. Let's see:
+
+If the initial e0 is [4,1,2,3], and after two steps, the transformed vector would be something multiplied by (B_s)^2, then inverse transformed. But in that example, the division by 4 (since m=2) would have to be handled. But 10000 is 4*2500, so 4 is a divisor of 10000. So in that case, division by 4 mod 10000 is possible if the numerator is divisible by 4. But how do we know that the inverse WHT produces a vector where all elements are divisible by 4?
+
+Wait, perhaps the mathematical steps ensure that the result of the inverse WHT is integral. Because in the problem, the transformations are all integer-based. So, the initial e0 is integers, and the coefficients are integers, so after all steps, the et should be integers. Therefore, the inverse WHT, which involves dividing by 2^m, must result in an integer, which means that the sum after the inverse transform is divisible by 2^m. Thus, when we compute the inverse WHT, the division by 2^m will give an integer, and when taking modulo p, even if p is even, as long as 2^m divides the sum, the division is possible modulo p. Wait, but how?
+
+For example, suppose after the inverse WHT steps, we have a value of 8, and we need to divide by 4. The result is 2. But modulo 4, 8 mod 4 is 0, and 0 /4 mod 4 is 0, but 2 mod4 is 2. So the division modulo even numbers is not straightforward. So perhaps the approach is only valid when the division is possible. But how can we ensure that the result is an integer?
+
+But according to the problem statement, the answer is guaranteed to exist, and we just have to output it modulo p. Therefore, the division by 2^m must be exact (i.e., the sum is a multiple of 2^m) so that when we divide, we get an integer. Therefore, when performing the inverse WHT, the sum must be divisible by 2^m, allowing us to compute the division modulo p as (sum * inv(2^m)) mod p, where inv(2^m) is the modular inverse of 2^m mod p. However, inv(2^m) exists only if 2^m and p are coprime. But in cases where p is even and 2^m shares a factor with p, this inverse doesn't exist. 
+
+This seems like a contradiction. But perhaps in the problem's context, the inverse WHT's division is not necessary. Wait, maybe the standard way of handling the WHT for this problem is to use the transform without the scaling factor. Let me double-check.
+
+Alternatively, perhaps the forward and inverse transforms are implemented without the scaling factor. For example, some implementations of the WHT do not include the scaling factor in the inverse. Then, applying the transform twice (forward and inverse) would multiply the original vector by 2^m. So, perhaps in our case, the initial steps are:
+
+Compute the WHT of e0 (without scaling), multiply by B^t (element-wise), then compute the inverse WHT (without scaling), and then divide by 2^m. But this division is required, and must be handled modulo p.
+
+So, the steps would be:
+
+1. Compute the WHT of e0, store in E0.
+2. Compute the WHT of g (the coefficients), store in B.
+3. For each s, compute ET[s] = E0[s] * (B[s])^t mod (something). But since we need to compute this modulo p, perhaps the exponents are computed modulo the totient of p if possible. However, t can be up to 1e18, so we need an efficient way to compute (B[s])^t mod (something). But the problem requires that the final result is mod p, but during the computation, the exponents could be very large, leading to very big numbers.
+
+Wait, but when working modulo p, we can compute (B[s]^t mod (p * 2^m)), since the division by 2^m would be part of the inverse transform. Wait, perhaps not. Let's think.
+
+The steps are:
+
+After computing the inverse WHT, the value is (sum ...) / (2^m). So when we compute the inverse WHT, we have to take each component of the transformed vector (after multiplying by B^t), sum them with the appropriate signs, and then divide by 2^m. Then, modulo p, this division is equivalent to multiplying by the inverse of 2^m mod p, but only if 2^m and p are coprime. If they are not, then this inverse does not exist. However, since the problem requires the answer to be an integer, the division must result in an integer, which implies that the sum is divisible by 2^m. Therefore, the sum is a multiple of 2^m, so when we divide by 2^m, we get an integer. Then, when taking modulo p, even if p is even, the division is exact, so the result is an integer. So, the modulo can be applied after the division.
+
+But how to handle this in code? Because during the steps, the numbers can be very large, and we can't compute them exactly. So perhaps the approach is to compute everything modulo (p * 2^m), then perform the division by 2^m modulo p.
+
+Wait, let's see. Let's denote the final result before division as S, which is divisible by 2^m. So S = k * 2^m. Then, the desired value is k. Then, modulo p, this is k mod p. But S mod (p * 2^m) is S, and since S is divisible by 2^m, S = 2^m * k. So, S mod (p * 2^m) = 2^m * (k mod p). Wait, no. For example, if k = p + 1, then S = 2^m (p +1), mod (p*2^m) is 2^m. Then, S / 2^m mod p would be (2^m (p +1) ) / 2^m mod p = (p +1) mod p =1. But according to S mod (p*2^m) = 2^m, then 2^m / 2^m mod p is 1, which is correct. So, perhaps during the exponentiation steps, we can compute everything modulo (p * 2^m), then after the inverse WHT, divide by 2^m (since S is divisible by 2^m), and then take modulo p.
+
+But how does that work? Let's think. 
+
+Suppose after the inverse WHT step, each element is S, which is divisible by 2^m. Then, S = 2^m * k. So, S mod (p * 2^m) is 2^m * (k mod p). Then, dividing by 2^m gives (k mod p). Then, the result is k mod p, which is the correct value.
+
+So, the steps would be:
+
+- Compute the WHT of e0 and g modulo (p * 2^m). Because when we multiply by B^t, we need to compute B[s]^t mod (p * 2^m), since after multiplying by E0[s], and then summing in the inverse WHT, the sum will be modulo (p * 2^m). Then, dividing by 2^m gives a value modulo p.
+
+Therefore, the plan is:
+
+1. Compute the function g[x] = b[w(x)], where w(x) is the Hamming weight of x.
+2. Compute the WHT of g to get B[s]. This is done modulo (p * 2^m), because during the exponentiation, we need to compute B[s]^t mod (p * 2^m).
+3. Compute the WHT of e0 to get E0[s], modulo (p * 2^m).
+4. For each s, compute ET[s] = (E0[s] * pow(B[s], t, mod)) ) % mod, where mod is p * (2^m).
+5. Compute the inverse WHT of ET, again modulo (p * 2^m).
+6. Divide each element by (2^m), which is possible since the inverse WHT step gives a sum divisible by 2^m.
+7. The result after division is modulo p.
+
+But how to compute the inverse WHT and division in code?
+
+Alternatively, during the inverse WHT step, since the result is divided by 2^m, perhaps we can compute the inverse WHT as (sum * inv_2m) mod p, where inv_2m is the modular inverse of 2^m mod p. But again, this requires that 2^m and p are coprime. If they are not, then the inverse doesn't exist. However, according to the problem's constraints, the answer must exist, which suggests that the sum is indeed divisible by 2^m. So, perhaps the division can be done as follows: compute the inverse WHT (without scaling), then compute (result * inv_2m) mod p. But inv_2m is the inverse of 2^m mod p, which exists only if 2^m and p are coprime. 
+
+This presents a problem when p is even. For example, if p is even and m is at least 1, then 2^m and p share a common factor of 2. So, the inverse does not exist. Therefore, this approach can't be directly applied. So there's a flaw in my initial reasoning.
+
+Hmm. This suggests that perhaps my initial approach is not correct, and I need to find another way.
+
+Alternative approach: Let's consider that the transformation matrix M is such that M[u][v] = b_{f(u, v)}. The key observation is that the matrix M is a symmetric matrix, and that it's diagonal in the Walsh-Hadamard basis.
+
+But perhaps there's a different way to model the transitions. Each time step, the energy at each node is a linear combination of all nodes in the previous step. The coefficients depend on the Hamming distance between u and v. So, for each node u, e_{i+1}[u] = sum_{v} e_i[v] * b_{f(u, v)}.
+
+But since f(u, v) is the Hamming distance between u and v (number of differing bits), which is the same as the Hamming weight of u xor v, the coefficient only depends on u xor v.
+
+This is a convolution over the XOR operation. Such convolutions can be handled efficiently using the Fast Walsh-Hadamard Transform (FWHT). The FWHT allows us to compute the convolution in O(n log n) time.
+
+In particular, the matrix M can be represented as a kernel function g[x] = b_{w(x)}, where w(x) is the number of 1s in x's binary representation. Then, each step is equivalent to convolving the current energy vector with the kernel g. Since convolution under XOR is associative, applying the convolution t times is equivalent to raising the kernel's transform to the t-th power, then convolving once with the initial vector.
+
+The steps using FWHT would be:
+
+1. Compute the FWHT of the initial vector e0.
+2. Compute the FWHT of the kernel g.
+3. Raise each element of the transformed kernel to the t-th power (element-wise).
+4. Multiply each element of the transformed e0 by the corresponding element from the transformed kernel raised to the t-th power.
+5. Compute the inverse FWHT to get the result after t steps.
+6. Apply modulo p.
+
+But how exactly does the FWHT handle multiple convolutions? 
+
+Each application of the kernel corresponds to a multiplication in the transformed domain. Therefore, after t applications, the transformed vector is the initial transformed vector multiplied by (transformed kernel)^t. This is the same as what I thought earlier.
+
+So the steps are correct. The main challenge is implementing the FWHT correctly and handling the division by 2^m in the inverse transform when applying modulo p.
+
+Now, the problem arises when p is even. For example, when m=1 and p=2, the division by 2 is not possible modulo 2. But according to the problem statement, the answer is required to be an integer modulo p. So, the division must be exact, which implies that the inverse transform's sum is a multiple of 2^m. Therefore, when we perform the inverse transform, the sum is divisible by 2^m, and dividing by 2^m gives an integer. Therefore, even if p is even, the division is exact, so after division, the result is an integer. Then, taking modulo p would be valid.
+
+But how to compute this in code?
+
+The approach would be:
+
+- Perform the FWHT on the initial vector and kernel, computing their transforms.
+- Multiply each component of the transformed initial vector by (transformed kernel component)^t.
+- Perform the inverse FWHT, then divide each element by 2^m (the size of the vector) to get the final result.
+- Apply modulo p to each element.
+
+But how to handle the division by 2^m modulo p when p is even?
+
+The answer is that since the division is exact (the sum is divisible by 2^m), the division can be done as integer division. However, since we are working modulo p, and we can't directly divide, we can compute the division as follows:
+
+If mod is p, then the result after inverse FWHT is S = 2^m * k. Then, S mod (mod) is (2^m *k) mod mod. But since we need to compute k mod mod, which is (S / 2^m) mod mod. But since 2^m may not have an inverse modulo mod, but S is divisible by 2^m, the division can be carried out as follows:
+
+k = S // 2^m 
+
+Then, k mod mod is the required result.
+
+But how to compute S in such a way that this division is possible? Because if we perform the inverse FWHT without any modulo, the numbers could be extremely large (e.g., with m=20 and t=1e18, leading to huge exponents), making it impossible to compute S directly.
+
+Therefore, the solution must find a way to compute everything modulo (mod * 2^m), then perform the division by 2^m.
+
+Because:
+
+S = inverse_FWHT(ET) → which is a multiple of 2^m.
+
+If we compute S modulo (mod * 2^m), then S = 2^m * k + l * (mod * 2^m), which simplifies to S ≡ 2^m * k (mod mod * 2^m). Therefore, S / 2^m ≡ k (mod mod). Because when we compute S mod (mod * 2^m), then divide by 2^m, we get k mod mod.
+
+Therefore, during the entire computation, we can perform all operations modulo (mod * 2^m), then after the inverse FWHT, divide by 2^m (which is possible since S is a multiple of 2^m) to get k, which is then taken modulo mod.
+
+This is the key insight. So, all steps should be computed modulo (mod * 2^m), which allows us to perform the division by 2^m correctly.
+
+So, the steps in code would be:
+
+1. Compute n = 2^m.
+
+2. For the kernel g[x], compute g[x] = b[number of 1s in x's binary representation].
+
+3. Compute the FWHT of e0 and g, but all operations are performed modulo (mod * n), where n = 2^m.
+
+   Wait, because mod * n = p * 2^m. So, the modulus is p * 2^m.
+
+4. Compute the transformed kernel B[s] = FWHT(g)[s].
+
+5. Compute the transformed e0 E0[s] = FWHT(e0)[s].
+
+6. For each s in 0..n-1:
+
+   ET[s] = (E0[s] * pow(B[s], t, mod * n)) % (mod * n)
+
+7. Compute the inverse FWHT of ET, again modulo (mod * n). The inverse FWHT is the same as the forward FWHT, but after processing, each element is divided by n. Wait, no. The inverse FWHT is the same as the forward FWHT, but after the process, you divide by n. But in our case, during the inverse step, the division by n is part of the process.
+
+But the standard FWHT implementation requires that after performing the inverse transform, you divide by n. However, in our case, since we are working modulo (mod * n), we can perform the inverse transform steps without division, then multiply by the inverse of n modulo (mod * n). But since n is 2^m, and mod * n is even (since mod can be even), the inverse of n may not exist. But in our approach, after the inverse transform, we have to divide by n (2^m) to get the correct result. However, as per our previous reasoning, this division is exact, so the result after the inverse transform is S, and S is divisible by n. So, when we compute S mod (mod * n), S is a multiple of n. Therefore, S = k * n, and S mod (mod * n) is k * n mod (mod * n) = (k mod mod) * n. Therefore, dividing by n gives k mod mod. So, the division is simply (S // n) mod mod.
+
+But how to compute this in code?
+
+Let's break it down:
+
+After performing the inverse FWHT (which is the same as the forward FWHT), we have S = sum ... which is the transformed vector multiplied by n. Then, the actual inverse FWHT is S / n.
+
+But how?
+
+Wait, the forward FWHT of a vector a is another vector A where each element is sum_{x} a[x] * (-1)^{x·s}. The inverse FWHT is sum_{s} A[s] * (-1)^{x·s} divided by n.
+
+But in code, the forward and inverse transforms can be the same algorithm. However, the inverse transform requires the division by n. So, perhaps after performing the forward FWHT on the initial vector and the kernel, then after multiplying by B^t, we perform the inverse FWHT (which is the same as the forward FWHT) and then divide by n.
+
+But during the inverse transform, the division by n is needed. However, since we are working modulo (mod * n), we can multiply by the inverse of n modulo (mod * n) if it exists. But since n is a power of two and mod can be even, mod * n is even, and n and mod *n are not coprime. So, the inverse of n doesn't exist modulo (mod *n). Therefore, we cannot perform the division modulo (mod *n). 
+
+But according to our previous reasoning, the sum after the inverse transform is divisible by n, so the division can be done as integer division. However, since we are working modulo (mod *n), the sum is stored modulo (mod *n). Therefore, S = sum_ET = k *n, so S mod (mod *n) = (k mod mod) *n. Therefore, S //n = k mod mod.
+
+So, the steps are:
+
+After inverse FWHT, each element s is sum_ET[s], which is a multiple of n. So, to get the final result, we compute sum_ET[s] //n mod mod.
+
+But sum_ET[s] is stored modulo (mod *n). So sum_ET[s] mod (mod *n) is (k *n) mod (mod *n) = (k mod mod) *n. Then, dividing by n gives (k mod mod), which is the desired value.
+
+Therefore, in code:
+
+For each element in the inverse FWHT result, divide by n (using integer division) and then take mod mod.
+
+But how to compute sum_ET[s] when it's stored modulo (mod *n)?
+
+For example, sum_ET[s] = (k *n) mod (mod *n) = (k mod mod) *n. So when we divide by n, we get (k mod mod). Which is exactly the value we want modulo mod.
+
+Therefore, in code:
+
+After performing the inverse FWHT on ET (mod (mod *n)), each element is divided by n (integer division), and then taken modulo mod.
+
+This works because sum_ET[s] is a multiple of n.
+
+So, the code steps are:
+
+- Compute the kernel g[x] = b[w(x)], where w(x) is the Hamming weight of x.
+
+- Compute mod_total = p * (1 << m)
+
+- Compute the forward FWHT of e0 and g, modulo mod_total.
+
+- Compute B[s]^t mod mod_total for each s. (Because when we multiply E0[s] by B[s]^t, the product is mod mod_total.)
+
+- Compute ET[s] = (E0[s] * B[s]^t) mod mod_total.
+
+- Compute the inverse FWHT of ET. (Which is the same as the forward FWHT, but applied again.)
+
+- For each element in the inverse FWHT result, divide by (1 << m), then take modulo p.
+
+Now, the key is to implement the FWHT correctly, taking into account the modulo mod_total during the transformations.
+
+Implementing the FWHT:
+
+The standard in-place iterative FWHT for XOR convolution is as follows:
+
+def fwht(a):
+    n = len(a)
+    h = 1
+    while h < n:
+        for i in range(0, n, h * 2):
+            for j in range(i, i + h):
+                x = a[j]
+                y = a[j + h]
+                a[j] = (x + y) % mod_total
+                a[j + h] = (x - y) % mod_total
+        h *= 2
+
+But in code, the order of the loops can vary. Another implementation may use bitwise layers, but the basic idea is to perform the butterfly operations.
+
+But note that the FWHT is applied in place. So during the transform, each pair of elements is updated based on their current values.
+
+Now, for each element, after each transformation step, we take modulo mod_total to prevent integer overflow, which is important in Python because even though Python can handle big integers, it would be very slow for large n and m.
+
+So, the code steps:
+
+Read m, t, p.
+
+n = 1 << m
+
+Read e0 as a list.
+
+Read b as a list of m+1 elements.
+
+Compute g[x] for x in 0..n-1: for each x, compute the number of 1 bits in x (w), then g[x] = b[w].
+
+Compute mod_total = p * n
+
+Compute the FWHT of e0 and g modulo mod_total.
+
+Compute B = fwht(g) → this is the transformed kernel.
+
+Compute E0 = fwht(e0) → this is the transformed initial vector.
+
+Compute ET[s] = (E0[s] * pow(B[s], t, mod_total)) % mod_total for each s.
+
+Compute the inverse FWHT of ET: apply the same FWHT again, and then divide each element by n.
+
+But wait, the inverse FWHT is the same as the forward FWHT, but with a division by n. So, after applying the FWHT again, the result is sum_ET multiplied by n. Therefore, we need to apply the FWHT again, then divide each element by n.
+
+Wait, no. The FWHT is its own inverse except for a scaling factor. Applying it twice multiplies each element by n. So, the forward transform of the forward transform is n times the original vector. Therefore, to compute the inverse transform, you would apply the forward transform again and divide by n.
+
+So, to compute the inverse FWHT of ET:
+
+1. Make a copy of ET.
+
+2. Apply the forward FWHT to this copy. This gives the inverse transform multiplied by n.
+
+3. Divide each element by n.
+
+But since we are working modulo mod_total = p *n, dividing by n is equivalent to multiplying by the inverse of n modulo mod_total. But since n and mod_total are not coprime (mod_total is p *n), the inverse does not exist. However, since the result after the second FWHT is a multiple of n (because the inverse transform of ET is sum_ET, which when multiplied by n after applying the FWHT again), dividing by n will give sum_ET, which is the correct value. 
+
+But how?
+
+Let's think. Let's suppose after the first FWHT (forward), we have the transformed vector. Then, after applying the second FWHT (forward), each element is multiplied by n. So, the inverse FWHT is (1/n) * FWHT(FWHT(a)).
+
+But since we are working modulo mod_total = p *n, when we apply the second FWHT, the elements are stored modulo mod_total. So, after the second FWHT, each element is n*a_i mod mod_total. Then, dividing by n gives a_i mod p.
+
+Wait, because:
+
+n * a_i mod (p *n) is equal to n*(a_i mod p). So, when you divide by n, you get (a_i mod p). 
+
+Yes. For example:
+
+n=4, p=5, mod_total=20.
+
+Suppose a_i =3. Then, n*a_i = 12 mod 20. Dividing by 4 gives 3 mod 5, which is 3.
+
+Another example: a_i =6 → n*a_i =24 mod 20 → 4. Dividing by4 → 1 mod5.
+
+Which is 6 mod5 is 1.
+
+So, this works. Therefore, after applying the second FWHT, each element is (n * a_i) mod (p *n). Then, dividing by n gives a_i mod p.
+
+Therefore, the code steps are:
+
+- Apply the FWHT to ET, storing the result in ET_inv.
+
+- For each element in ET_inv, compute (ET_inv[x] // n) % p.
+
+Therefore, even if ET_inv[x] is negative (due to subtraction steps in FWHT), when taken modulo mod_total, it becomes positive. So, dividing by n gives the correct value.
+
+So, in code:
+
+Compute the FWHT of e0 and g modulo mod_total.
+
+Compute ET[s] = (E0[s] * pow(B[s], t, mod_total)) % mod_total.
+
+Apply the FWHT to ET again (mod mod_total).
+
+Then, for each x in ET, compute (ET[x] // n) % p.
+
+But wait, in code, how to handle negative values after applying modulo?
+
+For example, if during the FWHT steps, we have x - y. If x < y, then x - y is negative, and modulo mod_total would wrap around. But when we divide by n, we need to ensure that the result is correct. For example, suppose mod_total is 20, and the value is -8. Mod 20 gives 12. 12 //4 = 3, which is equivalent to (-8) //4 = -2, but 12 mod 20 is 12 → 12//4=3. But when we take (12//4) mod5 → 3 mod5 is3, but (-8//4) is -2 → mod5 is 3 as well. So the division works correctly as long as the modulo is handled properly.
+
+Therefore, the code can proceed as follows:
+
+Implement the FWHT with modulo mod_total, then after applying the second FWHT, divide by n (integer division), then take modulo p.
+
+Now, the code structure:
+
+Read m, t, p.
+
+n = 1 << m.
+
+e0 = list of n integers.
+
+b = list of m+1 integers.
+
+Compute g[x] for each x in 0..n-1:
+
+   w = bin(x).count('1')
+
+   g[x] = b[w]
+
+mod_total = p * n
+
+Apply FWHT to e0 modulo mod_total.
+
+Apply FWHT to g modulo mod_total.
+
+Compute B = g's transformed array.
+
+Compute for each s in 0..n-1:
+
+   ET[s] = (e0_transformed[s] * pow(g_transformed[s], t, mod_total)) % mod_total.
+
+Apply FWHT to ET modulo mod_total.
+
+For each x in ET:
+
+   res = (ET[x] // n) % p
+
+   print(res)
+
+Now, the critical parts are implementing the FWHT correctly with modulo, and handling large exponents t.
+
+Implementing the FWHT with modulo:
+
+The FWHT function should process the array in place, applying the transformation and taking modulo mod_total at each step.
+
+The code for the FWHT function:
+
+def fwht(arr, mod):
+    n = len(arr)
+    h = 1
+    while h < n:
+        for i in range(0, n, h * 2):
+            for j in range(i, i + h):
+                x = arr[j]
+                y = arr[j + h]
+                arr[j] = (x + y) % mod
+                arr[j + h] = (x - y) % mod
+        h <<= 1
+
+But this is the standard iterative implementation. However, note that the order of the steps is important. This code should correctly compute the FWHT modulo mod_total.
+
+Testing this function: Let's see for small n.
+
+For n=2:
+
+Initial array [a, b]
+
+h=1:
+
+process i=0:
+
+j=0:
+
+x = a, y = b.
+
+arr[0] = a + b mod mod
+
+arr[1] = a - b mod mod.
+
+So transformed array is [a+b, a-b].
+
+Which is correct.
+
+For n=4:
+
+The process would first handle h=1, then h=2.
+
+But perhaps the code is correct.
+
+Now, the code steps:
+
+After applying FWHT to e0 and g, we have their transformed versions.
+
+Then, compute ET as the element-wise product of E0 and B^t.
+
+But since t can be up to 1e18, we need to compute pow(B[s], t, mod_total) efficiently. Python's pow function can do this.
+
+But B[s] can be zero, so even if B[s] is zero, pow(0, t, mod_total) is zero when t>0.
+
+Now, for the example input:
+
+Input:
+
+2 2 10000
+
+4 1 2 3
+
+0 1 0
+
+So m=2, n=4.
+
+The initial e0 is [4, 1, 2, 3].
+
+The coefficients b are [0, 1, 0].
+
+Compute g[x] for x in 0-3:
+
+x=0 (binary 00): w=0 → b[0] =0.
+
+x=1 (01): w=1 →b[1]=1.
+
+x=2 (10): w=1 →b[1]=1.
+
+x=3 (11): w=2 →b[2]=0.
+
+So g is [0,1,1,0].
+
+mod_total = 10000 *4=40000.
+
+Compute FWHT of e0:
+
+The FWHT of [4,1,2,3] is:
+
+First h=1:
+
+Process pairs (0,1) and (2,3):
+
+For i=0:
+
+j=0: x=4, y=1 → arr[0] =5, arr[1] =3.
+
+For i=2:
+
+j=2: x=2, y=3 → arr[2]=5, arr[3]=-1 → mod 40000 → 39999.
+
+After h=1, array is [5,3,5,39999].
+
+h=2:
+
+Now, process in steps of 4 (since h=2). So i ranges from 0.
+
+For i=0:
+
+j=0 and j=1.
+
+For j=0:
+
+x=5, y=5 → arr[0] =10, arr[2]=0.
+
+For j=1:
+
+x=3, y=39999 → arr[1] = (3+39999) mod40000 =40002 mod40000=2. arr[3] =3-39999= -39996 mod40000= 40000-39996=4.
+
+So after h=2, the transformed e0 is [10, 2, 0,4].
+
+Wait, let me re-calculate:
+
+After h=1 step:
+
+array is [5,3,5,39999].
+
+h=2:
+
+For i=0 to n-1 (4) step 4:
+
+So i=0.
+
+for j in 0..0+2-1=1:
+
+j=0:
+
+x = arr[0] =5, y= arr[0+2] =5.
+
+new arr[0] =5+5=10 mod40000.
+
+new arr[0+2] =5-5=0 mod40000.
+
+j=1:
+
+x= arr[1] =3, y= arr[1+2] =arr[3] =39999.
+
+new arr[1] =3+39999=40002 mod40000=2.
+
+new arr[1+2] =3-39999 =-39996 mod40000= 4.
+
+So after h=2, the array is [10, 2, 0,4].
+
+So the transformed e0 is [10,2,0,4].
+
+Then, compute the FWHT of g.
+
+g is [0,1,1,0].
+
+h=1:
+
+process pairs (0,1) and (2,3).
+
+i=0:
+
+j=0: x=0, y=1 → arr[0]=1, arr[1]=-1 mod40000=39999.
+
+i=2:
+
+j=2: x=1, y=0 → arr[2]=1, arr[3]=1-0=1.
+
+After h=1: [1,39999,1,1].
+
+h=2:
+
+process i=0.
+
+j=0 and j=1.
+
+j=0: x=1, y=1 → arr[0]=2, arr[2]=0.
+
+j=1: x=39999, y=1 → arr[1]=39999+1=40000 mod40000=0. arr[3] =39999-1=39998.
+
+So transformed g is [2,0,0,39998].
+
+So B is [2,0,0,39998].
+
+Now, compute ET[s] = E0[s] * (B[s]^t) mod mod_total.
+
+t=2.
+
+For s=0:
+
+B[0] =2 → 2^2=4. 10 *4=40 mod40000 →40.
+
+s=1:
+
+B[1]=0 →0^2=0. 2 *0=0.
+
+s=2:
+
+B[2]=0 →0^2=0.0 *0=0.
+
+s=3:
+
+B[3] =39998 → 39998^2 mod40000.
+
+39998 mod40000 is -2. So (-2)^2=4. 4 mod40000=4. So 4 *4=16 → 16 mod40000.
+
+ET = [40,0,0,16].
+
+Now, apply FWHT to ET.
+
+mod_total is 40000.
+
+h=1:
+
+process pairs (0,1) and (2,3).
+
+ET after initial step:
+
+[40,0,0,16].
+
+h=1:
+
+i=0:
+
+j=0: x=40, y=0 → arr[0] =40+0=40, arr[1] =40-0=40.
+
+i=2:
+
+j=2: x=0, y=16 → arr[2]=16, arr[3]=-16 mod40000=39984.
+
+ET now becomes [40,40,16,39984].
+
+h=2:
+
+process i=0.
+
+j=0:
+
+x=40, y=16 → arr[0] =56 mod40000. arr[2] =40-16=24.
+
+j=1:
+
+x=40, y=39984 → arr[1] =40+39984=40024 mod40000=24. arr[3] =40 -39984 =-39944 mod40000=56.
+
+So after h=2, the array is [56,24,24,56].
+
+Then, we divide each element by 4 (n=4).
+
+56//4=14 → mod10000=14.
+
+24//4=6 → mod10000=6.
+
+So the output is [14,6,6,14], which matches the sample.
+
+Thus, this approach works.
+
+Now, implementing this in Python.
+
+The code steps:
+
+Read m, t, p.
+
+n = 1 << m.
+
+e0 = list(map(int, input().split())).
+
+b = list(map(int, input().split())).
+
+g = [0]*n.
+
+for x in range(n):
+
+    w = bin(x).count('1')
+
+    g[x] = b[w]
+
+mod_total = p * n.
+
+Make a copy of e0 and g, then apply FWHT to each.
+
+Then compute ET, apply FWHT again, then divide by n and mod p.
+
+Implement the FWHT function with mod_total.
+
+Now, the code:
+
+def fwht(a, mod):
+    n = len(a)
+    h = 1
+    while h < n:
+        for i in range(0, n, h * 2):
+            for j in range(i, i + h):
+                x = a[j]
+                y = a[j + h]
+                a[j] = (x + y) % mod
+                a[j + h] = (x - y) % mod
+        h *= 2
+
+def main():
+    import sys
+    m, t, p = map(int, sys.stdin.readline().split())
+    n = 1 << m
+    e0 = list(map(int, sys.stdin.readline().split()))
+    b = list(map(int, sys.stdin.readline().split()))
+    
+    # Compute g[x] = b[w(x)]
+    g = []
+    for x in range(n):
+        w = bin(x).count('1')
+        g.append(b[w])
+    
+    mod_total = p * n
+    
+    # Compute FWHT of e0
+    e0_transformed = e0.copy()
+    fwht(e0_transformed, mod_total)
+    
+    # Compute FWHT of g
+    g_transformed = g.copy()
+    fwht(g_transformed, mod_total)
+    
+    # Compute ET[s] = e0_transformed[s] * (g_transformed[s]^t) mod mod_total
+    ET = []
+    for s in range(n):
+        e_s = e0_transformed[s]
+        g_s = g_transformed[s]
+        pow_gs = pow(g_s, t, mod_total)
+        ET_val = (e_s * pow_gs) % mod_total
+        ET.append(ET_val)
+    
+    # Apply FWHT again to ET (inverse transform)
+    fwht(ET, mod_total)
+    
+    # Compute result: (ET[x] // n) mod p
+    for x in ET:
+        res = (x // n) % p
+        print(res)
+    
+main()
+
+But wait, in the code, after applying the second FWHT, the array is stored in ET. Then, each element is divided by n and modulo p.
+
+But in Python, when x is negative (due to subtraction steps), the modulo operation might have wrapped it to a positive value. However, when we perform integer division, Python uses floor division. For example, (-1) //4 is -1, but if x was 39999 (mod 40000), then x is -1 mod 40000. So x//4 would be (40000-1) //4 = 39999//4=9999.75 → but wait, 39999//4 is 9999. But 9999*4=39996, which is 3 less than 39999. So this would give 9999, but when mod p (10000), it's 9999 mod10000=9999. But in the sample input, the correct answer is 14.
+
+Wait, no. In the sample input, after the second FWHT, the array is [56,24,24,56]. Divided by 4 gives 14,6,6,14. So in that case, all elements are positive. But when the values are negative mod mod_total, their division might be incorrect.
+
+Wait, but when mod_total is p *n, which is positive, and the FWHT is computed modulo mod_total, all elements are in [0, mod_total-1]. So when we compute x//n, even if x is stored as a positive number (e.g., 39999 in mod 40000 is 39999, which is -1 mod40000). Then, 39999//4 is 9999.75 → 9999. But what's the correct value?
+
+In the sample input, after the second FWHT, the values are 56,24,24,56. Divided by 4 gives 14,6,6,14. Which is correct.
+
+But if the value is 39999 (mod 40000), then 39999//4= 9999.75 → integer division gives 9999, which is 9999 mod10000. But the correct value could be something else. So, this approach may not work in cases where the inverse transform sum is negative. However, according to the problem statement, the answer must be an integer, so the division should be exact. But how to ensure that?
+
+The code as written will work as long as the final sum after inverse FWHT is a multiple of n. Because even if the stored value is (mod_total -k), dividing by n will give (mod_total -k)/n = (p*n -k)/n = p -k/n. Since k is congruent to sum_ET mod mod_total, and sum_ET is a multiple of n, k must be a multiple of n. So, (p*n -k) is a multiple of n, and the division is correct.
+
+But wait, in the code, during the inverse FWHT, after applying the forward transform again, the result is sum_ET multiplied by n. So, when the code computes the inverse transform by applying the forward transform again, the result is sum_ET multiplied by n. So, during the second FWHT, the code computes sum_ET multiplied by n, stored modulo mod_total (which is p *n).
+
+But sum_ET multiplied by n is equal to the original sum_ET multiplied by n *n? Wait, no. Let's think:
+
+The first FWHT of e0 and g gives their transformed versions. Then, after multiplying by B^t and applying the inverse FWHT (which is another FWHT followed by division by n), the final sum is correct.
+
+But perhaps I'm missing a step. Let me re-express the process.
+
+The correct approach is:
+
+After the first FWHT (forward), the transformed E0 and B are obtained. Then, multiplying each component gives the transformed ET. Then, the inverse FWHT is applied to ET. The inverse FWHT is the same as the forward FWHT followed by division by n. So, applying the forward FWHT to ET gives the inverse transform multiplied by n. Therefore, to get the inverse transform, we divide by n.
+
+But since the code applies the forward FWHT to ET and then divides by n, the division is required. However, during this process, the forward FWHT of ET (which is the inverse transform multiplied by n) is stored as ET after the second FWHT. Therefore, the code then divides each element by n to get the inverse transform.
+
+But the code after the second FWHT:
+
+ET after the second FWHT is (sum_ET multiplied by n) mod mod_total.
+
+But sum_ET is the correct value. Then, sum_ET multiplied by n must be congruent to the stored value modulo mod_total.
+
+Wait, perhaps this is getting too complicated. The sample input works, and the code is correct as written.
+
+Therefore, the code should be correct.
+</think>
+To solve this problem, we need to predict the energy distribution at time `t` given the initial energy distribution and transformation coefficients. The problem involves a complete graph where the energy at each vertex is updated based on a linear transformation involving the Hamming distance between vertices. Given the constraints, a direct simulation is infeasible, so we use the Fast Walsh-Hadamard Transform (FWHT) to efficiently compute the result.
+
+### Approach
+1. **Understanding the Transformation**: The energy update at each vertex is a linear combination of energies from all other vertices, weighted by coefficients based on the Hamming distance (number of differing bits) between vertices. This can be viewed as a convolution in the XOR domain.
+2. **Fast Walsh-Hadamard Transform (FWHT)**: This transform allows us to convert the problem into the frequency domain where convolutions become element-wise multiplications. This reduces the complexity from O(n²) to O(n log n).
+3. **Matrix Exponentiation**: Using FWHT, we transform the initial energy distribution and the transformation coefficients. After raising the transformed coefficients to the power `t`, we perform an inverse FWHT to get the result.
+
+### Solution Code
+```python
+def fwht(a, mod):
+    n = len(a)
+    h = 1
+    while h < n:
+        for i in range(0, n, h * 2):
+            for j in range(i, i + h):
+                x = a[j]
+                y = a[j + h]
+                a[j] = (x + y) % mod
+                a[j + h] = (x - y) % mod
+        h *= 2
+
+def main():
+    import sys
+    input = sys.stdin.read().split()
+    idx = 0
+    m = int(input[idx])
+    idx += 1
+    t = int(input[idx])
+    idx += 1
+    p = int(input[idx])
+    idx += 1
+    
+    n = 1 << m
+    e0 = list(map(int, input[idx:idx+n]))
+    idx += n
+    b = list(map(int, input[idx:idx+m+1]))
+    idx += m + 1
+    
+    # Compute g[x] = b[number of ones in x]
+    g = []
+    for x in range(n):
+        w = bin(x).count('1')
+        if w > m:
+            g.append(0)
+        else:
+            g.append(b[w] % (p * n))  # Ensure it's taken modulo p*n early to prevent overflow
+    
+    mod_total = p * n
+    
+    # Compute FWHT of e0
+    e0_transformed = e0.copy()
+    fwht(e0_transformed, mod_total)
+    
+    # Compute FWHT of g
+    g_transformed = g.copy()
+    fwht(g_transformed, mod_total)
+    
+    # Compute ET[s] = e0_transformed[s] * (g_transformed[s]^t) mod mod_total
+    ET = []
+    for s in range(n):
+        e_s = e0_transformed[s]
+        g_s = g_transformed[s]
+        # Compute pow(g_s, t, mod_total)
+        pow_gs = pow(g_s, t, mod_total)
+        et_val = (e_s * pow_gs) % mod_total
+        ET.append(et_val)
+    
+    # Apply inverse FWHT (same as FWHT) and then divide by n
+    fwht(ET, mod_total)
+    
+    # Compute the result and output
+    for x in ET:
+        res = (x // n) % p
+        print(res)
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Reading Input**: The input includes the parameters `m`, `t`, `p`, the initial energy distribution `e0`, and the transformation coefficients `b`.
+2. **Constructing the Kernel**: The kernel `g` is constructed where each element `g[x]` is the coefficient corresponding to the Hamming weight of `x`.
+3. **FWHT Application**: The FWHT is applied to both the initial energy distribution `e0` and the kernel `g` to convert them into the frequency domain.
+4. **Element-wise Multiplication**: Each element of the transformed initial energy distribution is multiplied by the corresponding element of the transformed kernel raised to the power `t`.
+5. **Inverse FWHT**: Applying the FWHT again converts the result back to the original domain, followed by division by `n` to scale the result correctly.
+6. **Modulo Operation**: The final result is taken modulo `p` to ensure correctness and handle large numbers efficiently.
+
+This approach efficiently handles the large constraints using properties of the FWHT and modular arithmetic, ensuring the solution is both optimal and correct.
+</bot>

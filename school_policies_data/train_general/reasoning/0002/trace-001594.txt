@@ -1,0 +1,1292 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Amr loves Chemistry, and specially doing experiments. He is preparing for a new interesting experiment.
+
+Amr has n different types of chemicals. Each chemical i has an initial volume of ai liters. For this experiment, Amr has to mix all the chemicals together, but all the chemicals volumes must be equal first. So his task is to make all the chemicals volumes equal.
+
+To do this, Amr can do two different kind of operations. 
+
+  * Choose some chemical i and double its current volume so the new volume will be 2ai
+  * Choose some chemical i and divide its volume by two (integer division) so the new volume will be <image>
+
+
+
+Suppose that each chemical is contained in a vessel of infinite volume. Now Amr wonders what is the minimum number of operations required to make all the chemicals volumes equal?
+
+Input
+
+The first line contains one number n (1 ≤ n ≤ 105), the number of chemicals.
+
+The second line contains n space separated integers ai (1 ≤ ai ≤ 105), representing the initial volume of the i-th chemical in liters.
+
+Output
+
+Output one integer the minimum number of operations required to make all the chemicals volumes equal.
+
+Examples
+
+Input
+
+3
+4 8 2
+
+
+Output
+
+2
+
+Input
+
+3
+3 5 6
+
+
+Output
+
+5
+
+Note
+
+In the first sample test, the optimal solution is to divide the second chemical volume by two, and multiply the third chemical volume by two to make all the volumes equal 4.
+
+In the second sample test, the optimal solution is to divide the first chemical volume by two, and divide the second and the third chemical volumes by two twice to make all the volumes equal 1.
+</user>
+<bot>
+<think>
+Okay, I need to solve this problem where Amr has to make all the chemicals have the same volume with the least number of operations. The operations allowed are doubling the volume or halving it (using integer division). Hmm, let's think about how to approach this.
+
+First, I need to understand what's required. For each chemical, we can perform any number of these two operations. The goal is to make all volumes equal. The key is to find a target volume that can be achieved by each chemical through some sequence of operations, and then calculate the total steps needed for each chemical to reach that target, summing them up. Then, among all possible targets, pick the one with the minimum total steps.
+
+But how do we efficiently find all possible targets for each chemical and then check which ones are common across all chemicals? Because if a target isn't achievable by all chemicals, then it's not a valid option.
+
+Let's consider each chemical's possible paths. For a given a_i, all possible values it can reach are the numbers obtained by multiplying by 2^k or dividing by 2^m (using integer division). For example, if a_i is 5, then the possible values are 5, 10, 20, ... (by doubling), and 2 (5//2=2), 1 (2//2=1), 0 (but since original a_i >=1, perhaps after division it can't go below 1? Wait, the problem says initial a_i is at least 1. So when you divide by two, like 1//2 is 0, but maybe in the problem's context, division is integer division. Wait, the problem statement says "divide its volume by two (integer division) so the new volume will be ai // 2". So yes, for a_i = 1, dividing gives 0. But the problem allows that? Because in the second example, one of the steps is to divide 3 by two, getting 1, then again 0.5? Wait, no, because 3 divided by two is 1 (integer division). Then dividing again gives 0. But the sample input 3's output is 5. Let me check the second example:
+
+Sample Input 2:
+3
+3 5 6
+
+Output is 5. The explanation says that all become 1. So for 3: divide by two once (3//2=1), that's one step. For 5: divide by two twice (5//2=2, then 2//2=1), two steps. For 6: divide by two twice (6//3=3, then 3//2=1.5, but integer division gives 1. So steps: 6→3 (1 step), 3→1 (another step, total two). So total steps: 1 + 2 + 2 =5. So yes, even if you reach 0, but in this case, the target is 1. But wait, 3 steps for 3: 3 →1 (1 step). 5 →2 →1 (2 steps). 6 →3 →1 (2 steps). Sum is 1+2+2=5. So the target is 1.
+
+So the chemicals can have volumes reduced down to 1, but even further? Like 1 divided by two would be 0. But if all chemicals can reach 0, but that's not allowed here because 0 isn't a valid target for some other chemical. For example, if a chemical is 3, it can reach 1, but then 0. But another chemical that can reach 0 would need to have a path. But maybe the approach is to consider all possible targets for each chemical, then find the intersection of all those possible targets, and for each common target, compute the sum of steps needed for each chemical to reach that target. Then pick the minimum sum.
+
+But how do we efficiently collect all possible targets for each chemical and find their intersections?
+
+An alternative approach is to model each possible value each chemical can reach, along with the number of steps required. Then, for each possible value that is common across all chemicals, sum the steps and choose the minimum.
+
+But for large n (up to 1e5), and each a_i up to 1e5, this approach could be computationally heavy. So we need an efficient way to represent the possible paths and steps.
+
+Let me think: For each a_i, we can generate all possible values that can be obtained by multiplying/dividing by 2. For each such value, we track the minimal steps needed to reach it from a_i. Then, for each possible value that's present in all a_i's possible values, sum the steps and find the minimum.
+
+But how to generate these possible values efficiently.
+
+Let's take an example. For a_i = 4:
+
+Possible steps:
+
+4 can be multiplied by 2 (steps +1 each time) →8, 16, etc. Or divided by 2 →2, 1, 0, etc. But perhaps, for each a_i, we can generate all possible values by going up (multiplying) and down (dividing), and track the steps. For example, for 4, the possible values are:
+
+- 4 (0 steps)
+- 2 (1 step down)
+- 1 (2 steps down)
+- 0 (3 steps down)
+- 8 (1 step up)
+- 16 (2 steps up)
+- etc.
+
+But considering that multiplying by 2 each time leads to infinitely increasing numbers, but in practice, other a_j's may have different possible targets. So perhaps the targets that are feasible are those that can be formed by repeatedly dividing some a_i by 2 (without considering multiplying) but then allowing multiplying steps. Wait, maybe the targets can be any value that is a factor of a_i multiplied by some power of two. For example, 3 can reach 3, 6, 12, etc. by multiplying, and 1, 0 by dividing.
+
+But how do these possible targets for different a_i's overlap?
+
+Another observation: the target must be a value that can be obtained by each a_i through some combination of multiplying and dividing. So for each a_i, we can generate all possible ancestors (values that can be divided by 2 to reach a_i) and descendants (values that can be multiplied by 2 to reach a_i). Wait, perhaps not. Let's think differently: For any a_i, to reach a target x, we can either:
+
+- Multiply by 2 multiple times (which would take x / a_i steps if a_i divides x and x is a multiple of a_i and a_i * 2^k = x), but that's only if x is greater than a_i and is a power of 2 multiple.
+
+Or, perhaps x can be obtained by first dividing a_i some times, then multiplying. Wait, but dividing reduces the value, and multiplying increases it. For example, if a_i is 5. Suppose the target is 10. How? 5 can be multiplied once to 10. So steps: 1. Another example: target is 20. Steps: multiply twice. But if the target is 2, then 5 divided once is 2 (5//2=2). So steps: 1. Then if the target is 4, you can't reach it from 5. Because 5//2=2 (steps 1), then multiply once (2→4, steps 2). So steps for 5 to reach 4 is 2. So yes, you can divide and then multiply. So the steps can be a combination of dividing and multiplying. Wait, but in this case, the steps are: divide once (step 1) to get 2, then multiply once (step 2) to get 4. So total steps for 5 to reach 4 is 2. So in general, the steps can be a combination of dividing and then multiplying.
+
+But how do we model all possible x values and the steps required for each a_i to reach x?
+
+Alternative approach: For each a_i, generate all possible x values that can be obtained by any sequence of operations (dividing and multiplying), along with the minimal steps required to reach x from a_i.
+
+But generating all possible x for each a_i could be expensive, especially since for a_i up to 1e5 and n up to 1e5. So how can we do this efficiently?
+
+Alternatively, perhaps for each a_i, the possible x's are the numbers that can be formed by moving up (multiplying) from some ancestor. For example, take a_i and divide it by 2 as much as possible (until you reach 0?), then for each of these values, you can multiply by 2 any number of times. But this seems like a possible way to model it.
+
+Wait, for example, take a_i=5:
+
+We can divide it once to 2, then multiply to get 4, 8, etc. So the x's for 5 would be:
+
+5, 10, 20, ... (by multiplying)
+5//2 = 2 → steps 1; then 2 can be multiplied to 4, 8, etc. (steps 1+1, 1+2, etc.)
+2//2=1 → steps 2; then multiply to 2,4,8 (steps 2+1, 2+2, etc.)
+1//2=0 → steps 3; then multiply steps (but 0 multiplied by 2 remains 0).
+
+So for each a_i, the possible x's are all the numbers that are in the path of dividing down to zero, and then all multiples of 2 for each of those numbers. So for each a_i, the possible x's can be generated by first dividing until zero, and then considering each of those intermediate values (including the original a_i) and then all multiples of 2 (including the value itself, which is 2^0 times the value). So for each a_i, the possible x's are the numbers that can be written as (a_i // (2^k)) ) * (2^m), where k is the number of times we divide (could be 0,1,2,... until a_i//2^k is zero) and m is the number of times we multiply (could be any non-negative integer).
+
+Wait, but how do we model this for all possible k and m?
+
+Alternatively, for each a_i, we can generate all possible x's by first generating all possible ancestors (obtained by dividing by 2 until we reach zero) and then for each ancestor, generate all possible descendants (by multiplying by 2 any number of times). Each x in this set is a possible target for that a_i.
+
+For example, for a_i=5:
+
+Ancestors are 5 (divided 0 times), 2 (divided once), 1 (divided twice), 0 (divided thrice). Then, for each of these ancestors, multiply by 2 as many times as possible. So:
+
+For ancestor 5: x can be 5, 10, 20, 40, etc.
+
+For ancestor 2: x can be 2,4,8,16, etc.
+
+For ancestor 1: x can be 1,2,4,8, etc.
+
+For ancestor 0: x is 0 (since 0 multiplied by 2 remains 0).
+
+So the possible x's are 5,10,20,... ; 2,4,8,...; 1,2,4,8...; 0.
+
+But in this case, some x's are overlapping. For example, 2 can be obtained from the ancestor 2 (steps 1), or from the ancestor 1 multiplied once (steps 2 +1 =3 steps). But the minimal steps for x=2 would be min(1 step (from 5→2 by dividing once) or 3 steps (5→2→1→2, which is not possible because after dividing twice, you get 1, then multiplying once gives 2, but that's steps 2 divides and 1 multiply: total 3 steps. But the first method (divide once) is better.
+
+So for each x, the minimal steps from a_i to x is the minimal steps required to reach x via any possible path.
+
+But how do we compute this for each a_i?
+
+Another approach: for each a_i, the minimal steps to reach x is the minimal number of divides (k) and multiplies (m) such that x = (a_i // (2^k)) * (2^m). Then the total steps is k + (m if (a_i // (2^k)) is not zero, else 0). Wait, maybe not. Let's think.
+
+For example, a_i=5, x=4.
+
+Possible paths:
+
+5 →2 (divide once, k=1), then multiply by 2 twice (m=2). So steps 1+2=3.
+
+Alternatively, 5 →5 (k=0), then multiply by 2 until you get 4. But 5*2=10, 20, etc. So that's impossible. So the minimal steps is 3.
+
+So for x=4, the steps are 3.
+
+So the way to compute steps is: find the minimal k and m such that (a_i // (2^k)) * 2^m = x, and then steps = k + m.
+
+So for each x, to compute the minimal steps for a_i to reach x, we can find the maximum possible k (number of divides) such that (a_i // (2^k)) divides x (i.e., x must be a multiple of (a_i // (2^k)) ), and then m is the exponent when x is written as (a_i // (2^k)) * 2^m. Then steps is k + m.
+
+But how to find the minimal steps for all possible x?
+
+Alternatively, for each a_i, generate all possible x's by first dividing as much as possible (k steps) and then multiplying (m steps). For each possible k (number of divides), compute the value v = a_i // (2^k). Then, for each v, generate all possible x's by multiplying by 2^m (m >=0). For each x in this set, the steps required are k + m. But if there are multiple ways to reach x (different k and m combinations), then we take the minimal steps.
+
+So for a_i=5, possible k values are 0,1,2,3 (since 5//2^3=0):
+
+k=0: v=5. x can be 5*2^m. steps =0 +m.
+
+k=1: v=2. x=2*2^m. steps=1 +m.
+
+k=2: v=1. x=1*2^m. steps=2 +m.
+
+k=3: v=0. x=0. steps=3 +0 (since m=0).
+
+For example, x=4 can be achieved by k=1 and m=1 (2*2^1=4, steps 1+1=2) or by k=2 and m=2 (1*2^2=4, steps 2+2=4). So the minimal steps is 2.
+
+Wait, but earlier example said steps for x=4 was 3. Wait, perhaps I made a mistake here.
+
+Wait, in the case of a_i=5 and x=4:
+
+Wait, if k=1, then v=2. Then m=1: 2*2=4. So steps=1+1=2. How is that possible?
+
+Because the steps would be divide once (5→2), then multiply once (2→4). So that's two steps. Oh right! Earlier example where I thought the steps were 3 was incorrect. So perhaps my initial analysis was wrong. So the minimal steps for x=4 would be 2.
+
+Wait, then why in the second sample input, when x=1, 3 →1 takes 1 step (divide once), 5 →1 requires two divides (5→2→1). 6→3→1 (two steps). So sum is 1+2+2=5.
+
+But how does the code compute this?
+
+So the approach is to for each a_i, generate all possible x's by considering all possible k (number of divides) and then m (number of multiplies), and track for each x the minimal steps required for that a_i. Then, for each x that is common to all a_i's, sum the steps and find the minimal total.
+
+But the problem is that for n=1e5, and each a_i could generate a lot of x's, this approach may not be feasible due to memory and time constraints.
+
+So we need a more efficient way.
+
+Alternative idea: For each a_i, generate all possible x's that can be obtained by the process of dividing down to some value and then multiplying up. For each such x, track the minimal steps required. Then, for all a_i's, collect the x's and their steps, and then find the x that is present in all a_i's' possible x's with the minimal sum of steps.
+
+But how to do this efficiently?
+
+An alternative approach is to precompute for each a_i all possible x's along with the minimal steps. Then, for each x, check if all a_i's have x in their possible x's. Then, compute the sum of steps for each x and pick the minimum.
+
+But this is O(n * average number of x per a_i) time and memory. If each a_i has, say, up to 30 possible x's (since each division reduces the value by half each time, and a_i up to 1e5 would have up to log2(1e5) ≈17 steps), then for n=1e5, the total x's would be 1e5 *17 ≈1.7e6, which is manageable.
+
+So the plan is:
+
+1. For each a_i, generate all possible x's and their minimal steps.
+
+2. For all a_i, collect these x's and steps.
+
+3. For each x that is present in all a_i's' x sets, sum the steps for each a_i to reach x.
+
+4. Find the x with the minimal total steps.
+
+So first, how to generate all possible x's and steps for a single a_i.
+
+Let's take a_i=3 as an example.
+
+Possible k (divides) steps:
+
+k=0: v=3. Then x can be 3,6,12,24, etc. steps are 0 + m.
+
+k=1: v=1 (3//2=1). x can be 1,2,4,8, etc. steps=1 + m.
+
+k=2: v=0 (1//2=0). x=0, steps=2.
+
+So for a_i=3, the possible x's include 3,6,12, etc. (when k=0), 1,2,4,8, etc. (k=1), and 0 (k=2).
+
+But for each x in these sequences, the steps are k + m. So for example, x=4 can be achieved by k=1 and m=2 (1*2^2=4, steps 1+2=3). But maybe another path gives a lower step count. Wait, but for x=4, can a_i=3 reach it via another k and m? For example, if k=0, then m is log2(4/3), but 4 isn't a multiple of 3, so that's not possible. So the only possible way is k=1 and m=2, steps 3.
+
+Wait, but in the second sample input, when x=1, a_i=3 can reach 1 by k=1 and m=0 (steps 1). So that's correct.
+
+So the steps for x=1 in a_i=3 is 1 step (divide once).
+
+So for each a_i, we can generate all possible x's by varying k (number of divides) and then for each possible v = a_i // (2^k), multiply by 2^m (m >=0) to get x. Then, the steps for that x would be k + m.
+
+But for a given x, there may be multiple (k, m) pairs, so we need to track the minimal steps for x.
+
+So for each a_i, when generating x's, for each possible k, compute v = a_i >> k (integer division by 2^k). Then, for each v, generate x = v << m (multiply by 2^m) for m >=0. But for each x, if there are multiple (k, m) pairs leading to the same x, we need to track the minimal steps (k + m).
+
+But how to generate all possible x's for a_i efficiently?
+
+Here's the approach:
+
+For a given a_i, generate all possible x's by:
+
+1. For each possible k (number of divides), compute v = a_i // (2^k). Then, generate x's as v * 2^m for m >=0, until x becomes too large. But since m can be any non-negative integer, x can be infinitely large. However, since other a_j's may have their own possible x's, perhaps it's sufficient to generate x's up to the maximum possible value across all a_i's.
+
+But this is not feasible. So perhaps we can generate x's up to a certain limit. Alternatively, for each a_i, when generating x's for a particular k, we can generate x's up to some maximum value that is common with other a_i's.
+
+But this seems complicated.
+
+Alternative idea: For each a_i, generate all possible x's by considering all possible k (number of divides) and then for each k, generate x's as v * 2^m where m is any number (including zero). But since m can be any, each x can be generated as part of the path of v*2^m. For example, when v is 3, x can be 3*2^0=3, 3*2^1=6, 3*2^2=12, etc. So for each k, the x's generated from v will be all even multiples of v.
+
+But for each a_i, the possible x's are the numbers that can be written as (a_i >> k) << m, for k >=0 and m >=0. So the steps are k + (m - k) if m >=k? No, wait. For example, if you divide k times, then multiply m times. So steps is k + m. Because each divide is a step, each multiply is a step.
+
+So for example, for a_i=5:
+
+k=1 (divide once, steps=1), v=2. Then multiply m=1 steps (steps=1+1=2) → x=4.
+
+So steps are k + m.
+
+So for each a_i, for each k, generate all x's by v*2^m for m >=0. Then, steps for x is k + m.
+
+But the same x can be generated from different k and m combinations, so for each x, we need to track the minimal steps.
+
+So for each a_i, the minimal steps to reach x is the minimum over all possible (k + m) where x = (a_i // (2^k)) * 2^m.
+
+So for each a_i, how do we generate all x's and their minimal steps?
+
+We can proceed as follows:
+
+For each a_i, iterate k from 0 until v becomes zero. For each k:
+
+v = a_i // (2^k)
+
+if v is zero, then x can only be zero. So steps is k (since m is zero).
+
+Otherwise:
+
+for m in 0,1,2,...: generate x = v * 2^m. steps is k + m.
+
+But for each x, we can track the minimal steps (k + m) for that a_i.
+
+But generating m up to infinity isn't feasible. However, since other a_i's may have their own x's, perhaps the maximum possible x that could be considered is up to the maximum a_i multiplied by some factor.
+
+But even this may not be feasible. So perhaps we can find that for each a_i, the x's generated for a particular k are v, 2v, 4v, 8v, etc. But for large m, the x's can be very big. But since other a_i's may not have x's in those large ranges, perhaps the x's that are possible to be common across all a_i's are those that are in the lower ranges. For example, the minimal steps are likely achieved at smaller x's.
+
+But this is just a heuristic. To handle this properly, perhaps we can generate all possible x's up to a certain maximum. But how to decide the maximum?
+
+Alternatively, for each a_i, generate x's by considering all possible k (up to log2(a_i) +1) and for each k, generate x's for m up to some limit (like 20 steps). But this may miss some x's.
+
+Alternatively, note that for each a_i, the possible x's are all numbers that can be obtained by multiplying/dividing by 2 any number of times. So the x's are numbers that have the same binary representation as the original a_i, shifted left or right (with possible loss of bits when shifting right). So for example, a_i=5 (101) can generate x=5 (101), 10 (1010), 20 (10100), etc., or 2 (10) when divided once, then 4 (100), etc. Or 1 (1) when divided twice, then multiplied to 2,4, etc.
+
+But this is getting a bit complicated.
+
+An alternative approach is to realize that the possible x's for each a_i are all the numbers that can be obtained by first dividing a_i as much as possible (without getting zero) and then multiplying. So for example, a_i=5: divide until you get 5, 2, 1, 0, and for each of these, multiply as much as possible. So for each a_i, the possible x's are all the numbers that can be written as (a_i >> k) * (1 << m), where k is >=0, and m is >=0, and (a_i >>k) is the value after k divisions.
+
+So for each a_i, the steps to reach x is k + m, where x = (a_i >>k) * (1 << m).
+
+So for each a_i, the minimal steps for x is the minimal k + m over all possible k and m such that x is (a_i >>k) * (1 <<m).
+
+But how to compute that?
+
+Well, for a given x, the minimal steps can be found by:
+
+1. For each possible k (starting from 0 to log2(a_i)), compute v = a_i >>k.
+
+2. Check if x is a multiple of v and x >= v. Because if x is a multiple of v, then x = v * 2^m, where m = log2(x/v). But since x must be a multiple of v and x >= v (since m >=0).
+
+But for x < v, this is not possible. So for example, if a_i is 5 and x is 2: v after k=1 is 2. Then m=0, steps 1 +0=1. So x=2 can be achieved with 1 step (divide once).
+
+But how to find all possible x's and steps for a_i.
+
+But perhaps, for each a_i, we can generate all possible x's by:
+
+Loop over k from 0 to log2(a_i):
+
+   current_v = a_i >>k
+
+   if current_v ==0: break (since further k will also produce zero)
+
+   then, generate x = current_v << m for m >=0. But generating all possible m's would create infinitely many x's, but perhaps we can generate up to some maximum possible x.
+
+But for the problem, since other a_i's can't have x's beyond a certain limit (like 1e5 * 2^20 is a very big number), but the target x must be a common x for all a_i's. So if one a_i can generate x=5, another can generate x=5 via their possible paths, etc.
+
+But generating all possible x's for all a_i's is computationally expensive.
+
+Alternative idea: For each a_i, generate all possible x's by first dividing down (k steps) to reach a value, and then multiply up (m steps) to reach x. For each a_i, collect all possible x's along with the steps needed. Then, for all a_i's, find the x's that are common to all of them. Among these, compute the sum of steps and find the minimum.
+
+But how to implement this efficiently.
+
+Let's think of an example. For a_i=4:
+
+Possible k values: 0,1,2,3, etc. until current_v becomes zero.
+
+k=0: v=4 → x can be 4,8,16,32, etc. steps 0,1,2, etc.
+
+k=1: v=2 → x=2,4,8,16, etc. steps 1, 2, 3, etc.
+
+k=2: v=1 → x=1,2,4, etc. steps 2,3,4, etc.
+
+k=3: v=0 → x=0. steps 3.
+
+So for x=4, possible steps:
+
+from k=0, m=0 → steps 0.
+
+from k=1, m=1 → steps 2.
+
+from k=2, m=2 → steps 4.
+
+So minimal steps is 0.
+
+But in the first sample input, x=4 is the target, which requires steps 0 for the first chemical (4), steps 1 for the second (8 divided once), steps 1 for the third (2 multiplied once). Sum is 0+1+1=2, which matches the sample output.
+
+So the approach seems correct.
+
+But to implement this, for each a_i, we need to generate all possible x's and track the minimal steps for each x.
+
+But for a large a_i, this can generate a lot of x's. So the problem is to handle this efficiently.
+
+Let's think of how to represent the possible x's for each a_i.
+
+For each a_i, we can generate all possible x's by:
+
+- For each possible k, compute v = a_i divided by 2^k (integer division).
+
+- For each v, generate x by multiplying by 2^m, where m is >=0.
+
+But since v can be reduced further by dividing, but once you've divided k times, further divisions would result in v being divided again. So for each a_i, we can iterate k from 0 until v becomes zero.
+
+For each k:
+
+   current_v = a_i >>k.
+
+   if current_v is zero: break.
+
+   then, generate x = current_v <<m for m >=0.
+
+   for each x generated, steps = k + m.
+
+   but for x = current_v <<m, we need to generate all possible m's, which would be infinite. But since x can't be larger than some maximum, perhaps we can cap m to some limit.
+
+But what's the maximum possible x we need to consider?
+
+We need to find x that is common across all a_i's. The x can't be larger than the maximum possible x that can be generated by all a_i's.
+
+But for a_i's, the maximum possible x is when k=0 and m is large. For example, a_i=1e5 can generate x=1e5, 2e5,4e5, etc. But other a_i's may not generate these large x's, so they would not be common across all a_i's.
+
+Therefore, it's possible that the minimal sum of steps is achieved for a small x. So perhaps it's sufficient to generate x's up to a certain limit, such as the maximum a_i multiplied by 2^20 (which is a large number, but manageable?).
+
+But even that may not be feasible. For example, if one a_i is 1e5, then generating x's up to 1e5*2^20 is 1e5 * 1 million is 1e11, which is impossible.
+
+So this approach is not feasible for large a_i.
+
+Alternative idea: For each a_i, the possible x's are all the numbers that can be obtained by first dividing a_i to some v, then multiplying to get up to a certain point. But how to find the common x's across all a_i's.
+
+Another observation: the possible x's for a_i are all the numbers that can be written in the form (a_i // (2^k)) * (2^m), for some k >=0 and m >=0.
+
+But (a_i // (2^k)) is equal to the largest odd divisor of (a_i // (2^something)) multiplied by 2^something.
+
+Wait, no. For example, a_i=12: it's 12 = 3*4. So the largest odd divisor is 3. So 12 can be written as 3*2^2.
+
+But in this case, any x generated from 12 would be 3*2^{2 + m}, which is 3*2^{something}.
+
+So for a_i=12, the possible x's are 3*2^m where m >=2 (since k can be 2, dividing 12 by 2^2 to get 3, then multiplying m times). Or other k's.
+
+But perhaps, for each a_i, all possible x's are multiples of the odd part of a_i divided by some 2^something.
+
+Wait, maybe not. But the key idea here is that each a_i can be decomposed into its odd part multiplied by a power of two. For example, a_i = o * 2^p, where o is odd.
+
+Then, the possible x's for a_i can be generated by varying k (number of divides) and m (number of multiplies) such that x = o * 2^{p -k + m}, where k can be up to p (so that p -k >=0), or beyond (in which case o is divided further, but when k exceeds p, then o is divided by 2 again, leading to o//2, etc. until it becomes zero).
+
+So for example, a_i=12=3*2^2.
+
+So for k=0: o=3*2^2 → x=3*2^2 * 2^m=3*2^{2+m} → x=12,24,48, etc. steps m.
+
+k=1: 12//2=6=3*2^1. So x=6*2^m=3*2^{1 +m} → steps 1 +m.
+
+k=2: 3*2^0 → x=3*2^m → steps 2 +m.
+
+k=3: 3//2=1 → steps 3 → x=1*2^m → steps 3 +m.
+
+k=4: 1//2=0 → steps 4 → x=0 → steps 4 +0.
+
+So for a_i=12, the possible x's include 12,24,48, etc. (from k=0), 6,12,24, etc. (k=1), 3,6,12, etc. (k=2), 1,2,4, etc. (k=3), and 0 (k=4).
+
+But x=6 can be achieved via k=1 and m=0 (steps 1) or k=2 and m=1 (steps 3). So minimal steps for x=6 is 1.
+
+So the minimal steps for x is the minimal k +m over all possible ways to reach x.
+
+But how does this help us find common x's across all a_i's?
+
+Perhaps the key is to realize that the common x's must be multiples of the odd parts of some decomposition of each a_i. But I'm not sure.
+
+Alternative approach: For each a_i, generate all possible x's by first generating all possible values obtained by dividing by 2 until zero, and then for each of these values, generate all possible multiples by multiplying by 2. For each such x, track the minimal steps. Then, for each x present in all a_i's, sum the steps and find the minimal total.
+
+But this is the same as before.
+
+But how to implement this efficiently.
+
+Now, the code structure:
+
+We need to process each a_i and generate all possible x's with their minimal steps.
+
+For each a_i in the input array:
+
+   Initialize a dictionary to track the minimal steps for each x.
+
+   current = a_i
+
+   k = 0
+
+   while True:
+
+       v = current
+
+       m =0
+
+       while True:
+
+           x = v * (2 ** m)
+
+           if x not in steps_dict or steps_dict[x] > (k + m):
+
+               steps_dict[x] = k + m
+
+           m +=1
+
+           # To avoid infinite loop, perhaps limit m up to a certain value.
+
+           # But how?
+
+           # Alternatively, if v is zero, then x is zero for any m, so break after m=0.
+
+           if v ==0:
+
+               break
+
+       # Now, proceed to next k.
+
+       current = current //2
+
+       k +=1
+
+       if current ==0:
+
+           # Also generate x=0 with steps k +0.
+
+           x =0
+
+           if x not in steps_dict or steps_dict[x] > k:
+
+               steps_dict[x] =k
+
+           break
+
+But wait, this code is not correct. For example, when current is divided by 2 each time, but for each current (v), generate x by multiplying by 2^m for m >=0. But when v is 0, x will always be 0 for any m. So after m=0, we can break.
+
+But in the code above, for v=0, the x is 0, steps is k + m. But when current is divided by 2 to become 0, then in the code, after generating m=0 (steps k), the loop breaks.
+
+But how to manage all possible x's generated by all possible k and m for a_i.
+
+But for a_i=3:
+
+k=0: v=3. Generate x=3*2^m for m=0,1,2,... → steps m.
+
+But since m can be up to any, this will generate infinitely many x's. Which is impossible to generate.
+
+So we need a way to cap m for practical purposes.
+
+But how?
+
+Alternative idea: For each v obtained by dividing a_i k times, generate x's for m up to a certain maximum such that 2^m *v is up to some maximum possible value. For example, we can generate up to 2^40 *v, which is a very large number. But even that could be problematic.
+
+Alternatively, note that for other a_j's, the maximum x they can generate is their own a_j multiplied by 2^m. So perhaps, the maximum x we need to consider is the maximum a_i multiplied by 2^40, but this is impractical.
+
+Alternative plan:
+
+For each a_i, we can generate all x's by:
+
+For each possible k (number of divides):
+
+   v = a_i // 2^k.
+
+   if v is zero, then x=0 (steps=k).
+
+   else:
+
+       generate x = v << m for m in 0 to (some limit, say 40).
+
+       steps for each x is k +m.
+
+For each x generated, track the minimal steps for each a_i.
+
+The idea is that even if there are x's beyond this limit, they are unlikely to be common across all a_i's. So we can set a reasonable limit for m, such as 40, which allows x to be up to v * 2^40. For v=1, this is 1.1e12, which is manageable in terms of integer storage.
+
+This approach would generate for each a_i a manageable number of x's. For example, for a_i=1e5:
+
+log2(1e5) is about 17, so k can be up to 17.
+
+For each k, m can be up to 40, generating 40 x's per k. So total x's per a_i is 17 *40=680. For n=1e5, total x's across all a_i's would be 1e5 * 680=6.8e7, which is manageable in terms of memory.
+
+But storing these as dictionaries for each a_i is not feasible. Instead, we need to track for each x the sum of steps across all a_i's, but only for x's that are common to all a_i's.
+
+So here's the revised plan:
+
+1. For each a_i in the input array, generate all possible x's and their minimal steps. For each x, track the minimal steps for a_i.
+
+2. For each x, maintain a count of how many a_i's have that x. Also, track the sum of steps for x across all a_i's.
+
+3. After processing all a_i's, iterate over all x's where the count equals n. Among these x's, select the one with the minimal sum of steps.
+
+But how to implement this.
+
+Implementation Steps:
+
+- Create a global dictionary, say 'x_total', which maps x to (count, sum_steps).
+
+- For each a_i in the input array:
+
+   - Create a dictionary 'local_steps' to track the minimal steps for each x in this a_i.
+
+   - Process all possible k (number of divisions) for a_i:
+
+      - current_v = a_i >>k
+
+      - if current_v is zero:
+
+          - x =0, steps =k.
+
+          - if x not in local_steps or steps < local_steps[x], update.
+
+          - break the loop as further k will also produce zero.
+
+      - else:
+
+          - for m in 0 to 40:
+
+              x = current_v << m
+
+              steps =k +m
+
+              if x is too large (beyond some limit, but in Python, it's okay to handle big integers).
+
+              if x not in local_steps or steps < local_steps[x]:
+
+                  local_steps[x] = steps
+
+          - Also, need to consider m beyond 40? But perhaps 40 is a safe limit. For example, even if a_i is 1, m=40 gives x=2^40, which is a huge number. But other a_j's must also have x=2^40 in their possible x's. Otherwise, this x won't be considered. However, for a_j's with a_i=5, for example, they can reach x=2^40 only if their paths allow. So in practice, the common x's are more likely to be smaller.
+
+   - After processing all possible k and m for a_i, iterate through the 'local_steps' dictionary and for each x in it:
+
+      - if x is already in 'x_total', increment the count by 1 and add the steps to sum_steps.
+
+      - else, add x to 'x_total' with count=1 and sum_steps=steps.
+
+- After processing all a_i's, iterate through 'x_total' and find all x's where count ==n. Among these, select the one with the minimal sum_steps.
+
+But what if some x's are generated in the a_i's but not all of them have that x in their possible x's? For example, a_i=3 and a_j=5. 3 can generate x=6 (3*2), but 5 can generate x=6 (5 divided once to 2, then multiplied once to 4, then multiplied again to 8? Wait, no. Wait, 5 divided once is 2.5 → integer division gives 2. Then multiplied by 2 once is 4. So steps for 5 to reach 6 is impossible. So x=6 would not be in 5's possible x's. Hence, x=6 would not be common to all a_i's.
+
+Thus, the code must only consider x's that are present in all a_i's' possible x's.
+
+So the code steps are:
+
+For each a_i:
+
+   generate all possible x's and minimal steps.
+
+   for each x in these x's:
+
+       add to x_total[x] += steps (sum) and increment count.
+
+At the end, for x to be considered, x's count must be equal to n.
+
+So the code can proceed as follows.
+
+Now, the key is to generate for each a_i all possible x's and their minimal steps, which requires for each a_i to generate x's by varying k and m.
+
+But with the approach of iterating k up to log2(a_i) +1, and m up to 40 steps, this seems manageable.
+
+Now, let's test this approach with the sample inputs.
+
+Sample Input 1:
+
+3
+
+4 8 2
+
+Processing each a_i:
+
+For a_i=4:
+
+k=0:
+
+current_v=4.
+
+m ranges from 0 to 40:
+
+x=4*1=4 → steps 0.
+
+x=4*2=8 → steps 1.
+
+x=4*4=16 → steps 2.
+
+...
+
+But for k=0, m can go up to 40.
+
+Similarly, k=1: current_v=4//2=2.
+
+m ranges from 0 to40:
+
+x=2*1=2 → steps 1.
+
+x=4 → steps 1+1=2.
+
+etc.
+
+But for x=4, the minimal steps from a_i=4 is 0.
+
+For a_i=8:
+
+k=0:
+
+current_v=8. m=0: x=8 → steps 0.
+
+m=1: 16 → steps1.
+
+k=1: current_v=4. x=4 → steps1+0=1.
+
+So for x=4, steps=1.
+
+But for a_i=8, the minimal steps to reach 4 is 1 (divide once).
+
+For a_i=2:
+
+k=0: current_v=2. x=2 → steps0.
+
+m=1:4 → steps1.
+
+k=1: current_v=1. x=1 → steps1. m=1:2 → steps2.
+
+So for x=4, steps is 1 (from k=0, m=1).
+
+So for all a_i's, the x=4 is present. The steps are:
+
+a_i=4: 0 steps.
+
+a_i=8: 1 step.
+
+a_i=2:1 step.
+
+Sum: 0+1+1=2 → which matches the sample output.
+
+Sample Input 2:
+
+3
+
+3 5 6
+
+Looking for x=1.
+
+For a_i=3:
+
+Possible paths:
+
+k=0:
+
+m=0 → x=3 (steps 0)
+
+k=1: current_v=3//2=1. m=0 → x=1 (steps1).
+
+So steps for x=1 is 1.
+
+For a_i=5:
+
+k=0: m=0 →5.
+
+k=1: current_v=2. m=0 →2.
+
+k=2: current_v=1. m=0 →1. steps=2.
+
+So steps for x=1 is 2.
+
+For a_i=6:
+
+k=0:6.
+
+k=1:3.
+
+k=2:1. steps=2+0=2.
+
+So steps for x=1 is 2.
+
+Sum steps:1+2+2=5.
+
+Which matches the sample.
+
+So this approach works.
+
+Now, the code:
+
+We need to implement this.
+
+But first, for each a_i, generate all possible x's and their minimal steps.
+
+Then, for each x, aggregate the steps sum and count.
+
+Finally, find the x with count ==n and minimal sum.
+
+Now, let's write the code.
+
+First, read n and the list a.
+
+Then, initialize x_total as a defaultdict with (count, sum_steps).
+
+For each number in a:
+
+   create a local_steps dictionary.
+
+   current = number
+
+   k=0
+
+   while True:
+
+       v = current
+
+       if v ==0:
+
+           x=0
+
+           steps =k
+
+           if x not in local_steps or steps < local_steps[x]:
+
+               local_steps[x] = steps
+
+           break
+
+       m =0
+
+       while True:
+
+           x = v * (2**m)
+
+           steps =k +m
+
+           if x not in local_steps or steps < local_steps[x]:
+
+               local_steps[x] = steps
+
+           m +=1
+
+           # Check if we should break.
+
+           # For example, if v is zero, break after m=0.
+
+           # But since v is not zero here, we need to stop after some m.
+
+           # Let's set a maximum m of 40.
+
+           if m >40:
+
+               break
+
+       # Now, divide current by 2 for next k.
+
+       current = current //2
+
+       k +=1
+
+   # After processing all k for this a_i, iterate through local_steps and update x_total.
+
+   for x, steps in local_steps.items():
+
+       if x in x_total:
+
+           x_total[x] = (x_total[x][0] +1, x_total[x][1] + steps)
+
+       else:
+
+           x_total[x] = (1, steps)
+
+# After processing all a_i's, iterate through x_total to find x with count ==n and minimal sum.
+
+min_steps = float('inf')
+
+for x, (count, total) in x_total.items():
+
+   if count ==n and total < min_steps:
+
+       min_steps = total
+
+print(min_steps)
+
+But wait, in the code above, for each a_i, we generate x's by varying k until current becomes zero. For each k, v is current, and then we generate m up to 40. This includes even when current is zero.
+
+But wait, the loop for k runs while current is not zero. Let me see:
+
+In the code:
+
+current = number
+
+k=0
+
+while True:
+
+   v = current
+
+   if v ==0:
+
+       x=0
+
+       steps =k
+
+       ... 
+
+       break
+
+   else:
+
+       generate x's for m up to 40.
+
+   current = current//2
+
+   k +=1
+
+Wait, the loop continues until current becomes zero. But once current becomes zero in the next iteration, the loop will break. For example:
+
+Take a_i=3:
+
+current starts as 3.
+
+k=0: v=3, generate m up to 40.
+
+current becomes 1 (3//2=1), k=1.
+
+k=1: v=1, generate m up to40.
+
+current becomes 0, k=2.
+
+Loop again: v is zero, add x=0 with steps=2.
+
+Break.
+
+So for a_i=3, the code generates x's from k=0, 1, and 2 (when v=3, 1, 0).
+
+So the code correctly generates x=0.
+
+But for a_i=3, the code would also generate x=3,6,12,..., etc. (k=0, m=0,1,2,...).
+
+But in the code, m is limited to 40. So for x=3*2^40 is possible.
+
+But what about when v=0?
+
+In the code, when current becomes zero, the loop breaks.
+
+But wait, the code for k=2:
+
+current is 0.
+
+In the loop:
+
+v = current =0.
+
+if v ==0:
+
+   x=0, steps=k=2.
+
+   add to local_steps.
+
+   break.
+
+So the loop breaks.
+
+Thus, for each a_i, the code generates x=0 with steps equal to the number of divisions needed to reach zero.
+
+But for example, a_i=1:
+
+k=0: v=1. generate m up to40: x=1,2,4,8,..., 1*2^40.
+
+k=1: v=0. generate x=0, steps=1.
+
+So for a_i=1, x=0 is generated with steps 1.
+
+Thus, the code correctly handles all cases.
+
+Now, testing this code on the samples.
+
+Sample 1:
+
+Input:
+
+3
+
+4 8 2
+
+Processing each a_i:
+
+For a_i=4:
+
+k=0: v=4.
+
+m ranges 0-40: x=4,8,16, ..., steps 0,1,2,...
+
+k=1: v=2. m ranges 0-40: x=2,4,8, ... steps1, 2,3,...
+
+k=2: v=1. m ranges 0-40: x=1,2,4, ... steps2,3,4,...
+
+k=3: v=0. x=0, steps3.
+
+Thus, for a_i=4, the minimal steps for x=4 is 0.
+
+For a_i=8:
+
+k=0: x=8, steps0.
+
+k=1: v=4. x=4, steps1.
+
+k=2: v=2. steps2.
+
+k=3: v=1.
+
+k=4: v=0.
+
+Thus, for x=4, steps is1.
+
+For a_i=2:
+
+k=0: x=2, steps0.
+
+k=1: v=1. x=1 steps1.
+
+k=2: v=0. x=0 steps2.
+
+Thus, for x=4:
+
+a_i=2: k=0, m=1. steps0+1=1.
+
+So for x=4, steps are 0 (from a_i=4), 1 (from a_i=8), and 1 (from a_i=2). Sum 2.
+
+Sample 2:
+
+3
+
+3 5 6
+
+For a_i=3:
+
+k=0: v=3, m=0 → steps0, x=3. m=1→6, steps1.
+
+k=1: v=1, m=0 → steps1. x=1.
+
+k=2: v=0 → x=0 steps2.
+
+Thus, for x=1, steps is1.
+
+For a_i=5:
+
+k=0:5 → m=0→5.
+
+k=1:2 → m=0→2.
+
+k=2:1 → m=0→1 steps2.
+
+k=3:0 → steps3.
+
+For x=1, steps is2.
+
+For a_i=6:
+
+k=0:6.
+
+k=1:3.
+
+k=2:1 → steps2.
+
+k=3:0 steps3.
+
+For x=1, steps is2.
+
+Sum steps:1+2+2=5.
+
+Thus, code works.
+
+Now, what about edge cases?
+
+Test case where n=1.
+
+Input:
+
+1
+
+5
+
+Output: 0 (since no operations needed).
+
+Code:
+
+For a_i=5:
+
+k=0: x=5 steps0.
+
+k=1:2 steps1.
+
+k=2:1 steps2.
+
+k=3:0 steps3.
+
+Thus, the x=5 is present (count=1), sum_steps=0. So output is0.
+
+Another test case:
+
+n=2
+
+3 6
+
+Possible targets:
+
+For 3: x=3 (0), 6 (1), 1.5 (not integer?), etc.
+
+Wait, but according to the code, 3 can generate x=3,6,12, etc. (k=0, m=0,1,2...). And x=3//2=1 (k=1) then multiply m=0: x=1 steps1+0=1. Multiply m=1: 2 steps2.
+
+For 6:
+
+k=0:6 steps0.
+
+k=1:3 steps1.
+
+k=2:1 steps2.
+
+So possible common x's are 3 (from 3: steps0, 6: steps1 (6 divided once to 3)). So sum steps 0+1=1. Or x=6: steps1 (3 multiplied once) +0 (6) → sum 1. Or x=1: steps1+2=3.
+
+So the minimal sum is1 for x=3 or x=6.
+
+So the code should output1.
+
+But let's see.
+
+The code would generate for a_i=3:
+
+local_steps includes 3 (0 steps), 6 (1), 12 (2), etc.
+
+For a_i=6: 6 (0), 3 (1 steps), 1 (2 steps), etc.
+
+So x=3 has steps for a_i=3:0, steps for a_i=6:1. Sum 0+1=1.
+
+x=6 has steps for a_i=3:1 (k=0, m=1) and steps for a_i=6:0. Sum 1+0=1.
+
+Thus, the minimal sum is1.
+
+So code would output1.
+
+Thus, the code works.
+
+Now, time to implement this code in Python.
+
+But we need to read input from stdin, process, and output.
+
+The code is as follows:
+
+Read n.
+
+Read list a.
+
+For each number in a:
+
+   generate all possible x's and their minimal steps.
+
+Update x_total.
+
+Finally, find x with count ==n and minimal sum.
+
+But how to handle large numbers? For example, when m is 40 and v is 1e5, 1e5*2^40 is a very large integer, but in Python, it's manageable.
+
+Now, the code:
+
+import sys
+from collections import defaultdict
+
+def main():
+    n, *rest = map(int, sys.stdin.read().split())
+    a = rest[:n]
+    
+    x_total = defaultdict(lambda: (0, 0))  # (count, sum_steps)
+    
+    for num in a:
+        local_steps = {}
+        current = num
+        k = 0
+        
+        while True:
+            v = current
+            if v == 0:
+                x = 0
+                steps = k
+                if x not in local_steps or steps < local_steps[x]:
+                    local_steps[x] = steps
+                break
+            
+            m = 0
+            while m <= 40:
+                x = v * (2 ** m)
+                steps = k + m
+                if x not in local_steps or steps < local_steps[x]:
+                    local_steps[x] = steps
+                m += 1
+            
+            # Proceed to next k
+            current = current // 2
+            k += 1
+        
+        # Update x_total with local_steps
+        for x, steps in local_steps.items():
+            count, total = x_total[x]
+            x_total[x] = (count + 1, total + steps)
+    
+    # Find the x with count == n and minimal total
+    min_total = float('inf')
+    for x, (count, total) in x_total.items():
+        if count == n and total < min_total:
+            min_total = total
+    
+    print(min_total)
+
+if __name__ == "__main__":
+    main()
+
+But why do we use m <=40? Because in the loop, m starts at 0 and increments up to 40, inclusive. So m ranges from 0 to40, total 41 steps. But perhaps we should use m <40 (40 steps). Let's check.
+
+In the code, the loop is:
+
+m =0
+
+while m <=40:
+
+    generate x.
+
+    m +=1
+
+So m will be 0,1,...,40. So the loop runs 41 times, m up to 40.
+
+But 2^40 is a very large number, so for most cases, even if m is 40, the x would be very large and not present in other a_i's. But to cover all possibilities, this is acceptable.
+
+Testing this code with the samples:
+
+Sample 1:
+
+Input:
+
+3
+
+4 8 2
+
+Output: 2.
+
+Sample 2:
+
+3
+
+3 5 6
+
+Output:5.
+
+Edge case n=1:
+
+Input:
+
+1
+
+5
+
+Output:0.
+
+All correct.
+
+Another test case where n=2 and a = [3,6], output is1.
+
+The code should correctly return1.
+
+Thus, the code should work.
+</think>
+To solve this problem, we need to determine the minimum number of operations required to make the volumes of all chemicals equal using the allowed operations of doubling or halving the volume (integer division). 
+
+### Approach
+1. **Generate Possible Targets**: For each chemical, generate all possible target volumes it can reach by repeatedly halving and then doubling. Track the minimum number of operations required to reach each target.
+2. **Track Common Targets**: Use a dictionary to track how many chemicals can reach each target and the sum of the operations required for all chemicals to reach that target.
+3. **Find Optimal Target**: From the common targets, determine the one with the minimum total operations.
+
+### Solution Code
+```python
+import sys
+from collections import defaultdict
+
+def main():
+    input = sys.stdin.read().split()
+    n = int(input[0])
+    a = list(map(int, input[1:n+1]))
+    
+    x_total = defaultdict(lambda: (0, 0))  # (count, sum_steps)
+    
+    for num in a:
+        local_steps = {}
+        current = num
+        k = 0
+        
+        while True:
+            v = current
+            if v == 0:
+                x = 0
+                steps = k
+                if x not in local_steps or steps < local_steps.get(x, float('inf')):
+                    local_steps[x] = steps
+                break
+            
+            m = 0
+            while m <= 40:
+                x = v * (2 ** m)
+                steps = k + m
+                if x not in local_steps or steps < local_steps.get(x, float('inf')):
+                    local_steps[x] = steps
+                m += 1
+            
+            current = current // 2
+            k += 1
+        
+        for x, steps in local_steps.items():
+            count, total = x_total[x]
+            x_total[x] = (count + 1, total + steps)
+    
+    min_total = float('inf')
+    for x, (count, total) in x_total.items():
+        if count == n and total < min_total:
+            min_total = total
+    
+    print(min_total if min_total != float('inf') else 0)
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Generate Possible Targets**: For each chemical volume, we consider all possible values obtained by halving until zero and then doubling. Each possible target volume and the corresponding operations (halves and doubles) are tracked.
+2. **Track Common Targets**: Using a dictionary, we count how many chemicals can reach each target and sum the operations needed. This helps identify targets common to all chemicals.
+3. **Determine Optimal Target**: The target with the minimum sum of operations across all chemicals is selected. This ensures the solution is both feasible and optimal in terms of operations required.
+
+This approach efficiently explores possible targets and operations, ensuring we find the optimal solution within computational limits.
+</bot>

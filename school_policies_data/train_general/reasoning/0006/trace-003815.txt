@@ -1,0 +1,778 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.You are given a string of length N. Calculate the number of distinct substrings of S.
+
+Constraints
+
+* 1 \leq N \leq 500,000
+* S consists of lowercase English letters.
+
+Input
+
+Input is given from Standard Input in the following format:
+
+
+S
+
+
+Output
+
+Print the answer.
+
+Examples
+
+Input
+
+abcbcba
+
+
+Output
+
+21
+
+
+Input
+
+mississippi
+
+
+Output
+
+53
+
+
+Input
+
+ababacaca
+
+
+Output
+
+33
+
+
+Input
+
+aaaaa
+
+
+Output
+
+5
+</user>
+<bot>
+<think>
+Okay, so I need to solve this problem where I have to find the number of distinct substrings in a given string S. The constraints are tight because the length of S can be up to 500,000. Hmm, what's the efficient way to do this?
+
+Wait, the naive approach of generating all possible substrings and storing them in a set would be O(n²) in time and space, which is definitely not feasible for n=5e5. That's way too slow and would use way too much memory. So we need a smarter approach.
+
+I remember that suffix arrays and suffix trees (like using a suffix automaton) are good for problems involving substrings. Oh right, the suffix automaton (SAM) is a linear-time and space data structure that can represent all substrings of a string efficiently. And the number of distinct substrings can be calculated using the SAM's properties.
+
+So maybe building a suffix automaton for the string S and then using the formula that sums (length of each state minus the link's length) across all states. Right, because each state in the SAM represents a set of substrings, and the number of distinct substrings is the sum over all states of (len(state) - len(link(state))).
+
+So the plan is to build the SAM for S and then compute this sum.
+
+But how to implement the suffix automaton efficiently? I remember that the SAM has states, each with a length, a link, and transitions. The construction process processes each character in the string step by step, creating new states as needed.
+
+Let me recall the algorithm. The suffix automaton is built incrementally. We start with an initial state. For each character, we add it to the automaton by creating a new state and updating the links and transitions. There's a lot to manage here: the last state, splits, cloning states when necessary.
+
+Implementing SAM correctly is a bit tricky. Let me outline the steps:
+
+1. Each state has:
+   - len: the length of the longest substring in this state.
+   - link: the suffix link to another state.
+   - transitions: a dictionary (or array) mapping characters to states.
+
+2. Start with initial state (size 0, link -1).
+
+3. For each character in S:
+   a. Create a new state (cur) with len = last.len + 1.
+   b. Follow the suffix links from the last state to find where the transitions for the current character are not present or can be updated.
+   c. If a state p is found where there's no transition for c, set p's transition to cur, and move to p's link.
+   d. If we reach the initial state without finding such a p, set cur's link to the initial state.
+   e. Otherwise, if we found a state p with transition q for c, check if q's len is p.len + 1. If yes, set cur's link to q.
+   f. If not, we need to clone q into a new state clone, copy all transitions and the link from q. Then, update q's link and the transitions of p and others to point to clone. Finally, set cur's link to clone.
+
+4. After processing all characters, the number of distinct substrings is the sum over all states (excluding the initial) of (state.len - state.link.len).
+
+Wait, no. Wait, the initial state has len 0 and link -1. Each state represents a set of substrings, and the number of new substrings added by a state is (state.len - state.link.len). So summing this for all states except the initial gives the total number of distinct substrings.
+
+Yes. So the key is to build the SAM and compute this sum.
+
+Now, the challenge is to implement the SAM efficiently for large n. Since the maximum n is 5e5, the implementation needs to be O(n) time and space.
+
+Implementing the SAM in Python requires careful handling. Let's outline the data structures. Each state can be a class or a dictionary. But for speed, perhaps using a list of dictionaries would be better. Alternatively, we can represent each state as a dictionary with 'len', 'link', and 'trans' (transitions).
+
+But in Python, even dictionaries can be slow for large data. However, considering that each state has transitions only for characters that actually exist, maybe using a list of objects. Let's think about using a list where each element is a state. For transitions, perhaps a list of size 26 (for lowercase letters) would be faster, using indexes 0-25 for 'a'-'z'.
+
+Wait, but using a dictionary for transitions might be more memory-efficient, but for speed, perhaps arrays (like using a list of lists, where transitions are stored as indexes) are better. Let's see.
+
+Alternatively, in the SAM implementation, each state's transitions are stored as a dictionary, which maps characters to state indices.
+
+But for Python, the standard approach is to use a list of objects. Let's outline the code structure.
+
+The code structure for SAM:
+
+- We'll have a list of states. Each state is a dictionary with 'len', 'link', 'trans'.
+- The initial state is at index 0, len 0, link -1, trans empty.
+- The size is the current number of states.
+- last is the index of the last state added (initially 0).
+
+For each character in S:
+   create new state (cur) with len = last.len + 1, link to be determined.
+   then, we start from last and traverse the suffix links to find the correct position to link.
+
+But in code, how to handle this?
+
+Alternatively, here's a standard SAM implementation outline in Python:
+
+class State:
+    def __init__(self):
+        self.len = 0
+        self.link = -1
+        self.trans = {}
+
+sa = [State()]
+sa[0].len = 0
+sa[0].link = -1
+size = 1
+last = 0
+
+for c in S:
+    # create new state
+    p = last
+    curr = State()
+    curr.len = sa[p].len + 1
+    curr.link = -1
+    curr.trans = {}
+    sa.append(curr)
+    curr_idx = size
+    size +=1
+    last = curr_idx
+
+    # now follow suffix links
+    while p != -1 and c not in sa[p].trans:
+        sa[p].trans[c] = curr_idx
+        p = sa[p].link
+
+    if p == -1:
+        curr.link = 0
+    else:
+        q = sa[p].trans[c]
+        if sa[p].len + 1 == sa[q].len:
+            curr.link = q
+        else:
+            # clone q
+            clone = State()
+            clone.len = sa[p].len +1
+            clone.trans = sa[q].trans.copy()
+            clone.link = sa[q].link
+            sa.append(clone)
+            clone_idx = size
+            size +=1
+
+            # update q's link and curr's link
+            sa[q].link = clone_idx
+            curr.link = clone_idx
+
+            # update transitions in p's ancestors to point to clone instead of q where applicable
+            while p != -1 and sa[p].trans.get(c, None) == q:
+                sa[p].trans[c] = clone_idx
+                p = sa[p].link
+
+    # proceed to next character
+
+Wait, but in this code, the states are stored in a list, and each state's transitions are a dictionary. But for Python, even with 5e5 characters, the number of states in SAM is O(n), which is manageable. The maximum number of states is 2n - 1, so for n=5e5, that's 1e6, which is acceptable.
+
+So the code would process each character, adding a new state each time, and possibly cloning when needed.
+
+Once the SAM is built, we can compute the sum of (state.len - state.link.len) for all states except the initial state.
+
+Wait, but the initial state is the first state (index 0), which has link -1. So for all other states, we compute (len - link.len). However, the link of a state can be -1 (only for the initial state). So in the code, after building the SAM, we need to iterate through all states (starting from index 1 to size-1) and for each state s, sum += s.len - sa[s.link].len.
+
+Wait, but what if s.link is -1? That's only possible for the initial state. But the initial state's link is -1, but other states' links can't be -1 except when their link is the initial state. Wait, no. The initial state has link -1. All other states' links are valid state indices. Because during the construction:
+
+When a new state is created (curr), after processing, the link is set to 0 if p is -1, which is the initial state. Otherwise, it's set to q or clone. So the link of any state except the initial is a valid state index.
+
+So, for all states except the initial (i=0), the link is a valid index, so when we compute s.link, it's valid.
+
+Thus, the sum is sum over all states (from 1 to size-1) of (sa[i].len - sa[sa[i].link].len).
+
+But wait, the initial state is index 0. All other states have their link pointing to a state with a smaller len. So when we calculate for state i, the link's len is less than or equal to i's len.
+
+So the code after building the SAM is:
+
+ans = 0
+for i in range(1, size):
+    ans += sa[i].len - sa[sa[i].link].len
+
+Then print ans.
+
+But how efficient is this in Python? For n=5e5, the SAM would have up to 1e6 states, and this loop would take 1e6 iterations, which is acceptable.
+
+But in Python, using a list of objects with attributes stored as variables may be slower. So perhaps using a list of dictionaries would be better for speed. Let's see.
+
+Alternatively, in the code above, using a list of State objects with trans as a dictionary. But for each state, the transitions are stored as a dictionary of characters to indexes. But during construction, the code may take O(n) time.
+
+Another possible optimization: since the characters are lowercase letters, the transitions can be represented as a list of 26 elements (for a-z), but for Python, using a dictionary is more memory-efficient, but perhaps slower. However, in practice, using a dictionary might be manageable.
+
+But for very large n (5e5), the code may take some time. Let me test with the example.
+
+Take the first example: input 'abcbcba', output 21.
+
+Building the SAM for this would generate several states. Let's see:
+
+But perhaps in Python, even with 5e5 characters, the code would work within the time constraints. However, there's a problem with using Python for such a high-performance requirement. The time constraints for programming contests are usually tight, and Python is slower than C++.
+
+But the problem says to generate a Python function that can handle the input. So perhaps the code is correct, but may not pass the time constraints for the largest input in Python. However, perhaps there's a way to optimize the code.
+
+Wait, but the code must be correct. Let's think about possible errors.
+
+For example, in the SAM construction, when a clone is created, the clone's transitions are a copy of the original's transitions. So in Python, using a dictionary's copy() method may be efficient enough.
+
+Alternatively, using a shallow copy (like clone.trans = dict(q.trans)), but that's O(1) in Python? No, because creating a new dictionary requires copying all the key-value pairs, which for a state with many transitions could be O(k) time, where k is the number of transitions. But in practice, each state's transitions are limited, so the overall time should be O(n).
+
+Another thing to note is that in Python, appending to a list is O(1) amortized, so the code should be okay.
+
+So the code outline is:
+
+Read the string S.
+
+Build the suffix automaton for S.
+
+Sum all (state.len - state.link.len) for each state except the initial.
+
+But how to represent the states? Let's code this in Python.
+
+Wait, but in Python, using classes for each state may be slow. Alternatively, we can represent each state as a dictionary.
+
+So let's try to code this:
+
+We can represent the SAM as a list of dictionaries. Each state is a dictionary with 'len', 'link', 'trans'.
+
+Initialize:
+
+sa = [{'len': 0, 'link': -1, 'trans': {}}]
+size = 1
+last = 0
+
+Then, for each character in S:
+
+curr = {'len': sa[last]['len'] + 1, 'link': -1, 'trans': {}}
+sa.append(curr)
+curr_idx = size
+size += 1
+p = last
+last = curr_idx
+
+Then, while p != -1 and current character not in sa[p]['trans']:
+
+Set sa[p]['trans'][c] = curr_idx, and p = sa[p]['link'].
+
+Then, if p == -1, set curr['link'] to 0.
+
+Else:
+
+q = sa[p]['trans'][c]
+
+if sa[p]['len'] + 1 == sa[q]['len']:
+
+then curr['link'] = q.
+
+else:
+
+create clone.
+
+clone = {'len': sa[p]['len'] + 1, 'link': sa[q]['link'], 'trans': sa[q]['trans'].copy()}
+
+sa.append(clone)
+
+clone_idx = size
+
+size += 1
+
+Then, set sa[q]['link'] = clone_idx.
+
+curr['link'] = clone_idx.
+
+Then, iterate p (starting from previous p) and for each, check if their transition for c is q. If so, change to clone_idx.
+
+So the code would be:
+
+for c in S:
+
+    # Create new state
+    curr = {'len': sa[last]['len'] + 1, 'link': -1, 'trans': {}}
+    sa.append(curr)
+    curr_idx = len(sa) - 1
+    p = last
+    # Update transitions
+    while p != -1 and c not in sa[p]['trans']:
+        sa[p]['trans'][c] = curr_idx
+        p = sa[p]['link']
+    if p == -1:
+        sa[curr_idx]['link'] = 0
+    else:
+        q = sa[p]['trans'][c]
+        if sa[p]['len'] + 1 == sa[q]['len']:
+            sa[curr_idx]['link'] = q
+        else:
+            # Clone q
+            clone = {
+                'len': sa[p]['len'] + 1,
+                'link': sa[q]['link'],
+                'trans': sa[q]['trans'].copy(),
+            }
+            sa.append(clone)
+            clone_idx = len(sa) - 1
+            # Update q's link and curr's link
+            sa[q]['link'] = clone_idx
+            sa[curr_idx]['link'] = clone_idx
+            # Update p's path to point to clone
+            while p != -1 and sa[p]['trans'].get(c, None) == q:
+                sa[p]['trans'][c] = clone_idx
+                p = sa[p]['link']
+    last = curr_idx
+
+Then, after building the SAM, compute the sum:
+
+ans = 0
+for i in range(1, len(sa)):
+    ans += sa[i]['len'] - sa[sa[i]['link']]['len']
+
+print(ans)
+
+This should give the correct answer.
+
+Now, test the first example.
+
+Sample Input 1: 'abcbcba' → output 21.
+
+Let's see. The number of distinct substrings is 21. Let's see:
+
+The substrings are all possible unique ones. For a string of length 7, the maximum possible is 7*8/2=28. But some are duplicated, so the answer is 21.
+
+But building the SAM for this input and summing the len - link.len for all states except the initial should give 21.
+
+So the code should work.
+
+But in Python, for n=5e5, the code may take too long because of the per-character processing and dictionary operations. For example, each character may require O(1) amortized time, but in practice, the inner loops (the while p != -1 ...) could have O(n) total time.
+
+Wait, the SAM construction is O(n) in time. Because each iteration of the loop for adding characters adds a new state and does a certain number of steps. The total number of operations for all characters is O(n), because each step in the while loop for p can be amortized to O(1) per character.
+
+Thus, the code should handle n=5e5 in Python, but in practice, the constants may be too high. For example, using dictionaries for transitions may be slow. Let's think of possible optimizations.
+
+Alternative approach: use a list of transitions. Since the characters are lowercase letters, we can represent transitions as a list of 26 elements (each element is the index of the state, or None). For a character c, ord(c) - ord('a') gives the index in the list. However, in Python, list operations are faster than dictionary lookups.
+
+So, changing the 'trans' part to be a list of 26 elements, initialized to -1 (no transition).
+
+Each state's 'trans' is a list of 26 integers, default -1.
+
+So, when building, for a character c, the index is ord(c) - 97.
+
+This may speed up the transitions since checking for presence is O(1) with a list, and the code can use indexes.
+
+So modifying the code to use lists for transitions:
+
+sa = [{'len': 0, 'link': -1, 'trans': [-1]*26}]
+size = 1
+last = 0
+
+Then, for each character c in S:
+
+ci = ord(c) - 97
+
+Then, in the loop:
+
+while p != -1 and sa[p]['trans'][ci] == -1:
+
+    sa[p]['trans'][ci] = curr_idx
+
+    p = sa[p]['link']
+
+Similarly, when checking if a transition exists.
+
+This would make the transitions faster as list lookups are O(1) and use less memory.
+
+Yes, this is a better approach. So the code can be modified to use lists for transitions.
+
+So the code would be:
+
+sa = [{'len': 0, 'link': -1, 'trans': [-1]*26}]
+size = 1
+last = 0
+
+for c in S:
+    ci = ord(c) - ord('a')
+    # create new state
+    curr = {'len': sa[last]['len'] + 1, 'link': -1, 'trans': [-1]*26}
+    sa.append(curr)
+    curr_idx = len(sa) - 1
+    p = last
+    while p != -1 and sa[p]['trans'][ci] == -1:
+        sa[p]['trans'][ci] = curr_idx
+        p = sa[p]['link']
+    if p == -1:
+        sa[curr_idx]['link'] = 0
+    else:
+        q = sa[p]['trans'][ci]
+        if sa[p]['len'] +1 == sa[q]['len']:
+            sa[curr_idx]['link'] = q
+        else:
+            # clone q
+            clone = {
+                'len': sa[p]['len'] + 1,
+                'link': sa[q]['link'],
+                'trans': sa[q]['trans'].copy(),
+            }
+            sa.append(clone)
+            clone_idx = len(sa) -1
+            sa[q]['link'] = clone_idx
+            sa[curr_idx]['link'] = clone_idx
+            # update transitions from p and ancestors
+            while p != -1 and sa[p]['trans'][ci] == q:
+                sa[p]['trans'][ci] = clone_idx
+                p = sa[p]['link']
+    last = curr_idx
+
+This way, transitions are handled as lists of 26 elements, which should be faster than dictionaries.
+
+But in Python, list.copy() for the transitions (which are lists) creates a shallow copy, which is O(26) time. But for cloning, it's manageable.
+
+Yes, this should be more efficient.
+
+Now, after building the SAM, the sum is computed as before:
+
+ans = 0
+for i in range(1, len(sa)):
+    ans += sa[i]['len'] - sa[ sa[i]['link'] ]['len']
+print(ans)
+
+This should work.
+
+Testing the first example:
+
+Input: abcbcba → output 21.
+
+Let's see:
+
+The code should build the SAM correctly, and the sum should be 21.
+
+Now, what about the fourth example: 'aaaaa' → output 5.
+
+The number of distinct substrings is 5: 'a', 'aa', 'aaa', 'aaaa', 'aaaaa'.
+
+So the SAM for 'aaaaa' would have states with lens 0,1,2,3,4,5. But wait, the SAM may have more states because of the way cloning works. Wait, but the number of distinct substrings is 5. So the sum over all states (excluding initial) of len - link.len should be 5.
+
+Let's see:
+
+For example, the SAM would have:
+
+State 0: len 0, link -1.
+
+State 1: len 1, link 0. So 1-0=1.
+
+State 2: len 2, link 1. 2-1=1. Sum so far 2.
+
+State 3: len 3, link 2. 3-2=1. Sum 3.
+
+State 4: len 4, link 3. Sum 4.
+
+State 5: len5, link4. Sum5.
+
+But there may be other cloned states. Wait, no. When building 'a's, each new character is 'a'. Let's see:
+
+First 'a':
+
+- create state 1 (len 1). p is 0.
+
+- check p's transitions for 'a' (index 0). Initially, sa[0]['trans'][0] is -1.
+
+So during the while loop, p=0, set sa[0]['trans'][0] = 1. Then p becomes sa[0]['link'] which is -1.
+
+So link of 1 is 0.
+
+Second 'a':
+
+create state 2 (len 2).
+
+p=1.
+
+Check p's transitions for 'a' (0): sa[1]['trans'][0] is -1. So set to 2. p becomes sa[1]['link'] =0.
+
+Check sa[0]['trans'][0] is 1 (from previous step). So now, when we check sa[0]['trans'][0] is 1. So in the loop, p=0, which has 'a' transition to 1. So we break.
+
+q is 1. sa[p].len +1 is 0+1=1, which is equal to q.len (1). So state 2's link is 1.
+
+So now, state2's len is 2, link is 1. So 2-1=1 added to sum.
+
+Third 'a':
+
+create state3 (len3).
+
+p=2.
+
+Check transitions for 'a' (0) in p=2: -1. So set to3. p becomes sa[2].link =1.
+
+Check p=1's transitions for 'a' is -1 (since in previous steps, when state2 was added, p=1's 'a' was set to 2. Then when state3 is added, p=2's 'a' is set to3, and then p becomes1. Now, check p=1's 'a' is -1 (wait, no. Because in the second 'a' step, after processing state2, the transitions for p=1's 'a' is 2. Then during the third 'a' processing, when p=2 (current last is state2), we check transitions for 'a' in p=2. It's -1 (since state2's trans was initialized as [-1]*26, and during the second 'a', when p=1, in the loop, we set sa[1]['trans'][0] =2. Then in state2's transitions, during the third 'a' processing, p is initially 2. So sa[2]['trans'][0] is -1, so set to3. Then p=2's link is 1.
+
+So now, p=1. Check sa[1]['trans'][0] is 2 (from second step). So we enter the else clause.
+
+q is 2. sa[p].len +1 is 1 +1 =2. sa[q].len is 2. So state3's link is 2.
+
+Then, state3's len is3. link is2. So contribution is 3-2=1. Sum becomes 3.
+
+Fourth 'a':
+
+create state4 (len4).
+
+p=3.
+
+Check 'a' in p=3's trans is -1. set to4. p becomes3's link, which is2.
+
+Check p=2's trans for 'a' is -1 (since during third 'a' processing, when state3 was added, p=2's 'a' was set to3. Then in the fourth 'a' step, p=3's 'a' is set to4, and p moves to3's link (2). Now, check p=2's 'a' is3 (from third step). So sa[2]['trans'][0] is3. So q is3. sa[p].len is2. sa[p].len +1=3. q's len is3. So state4's link is3. So contribution 4-3=1. sum is4.
+
+Fifth 'a':
+
+create state5 (len5).
+
+p=4.
+
+Check 'a' in p=4's trans: -1. set to5. p=4's link is3.
+
+Check p=3's 'a' is4. So q=4. sa[p].len is3. 3+1=4. q's len is4. So state5's link is4. contribution 5-4=1. sum is5.
+
+Thus, the sum is5, which matches the sample.
+
+So the code should work.
+
+Therefore, the code should handle all cases correctly.
+
+Now, in Python, the code might be slow for n=5e5. Let's think about possible optimizations.
+
+Another optimization is to precompute the ord of each character once, rather than doing ord(c) - ord('a') for each character. Since ord('a') is 97, we can compute ci = ord(c) - 97.
+
+But in Python, the code would do this for each character.
+
+Another thing: using lists for the states. Each state is a dictionary, but in Python, dictionaries are flexible but perhaps slow. Alternatively, we can use a list of tuples, but since the elements (len, link, trans) are varying types, a tuple may not be feasible. Alternatively, using a list of objects, perhaps using a class with __slots__ can speed things up.
+
+But in Python, using a class with __slots__ may be more efficient. Let's try that.
+
+Rewriting the code using a class:
+
+class State:
+    __slots__ = ['len', 'link', 'trans']
+    def __init__(self):
+        self.len = 0
+        self.link = -1
+        self.trans = [-1] * 26
+
+sa = [State()]
+sa[0].len = 0
+sa[0].link = -1
+size = 1
+last = 0
+
+for c in S:
+    ci = ord(c) - 97
+    curr = State()
+    curr.len = sa[last].len + 1
+    curr.link = -1
+    curr.trans = [-1]*26
+    sa.append(curr)
+    curr_idx = len(sa)-1
+    p = last
+    while p != -1 and sa[p].trans[ci] == -1:
+        sa[p].trans[ci] = curr_idx
+        p = sa[p].link
+    if p == -1:
+        curr.link = 0
+    else:
+        q = sa[p].trans[ci]
+        if sa[p].len + 1 == sa[q].len:
+            curr.link = q
+        else:
+            clone = State()
+            clone.len = sa[p].len +1
+            clone.trans = list(sa[q].trans)
+            clone.link = sa[q].link
+            sa.append(clone)
+            clone_idx = len(sa)-1
+            sa[q].link = clone_idx
+            curr.link = clone_idx
+            # Update the transitions
+            while p != -1 and sa[p].trans[ci] == q:
+                sa[p].trans[ci] = clone_idx
+                p = sa[p].link
+    last = curr_idx
+
+ans =0
+for i in range(1, len(sa)):
+    ans += sa[i].len - sa[sa[i].link].len
+print(ans)
+
+This way, using __slots__ and lists for transitions can speed up access.
+
+This should be faster than using dictionaries.
+
+But even with this, for n=5e5, the code may be slow in Python. But given that the problem requires an executable Python function, we have to proceed.
+
+Another possible optimization is to precompute the list of characters as their indices once, so we don't recompute ord(c) -97 each time.
+
+For example:
+
+S = input().strip()
+chars = [ord(c) -97 for c in S]
+
+Then, iterate through chars instead of S.
+
+But that's a minor optimization.
+
+So, the final code would read S, process each character, build the SAM, compute the sum, and output.
+
+But the code must be self-contained, with no external dependencies, and call the function after definition.
+
+Putting it all together:
+
+Read S from stdin.
+
+Build the SAM as per the code.
+
+Calculate the answer.
+
+Print it.
+
+So the code in Python would be:
+
+class State:
+    __slots__ = ['len', 'link', 'trans']
+    def __init__(self):
+        self.len = 0
+        self.link = -1
+        self.trans = [-1] * 26
+
+def main():
+    import sys
+    S = sys.stdin.readline().strip()
+    if not S:
+        print(0)
+        return
+    sa = [State()]
+    sa[0].len = 0
+    sa[0].link = -1
+    last = 0
+    for c in S:
+        ci = ord(c) - 97
+        curr = State()
+        curr.len = sa[last].len + 1
+        curr.link = -1
+        curr.trans = [-1]*26
+        sa.append(curr)
+        curr_idx = len(sa) -1
+        p = last
+        while p != -1 and sa[p].trans[ci] == -1:
+            sa[p].trans[ci] = curr_idx
+            p = sa[p].link
+        if p == -1:
+            sa[curr_idx].link = 0
+        else:
+            q = sa[p].trans[ci]
+            if sa[p].len +1 == sa[q].len:
+                sa[curr_idx].link = q
+            else:
+                clone = State()
+                clone.len = sa[p].len +1
+                clone.trans = list(sa[q].trans)
+                clone.link = sa[q].link
+                sa.append(clone)
+                clone_idx = len(sa) -1
+                sa[q].link = clone_idx
+                sa[curr_idx].link = clone_idx
+                while p != -1 and sa[p].trans[ci] == q:
+                    sa[p].trans[ci] = clone_idx
+                    p = sa[p].link
+        last = curr_idx
+    ans =0
+    for i in range(1, len(sa)):
+        ans += sa[i].len - sa[sa[i].link].len
+    print(ans)
+
+main()
+
+But even this may not pass the time constraints in Python for the largest input. However, given the problem statement, this is the correct approach. Alternative approaches like using a suffix array with LCP (longest common prefix) array would also work, but building a suffix array for 5e5 in Python is also challenging.
+
+The other approach is to compute the sum as the sum for each suffix of the number of new substrings added. This can be done with the suffix automaton approach, which is what this code is doing.
+
+Thus, this code should be the correct solution.
+</think>
+To solve this problem, we need to determine the number of distinct substrings in a given string. The solution must efficiently handle strings up to a length of 500,000 characters. We use a Suffix Automaton (SAM) to achieve this efficiently in linear time and space.
+
+### Approach
+1. **Suffix Automaton (SAM)**: A SAM is a powerful data structure that compactly represents all substrings of a given string. It allows us to efficiently count the number of distinct substrings by leveraging the properties of its states and transitions.
+2. **Construction of SAM**: The SAM is built incrementally by processing each character of the string. Each state in the SAM represents a set of substrings ending at a certain position, and transitions between states represent adding a new character.
+3. **Counting Substrings**: The number of distinct substrings can be computed by summing the contributions of each state in the SAM. Each state's contribution is the difference between its length and the length of its suffix link, which gives the number of new substrings introduced by that state.
+
+### Solution Code
+```python
+class State:
+    __slots__ = ['len', 'link', 'trans']
+    def __init__(self):
+        self.len = 0
+        self.link = -1
+        self.trans = [-1] * 26
+
+def main():
+    import sys
+    S = sys.stdin.readline().strip()
+    if not S:
+        print(0)
+        return
+    sa = [State()]
+    sa[0].len = 0
+    sa[0].link = -1
+    last = 0
+    for c in S:
+        ci = ord(c) - 97
+        curr = State()
+        curr.len = sa[last].len + 1
+        curr.link = -1
+        curr.trans = [-1] * 26
+        sa.append(curr)
+        curr_idx = len(sa) - 1
+        p = last
+        while p != -1 and sa[p].trans[ci] == -1:
+            sa[p].trans[ci] = curr_idx
+            p = sa[p].link
+        if p == -1:
+            sa[curr_idx].link = 0
+        else:
+            q = sa[p].trans[ci]
+            if sa[p].len + 1 == sa[q].len:
+                sa[curr_idx].link = q
+            else:
+                clone = State()
+                clone.len = sa[p].len + 1
+                clone.trans = list(sa[q].trans)
+                clone.link = sa[q].link
+                sa.append(clone)
+                clone_idx = len(sa) - 1
+                sa[q].link = clone_idx
+                sa[curr_idx].link = clone_idx
+                while p != -1 and sa[p].trans[ci] == q:
+                    sa[p].trans[ci] = clone_idx
+                    p = sa[p].link
+        last = curr_idx
+    ans = 0
+    for i in range(1, len(sa)):
+        ans += sa[i].len - sa[sa[i].link].len
+    print(ans)
+
+main()
+```
+
+### Explanation
+1. **State Class**: Each state in the SAM has a length (`len`), a suffix link (`link`), and transitions (`trans`) to other states based on characters.
+2. **Building the SAM**: For each character in the input string, we create a new state and update transitions and suffix links. If necessary, we clone states to maintain the properties of the SAM.
+3. **Counting Distinct Substrings**: After constructing the SAM, we sum the contributions of each state (excluding the initial state) by calculating the difference between the length of the state and the length of its suffix link. This sum gives the total number of distinct substrings.
+
+This approach efficiently handles the problem constraints, ensuring linear time and space complexity relative to the input size.
+</bot>

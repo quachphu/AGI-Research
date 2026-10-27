@@ -1,0 +1,1405 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.There is an infinite sequence consisting of all positive integers in the increasing order: p = {1, 2, 3, ...}. We performed n swap operations with this sequence. A swap(a, b) is an operation of swapping the elements of the sequence on positions a and b. Your task is to find the number of inversions in the resulting sequence, i.e. the number of such index pairs (i, j), that i < j and pi > pj.
+
+Input
+
+The first line contains a single integer n (1 ≤ n ≤ 105) — the number of swap operations applied to the sequence.
+
+Each of the next n lines contains two integers ai and bi (1 ≤ ai, bi ≤ 109, ai ≠ bi) — the arguments of the swap operation.
+
+Output
+
+Print a single integer — the number of inversions in the resulting sequence.
+
+Examples
+
+Input
+
+2
+4 2
+1 4
+
+
+Output
+
+4
+
+
+Input
+
+3
+1 6
+3 4
+2 5
+
+
+Output
+
+15
+
+Note
+
+In the first sample the sequence is being modified as follows: <image>. It has 4 inversions formed by index pairs (1, 4), (2, 3), (2, 4) and (3, 4).
+</user>
+<bot>
+<think>
+Okay, let's see. The problem is to find the number of inversions in a sequence after performing a series of swap operations. The initial sequence is 1, 2, 3, ... and each swap exchanges the elements at positions a and b. The challenge is to compute the inversion count efficiently, especially considering that n can be up to 1e5 and the positions can be up to 1e9. Hmm, this seems tricky because directly simulating the swaps and then computing inversions would be impossible due to the size constraints.
+
+First, I need to understand how the swap operations affect the sequence. Since each swap can affect elements at positions a and b, but since the positions can be very large, we can't track the entire sequence. So, we need a way to represent the current state of the sequence by keeping track of the swaps in a smart way.
+
+Wait, but the initial sequence is just the identity mapping. Each swap(a, b) swaps the elements at those positions. So, after several swaps, the value at any position x is determined by the swaps that involved x. So, for each position, we can track what its current value is by applying all swaps in reverse order? Or maybe not. Let's think: suppose we start with the initial sequence. Each swap(a, b) changes the elements at a and b. So, the value at position a after each swap depends on whether it was swapped in previous steps.
+
+Wait, no. Let's think step by step. For example, first swap is 4 and 2. The sequence becomes 1,4,3,2. Then the next swap is 1 and 4: the positions 1 and 4. So position 1 has 2 (since after first swap, position 4 was 2), swapping with position 4's value (which is 1, because initial after first swap, positions 1 and 4 are 1 and 2. Wait, no. Wait the initial sequence is 1,2,3,4. Then first swap 4 and 2: positions 2 and 4 are swapped. So after first swap, sequence is 1,4,3,2. Then the next swap is 1 and 4. So position 1 (value 1) and position 4 (value 2) are swapped. So the sequence becomes 2,4,3,1. Then the inversions are between (1,4) (2 and 1), (2,3) (4>3), (2,4) (4>1), (3,4) (3>1). Total 4 inversions. Which matches the sample output.
+
+But how do we compute this efficiently?
+
+The problem is to model the current permutation after all swaps and compute the inversion count. The naive approach is impossible because the permutation can be up to 1e9 elements. So, the key is to model the permutation in a way that only the swapped positions are tracked, and the rest are identity.
+
+So, the permutation can be represented as a dictionary where for most positions x, perm[x] = x. But whenever a swap occurs between a and b, we need to swap the values in perm for those positions. So, for each swap(a, b), we can do the following:
+
+- Check if a is in the permutation map. If not, set perm[a] = a.
+
+- Check if b is in the permutation map. If not, set perm[b] = b.
+
+- Then swap perm[a] and perm[b].
+
+This way, the permutation map only contains entries for positions that have been swapped at least once, and all other positions remain as their initial value (x). 
+
+Once all swaps are processed, the permutation is represented by this map. Then, the problem reduces to computing the inversion count of this permutation. But how?
+
+The inversion count is the sum over all i < j where p_i > p_j. But since most positions are untouched (their value is x), but some positions are swapped. So, the inversion count can be broken down into:
+
+1. Inversions involving at least one swapped position.
+
+2. Inversions between two non-swapped positions. But in the original sequence, these are ordered as x < y when i < j (since i = x and j = y, so if x < y, then i < j implies x < y, so no inversion). So, all pairs of non-swapped positions contribute zero inversions. So, we only need to consider pairs where at least one of the positions is swapped.
+
+So, the problem is to compute inversions in the permutation that includes all swapped positions and the rest as identity.
+
+But how to do that?
+
+First, let's collect all the positions that have been swapped at least once. Let's call this set S. The size of S can be up to 2*n, since each swap introduces two new positions. For n=1e5, 2e5 is manageable.
+
+Once we have S, the permutation for each x in S is perm[x], and for x not in S, perm[x] = x.
+
+The inversion count is then:
+
+sum_{i < j} [perm(i) > perm(j)]
+
+But since most positions are not in S, but the sum includes all possible i < j. So, the majority of pairs are between non-swapped positions (which contribute zero), so we can ignore them. We only need to consider pairs where at least one of i or j is in S.
+
+But even that could be O(M^2), where M is the size of S. For M=2e5, M^2 is 4e10, which is way too big. So we need a smarter approach.
+
+Alternative approach:
+
+The inversion count can be split into three parts:
+
+1. Both i and j are in S. So, their perm(i) and perm(j) are modified. So, for these pairs, we need to compute how many (i,j) in S where i < j and perm(i) > perm(j).
+
+2. i is in S, j is not in S. So, j is in the original sequence (perm(j) = j). So, for each i in S, how many j > i (not in S) where perm(i) > j. Plus how many j < i (not in S) where perm(i) < j (since i < j is not true here). Wait no: i < j in this case. So j is not in S, j >= i.
+
+Wait, for i in S and j not in S: j can be either greater than i or less than i. Wait, but in the pair (i,j), since i < j, j must be greater than i.
+
+So for i in S and j not in S, j must be >= i+1. So, for each i in S, the number of j not in S such that j > i and perm(i) > j. Because perm(j) is j.
+
+So, for i in S, how many j in (i, j_max] where j is not in S and perm(i) > j. Similarly, for j in S and i not in S where i < j and perm(i) > perm(j). But perm(i) is i, since i is not in S. So perm(i) =i, perm(j) is in S. So, if i < j but i > perm(j), then it's an inversion. So, for j in S, how many i < j (i not in S) where i > perm(j).
+
+Wait, this is getting complicated. Let's break it down into the three cases.
+
+Case 1: Both i and j are in S. We need to compute the number of pairs (i,j) in S where i < j and perm[i] > perm[j].
+
+Case 2: i is in S, j is not in S. We need to find i < j (so j >= i+1) where perm[i] > j (since perm[j] =j).
+
+Case 3: j is in S, i is not in S. Then i < j, perm[i] =i, perm[j] is in S. So inversion occurs if i > perm[j].
+
+Additionally, there's Case 4: neither i nor j are in S. But as mentioned before, since perm[i] =i and perm[j] =j, if i < j then i < j, so no inversion. So case 4 contributes zero.
+
+So, the total inversions are the sum of case1, case2, and case3.
+
+So, the problem reduces to calculating these three cases.
+
+Now, how to compute each case efficiently.
+
+Let's start with Case 1: compute the number of inversions among the elements in S. Since the elements in S can be up to 2e5, we need an O(M log M) solution for this. The standard approach for inversion count is using a Fenwick tree or a merge sort-based algorithm.
+
+But first, we need to collect all elements in S, along with their perm values. Then, we can process them in a way that allows us to compute the inversion count.
+
+So, for case1:
+
+We can create a list of tuples (i, perm[i]) for all i in S. Then, sort this list by i (since i < j is required). Then, for each element in this sorted list, we need to count how many elements after it have perm[j] less than perm[i]. Because the list is sorted by i, which is the actual position, so all j in the list after the current element have i < j. So, we can model this as the inversion count problem on the array of perm[i] values, sorted by their positions. So, the inversion count of this array (the perm values) gives case1.
+
+So, for case1, we can compute this using a Fenwick tree approach. For example, we process the elements in the order of increasing i (since i < j implies they are in order). For each perm[i], we want to find how many elements already processed have perm[j] > perm[i], which is equivalent to the number of elements in the Fenwick tree that are greater than perm[i]. Wait, no: since we process the elements in order of increasing i (i.e., j comes after i), so when processing j, all i < j have already been processed. So, for each j, the number of i < j where perm[i] > perm[j] is the number of elements already in the Fenwick tree that are greater than perm[j]. So, as we process each element, we can keep a Fenwick tree that stores the perm values processed so far, and for each new perm[j], query the number of elements in the tree that are greater than perm[j]. Summing these gives the inversion count for case1.
+
+Yes, that's correct. So for case1, the inversion count is the standard inversion count for the list of perm[i] values ordered by i. So, the approach for case1 is manageable.
+
+Now, case2: i is in S, j is not in S, i < j, perm[i] > j.
+
+We need to find, for each i in S, the number of j not in S where j > i and j < perm[i]. Because j must be greater than i (since i < j), and perm[i] > j (since j is not in S, perm[j] =j). So, for each i in S, the count is the number of integers j in (i, perm[i)] that are not in S. Because j must be in the range (i, perm[i)] (since j > i and j < perm[i] implies j <= perm[i] -1 if perm[i] > i +1).
+
+Wait, but perm[i] could be less than i. For example, after swapping, perm[i] could be smaller than i. So, the j must be between i+1 and perm[i] if perm[i] > i. Wait, no. Let's see: j must be > i (since i < j) and j < perm[i]. So j must be in the interval (i, perm[i)). But if perm[i] <= i, then the interval (i, perm[i)) is empty, so the count is zero. So for each i in S, if perm[i] > i, then the number of j not in S between i+1 and perm[i] -1. Wait, no: j can be any integer >i and <= perm[i] -1, but j must not be in S.
+
+So, for each i in S:
+
+if perm[i] > i: count += max(0, (perm[i] -1) - (i + 1) + 1) ) minus the number of elements in S that are in (i, perm[i] -1].
+
+Wait, let's compute the total numbers in the interval (i, perm[i] -1], which is perm[i] -1 - i. Then subtract the number of elements in S that lie within that interval. Because those j's are in S, so they are not considered here (since j must not be in S).
+
+Wait, no. Because j is not in S. So for the interval (i, perm[i]), j must be in that interval and not in S.
+
+So the count is (number of integers j in (i, perm[i]) ) - (number of elements in S that are in (i, perm[i])).
+
+Wait, but j must be > i and j < perm[i], because j < perm[i] (since perm[i] >j) and j > i (since i<j). So the interval is (i, perm[i)). The number of integers in this interval is max(0, perm[i] - i -1). But perm[i] could be less than i, which would make this interval invalid.
+
+So, the formula is:
+
+count_case2_i = max(0, (perm[i] -1 - i) ) - (number of elements in S that are in (i, perm[i] -1]).
+
+Because the integers in the interval (i, perm[i}) are i+1, i+2, ..., perm[i] -1. So the total is perm[i] -1 -i - 0 + 1 -1 = perm[i] -i -1.
+
+But if perm[i] <= i+1, then this is zero or negative, so max(0, ...).
+
+Wait, for example, if perm[i] is i+2: then the interval is i+1 to i+1 (since perm[i] is i+2, j < i+2. So j can be i+1. So the count is 1. Which is (i+2-1 -i) = 1. So yes. So formula is correct.
+
+Then, subtract the number of elements in S that are in the interval (i, perm[i} ), i.e., (i, perm[i} ) is j where i < j < perm[i]. So j can be in S. For each such j, since j is in S, j is excluded from the count. So the count for i is (perm[i] - i -1) - (number of S elements in (i, perm[i} )).
+
+So, for case2, we need to compute for each i in S, the value (perm[i] -i -1) if perm[i] >i+1, else zero, minus the number of elements in S that are between i and perm[i}.
+
+But how to compute the number of S elements in (i, perm[i} )?
+
+We can sort the elements in S. Then, for each i in S, perform a binary search to find how many elements in S are in the interval (i, perm[i}).
+
+Wait, the elements in S are a sorted list. Let's sort S and store it as a list sorted_S.
+
+For a given i, the lower bound is i+1, upper bound is perm[i} -1 (since j must be less than perm[i}).
+
+So, the number of elements in S that are in (i, perm[i}) is the number of elements in sorted_S that are in (i, perm[i}).
+
+So, for each i in S:
+
+if perm[i] >i:
+
+   lower = i +1
+
+   upper = perm[i} -1
+
+   count = upper - lower +1 if upper >= lower else 0
+
+   the number of S elements in this interval is the count of elements in S between lower and upper.
+
+   So the contribution to case2 is (max(0, perm[i] - i -1) - count_in_S)
+
+else:
+
+   contribution is zero.
+
+So, for each i in S, we calculate this.
+
+Now, case3: j is in S, i is not in S. Then i < j, and perm[i] =i, perm[j] is in S. So inversion occurs when i > perm[j].
+
+So, for each j in S, we need to count the number of i not in S where i < j and i > perm[j].
+
+Since i is not in S, perm[i] =i.
+
+So, inversion occurs when i < j and i > perm[j], which implies perm[j] < i < j.
+
+So, the interval for i is (perm[j], j).
+
+But i must not be in S. So the count is the number of integers i in (perm[j], j) that are not in S.
+
+So, for each j in S:
+
+if j > perm[j]:
+
+   the interval is (perm[j], j)
+
+   the number of integers in this interval is j - perm[j] -1.
+
+   subtract the number of elements in S that are in (perm[j], j).
+
+So, the contribution is (j - perm[j] -1) - (number of S elements in (perm[j], j)).
+
+But if j <= perm[j], then the interval (perm[j], j) is empty, so the contribution is zero.
+
+So, case3's contribution is sum over j in S of max(0, (j - perm[j] -1) - count_in_S_j_interval).
+
+Now, the problem is how to compute, for each i in S, the count_in_S for their respective intervals, and similarly for j in S.
+
+To compute these counts, since S is sorted, we can perform binary search for the lower and upper bounds.
+
+So, for case2 and case3, the key step is to compute for a given interval (a, b) the number of elements in S that lie within this interval.
+
+So, if we have a sorted list of S elements, then for any a and b, we can compute the count as upper_bound(b) - lower_bound(a).
+
+Wait, no. Let's see. For example, the elements in S are sorted. For interval (lower, upper), the elements in S that are >= lower and <= upper can be found using bisect_left and bisect_right.
+
+Wait, the number of elements in S that are in (a, b) (exclusive) is the count of elements in S where a < x < b.
+
+Wait, the interval (a, b) here is exclusive, but in case2, the interval is (i, perm[i} ), which is j >i and j < perm[i}.
+
+So, the elements in S that are in (i, perm[i}) are those x where i <x < perm[i}.
+
+So, in the sorted_S list, the left index is the first element greater than i, and the right index is the last element less than perm[i}.
+
+So, using bisect.bisect_right(sorted_S, i) gives the insertion point after the elements <=i. The start index is bisect.bisect_right(sorted_S, i).
+
+bisect.bisect_left(sorted_S, perm[i}) gives the insertion point before the elements >= perm[i}.
+
+So, the count is max(0, bisect.bisect_left(sorted_S, perm[i}) - bisect.bisect_right(sorted_S, i)).
+
+Similarly for case3.
+
+So, for each interval (lower, upper) where we want to count the elements in S that are in (lower, upper), we can compute it as bisect_left(upper) - bisect_right(lower).
+
+This gives the number of elements x in S where lower < x < upper.
+
+So, this is manageable.
+
+So, putting it all together:
+
+The plan is:
+
+1. Process all swaps and build the permutation map.
+
+   For each swap a and b:
+
+   - Check if a is in the permutation. If not, perm[a] =a.
+
+   - Check if b is in the permutation. If not, perm[b] =b.
+
+   - Swap perm[a] and perm[b].
+
+   So, after all swaps, perm maps each swapped position to its current value.
+
+2. Collect all swapped positions into a set S. Then, create a sorted list sorted_S.
+
+3. Compute case1: inversions among elements in S.
+
+   - Create a list of (i, perm[i]) sorted by i.
+
+   - Extract the perm[i] values in this order to form an array, and compute the number of inversions in this array.
+
+   This can be done using a Fenwick Tree (BIT) approach, by processing the perm values in reverse order and querying the number of elements already in the tree that are less than the current perm value (to avoid double counting, maybe the standard approach applies here).
+
+   Wait, standard inversion count using Fenwick Tree:
+
+   The approach is to process the elements from right to left. For each element, the number of elements to the left (already processed) that are smaller than current. But that would count the inversion pairs (i,j) where i < j and a[i] > a[j]. So, in the Fenwick Tree, we can map the values to their ranks (since perm[i] can be up to 1e9, but we can compress them to their order in the sorted list of perm values).
+
+   For example:
+
+   Let's collect all perm values (for elements in S) and sort them to assign a rank. Then, for each perm[i] in the list processed from right to left, the Fenwick Tree tracks the frequencies of the ranks. For each element, the number of elements already in the tree with rank less than current's rank is added to the inversion count.
+
+   Wait, no. If we process from left to right and for each element, query the number of elements greater than current, then that would give the inversion count. Because for each element, the elements to the left that are greater than it contribute to inversions.
+
+   So, the inversion count can be calculated as:
+
+   Initialize Fenwick Tree.
+
+   For each element in the list (sorted by i, since i < j implies order in list):
+
+       current_value = perm[i]
+
+       count += query( Fenwick Tree, max_rank ) - query( Fenwick Tree, current_value )
+
+       update Fenwick Tree to add current_value.
+
+   Here, the Fenwick Tree is tracking the frequencies of the values processed so far. The query for the number of elements greater than current_value is the total elements so far (sum up to max_rank) minus sum up to current_value.
+
+   However, the problem is that perm[i] can be very large (up to 1e9), so we need to compress the values.
+
+   So, the steps would be:
+
+   a. Collect all the perm[i] values from S.
+
+   b. Create a sorted list of unique values, assign a rank to each (coordinate compression).
+
+   c. For each perm[i] in the list (sorted by i), get its rank, and use the Fenwick Tree to track the frequencies.
+
+   So, processing in the order of increasing i (since that's the order of the pairs i < j in S), and for each perm[i], the number of elements already in the tree with perm[j] < perm[i] (so inversions would be the total elements processed so far minus the number of elements <= perm[i]).
+
+   Wait, no. Because when you process the elements in order of i, each element is added to the Fenwick Tree. For each element, the number of elements already in the tree that are larger than the current element is the number of inversions contributed by this element. Because those elements are to the left (i < j) and their value is larger.
+
+   Wait, no. Because the list is sorted by i. So, when processing the elements in order of increasing i, when we process i, all j < i in S have already been processed. So, for the current i, perm[i] is compared with perm[j] where j < i (i < j is not possible here). So, the inversion count for case1 is the number of j in S where j < i (so j comes before i in the list) and perm[j] > perm[i].
+
+   So, when processing the elements in order of increasing i (so the list is sorted by i), we need to process each perm[i] and count how many elements before it (already in the Fenwick Tree) are larger than perm[i]. Summing these gives case1's inversion count.
+
+   So, to compute this, the elements are processed in order of i. For each perm[i], we query the Fenwick Tree for the number of elements that are greater than perm[i]. This is the sum of elements in the tree minus the sum up to perm[i]. So, the Fenwick Tree needs to support this.
+
+   However, since the perm[i] can be up to 1e9, coordinate compression is necessary.
+
+   So, for example, collect all the perm values, sort them, assign a rank to each. Then, the maximum rank is the size of the sorted list.
+
+   Then, for each perm[i], get its rank. When we query the Fenwick Tree for the number of elements greater than perm[i], it's equivalent to the sum from rank+1 to max_rank.
+
+   So, during processing:
+
+   case1_count = 0
+
+   for i in sorted_S:
+
+       current_value = perm[i]
+
+       rank = get_rank(current_value)
+
+       # number of elements already in the tree with value > current_value is sum(rank+1, max_rank)
+
+       # which is equal to (total elements in tree) - sum(1, rank)
+
+       total_in_tree = fenwick.query(max_rank)
+
+       sum_up_to_rank = fenwick.query(rank)
+
+       case1_count += (total_in_tree - sum_up_to_rank)
+
+       fenwick.update(rank, 1)
+
+   So, this would give the correct inversion count for case1.
+
+   So, that's manageable.
+
+4. Compute case2 and case3.
+
+   For case2:
+
+   For each i in S:
+
+       if perm[i] > i:
+
+           lower = i + 1
+
+           upper = perm[i] - 1
+
+           if upper < lower:
+
+               contribution = 0
+
+           else:
+
+               total_numbers = upper - lower + 1
+
+               # number of S elements in (i, perm[i}) is the number of elements in S between lower and upper.
+
+               count_in_S = bisect.bisect_left(sorted_S, upper +1) - bisect.bisect_right(sorted_S, i)
+
+               contribution = max(0, (upper - lower +1) ) - count_in_S
+
+               case2_count += contribution
+
+   For case3:
+
+   For each j in S:
+
+       if j > perm[j]:
+
+           lower = perm[j] +1
+
+           upper = j -1
+
+           if upper < lower:
+
+               contribution =0
+
+           else:
+
+               total_numbers = upper - lower +1
+
+               # number of S elements in (perm[j}, j) is the number of elements in S between lower and upper.
+
+               count_in_S = bisect.bisect_left(sorted_S, upper +1) - bisect.bisect_right(sorted_S, perm[j])
+
+               contribution = (upper - lower +1) - count_in_S
+
+               case3_count += contribution
+
+   Wait, for case3, the interval is (perm[j}, j), which is perm[j} < i < j. So, the interval is (perm[j}, j-1], since i must be less than j.
+
+   So, lower is perm[j} +1 (since i must be greater than perm[j}, which is perm[j} < i < j).
+
+   So, lower = perm[j} +1, upper = j-1.
+
+   So, the number of integers in this interval is (j-1 - (perm[j} +1) +1) = j - perm[j} -1.
+
+   Which is the same as (j - perm[j} -1).
+
+   So, the code for case3:
+
+   For each j in S:
+
+       if j > perm[j]:
+
+           lower = perm[j] +1
+
+           upper = j -1
+
+           if upper < lower:
+
+               contribution = 0
+
+           else:
+
+               total_numbers = upper - lower +1
+
+               count_in_S = bisect.bisect_left(sorted_S, upper +1) - bisect.bisect_right(sorted_S, perm[j])
+
+               contribution = total_numbers - count_in_S
+
+               case3_count += contribution
+
+   So, this is manageable.
+
+5. Sum case1_count, case2_count, case3_count to get the total inversion count.
+
+Now, the steps are:
+
+- Process the swaps and build the permutation.
+
+- Collect all positions in S.
+
+- Sort S to get sorted_S.
+
+- Compute case1.
+
+   - Create a list of perm[i] in sorted_S order.
+
+   - Compress the perm values to ranks.
+
+   - Use Fenwick Tree to compute case1_count.
+
+- Compute case2 and case3 using the sorted_S and bisect.
+
+So, now, the problem is to implement this correctly.
+
+Now, let's test this approach with the sample input.
+
+Sample Input 1:
+
+2
+
+4 2
+
+1 4
+
+Processing swaps:
+
+Initially, perm is empty.
+
+First swap(4,2):
+
+Check 4: not in perm, add perm[4]=4.
+
+Check 2: not in perm, add perm[2]=2.
+
+Swap them: perm[4] =2, perm[2]=4.
+
+So, perm is {4:2, 2:4}.
+
+Second swap(1,4):
+
+Check 1: not in perm, add perm[1]=1.
+
+Check 4: already in perm, value is 2.
+
+Swap them: perm[1] =2, perm[4] =1.
+
+So, perm is {1:2, 4:1, 2:4}.
+
+So S is {1,2,4} (all keys in perm).
+
+sorted_S is [1,2,4].
+
+perm for each:
+
+perm[1] =2
+
+perm[2]=4
+
+perm[4]=1
+
+So, case1: the list of perm values in sorted_S order is [2,4,1].
+
+Compute inversion count for this array.
+
+Inversions in [2,4,1]:
+
+(2,4) no inversion (2 <4).
+
+(2,1) yes.
+
+(4,1) yes.
+
+So total 2 inversions.
+
+But according to case1, the count should be the number of pairs (i,j) in S where i <j and perm[i] > perm[j].
+
+In the sample:
+
+i=1, j=2: perm[1]=2 <4 → no.
+
+i=1, j=4: perm[1]=2>1 → yes. → inversion.
+
+i=2, j=4: perm[2]=4>1 → yes. → inversion.
+
+So case1_count is 2.
+
+But according to the code's approach, when processing the elements in sorted order (1,2,4):
+
+perm values are 2,4,1.
+
+Processing in order:
+
+i=1: current_value=2. Fenwick Tree is empty. case1_count += 0. add 2.
+
+i=2: current_value=4. Fenwick Tree has 2. Elements greater than 4 → 0. case1_count += 0. add4.
+
+i=4: current_value=1. Fenwick Tree has 2,4. elements greater than 1 → 2. case1_count +=2. add 1.
+
+Total case1_count is 2.
+
+Which is correct.
+
+case2: for each i in S.
+
+i=1: perm[i] =2. since 2>1.
+
+lower=1+1=2. upper=2-1=1. upper < lower → contribution 0.
+
+Wait, no. Because perm[i] is 2, which is larger than i=1. So upper is perm[i] -1 =1. So lower=2, upper=1 → upper < lower. So contribution is 0.
+
+So no contribution from i=1.
+
+i=2: perm[i]=4. 4>2.
+
+lower=3, upper=3 (4-1=3). The interval is 3. So j=3.
+
+But 3 is not in S. So the number of integers in (2, 4) (exclusive) is 3-2-1 = 0? Wait, perm[i] is 4. i is 2. So interval is (2,4) → j must be >2 and <4. So j can be 3. So number of integers is 1. Then subtract the number of S elements in (2,4). S is {1,2,4}, so no elements in (2,4). So contribution is 1-0=1.
+
+So case2 contribution for i=2 is 1.
+
+i=4: perm[i]=1. 1 <4 → no contribution.
+
+So case2_count is 1.
+
+case3: for each j in S.
+
+j=1: perm[j] =2. j=1 <2 → no contribution.
+
+j=2: perm[j]=4. j=2 <4 → no contribution.
+
+j=4: perm[j]=1. j=4>1. So lower=1+1=2. upper=4-1=3.
+
+number of integers in (1,4) is 2 and 3. So 2 numbers.
+
+number of S elements in (1,4) is elements in (1,4). S is [1,2,4]. Elements in (1,4) are 2. So count_in_S is 1.
+
+contribution is (4-1-1) -1 = 2-1=1. Wait, j=4, perm[j]=1. interval is (1,4), j=4. So the interval for i is (1,4) → i can be 2,3. But i must not be in S. i=2 is in S, so excluded. i=3 is not in S. So contribution is 1 (i=3).
+
+So contribution is (4-1-1) -1 = (2) -1=1.
+
+So case3_count is 1.
+
+So total inversion count is 2 (case1) +1 (case2) +1 (case3) =4, which matches the sample.
+
+Yes, that's correct.
+
+So the approach works for the sample.
+
+Now, let's think about the implementation.
+
+First, processing the swaps:
+
+We need to process each swap and update the permutation. For each swap a and b:
+
+If a is not in the permutation, perm[a] =a.
+
+If b is not in the permutation, perm[b] =b.
+
+Then swap perm[a] and perm[b].
+
+So, in Python, the permutation can be represented as a dictionary.
+
+But since n can be up to 1e5, and each swap requires two lookups and two assignments, this is manageable.
+
+Next, collect S as the keys of the permutation.
+
+Then, sorted_S = sorted(S).
+
+Case1:
+
+We create a list of perm[i] in sorted_S order.
+
+Then, coordinate compression of these perm values.
+
+So, collect all perm values, sort them, assign a rank. For example, sorted_perm_values = sorted(unique_perm_values).
+
+Then, for each value, the rank is its index in sorted_perm_values.
+
+But in Python, we can use a dictionary for the rank mapping.
+
+But since the perm values can be up to 1e9, but M is up to 2e5, the sorted list can be built by collecting the perm values in S, then sorted.
+
+Then, create a mapping from value to rank.
+
+For example:
+
+perm_values = [perm[i] for i in sorted_S]
+
+sorted_unique = sorted( set(perm_values) )
+
+rank = {v:i+1 for i, v in enumerate(sorted_unique)}  # ranks start from 1 to len(sorted_unique)
+
+But for Fenwick Tree, the ranks can start at 1. So, for each value, its rank is the index in the sorted_unique list plus 1.
+
+Wait, but what if there are duplicates? In case of duplicates, the rank is the same. For example, if two values are the same, their rank is the same. But in Fenwick Tree, each element is added as per their actual value. However, since the Fenwick Tree counts the number of elements <= x, it's okay.
+
+But in case of duplicates, the compression must assign the same rank to duplicates.
+
+But in the coordinate compression step, we need to sort all unique values and assign ranks in order. So, for example, perm_values may have duplicates, but sorted_unique will have each unique value once.
+
+But in the Fenwick Tree, when we add a value, its rank is based on the sorted_unique list. So, even if two values are the same, they will have the same rank. So, when adding to the Fenwick Tree, their ranks are the same, and the query for elements > current will work correctly.
+
+So, the compression is correct.
+
+Then, for the Fenwick Tree:
+
+class FenwickTree:
+
+    def __init__(self, size):
+
+        self.n = size
+
+        self.tree = [0]*(self.n +1)
+
+    def update(self, idx, delta):
+
+        while idx <= self.n:
+
+            self.tree[idx] += delta
+
+            idx += idx & -idx
+
+    def query(self, idx):
+
+        res =0
+
+        while idx>0:
+
+            res += self.tree[idx]
+
+            idx -= idx & -idx
+
+        return res
+
+Then, for case1:
+
+sorted_S = [1,2,4]
+
+perm_values = [2,4,1]
+
+sorted_unique_perm = [1,2,4]
+
+rank mapping: 1 →1, 2→2,4→3.
+
+So, perm_values in terms of ranks are [2,3,1].
+
+Processing them in order:
+
+i=0 (value 2):
+
+fenwick is empty. query(3) (max_rank is 3) → 0. query(2) is 0.
+
+contribution: 0-0=0.
+
+update rank 2.
+
+i=1 (value 3):
+
+fenwick has rank 2. query(3) is 1 (sum up to 3 is 1?), no. Wait, the Fenwick Tree starts with zeros. After updating rank 2, the tree has 1 at rank 2. So when querying up to 3, which is the max_rank, returns 1. query(3) gives sum up to 3 (which is 1). Then sum up to current's rank (3) is 1. So contribution is 1-1=0. So case1_count remains 0.
+
+Then update rank 3.
+
+i=2 (value 1):
+
+current rank is 1.
+
+query(3) gives 2 (sum up to 3 is 1 (from rank2) +1 (rank3) → 2. sum up to rank1 is 0.
+
+contribution is 2-0=2. So case1_count +=2.
+
+So total case1_count is 2.
+
+Yes, correct.
+
+Now, case2 and case3:
+
+For case2, i in S:
+
+i=1: perm[i] =2. 2>1 → contribution is (2-1-1) - count_in_S.
+
+perm[i] -i -1 =0. So contribution is 0. So no.
+
+i=2: perm[i] =4. 4>2 → upper=4-1=3. lower=2+1=3. upper=3. So interval [3,3]. So total numbers is 1. count_in_S is the number of elements in S between 3 and3.
+
+sorted_S is [1,2,4]. So elements >=3 are 4. So count_in_S is 0. So contribution is 1-0=1.
+
+i=4: perm[i]=1 <4 → no contribution.
+
+case2_count=1.
+
+case3: j in S.
+
+j=1: perm[j]=2. j=1<2 → no.
+
+j=2: perm[j]=4. j=2 <4 → no.
+
+j=4: perm[j]=1. j=4>1. lower=1+1=2. upper=4-1=3. interval (2,3).
+
+elements in S are [1,2,4]. So count_in_S is elements between 2 and3. sorted_S.bisect_right(2) is index 2 (since sorted_S[1]=2, bisect_right returns 2. bisect_left(3) returns 2 (since 3 is between 2 and4). So count_in_S is 2-2=0. total_numbers=3-2=1. contribution 1-0=1.
+
+case3_count=1.
+
+So total is 2+1+1=4.
+
+So, the code works.
+
+Now, implementing this in Python.
+
+Now, code steps:
+
+1. Read n.
+
+2. Process n swaps, building the perm dictionary.
+
+   For each swap a, b:
+
+   if a not in perm: perm[a] =a.
+
+   if b not in perm: perm[b] =b.
+
+   swap perm[a] and perm[b].
+
+3. Collect S as the keys of perm. sorted_S = sorted(S).
+
+4. Compute case1:
+
+   a. Create a list of perm_values = [perm[i] for i in sorted_S].
+
+   b. Compress the perm_values to ranks.
+
+      sorted_unique = sorted( set(perm_values) )
+
+      rank_dict = {v:i+1 for i, v in enumerate(sorted_unique)}  # ranks start at 1.
+
+      max_rank = len(sorted_unique)
+
+      fenwick = FenwickTree(max_rank)
+
+      case1_count =0
+
+      for value in perm_values:
+
+          r = rank_dict[value]
+
+          # query the sum of elements in the tree with rank > r.
+
+          # sum from 1 to max_rank → fenwick.query(max_rank)
+
+          # sum from 1 to r → fenwick.query(r)
+
+          # elements > r → total_in_tree - sum_up_to_r
+
+          total_in_tree = fenwick.query(max_rank)
+
+          sum_up_to_r = fenwick.query(r)
+
+          case1_count += (total_in_tree - sum_up_to_r)
+
+          fenwick.update(r, 1)
+
+5. Compute case2:
+
+   case2_count =0
+
+   for i in sorted_S:
+
+       current_perm = perm[i]
+
+       if current_perm >i:
+
+           lower = i +1
+
+           upper = current_perm -1
+
+           if upper < lower:
+
+               continue
+
+           # number of integers in [lower, upper] is upper - lower +1
+
+           total_numbers = upper - lower +1
+
+           # number of elements in S in (i, current_perm) → (i, current_perm) is j >i and j < current_perm → i < j < current_perm.
+
+           left = bisect.bisect_right(sorted_S, i)
+
+           right = bisect.bisect_left(sorted_S, current_perm)
+
+           count_in_S = right - left
+
+           contribution = total_numbers - count_in_S
+
+           case2_count += contribution
+
+6. Compute case3:
+
+   case3_count =0
+
+   for j in sorted_S:
+
+       current_perm = perm[j]
+
+       if j > current_perm:
+
+           lower = current_perm +1
+
+           upper = j -1
+
+           if upper < lower:
+
+               continue
+
+           # number of integers in [lower, upper] is upper - lower +1.
+
+           total_numbers = upper - lower +1
+
+           # number of elements in S in (current_perm, j) → j must be in (current_perm, j) → current_perm < x < j.
+
+           left = bisect.bisect_right(sorted_S, current_perm)
+
+           right = bisect.bisect_left(sorted_S, j)
+
+           count_in_S = right - left
+
+           contribution = total_numbers - count_in_S
+
+           case3_count += contribution
+
+7. total = case1_count + case2_count + case3_count.
+
+8. Print(total)
+
+Now, possible edge cases.
+
+For example, when a swap is between the same positions, but the problem states a and b are different. So, no need to handle that.
+
+Now, implement this in Python.
+
+But there's a possible issue with the Fenwick Tree's size. For example, if all perm values are unique, the sorted_unique list will have len(perm_values) elements. So, the Fenwick Tree is initialized with len(sorted_unique) as the maximum rank.
+
+But in Python, the Fenwick Tree's size is passed as the parameter, which is max_rank.
+
+So, the code should handle that.
+
+Testing the code with sample input 1:
+
+Sample input 1:
+
+2
+
+4 2
+
+1 4
+
+Processing swaps:
+
+swap(4,2):
+
+perm becomes {4:2, 2:4}
+
+swap(1,4):
+
+perm becomes {1:2, 4:1, 2:4}
+
+sorted_S = [1,2,4]
+
+perm_values = [2,4,1]
+
+sorted_unique is [1,2,4] → ranks are 1→1, 2→2,4→3.
+
+case1 processing:
+
+value 2 (rank 2): total_in_tree is 0. contribution 0. add to fenwick.
+
+value4 (rank3): total_in_tree is 1 (sum up to 3 is 1). sum_up_to_r=sum up to3 is 1. contribution 1-1=0. add to fenwick.
+
+value1 (rank1): total_in_tree is 2. sum_up_to_r=0. contribution 2-0=2. case1_count=2.
+
+case2:
+
+i=1: current_perm=2. 2>1 → lower=2, upper=1 → no contribution.
+
+i=2: current_perm=4>2. lower=3, upper=3. total_numbers=1. elements in S between i=2 and current_perm=4 → elements >2 and <4. sorted_S is [1,2,4]. bisect_right(2) is 2 (since 2 is at index1, bisect_right returns 2). bisect_left(4) is 2. count_in_S=2-2=0. contribution=1-0=1.
+
+i=4: current_perm=1<4 → no contribution.
+
+case2_count=1.
+
+case3:
+
+j=1: current_perm=2. j=1<2 → no.
+
+j=2: current_perm=4. j=2<4 → no.
+
+j=4: current_perm=1. j=4>1. lower=2, upper=3. total_numbers=2 (3-2+1=2). elements in S between current_perm+1=2 and j-1=3. sorted_S is [1,2,4]. bisect_right(2) is 2 (since 2 is at index1, bisect_right returns 2). bisect_left(4) (j=4, bisect_left(4) is 2). count_in_S=2-2=0. contribution=2-0=2. Wait, no: j=4, current_perm=1. lower=1+1=2. upper=4-1=3. The elements in S between 2 and3. S contains 2 and4. So elements in (2,3) are none. So contribution is 2 (numbers 2 and3) minus 0 → 2. But why is that?
+
+Wait, the code for case3:
+
+j=4, current_perm=1. j=4>current_perm.
+
+lower = current_perm +1 =2.
+
+upper = j-1=3.
+
+total_numbers = 3-2 +1 =2.
+
+number of elements in S between lower (2) and upper (3):
+
+sorted_S is [1,2,4]. bisect_right(2) is index2 (since 2 is at index1, bisect_right returns 2). bisect_left(3) is index2 (since 3 is between 2 and4). count_in_S=2-2=0. So contribution is 2-0=2.
+
+So case3_count +=2.
+
+But according to our earlier analysis, the contribution should be 1. What's wrong here?
+
+Wait, in the sample input case3, j=4:
+
+the interval is (1,4) → i must be in (1,4) → perm[j}=1, so i>1 and <4.
+
+But for case3, j=4, the interval is (perm[j}, j) → (1,4), so i is in (1,4).
+
+But in the code, case3 for j=4:
+
+lower = current_perm +1 =1+1=2.
+
+upper = j-1=4-1=3.
+
+So the interval for i is [2,3].
+
+So the integers in this interval are 2 and3.
+
+So total_numbers=2.
+
+But in the sample, i must not be in S. S contains 1,2,4.
+
+So i=2 is in S, but 3 is not. So the count is 1 (only i=3).
+
+But according to the code:
+
+contribution= total_numbers (2) - count_in_S (1) → 2-1=1.
+
+But according to the code's calculation, count_in_S is 0. What's wrong?
+
+Wait, j=4:
+
+current_perm is 1.
+
+lower=1+1=2.
+
+upper=4-1=3.
+
+elements in S between 2 and3:
+
+sorted_S is [1,2,4]. elements >=2 and <=3.
+
+bisect_right(sorted_S, current_perm) → current_perm=1. bisect_right(1) in sorted_S is 1. bisect_left(j) → j=4. bisect_left(4) returns 2.
+
+count_in_S = 2-1=1.
+
+So count_in_S is 1.
+
+But according to the code:
+
+left = bisect.bisect_right(sorted_S, current_perm) → bisect_right(1) in [1,2,4] is 1 (since 1 is at index0, bisect_right returns 1).
+
+right = bisect.bisect_left(sorted_S, j) → j=4, bisect_left in [1,2,4] is 2.
+
+count_in_S = 2-1=1.
+
+So contribution is 2 (total_numbers) -1=1.
+
+But earlier code for case3 has:
+
+left = bisect.bisect_right(sorted_S, current_perm)
+
+right = bisect.bisect_left(sorted_S, j)
+
+count_in_S = right - left
+
+But current_perm is 1, j is4.
+
+So:
+
+bisect.bisect_right(sorted_S, 1) → returns 1 (since 1 is at index0, elements after are >=1, so the insertion point is 1.
+
+bisect.bisect_left(sorted_S,4) → returns 2.
+
+So count_in_S is 2-1=1.
+
+So contribution is 2-1=1.
+
+Ah, I see. So in the code, for case3, the code uses bisect.bisect_right(sorted_S, current_perm) and bisect.bisect_left(sorted_S, j). But j is4.
+
+But the interval for case3 is (current_perm, j) → (1,4). But j is part of S. So elements in S that are between current_perm and j (exclusive) are those x where current_perm <x <j.
+
+So, for j=4, current_perm=1, elements x in S where 1 <x <4. Those are x=2.
+
+So count_in_S is 1.
+
+So contribution is 2 (total_numbers) -1 (count_in_S) =1.
+
+So why did the code compute this as 2-0=2?
+
+Ah, no. Because in the code, the left is bisect_right(sorted_S, current_perm). current_perm=1. bisect_right returns 1.
+
+The right is bisect_left(sorted_S, j). j=4. bisect_left returns 2.
+
+So count_in_S =2-1=1.
+
+So contribution is 2-1=1.
+
+So case3_count is 1.
+
+But in the code, the code for case3:
+
+for j in sorted_S:
+
+    current_perm = perm[j]
+
+    if j > current_perm:
+
+        lower = current_perm +1
+
+        upper = j -1
+
+        if upper < lower:
+
+            continue
+
+        total_numbers = upper - lower +1
+
+        # elements in S in (current_perm, j) → x > current_perm and x <j.
+
+        left = bisect.bisect_right(sorted_S, current_perm)
+
+        right = bisect.bisect_left(sorted_S, j)
+
+        count_in_S = right - left
+
+        contribution = total_numbers - count_in_S
+
+        case3_count += contribution
+
+So for j=4:
+
+current_perm=1.
+
+bisect_right(sorted_S, 1) → returns 1.
+
+bisect_left(sorted_S,4) → returns 2.
+
+count_in_S = 2-1=1.
+
+contribution = (3-2+1) -1 = (2) -1=1.
+
+Yes.
+
+So case3_count is 1.
+
+So why did I think earlier that the code would compute it as 2?
+
+Ah, I must have made a mistake in the earlier analysis.
+
+So the code is correct.
+
+So in the sample, case3_count is 1.
+
+So total is 2+1+1=4.
+
+Which is correct.
+
+Thus, the code works.
+
+Now, implement this in Python.
+
+Now, code:
+
+Read the input, process swaps, build the permutation.
+
+Then, compute case1, case2, case3.
+
+Potential optimizations:
+
+- When processing the swaps, the permutation can be a dictionary.
+
+But for handling very large a and b, but n up to 1e5, this is manageable.
+
+Now, code:
+
+import bisect
+
+class FenwickTree:
+    def __init__(self, size):
+        self.n = size
+        self.tree = [0]*(self.n + 2)  # 1-based indexing
+
+    def update(self, idx, delta):
+        while idx <= self.n:
+            self.tree[idx] += delta
+            idx += idx & -idx
+
+    def query(self, idx):
+        res = 0
+        while idx >0:
+            res += self.tree[idx]
+            idx -= idx & -idx
+        return res
+
+def main():
+    import sys
+    input = sys.stdin.read().split()
+    ptr =0
+    n = int(input[ptr])
+    ptr +=1
+
+    perm = dict()
+
+    for _ in range(n):
+        a = int(input[ptr])
+        b = int(input[ptr+1])
+        ptr +=2
+        if a not in perm:
+            perm[a] = a
+        if b not in perm:
+            perm[b] = b
+        # swap
+        perm[a], perm[b] = perm[b], perm[a]
+
+    if not perm:
+        print(0)
+        return
+
+    S = sorted(perm.keys())
+    m = len(S)
+    # case1
+    perm_values = [perm[i] for i in S]
+    # coordinate compression
+    sorted_unique = sorted(set(perm_values))
+    rank = {v:i+1 for i, v in enumerate(sorted_unique)}
+    max_rank = len(sorted_unique)
+    ft = FenwickTree(max_rank)
+    case1_count =0
+    for value in perm_values:
+        r = rank[value]
+        total_in_tree = ft.query(max_rank)
+        sum_up_to_r = ft.query(r)
+        case1_count += (total_in_tree - sum_up_to_r)
+        ft.update(r, 1)
+
+    # case2
+    case2_count =0
+    for i in S:
+        current_perm = perm[i]
+        if current_perm > i:
+            lower = i +1
+            upper = current_perm -1
+            if upper < lower:
+                continue
+            total_numbers = upper - lower +1
+            # count elements in S between i and current_perm (exclusive)
+            left = bisect.bisect_right(S, i)
+            right_idx = bisect.bisect_left(S, current_perm)
+            count_in_S = right_idx - left
+            contribution = total_numbers - count_in_S
+            case2_count += contribution
+
+    # case3
+    case3_count =0
+    for j in S:
+        current_perm = perm[j]
+        if j > current_perm:
+            lower = current_perm +1
+            upper = j -1
+            if upper < lower:
+                continue
+            total_numbers = upper - lower +1
+            # count elements in S between current_perm and j (exclusive)
+            left = bisect.bisect_right(S, current_perm)
+            right_idx = bisect.bisect_left(S, j)
+            count_in_S = right_idx - left
+            contribution = total_numbers - count_in_S
+            case3_count += contribution
+
+    total = case1_count + case2_count + case3_count
+    print(total)
+
+if __name__ == "__main__":
+    main()
+
+Now, test this code with sample input 1.
+
+Sample input 1:
+
+2
+
+4 2
+
+1 4
+
+Output should be 4. The code should generate this.
+
+Sample input 2:
+
+3
+
+1 6
+
+3 4
+
+2 5
+
+Output is 15.
+
+But verifying this would take time. However, the code should handle all cases correctly.
+
+Possible issues:
+
+- Handling of the ranks in the Fenwick Tree.
+
+- Correct bisect operations for case2 and case3.
+
+But the code is as per the logical steps.
+
+Thus, this should be the correct solution.
+</think>
+To solve this problem, we need to determine the number of inversions in a sequence after performing a series of swap operations on an initially sorted sequence of positive integers. An inversion is a pair of indices (i, j) such that i < j and the element at position i is greater than the element at position j.
+
+### Approach
+The approach involves three main parts to efficiently compute the inversion count after all swaps:
+
+1. **Case 1: Inversions within Swapped Positions**:
+   - Track the positions involved in swaps and their values after each swap.
+   - Use a Fenwick Tree (Binary Indexed Tree) to count inversions among these swapped positions.
+
+2. **Case 2: Inversions Between Swapped and Non-Swapped Positions**:
+   - For each swapped position, compute how many non-swapped positions (greater than the current position) have values smaller than the current swapped value.
+
+3. **Case 3: Inversions Between Non-Swapped and Swapped Positions**:
+   - For each swapped position, compute how many non-swapped positions (smaller than the current position) have values larger than the current swapped value.
+
+### Solution Code
+```python
+import bisect
+
+class FenwickTree:
+    def __init__(self, size):
+        self.n = size
+        self.tree = [0] * (self.n + 2)  # 1-based indexing
+
+    def update(self, idx, delta):
+        while idx <= self.n:
+            self.tree[idx] += delta
+            idx += idx & -idx
+
+    def query(self, idx):
+        res = 0
+        while idx > 0:
+            res += self.tree[idx]
+            idx -= idx & -idx
+        return res
+
+def main():
+    import sys
+    input = sys.stdin.read().split()
+    ptr = 0
+    n = int(input[ptr])
+    ptr += 1
+
+    perm = dict()
+
+    for _ in range(n):
+        a = int(input[ptr])
+        b = int(input[ptr + 1])
+        ptr += 2
+        if a not in perm:
+            perm[a] = a
+        if b not in perm:
+            perm[b] = b
+        perm[a], perm[b] = perm[b], perm[a]
+
+    if not perm:
+        print(0)
+        return
+
+    S = sorted(perm.keys())
+    m = len(S)
+    perm_values = [perm[i] for i in S]
+
+    # Coordinate compression for Fenwick Tree
+    sorted_unique = sorted(set(perm_values))
+    rank = {v: i + 1 for i, v in enumerate(sorted_unique)}
+    max_rank = len(sorted_unique)
+    ft = FenwickTree(max_rank)
+    case1_count = 0
+    for value in perm_values:
+        r = rank[value]
+        total_in_tree = ft.query(max_rank)
+        sum_up_to_r = ft.query(r)
+        case1_count += (total_in_tree - sum_up_to_r)
+        ft.update(r, 1)
+
+    case2_count = 0
+    for i in S:
+        current_perm = perm[i]
+        if current_perm > i:
+            lower = i + 1
+            upper = current_perm - 1
+            if upper < lower:
+                continue
+            total_numbers = upper - lower + 1
+            left = bisect.bisect_right(S, i)
+            right_idx = bisect.bisect_left(S, current_perm)
+            count_in_S = right_idx - left
+            case2_count += (total_numbers - count_in_S)
+
+    case3_count = 0
+    for j in S:
+        current_perm = perm[j]
+        if j > current_perm:
+            lower = current_perm + 1
+            upper = j - 1
+            if upper < lower:
+                continue
+            total_numbers = upper - lower + 1
+            left = bisect.bisect_right(S, current_perm)
+            right_idx = bisect.bisect_left(S, j)
+            count_in_S = right_idx - left
+            case3_count += (total_numbers - count_in_S)
+
+    total = case1_count + case2_count + case3_count
+    print(total)
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Reading Input and Processing Swaps**:
+   - Read the number of swaps and each swap operation, updating a dictionary to track the current value at each position after swaps.
+
+2. **Coordinate Compression**:
+   - Compress the values of the swapped positions to a smaller range to efficiently use a Fenwick Tree.
+
+3. **Fenwick Tree for Inversion Count**:
+   - Use the Fenwick Tree to count inversions among the swapped positions by processing values in sorted order of their positions.
+
+4. **Counting Involving Non-Swapped Positions**:
+   - Use binary search to efficiently count non-swapped positions contributing to inversions with swapped positions.
+
+This approach ensures efficient handling of large input sizes and positions, avoiding direct simulation of the entire sequence.
+</bot>

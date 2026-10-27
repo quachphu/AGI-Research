@@ -1,0 +1,1138 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Mike likes strings. He is also interested in algorithms. A few days ago he discovered for himself a very nice problem:
+
+
+You are given an AB-string S. You need to count the number of substrings of S, which have an equal number of 'A'-s and 'B'-s.
+
+
+Do you know how to solve it? Good. Mike will make the problem a little bit more difficult for you.
+
+
+You are given an ABC-string S. You need to count the number of substrings of S, which have an equal number of 'A'-s, 'B'-s and 'C'-s.
+
+
+A string is called AB-string if it doesn't contain any symbols except 'A' or 'B'. A string is called ABC-string if it doesn't contain any symbols except 'A', 'B' or 'C'.
+
+
+Input
+The first line of the input contains an ABC-string S.
+
+Output
+Your output should contain the only integer, denoting the number of substrings of S, which have an equal number of 'A'-s, 'B'-s and 'C'-s.
+
+The answer can go above a 32-bit integer. Please, use 64-bit integers for storing and processing data.
+
+Constraints
+1 ≤ |S| ≤ 1 000 000; where |S| denotes the length of the given ABC-string.
+
+Example
+Input:
+ABACABA
+
+Output:
+2
+
+
+Explanation
+
+In the example you should count S[2..4] = "BAC" and S[4..6] = "CAB".
+</user>
+<bot>
+<think>
+Okay, let's try to solve this problem. So the task is to count the number of substrings in a given ABC-string that have an equal number of A's, B's, and C's. Each of the three characters must appear the same number of times in the substring. Hmm.
+
+First, I need to think about how to approach this efficiently. The constraints are tight—the string can be up to 1,000,000 characters long. A brute-force approach where we check every possible substring would be O(n^2), which would be way too slow for n=1e6. So we need a smarter way.
+
+Let's think about the properties of such substrings. For a substring to have equal numbers of A, B, and C, the total length must be a multiple of 3. Because if each count is k, then 3k is the length. So the first thing is that any valid substring must have length 3k for some integer k ≥ 1. That's a useful filter. So we can ignore all substrings whose length isn't divisible by 3 right away. That reduces the possible candidates, but even then, for each possible 3k length substring, checking counts is O(n) per substring, which would still be O(n^2) for k up to n/3. So that's not feasible.
+
+We need a way to track the counts of A, B, C efficiently as we process the string.
+
+Another idea: for a substring to have equal counts of A, B, and C, the difference between the counts of each pair of characters up to the end of the substring must be zero. But how do we track this?
+
+Alternatively, we can model the problem using prefix sums. Let's consider the prefix sum for each character. For example, for each position i in the string, we can track the cumulative counts of A, B, and C up to i. Then, for a substring from j+1 to i, the counts would be (A[i] - A[j], B[i] - B[j], C[i] - C[j]). We want these three differences to be equal. So:
+
+A[i] - A[j] = B[i] - B[j] = C[i] - C[j]
+
+Let's call this common difference d. Then, each of the differences A-B, B-C, etc., between the prefix sums must be the same at i and j.
+
+But perhaps there's a way to encode these differences in a way that allows us to track when two prefixes differ by the same amount for each pair.
+
+Another approach: Let's think of the problem in terms of the differences between the counts. For each position, compute the differences between the counts of A and B, B and C, etc. Then, for two indices j and i, the differences (A[i] - A[j]) = (B[i] - B[j]) = (C[i] - C[j]) = d. This implies that the differences between the counts for each pair must be the same between j and i.
+
+Alternatively, for two indices j and i (j < i), the substring from j+1 to i must satisfy:
+
+(A[i] - A[j]) == (B[i] - B[j])
+and (B[i] - B[j]) == (C[i] - C[j])
+
+Which can be rearranged as:
+
+(A[i] - B[i]) = (A[j] - B[j])
+and (B[i] - C[i]) = (B[j] - C[j])
+
+So if we can track the values of (A - B) and (B - C) for each prefix, then for each i, we can look for j's where these two differences are the same as those at i. Each such j would correspond to a possible substring j+1 to i where the counts are equal. But we also need the total length (i - j) to be divisible by 3, since the counts must each be (i-j)/3. Wait, no. Wait, the total number of characters in the substring is (i - j). Each count (A, B, C) must be equal. Let's say each is k. Then 3k = i-j. So the length must be a multiple of 3. So (i - j) must be a multiple of 3.
+
+So combining these two conditions: the differences (A[i]-B[i], B[i]-C[i]) must equal (A[j]-B[j], B[j]-C[j]), and (i-j) must be divisible by 3.
+
+So for each i, we need to find the number of j's where j < i, (A[i]-B[i], B[i]-C[i]) equals (A[j]-B[j], B[j]-C[j]), and (i-j) is divisible by 3.
+
+This seems promising. Because then, the problem reduces to maintaining a hash map (like a dictionary) that maps the pair (delta_AB, delta_BC) to a list of indices j where these deltas occur. Then, for each i, we look up the current delta pair and check all previous j's in that group to see if (i-j) is divisible by 3. The count for each i would be the number of such j's that satisfy the modulo condition.
+
+But even this could be O(n) per i in the worst case if all j's have the same delta pair. For example, if the entire string is made of A's, then the delta_AB would be i (since A count increases by 1 each time, B count stays 0) and delta_BC would be i - 0 (since B is 0, C is 0). Wait, but in that case, all deltas would be (i, 0) for each i. But since each i is unique, the list for each delta pair would be of size 1. So perhaps this approach is manageable.
+
+But for large n (1e6), storing lists for each delta pair and then checking each element in the list for the modulo condition would be O(n^2) time again if there are many entries in each list. So this approach isn't efficient enough.
+
+Hmm. So how can we handle the modulo condition efficiently?
+
+Let's think: For each delta pair (d1, d2), we can track the count of indices j with those deltas, grouped by j mod 3. Because when (i-j) is divisible by 3, j mod 3 must equal i mod 3. Because:
+
+i - j ≡ 0 mod 3 → j ≡ i mod 3.
+
+So for each delta pair, we can maintain a frequency dictionary that counts how many times each (j mod 3) has occurred. Then, for a current i, when we look up the delta pair (d1, d2), we can immediately get the count of j's that have the same delta pair and j mod 3 equals i mod 3. That's O(1) per i.
+
+Ah, that's clever. So the steps would be:
+
+1. Precompute the prefix sums for A, B, C.
+
+2. For each position i in the string, compute delta_AB = (A[i] - B[i]) and delta_BC = (B[i] - C[i]).
+
+3. For each i, the current delta pair is (delta_AB, delta_BC). We need to find how many j's (j < i) have the same delta_AB and delta_BC, and j ≡ i mod 3. The count of such j's is added to the result.
+
+4. Then, we update our dictionary to include this i's delta pair and its mod 3.
+
+So the main idea is to track for each (delta_AB, delta_BC) pair, the number of times each j mod 3 has occurred. Then, for each i, we check how many previous j's have the same delta pair and j mod 3 equal to i mod 3. Because (i-j) must be divisible by 3, which is equivalent to j ≡ i mod 3.
+
+This reduces the problem to a hash map lookup and counting.
+
+Let's see. Let's formalize this.
+
+The key for the hash map is the tuple (delta_AB, delta_BC). The value is a dictionary (or array) that maps each possible mod (0,1,2) to the number of times that mod has been seen for this key.
+
+For each i from 0 to n (assuming 0-based prefix sums), when we process i, we compute delta_AB = A[i] - B[i], delta_BC = B[i] - C[i]. Then, we look up the key (delta_AB, delta_BC) in the hash map. If it exists, the current contribution to the answer is the count stored under mod i_mod = i % 3. Because for j's that are in this key's mod group i_mod, (i-j) is divisible by 3. So we add that count to the total.
+
+Then, we update the hash map by adding the current i_mod to the key (delta_AB, delta_BC).
+
+But wait, the initial state is important. The prefix sum starts at 0. For example, at index 0 (before the first character), all counts are 0. So delta_AB = 0-0 = 0, delta_BC = 0-0=0. The mod is 0%3=0. So this initial state is part of the hash map.
+
+Let's test this approach with the example.
+
+Example input: ABACABA → "A", "B", "A", "C", "A", "B", "A". Let's index from 0 to 6 (assuming 0-based for the string). Let's compute the prefix sums (A, B, C) for each position.
+
+But actually, the prefix sums are for the first i characters, so prefix sums for 0 is (0,0,0), for 1 (1,0,0), etc.
+
+Let's compute the prefix sums for each i (from 0 to 7, perhaps? Wait, no: the string is length 7. So prefix sums for i from 0 (empty) to 7 (full string). Wait, no. Let's clarify.
+
+Let's let the prefix sums be for 0-based indices up to n. For example, for S of length n, there are n+1 prefix sums (from 0 to n). So for the example "ABACABA" (length 7), the prefix sums are for indices 0 (0,0,0), 1 (A: 1,0,0), 2 (A,B: 1,1,0), etc.
+
+So the steps for the example:
+
+Let's build the prefix sums:
+
+i=0: A=0, B=0, C=0 → delta_AB=0, delta_BC=0. mod 0.
+
+i=1: A=1, B=0, C=0 → delta_AB=1, delta_BC=0. mod 1%3=1.
+
+i=2: A=1, B=1, C=0 → delta_AB=0, delta_BC=1. mod 2%3=2.
+
+i=3: A=2, B=1, C=0 → delta_AB=1, delta_BC=1. mod 3%3=0.
+
+i=4: A=2, B=1, C=1 → delta_AB=1, delta_BC=0. mod 4%3=1.
+
+i=5: A=3, B=1, C=1 → delta_AB=2, delta_BC=0. mod 5%3=2.
+
+i=6: A=3, B=2, C=1 → delta_AB=1, delta_BC=1. mod 6%3=0.
+
+i=7: A=4, B=2, C=1 → delta_AB=2, delta_BC=1. mod 7%3=1.
+
+Now, the hash map starts empty. We process each i in order, keeping track of the delta pairs and mods.
+
+Wait, but initially, we have to include the i=0 prefix. So for each i starting from 0, we first check if the current delta pair has been seen before. But when i=0, since the hash map is empty, there's nothing. Then we add (0,0) with mod 0: count 1.
+
+Then for i=1:
+
+Compute delta_AB=1, delta_BC=0. mod is 1.
+
+Check if (1,0) is in the map. It's not. So no contribution. Then add (1,0) with mod 1.
+
+i=2: delta_AB=0, delta_BC=1. mod=2.
+
+Check (0,1) not in map. Add to map.
+
+i=3: delta_AB=1, delta_BC=1. mod=0.
+
+Check (1,1) not in map. Add to map.
+
+i=4: delta_AB=1, delta_BC=0. mod=1.
+
+Check (1,0). It exists, and mod is 1. So current contribution is the count for mod 1 in this key. The key (1,0) was added when i=1, mod=1, and now i=4 mod=1. So when processing i=4, the current delta is (1,0), and mod is 1. The previous j's with same delta and mod 1 are j=1. So (i-j) is 4-1=3, which is divisible by 3. So this would contribute 1 to the total. But wait, the substring from j+1 to i is from 1+1=2 to 4 (assuming prefix sums are up to i). Wait, perhaps the way the indices are handled is a bit tricky.
+
+Wait, prefix sum up to i represents the first i characters. So the substring from j+1 to i is of length i - j. So for example, if j=0 and i=3, substring is 1-3 (0-based?), but maybe we need to clarify.
+
+But perhaps the exact way the indices are managed isn't as important as the approach. Let's proceed.
+
+In the example, for i=4, the current delta is (1,0), mod=1. So we look up (1,0) in the map, which was added at i=1 (mod 1). So the count for mod 1 is 1. So we add 1 to the result. Then, we add the current (1,0) delta to the map, so the key (1,0) now has mod 1 count 2.
+
+Wait, but after processing i=4, the count for key (1,0) and mod 1 is 2. So for later i's with the same delta and mod, the count would be higher.
+
+Continuing:
+
+i=5: delta_AB=2, delta_BC=0. mod=2. No previous entries, add to map.
+
+i=6: delta_AB=1, delta_BC=1. mod=0. Check this key. The previous occurrence was i=3 (delta_AB=1, delta_BC=1, mod 0). So the count for mod 0 is 1, so add 1 to the result. Then add to the map, making mod 0 count 2.
+
+i=7: delta_AB=2, delta_BC=1. mod=1. Check if this key exists. No. So no contribution.
+
+So the total contributions would be from i=4 (1), i=6 (1), totaling 2. Which matches the sample output.
+
+So the approach works for the sample. That's good.
+
+Now, how to implement this.
+
+The steps for the code:
+
+1. Read the input string.
+
+2. Compute the prefix sums for A, B, C.
+
+3. For each i (from 0 to len(s)), compute delta_AB = A[i] - B[i], delta_BC = B[i] - C[i].
+
+4. For each i, compute the current mod (i mod 3).
+
+5. Check if (delta_AB, delta_BC) is present in the hash map. If yes, add the count of entries with mod equal to current mod.
+
+6. Update the hash map by incrementing the count for (delta_AB, delta_BC) and current mod.
+
+So the main data structure is a dictionary, say 'counter', where each key is a tuple (dAB, dBC), and the value is another dictionary (or a list) that tracks the counts for each mod 0, 1, 2.
+
+Implementing this efficiently is crucial. For Python, using a defaultdict that maps (dAB, dBC) to a list of counts for each mod. So for each key, we can have a list of size 3, where each element is the count of j's with mod 0, 1, or 2.
+
+So initializing the 'counter' as a defaultdict that, for each key, initializes a [0, 0, 0] list. But since the initial state is empty, we need to handle the first occurrence.
+
+Alternatively, when we process each i, we first check if the current (dAB, dBC) is in the counter. If not, add it with [0,0,0]. Then, the current contribution is the count of current mod. Then, we increment the count for that mod.
+
+Wait, but for i=0, the first occurrence. Let's see:
+
+At i=0, the deltas are (0,0), mod=0. The counter is empty. So when we check for (0,0), it's not present. So the contribution is 0. Then, we add (0,0) to the counter with [0,0,0], then increment the mod 0 to 1.
+
+Wait, no. Wait, the code would be:
+
+Initialize counter as a defaultdict that, for each key, stores a list [count_mod0, count_mod1, count_mod2].
+
+Initially, the counter is empty.
+
+For each i in 0 to n:
+
+   dAB = A[i] - B[i]
+
+   dBC = B[i] - C[i]
+
+   key = (dAB, dBC)
+
+   current_mod = i % 3
+
+   # current contribution is the count of key's current_mod in the counter
+
+   if key in counter:
+
+       res += counter[key][current_mod]
+
+   else:
+
+       res += 0
+
+   # now, update the counter for this key and current_mod
+
+   # if the key is not present, initialize it with [0,0,0]
+
+   if key not in counter:
+
+       counter[key] = [0, 0, 0]
+
+   counter[key][current_mod] += 1
+
+But wait, for i=0, when we process it:
+
+key is (0,0). It's not in the counter. So we add it with [0,0,0]. Then, increment current_mod (0) by 1. So counter[(0,0)][0] becomes 1.
+
+Then, when processing i=0, the contribution is 0 (since key was not present before adding).
+
+For i=1:
+
+dAB=1, dBC=0. key=(1,0). Not present. So contribution 0. Then add to counter: key (1,0) has [0,0,0], then increment mod 1 to 1.
+
+When processing i=4:
+
+key is (1,0), current_mod=1. Check if key is in counter. It was added at i=1. So counter[key][1] is 1. So contribution +=1.
+
+Then, after adding, counter[key][1] becomes 2.
+
+This seems correct.
+
+So the code proceeds by iterating through each prefix sum, and for each, checking the current delta pair's count for the current mod, adding that to the result, then updating the counter.
+
+So the steps for the code:
+
+- Precompute prefix sums for A, B, C.
+
+But how to compute the prefix sums efficiently? For a string of length up to 1e6, it's manageable. We can compute them in O(n) time.
+
+So in Python:
+
+s = input().strip()
+
+n = len(s)
+
+a = [0]*(n+1)
+
+b = [0]*(n+1)
+
+c = [0]*(n+1)
+
+for i in range(1, n+1):
+
+    a[i] = a[i-1] + (1 if s[i-1] == 'A' else 0)
+
+    b[i] = b[i-1] + (1 if s[i-1] == 'B' else 0)
+
+    c[i] = c[i-1] + (1 if s[i-1] == 'C' else 0)
+
+But for 1e6 elements, this is acceptable. However, using arrays of size 1e6+1 may require some memory, but Python can handle it.
+
+But even better, since we only need the previous value, we can compute the prefix sums incrementally without using O(n) space. For each i, we can track a, b, c as cumulative counts.
+
+Wait, but for each i, when processing, we need the cumulative counts up to i. So perhaps for space optimization, we can compute a, b, c on the fly, instead of storing them all. Let's see.
+
+Initialize count_a, count_b, count_c = 0,0,0.
+
+prefix_a = [0]
+
+prefix_b = [0]
+
+prefix_c = [0]
+
+for char in s:
+
+    count_a += (char == 'A')
+
+    count_b += (char == 'B')
+
+    count_c += (char == 'C')
+
+    prefix_a.append(count_a)
+
+    prefix_b.append(count_b)
+
+    prefix_c.append(count_c)
+
+But this still uses O(n) space. For 1e6 elements, each list has 1e6+1 elements, which is manageable in Python.
+
+Alternatively, during the iteration of i from 0 to n (i.e., for each prefix sum), we can compute the current a, b, c on the fly. But for the code's logic, we need the a[i], b[i], c[i] for each i. So the code as above is manageable.
+
+Once the prefix sums are computed, we can proceed.
+
+Then, for each i in 0 to n (inclusive), compute delta_ab = a[i] - b[i], delta_bc = b[i] - c[i].
+
+Then, the current_mod is i %3.
+
+We can use a defaultdict from the collections module. The key is (delta_ab, delta_bc), and the value is a list of counts for mod 0, 1, 2.
+
+Now, the code outline:
+
+from collections import defaultdict
+
+s = input().strip()
+
+n = len(s)
+
+prefix_a = [0]*(n+1)
+
+prefix_b = [0]*(n+1)
+
+prefix_c = [0]*(n+1)
+
+for i in range(1, n+1):
+
+    prefix_a[i] = prefix_a[i-1] + (1 if s[i-1] == 'A' else 0)
+
+    prefix_b[i] = prefix_b[i-1] + (1 if s[i-1] == 'B' else 0)
+
+    prefix_c[i] = prefix_c[i-1] + (1 if s[i-1] == 'C' else 0)
+
+counter = defaultdict(lambda: [0, 0, 0])
+
+result = 0
+
+for i in range(n+1):
+
+    a = prefix_a[i]
+
+    b_val = prefix_b[i]
+
+    c_val = prefix_c[i]
+
+    delta_ab = a - b_val
+
+    delta_bc = b_val - c_val
+
+    current_mod = i %3
+
+    key = (delta_ab, delta_bc)
+
+    # Add the count of current_mod in the key's entry to the result
+
+    result += counter.get(key, [0,0,0])[current_mod]
+
+    # Now update the counter
+
+    # Since we use defaultdict, we can just do:
+
+    counter[key][current_mod] += 1
+
+print(result)
+
+Wait, but the defaultdict initializes each new key with [0,0,0]. So for the first occurrence of a key, when we access counter[key], it returns [0,0,0]. Then, we add the current count (0 for first occurrence) to the result, and then increment the current_mod's count.
+
+Yes.
+
+Testing this code with the sample input:
+
+Sample input: ABACABA → the code should output 2.
+
+Let's see:
+
+prefix_a = [0,1,1,2,2,3,3,4]
+
+prefix_b = [0,0,1,1,1,1,2,2]
+
+prefix_c = [0,0,0,0,1,1,1,1]
+
+For i from 0 to 7 (since n=7):
+
+i=0:
+
+delta_ab = 0-0=0
+
+delta_bc=0-0=0
+
+current_mod=0.
+
+counter is empty. counter.get(key, [0,0,0]) → [0,0,0]. So result += 0. Then, increment counter[key][0] to 1.
+
+i=1:
+
+a=1, b=0, c=0. delta_ab=1, delta_bc=0. mod=1.
+
+counter has (0,0): [1,0,0]. The key (1,0) is not in the counter. So result += 0. Then, counter[(1,0)][1] becomes 1.
+
+i=2:
+
+a=1, b=1, c=0. delta_ab=0, delta_bc=1. mod=2. result +=0. Then, counter[(0,1)][2] becomes 1.
+
+i=3:
+
+a=2, b=1, c=0. delta_ab=1, delta_bc=1. mod=0. result +=0. counter[(1,1)][0] becomes 1.
+
+i=4:
+
+a=2, b=1, c=1. delta_ab=1, delta_bc=0. mod=1.
+
+Looking up (1,0) in the counter. The entry was created at i=1. counter[(1,0)] is [0,1,0] (since it was created when i=1 (mod 1), and i=4's current_mod is 1. So counter.get((1,0)) → [0,1,0]. current_mod is 1, so result +=1. Then, counter[(1,0)][1] becomes 2.
+
+So result is now 1.
+
+i=5:
+
+a=3, b=1, c=1. delta_ab=2, delta_bc=0. mod=2. So no entry for (2,0), so result +=0. Then, create entry for (2,0) with [0,0,1].
+
+i=6:
+
+a=3, b=2, c=1. delta_ab=1, delta_bc=1. mod=0.
+
+Looking up (1,1) in the counter. The entry was created at i=3 (mod 0). counter[(1,1)] is [1,0,0]. current_mod is 0. So result +=1. Then, counter[(1,1)][0] becomes 2. Now result is 2.
+
+i=7:
+
+a=4, b=2, c=1. delta_ab=2, delta_bc=1. mod=1. No entry. So result remains 2.
+
+So the final result is 2. Correct.
+
+Another test case: suppose the input is "ABC". The length is 3. So possible substring is the entire string. The counts are A:1, B:1, C:1. So output should be 1.
+
+Let's see how the code handles this.
+
+prefix_a: [0,1,1,1]
+
+prefix_b: [0,0,1,1]
+
+prefix_c: [0,0,0,1]
+
+Processing i=0:
+
+delta_ab=0, delta_bc=0. mod 0. result +=0. counter[(0,0)][0] becomes 1.
+
+i=1:
+
+delta_ab=1-0=1, delta_bc=0-0=0. mod 1. result +=0. counter[(1,0)][1] becomes 1.
+
+i=2:
+
+delta_ab=1-1=0, delta_bc=1-0=1. mod 2. result +=0. counter[(0,1)][2] becomes 1.
+
+i=3:
+
+delta_ab=1-1=0, delta_bc=1-1=0. mod 0.
+
+Looking up (0,0). The counter for (0,0) has [1,0,0] (from i=0). current_mod is 0. So result +=1. Then, counter[(0,0)][0] becomes 2.
+
+So total result is 1. Correct.
+
+Another test case: input "AAABBBCCC". The substring from 3 to 8 (0-based) is "BBBC" no, wait. Wait, the entire string is "AAA BBB CCC" (split for clarity). The valid substrings would be any substring of length 3k where each character count is k. For example, the entire string is length 9. Each count is 3. So that's valid. Also, the substring from positions 0-8 (the entire string) would be valid. Are there other substrings? Let's see:
+
+Looking for substrings of length 3. For example, "AAB" has 2 A, 1 B, 0 C → no. "ABB" → 1 A, 2 B, 0 C. No. How about the last three characters: "CCC" → 0,0,3. No. So only the entire string is valid. So output should be 1.
+
+But according to the code:
+
+At i=9 (since the length is 9), the code would process i=0 to 9.
+
+But let's see:
+
+prefix sums for a, b, c:
+
+At i=9: a=3, b=3, c=3. delta_ab=0, delta_bc=0. mod 0 (9 mod 3=0). Looking up (0,0) in the counter. At i=0, the key (0,0) was added, and mod 0. Then, in the loop for i=9, the code would check if (0,0) exists. The key (0,0) is present. The current mod is 0. So how many times has (0,0) and mod 0 been seen before?
+
+At i=0: (0,0), mod 0 → counter entry is [1,0,0].
+
+At i=3: let's see, when i=3, a=3, b=0, c=0. delta_ab=3, delta_bc=0. Not relevant.
+
+At i=9, the delta_ab is 0, delta_bc=0. The key (0,0) has entries from i=0, and possibly others?
+
+Wait, in the string "AAABBBCCC", each character is added three times. Let's compute the prefix sums:
+
+i=0: a=0, b=0, c=0.
+
+i=1: a=1, b=0, c=0.
+
+i=2: a=2, b=0, c=0.
+
+i=3: a=3, b=0, c=0.
+
+i=4: a=3, b=1, c=0.
+
+i=5: a=3, b=2, c=0.
+
+i=6: a=3, b=3, c=0.
+
+i=7: a=3, b=3, c=1.
+
+i=8: a=3, b=3, c=2.
+
+i=9: a=3, b=3, c=3.
+
+So for i=9, delta_ab=0, delta_bc=0. mod is 9%3=0.
+
+The key (0,0) is present. The counter for (0,0) has how many entries?
+
+Looking at all previous i's where delta_ab and delta_bc are (0,0):
+
+i=0: (0,0) mod 0.
+
+i=9: but for i=9, we are processing the prefix sum up to 9. So before processing i=9, the counter has entries for (0,0) from i=0 and any other i's that have delta_ab and delta_bc 0.
+
+But for other i's:
+
+i=6: a=3, b=3, c=0 → delta_ab=0, delta_bc=3 → key (0,3).
+
+i=7: a=3, b=3, c=1 → delta_ab=0, delta_bc=2.
+
+i=8: delta_ab=0, delta_bc=0 → (0,0). mod 8%3=2.
+
+So i=8: a=3, b=3, c=2 → delta_ab=0, delta_bc=1. So no.
+
+Wait, delta_bc for i=8 is 3-2=1? Wait, no. Wait, delta_ab is a - b. For i=8:
+
+a=3, b=3, c=2. So delta_ab=0, delta_bc=3 - 2=1. So key (0,1). mod 8%3=2.
+
+So only i=0 and i=9 have delta_ab and delta_bc equal to (0,0).
+
+Wait, i=9's delta_ab is 3-3=0, delta_bc is 3-3=0. So key (0,0).
+
+So when processing i=9, the code looks up (0,0) in the counter.
+
+At that point, the counter for key (0,0) has:
+
+The entry for (0,0) was created at i=0. Then, i=9 is the current i.
+
+So for i=9:
+
+current_mod = 9%3=0.
+
+Looking up key (0,0) in the counter. The counts are [1, 0, 0] (from i=0, which has mod 0). So result +=1.
+
+Then, the code adds 1 to counter[(0,0)][0], making it 2.
+
+So the total result would be 1 from i=9, plus any other contributions.
+
+But are there other i's that contribute?
+
+Let's see:
+
+For i=6: a=3, b=3, c=0 → delta_ab=0, delta_bc=3-0=3. Key (0,3). mod 6%3=0.
+
+So no contribution.
+
+i=9 is the only one with (0,0) after i=0.
+
+So the code would output 2? Wait, no. Because i=0 is processed first, and then for i=9, the code adds the count from the counter's (0,0) entry which includes i=0.
+
+Wait, when processing i=0: no contribution. Then, when processing i=9, the code looks for previous j's with same key and mod. The j's are j=0, since (0,0) with mod 0. So (i-j) is 9-0=9, which is divisible by 3. So the substring is from j+1 to i: 0+1 to 9 (since the code uses the prefix sums up to i, which is 9). The substring is the entire string, which is valid. So the code would count this as 1.
+
+So the result is 1. Correct.
+
+But according to the code, the result would be:
+
+Looking at all i's:
+
+i=0: contributes 0.
+
+i=1: no contribution.
+
+i=2: no.
+
+...
+
+i=9: delta_ab=0, delta_bc=0. current_mod=0. counter has (0,0) with [1, 0, 0] (from i=0). So adds 1. Then increments the counter to 2.
+
+So the total result is 1. Correct.
+
+So the code works for this case.
+
+So the code seems correct.
+
+Now, considering the constraints. For a string of length 1e6, the code has O(n) time and O(n) space. The space is for the prefix_a, prefix_b, prefix_c arrays. Each is size 1e6+1, which is about 4MB each (since integers in Python are 28 bytes, but with list of integers, perhaps more). Wait, but for 1e6 elements, it's manageable. Python can handle that.
+
+But in Python, using list comprehensions or pre-allocated lists for the prefix sums is feasible.
+
+Alternatively, we can compute the prefix sums on the fly, as we process each i, to save space. Because for each i, when processing the delta, we only need the current a, b, c counts. So we can track them incrementally.
+
+Let's see:
+
+Instead of precomputing the prefix arrays, we can track a, b, c as variables and update them for each character.
+
+So:
+
+s = input().strip()
+
+count_a = 0
+
+count_b = 0
+
+count_c = 0
+
+counter = defaultdict(lambda: [0,0,0])
+
+result = 0
+
+# Initialize for i=0: all counts are 0.
+
+counter_key = (0, 0)
+
+counter[counter_key][0 %3] += 1
+
+Wait, no. Wait, the code starts by initializing the counter with the prefix sum at i=0.
+
+But in the original code, i runs from 0 to n (inclusive), which corresponds to the empty prefix (i=0) to the entire string (i=n). So the initial counts for a, b, c are 0. Then, for each character, we increment the counts.
+
+So the code can be rewritten as:
+
+s = input().strip()
+
+n = len(s)
+
+count_a = 0
+
+count_b = 0
+
+count_c = 0
+
+counter = defaultdict(lambda: [0, 0, 0])
+
+result = 0
+
+# Process the i=0 case first.
+
+counter_key = (0, 0)
+
+current_mod = 0 %3
+
+result += counter[counter_key][current_mod]
+
+# But the counter hasn't been updated yet. Wait, no. The code for the original approach is:
+
+for i in range(n+1):
+
+    compute delta_ab and delta_bc, check counter, update.
+
+But when using incremental counts, the code can process i from 0 to n by incrementally updating a, b, c.
+
+So here's how:
+
+Initialize count_a, count_b, count_c =0,0,0.
+
+Add the initial state (i=0) to the counter.
+
+Then, for each character in s (i from 1 to n):
+
+    update count_a, count_b, count_c.
+
+    compute delta_ab and delta_bc.
+
+    compute current_mod = i %3.
+
+    check counter for key and add to result.
+
+    update counter.
+
+So the code would be:
+
+from collections import defaultdict
+
+s = input().strip()
+
+count_a = 0
+
+count_b = 0
+
+count_c = 0
+
+counter = defaultdict(lambda: [0, 0, 0])
+
+result = 0
+
+# Handle the i=0 case:
+
+key = (0, 0)
+
+current_mod = 0 %3
+
+result += counter[key][current_mod]
+
+counter[key][current_mod] +=1
+
+# Now process each character (i from 1 to n)
+
+for i in range(1, len(s)+1):
+
+    char = s[i-1]
+
+    if char == 'A':
+
+        count_a +=1
+
+    elif char == 'B':
+
+        count_b +=1
+
+    else:
+
+        count_c +=1
+
+    delta_ab = count_a - count_b
+
+    delta_bc = count_b - count_c
+
+    key = (delta_ab, delta_bc)
+
+    current_mod = i %3
+
+    result += counter.get(key, [0,0,0])[current_mod]
+
+    # Update the counter
+
+    counter[key][current_mod] +=1
+
+print(result)
+
+Wait, but the initial step for i=0 is handled by adding it to the counter before processing the characters. Then, for i=0, the code adds 0 to the result (since counter is empty at that point?), then increments the counter.
+
+Wait, perhaps the code should be structured as follows:
+
+Initially, before any characters are processed (i=0):
+
+count_a = 0, count_b=0, count_c=0.
+
+delta_ab = 0-0=0.
+
+delta_bc=0-0=0.
+
+current_mod =0%3=0.
+
+Add this to the counter. But wait, the code should first check if the key exists in the counter, add to the result, then update the counter.
+
+But for i=0:
+
+result += counter.get(key, [0,0,0])[current_mod] → which is 0.
+
+Then, update the counter.
+
+Then, process each character.
+
+So the code would be:
+
+from collections import defaultdict
+
+s = input().strip()
+
+count_a = 0
+
+count_b = 0
+
+count_c = 0
+
+counter = defaultdict(lambda: [0, 0, 0])
+
+result = 0
+
+# Process i=0:
+
+key = (0, 0)
+
+current_mod = 0 %3
+
+result += counter[key][current_mod]
+
+counter[key][current_mod] +=1
+
+for i in range(1, len(s)+1):
+
+    char = s[i-1]
+
+    if char == 'A':
+
+        count_a +=1
+
+    elif char == 'B':
+
+        count_b +=1
+
+    else:
+
+        count_c +=1
+
+    delta_ab = count_a - count_b
+
+    delta_bc = count_b - count_c
+
+    key = (delta_ab, delta_bc)
+
+    current_mod = i %3
+
+    # Add to result
+
+    result += counter.get(key, [0, 0, 0])[current_mod]
+
+    # Update the counter
+
+    counter[key][current_mod] +=1
+
+print(result)
+
+Wait, but in this code, the first step is processing i=0:
+
+At i=0, the key is (0,0), current_mod is 0. The counter is a defaultdict, so when we access counter[key], it returns [0,0,0]. So result +=0. Then, we increment counter[key][0] to 1.
+
+Then, for each i from 1 to len(s), we process each character, update the counts, compute delta_ab and delta_bc, current_mod, and add the current count in the counter to the result.
+
+But for i=0, we have already added it to the counter. The loop for i=1 to n processes the prefix sums for i=1 to n.
+
+This should be equivalent to the previous approach, but saves O(n) space by not storing the prefix arrays. So this is more efficient in terms of memory.
+
+Testing this code with the sample input:
+
+Sample input ABACABA:
+
+Processing i=0:
+
+result += 0, counter[(0,0)][0] becomes 1.
+
+Then, i=1 (char 'A'):
+
+count_a=1.
+
+delta_ab=1-0=1.
+
+delta_bc=0-0=0.
+
+current_mod=1%3=1.
+
+counter.get((1,0), [0,0,0])[1] → 0. So result +=0.
+
+Then, counter[(1,0)][1] becomes 1.
+
+i=2 (char 'B'):
+
+count_b=1.
+
+delta_ab=1-1=0.
+
+delta_bc=1-0=1.
+
+current_mod=2%3=2.
+
+counter.get((0,1), [0,0,0])[2] → 0. result +=0. counter updated.
+
+i=3 (char 'A'):
+
+count_a=2.
+
+delta_ab=2-1=1.
+
+delta_bc=1-0=1.
+
+current_mod=3%3=0.
+
+counter.get((1,1), [0,0,0])[0] → 0. result +=0. counter updated.
+
+i=4 (char 'C'):
+
+count_c=1.
+
+delta_ab=2-1=1.
+
+delta_bc=1-1=0.
+
+current_mod=4%3=1.
+
+counter.get((1,0), [0,0,0])[1] → 1. So result +=1. Now result is 1.
+
+Then, counter[(1,0)][1] becomes 2.
+
+i=5 (char 'A'):
+
+count_a=3.
+
+delta_ab=3-1=2.
+
+delta_bc=1-1=0.
+
+current_mod=5%3=2.
+
+counter.get((2,0), [0,0,0])[2] →0. result remains 1. counter updated.
+
+i=6 (char 'B'):
+
+count_b=2.
+
+delta_ab=3-2=1.
+
+delta_bc=2-1=1.
+
+current_mod=6%3=0.
+
+counter.get((1,1), [0,0,0])[0] → 0. result +=0. counter updated.
+
+i=7 (char 'A'):
+
+count_a=4.
+
+delta_ab=4-2=2.
+
+delta_bc=2-1=1.
+
+current_mod=7%3=1.
+
+counter.get((2,1), [0,0,0])[1] →0. result remains 1.
+
+So after processing all i's, the result is 1? But the sample's correct output is 2. Wait, what's wrong here.
+
+Ah, because in this revised code, the processing for i=0 is added to the counter, but in the original code, the loop runs from i=0 to 7 (for the sample input). The revised code's loop for the characters is from i=1 to 7 (since len(s) is 7). So the code processes i=0 as a separate step, then i=1 to 7.
+
+But in the original code, for the sample input, when i=6 (which is i=6 in the code's loop, which corresponds to the prefix sum after 6 characters, which is the prefix sum up to index 6 in the string, which is 'ABACAB' (indices 0-5). Wait, perhaps there's confusion between 0-based and 1-based indices.
+
+Wait, the sample input is 'ABACABA' which is 7 characters long. So in the revised code, after processing i=0 (initial state), the loop runs for i=1 to 7, inclusive. Each i corresponds to the prefix sum after processing the first i characters. So for i=7, it's the entire string.
+
+So in the revised code, for the sample input:
+
+i=0: handled in the initial step.
+
+i=1 to 7 (7 iterations):
+
+Let's recheck:
+
+i=1:
+
+char is s[0] → 'A'.
+
+count_a=1.
+
+delta_ab=1-0=1.
+
+delta_bc=0-0=0.
+
+current_mod=1%3=1.
+
+result +=0.
+
+i=2:
+
+char is s[1] → 'B'.
+
+count_b=1.
+
+delta_ab=1-1=0.
+
+delta_bc=1-0=1.
+
+current_mod=2.
+
+result +=0.
+
+i=3:
+
+char s[2] → 'A'. count_a=2.
+
+delta_ab=2-1=1.
+
+delta_bc=1-0=1.
+
+current_mod=3%3=0.
+
+result +=0.
+
+i=4:
+
+char s[3] → 'C'. count_c=1.
+
+delta_ab=2-1=1.
+
+delta_bc=1-1=0.
+
+current_mod=4%3=1.
+
+Looking up (1,0) in the counter. The counter for this key was created when i=0's step? No. Wait, the counter is initialized with (0,0) for i=0.
+
+Wait, the code processes i=4 (which is the 4th iteration of the loop, corresponding to the fourth character).
+
+At i=4, the delta_ab is 1, delta_bc is 0.
+
+In the counter, the key (1,0) was added when i=1 (the first iteration of the loop), where mod was 1.
+
+So when processing i=4:
+
+current_mod=1. So check the counter for (1,0)[1]. The count is 1. So result +=1. Now result is 1.
+
+i=5:
+
+char is s[4] → 'A'. count_a=3.
+
+delta_ab=3-1=2.
+
+delta_bc=1-1=0.
+
+current_mod=5%3=2.
+
+counter for (2,0) is new. So no contribution.
+
+i=6:
+
+char s[5] → 'B'. count_b=2.
+
+delta_ab=3-2=1.
+
+delta_bc=2-1=1.
+
+current_mod=6%3=0.
+
+Looking up (1,1) in the counter. The key (1,1) was added when i=3, which had current_mod 0. So the counter for (1,1)[0] is 1. So result +=1. Now result is 2.
+
+i=7:
+
+char s[6] → 'A'. count_a=4.
+
+delta_ab=4-2=2.
+
+delta_bc=2-1=1.
+
+current_mod=7%3=1.
+
+No contribution.
+
+So the result is 2. Correct.
+
+Ah, I see. The revised code works correctly. So the code can be written without precomputing the prefix arrays, which saves memory. That's better for large inputs.
+
+So the final code would be this revised version, which tracks the counts incrementally.
+
+Thus, the code is:
+
+Use a defaultdict to track the counts of (delta_ab, delta_bc) and their mod 3.
+
+Process i=0 separately by adding it to the counter, then for each character, update the counts and check the current delta pair.
+
+This code is efficient in both time and space.
+</think>
+To solve this problem, we need to count the number of substrings in a given ABC-string that contain an equal number of 'A', 'B', and 'C' characters. The solution must efficiently handle strings up to 1,000,000 characters long.
+
+### Approach
+The key insight is that for a substring to have equal counts of 'A', 'B', and 'C', its length must be a multiple of 3. Additionally, we can use prefix sums and differences between these sums to track the counts of each character efficiently.
+
+1. **Prefix Sums and Differences**: For each position in the string, we compute the cumulative counts of 'A', 'B', and 'C'. We then calculate the differences between these counts (delta_ab = A - B, delta_bc = B - C) to form a key that helps identify potential valid substrings.
+
+2. **Modulo Operation**: Since the length of valid substrings must be a multiple of 3, we use modulo 3 on the indices to group potential start and end points of valid substrings.
+
+3. **Hash Map with Count Tracking**: We use a hash map (dictionary) to track the occurrence of each (delta_ab, delta_bc) pair along with their modulo 3 indices. This allows us to quickly determine how many valid substrings end at the current position.
+
+### Solution Code
+```python
+from collections import defaultdict
+
+def count_abc_substrings():
+    s = input().strip()
+    count_a = 0
+    count_b = 0
+    count_c = 0
+    counter = defaultdict(lambda: [0, 0, 0])
+    result = 0
+
+    # Handle the initial state (i=0)
+    key = (0, 0)
+    current_mod = 0 % 3
+    result += counter[key][current_mod]
+    counter[key][current_mod] += 1
+
+    for i in range(1, len(s) + 1):
+        char = s[i-1]
+        if char == 'A':
+            count_a += 1
+        elif char == 'B':
+            count_b += 1
+        else:
+            count_c += 1
+
+        delta_ab = count_a - count_b
+        delta_bc = count_b - count_c
+        key = (delta_ab, delta_bc)
+        current_mod = i % 3
+
+        # Add to the result the count of occurrences with the same key and mod
+        result += counter.get(key, [0, 0, 0])[current_mod]
+
+        # Update the counter for this key and mod
+        counter[key][current_mod] += 1
+
+    print(result)
+
+count_abc_substrings()
+```
+
+### Explanation
+1. **Initialization**: We start by initializing counters for 'A', 'B', and 'C' to zero. We also initialize a hash map to track the occurrences of each (delta_ab, delta_bc) pair along with their modulo 3 indices.
+
+2. **Processing Initial State**: The initial state (i=0) corresponds to an empty prefix, where all counts are zero. This is added to the hash map with modulo 0.
+
+3. **Iterating Through the String**: For each character in the string, we update the cumulative counts of 'A', 'B', and 'C'. We then compute the current delta_ab and delta_bc values, and the current index modulo 3.
+
+4. **Checking Valid Substrings**: For each position, we check how many times the current (delta_ab, delta_bc) pair has been seen with the same modulo 3 index. This count is added to the result as these represent valid substrings ending at the current position.
+
+5. **Updating the Hash Map**: After checking, we update the hash map to include the current (delta_ab, delta_bc) pair and its modulo 3 index.
+
+This approach efficiently tracks potential valid substrings using prefix sums and differences, ensuring an O(n) time complexity and O(n) space complexity, making it suitable for large input sizes.
+</bot>

@@ -1,0 +1,1355 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.You are given a binary array A=(A_1,A_2,\cdots,A_N) of length N.
+
+Process Q queries of the following types. The i-th query is represented by three integers T_i,L_i,R_i.
+
+* T_i=1: Replace the value of A_j with 1-A_j for each L_i \leq j \leq R_i.
+* T_i=2: Calculate the inversion(*) of the array A_{L_i},A_{L_i+1},\cdots,A_{R_i}．
+
+
+
+Note：The inversion of the array x_1,x_2,\cdots,x_k is the number of the pair of integers i,j with 1 \leq i < j \leq k, x_i > x_j.
+
+Constraints
+
+* 1 \leq N \leq 2 \times 10^5
+* 0 \leq A_i \leq 1
+* 1 \leq Q \leq 2 \times 10^5
+* 1 \leq T_i \leq 2
+* 1 \leq L_i \leq R_i \leq N
+* All values in Input are integer.
+
+Input
+
+Input is given from Standard Input in the following format:
+
+
+N Q
+A_1 A_2 \cdots A_N
+T_1 L_1 R_1
+T_2 L_2 R_2
+\vdots
+T_Q L_Q R_Q
+
+
+Output
+
+For each query with T_i=2, print the answer.
+
+Example
+
+Input
+
+5 5
+0 1 0 0 1
+2 1 5
+1 3 4
+2 2 5
+1 1 3
+2 1 2
+
+
+Output
+
+2
+0
+1
+</user>
+<bot>
+<think>
+Okay, I need to solve this programming problem. Let's read the problem carefully.
+
+We have a binary array A of length N. We need to process Q queries, which can be of two types. Type 1 flips the elements from L to R (inclusive). Type 2 asks for the inversion count of the subarray from L to R. The inversion count is the number of pairs (i,j) where i < j and A_i > A_j. Since the array is binary, the inversion count can be calculated based on the number of 1s and 0s in the subarray.
+
+The constraints are tight: N and Q can be up to 2e5. So any naive approach with O(N) per query will be too slow. We need a data structure that can handle range updates and efficiently compute the necessary information for inversion counts.
+
+Let's think about what the inversion count means for a binary array. Suppose in a subarray, there are c0 zeros and c1 ones. The inversion count is the number of pairs where a 1 is before a 0. So each 1 that is followed by a 0 contributes to the inversion. So for each 1 in the array, the number of 0s that come after it in the subarray is the total inversions. So total inversions = sum over all 1s in the subarray of the number of 0s after them.
+
+But how to compute this efficiently?
+
+Let's consider that the inversion count can be broken down into:
+
+count_1 = number of 1s in the subarray
+count_0 = number of 0s in the subarray
+
+But inversions are the number of 1s multiplied by the number of 0s that come after them. Wait, no. Wait, each 1 that comes before a 0 contributes exactly once. So the total is the number of pairs (i,j) where i < j, A[i] = 1 and A[j] = 0.
+
+So for a subarray, the inversion count is equal to the number of 1s multiplied by the number of 0s that are to the right of each 1. So if we have the count of 1s and 0s in the entire subarray, but also the positions of the 1s and 0s, maybe we can find a way to compute this.
+
+Alternatively, the inversion count can be calculated as the sum for each 1 in the subarray of the number of 0s that come after it in the subarray.
+
+But how to compute this efficiently. Let's think about the elements. Let's say for a given subarray [L, R], we have:
+
+total_ones = the number of 1s in [L, R]
+sum_position_ones = sum of the positions (indices) of all 1s in [L, R]
+
+Similarly, total_zeros = R-L+1 - total_ones.
+
+But how does that help? Hmm.
+
+Wait, when we flip a subarray, all 0s become 1s and vice versa. So for a flip operation (type 1), the inversion counts in the flipped regions would change accordingly.
+
+But handling this with range flips and queries is tricky. So the data structure needs to handle:
+
+1. Range flips (toggle 0 to 1 and 1 to 0 in a range)
+2. For a given range, calculate the inversion count (number of (1,0) pairs where 1 is before 0).
+
+So we need a segment tree that can handle both range updates (flips) and range queries for inversion counts.
+
+Wait, but inversion counts are specific to the elements in the subarray. So the segment tree nodes must store information that allows us to compute the inversion count for a given range.
+
+Let's think about the segment tree nodes. Each node represents a range [l, r]. For that range, we need to store:
+
+- The number of 0s (c0) and 1s (c1) in the range.
+- The inversion count (inv) for the range.
+- Additionally, perhaps the number of 0s and 1s to the left and right, or some other information to combine when merging nodes.
+
+Wait, but how to combine the inversion counts from left and right children. Let's say we have a parent node covering [l, r] which is split into left [l, m] and right [m+1, r]. The inversion count for the parent is inv_left + inv_right + cross_inversions, where cross_inversions is the number of 1s in the left child multiplied by the number of 0s in the right child. Because in the cross part, each 1 in the left is before each 0 in the right, contributing to inversions.
+
+Yes, that's right. So the inversion count for a node is the sum of the inversions in the left and right children, plus the cross inversions (left_ones * right_zeros).
+
+So for the segment tree, each node needs to store:
+
+- count_ones (c1)
+- count_zeros (c0)
+- inversion_count (inv)
+- Also, since the node may have a pending flip (lazy propagation), we need a flip flag.
+
+When a flip is applied to a node, all the 0s become 1s and vice versa. So the count_ones and count_zeros are swapped. The inversion count for the node changes as well. Because the inversion count is the number of 1s before 0s, flipping the bits would change the inversion count to the number of 0s before 1s, which is (c0 * c1) - inv. Because the total possible pairs is c0 * c1 (all possible pairs between 0s and 1s, but only those where 0 comes before 1). Wait, no. Wait, the total number of 0-1 pairs (regardless of order) is c0 * c1. The original inv is the number of 1-0 pairs (i < j, 1 followed by 0). After flipping, each 1 becomes 0 and 0 becomes 1. So the inversion count becomes the number of 0-1 pairs where 0 (originally 1) is before 1 (originally 0). But since the entire array is flipped, the inversion count is now the number of 0s (originally 1s) in the array multiplied by the number of 1s (originally 0s) in the array, minus the original inversion count. Wait, no. Let me think again.
+
+Original array: some 1s and 0s. inv is the number of 1s followed by 0s.
+
+After flipping, each 1 becomes 0 and each 0 becomes 1. So the new inversion count is the number of 0s (original 1s) followed by 1s (original 0s). Which is the same as the number of pairs (i,j) where i < j, original A_i was 1 (now 0) and original A_j was 0 (now 1). So in the original array, that's the number of pairs where A_i=1 and A_j=0 and j > i. Wait, no. Wait, after flipping, the new inversion is (i,j) where new A_i is 0 (original 1) and new A_j is 1 (original 0), and i < j. Which is exactly the same as (i,j) where original A_i is 1, original A_j is 0, and j > i. Which is the original inversion count. Wait, no. Wait, no. Because in the original array, the inversion count is the number of (i,j) where i<j, A_i=1 and A_j=0. After flipping, the new inversion count is the number of (i,j) where i<j, new A_i=0 and new A_j=1. Which is exactly the same as the original inversion count. Wait, that can't be right. Because flipping the array would change the inversion count.
+
+Wait, for example, consider the array [1,0]. Original inversion count is 1. After flipping, it's [0,1], inversion count is 0. So no, the inversion count after flipping is not the same as before. So my initial assumption was wrong.
+
+So when we flip a segment, the inversion count for that segment becomes (total pairs of 0 and 1 in the segment) minus original inversion count. Because total possible pairs between 0 and 1 is c0 * c1. Original inversion count is the number of 1s followed by 0s. After flipping, each 0 becomes 1 and 1 becomes 0. So the new inversion count is the number of 0s (original 1s) followed by 1s (original 0s). Which is the same as the number of (i,j) where original A_i=1, original A_j=0, and i<j. Which is the original inversion count. Wait, no. Wait, no. Because after flipping, the array is 0 becomes 1 and 1 becomes 0. So the new array's elements are 1 - A_i. So inversion count for the new array is the number of pairs (i,j) where (1 - A_i) > (1 - A_j), i<j. Which simplifies to A_j > A_i. So the new inversion count is the number of pairs (i,j) where i < j and A_j > A_i. Which is the same as the number of pairs (i,j) where i < j and A_i < A_j. Which is the number of pairs that are not inversions but ordered. The total possible ordered pairs (i<j) is (k*(k-1))/2, where k is the length of the array. But considering only 0 and 1 pairs. Hmm. Let's think again.
+
+Suppose in a segment, there are c0 zeros and c1 ones. The total possible 0-1 pairs is c0*c1. The inversion count for the original segment is the number of 1s followed by 0s. For the flipped segment, the inversion count would be the number of 0s followed by 1s. Which is c0 * c1 - original_inversion. Because for each 0 in the original, which is now 1, and 1 (original 0) that comes after, the pair contributes to inversion. So flipping the segment changes the inversion count to (c0 * c1) - inv.
+
+So, when a segment is flipped, the inversion count for that segment becomes (c0 * c1) - inv. Also, the count_ones and count_zeros are swapped.
+
+Moreover, for any node that's being flipped, we need to apply these changes. And for the lazy propagation, we can represent the flip as a toggle (since flipping twice returns to the original state).
+
+So, the segment tree node needs to store:
+
+- c0: number of 0s in the segment
+- c1: number of 1s in the segment
+- inv: inversion count in the segment
+- flip: a boolean indicating whether the segment is flipped (lazy)
+
+When a node is to be flipped, the following changes occur:
+
+- c0 and c1 are swapped.
+- inv becomes (c0 * c1) - inv (since the inversion count is now the complement in the total possible 0-1 pairs).
+- The flip flag is toggled.
+
+For the segment tree, when merging two nodes (left and right), the inversion count is:
+
+left.inv + right.inv + (left.c1 * right.c0)
+
+Because the cross inversions between left and right are the number of 1s in the left multiplied by the number of 0s in the right.
+
+So each node must track c0, c1, inv, and the flip status.
+
+Now, building this segment tree:
+
+Each leaf node corresponds to a single element. For a leaf with value 0:
+
+- c0 = 1, c1 = 0, inv = 0 (no pairs), flip = false.
+
+For a leaf with value 1:
+
+- c0 = 0, c1 = 1, inv = 0.
+
+When combining two nodes, their c0 and c1 are added, and the inv is as described.
+
+Now, for the flip operation:
+
+When a flip is applied to a node, the node's c0 and c1 are swapped. The inv is set to (c0 * c1) - inv. The flip flag is toggled.
+
+For the lazy propagation, whenever we visit a node (during update or query), we need to check if it has a pending flip. If yes, apply the flip to the node, propagate the flip to the children (if any), and clear the flip flag.
+
+Now, the problem is how to handle the range flip and the inversion count query.
+
+So, for each query of type 1, we need to perform a range flip (toggle) from L to R.
+
+For each query of type 2, we need to compute the inversion count of the subarray L to R.
+
+So, the plan is:
+
+- Build a segment tree where each node tracks c0, c1, inv, and flip status.
+- For a type 1 query, perform a range flip (which in the segment tree is a range update with flip).
+- For a type 2 query, query the segment tree for the inversion count of the range [L, R], which requires getting the inv value of that range, considering the flips.
+
+But wait, the inversion count for the range [L, R] is exactly the inv stored in the segment tree node covering [L, R], plus the cross inversions between the left and right parts if the range is split into multiple nodes. However, the segment tree's query function should already handle this by combining the nodes in the correct way.
+
+Wait, the segment tree's query function for inversion would need to combine the inv values from the relevant segments and the cross terms. So the standard way to query a range is to split the query into the necessary nodes and combine their data.
+
+But building this into the segment tree requires that when we query a range, we can accumulate the necessary information (c0, c1, inv) from the nodes in the query range, taking into account the order in which they are merged.
+
+So the query function would return a structure containing c0, c1, inv for the queried range, which is built by combining the left and right segments. For example, when querying a range that is covered by two separate nodes (left and right), the combined inv would be left.inv + right.inv + (left.c1 * right.c0).
+
+So the key is that during a query, we need to traverse the segment tree, collect all the relevant nodes, and combine them in the order they appear (since the left node comes before the right node), accumulating the inversion count as we go.
+
+Thus, for the query function, the approach is:
+
+Initialize a structure with c0=0, c1=0, inv=0.
+
+For each segment in the decomposition of the query range:
+
+- Combine the current accumulated structure with the data from this segment.
+
+The combination is:
+
+new_inv = acc.inv + seg.inv + (acc.c1 * seg.c0)
+new_c0 = acc.c0 + seg.c0
+new_c1 = acc.c1 + seg.c1
+return new_inv, new_c0, new_c1
+
+So, during a query, we traverse the segments and build up the total inversion count, along with the total 0s and 1s.
+
+This seems manageable. So the steps for the code:
+
+Implement a segment tree with each node storing:
+
+- c0, c1: number of 0s and 1s in the segment
+- inv: inversion count in the segment
+- flip: a boolean indicating if the segment is flipped (lazy)
+
+The segment tree must support:
+
+- Range flip (toggle 0 and 1) with lazy propagation.
+- Range query that returns the inversion count for the range, considering the flips.
+
+Now, the challenge is to implement this efficiently in Python, considering the large constraints (up to 2e5 elements and queries). However, Python's speed might be a problem here. But given that the time complexity for each query is O(log N), it's manageable.
+
+But implementing a segment tree in Python with these features can be a bit tricky. Let's outline the steps.
+
+First, the segment tree will be represented as an array. But for large N (up to 2e5), a 4*N array is manageable (but 2e5 *4 is 8e5, which is acceptable).
+
+Alternatively, a recursive approach may not be feasible due to stack depth, but iterative implementations are possible. However, Python's recursion stack is limited (default is around 1e4), so for N up to 2e5, recursion depth would be log2(2e5) ≈ 18, which is acceptable. So maybe a recursive segment tree is manageable.
+
+Alternatively, use an iterative approach for the segment tree.
+
+But perhaps a recursive approach is easier to code.
+
+Alternatively, use a class-based segment tree.
+
+Let's outline the structure.
+
+Each node will have:
+
+- left and right child (for a binary tree)
+- c0, c1, inv, flip
+
+But in practice, for a fixed array, we can represent the segment tree using an array-based structure, where each node is stored in an array with indexes calculated based on the level.
+
+Alternatively, perhaps a list of dictionaries, but that may be too slow. Instead, perhaps precompute the nodes as a list of objects, but in Python, even with classes, it's manageable.
+
+But given time constraints, perhaps using a list of tuples, but that might be difficult. So perhaps using a list of dictionaries, each node represented as a dictionary with keys: c0, c1, inv, flip, left, right, etc. But this is probably not efficient.
+
+Alternatively, since each node has c0, c1, inv, flip, and the left and right children can be represented via indices, but this requires building the tree in a way that can be handled.
+
+But perhaps the easiest way is to use a class-based approach for the segment tree, with each node storing the necessary information.
+
+But given that Python's recursion can handle log2(2e5) depth, perhaps a recursive implementation is feasible.
+
+So the plan is:
+
+Implement a segment tree where each node is responsible for a certain range. Each node can either be a leaf or have two children. For each node, we track c0, c1, inv, and a flip flag.
+
+For the build function:
+
+def build(l, r):
+
+    create a node for the range [l, r]
+
+    if l == r:
+
+        set c0 and c1 based on A[l]
+
+        inv is 0
+
+        flip is False
+
+    else:
+
+        mid = (l + r) // 2
+
+        left = build(l, mid)
+
+        right = build(mid+1, r)
+
+        combine left and right to get c0, c1, inv.
+
+        c0 = left.c0 + right.c0
+
+        c1 = left.c1 + right.c1
+
+        inv = left.inv + right.inv + (left.c1 * right.c0)
+
+        flip is False
+
+For the update function (flip a range):
+
+def update_range(node, l, r, ul, ur):
+
+    if the current node's range is outside [ul, ur], do nothing.
+
+    else:
+
+        apply any pending flips (lazy propagation)
+
+        if the current node's range is fully within [ul, ur]:
+
+            flip the node (swap c0 and c1, inv becomes c0*c1 - inv)
+
+            toggle the flip flag (but since we are applying it, set the flag to False and propagate to children if any?)
+
+        else:
+
+            split into left and right children, and recursively update.
+
+            then recombine the node's c0, c1, inv from the children.
+
+Wait, no. Because when a flip is applied to a node, it's a lazy operation. So when we need to process a node, we first check if there's a pending flip. If so, we apply it to the node, then propagate the flip to the children (if any), and then clear the flip flag.
+
+So during an update, when we reach a node that needs to be updated (i.e., its range is within the update range), we apply the flip, then propagate the flip to the children (if not a leaf) by adding a flip flag to them.
+
+Wait, but when you flip a node, you swap c0 and c1, set inv to c0*c1 - inv, and toggle the flip flag. However, if the node has children, then the flip is propagated by adding the flip flag to the children and not actually flipping the current node again. Wait, no. The standard approach for lazy propagation is that when a node is to be updated (like a flip), if the node's entire range is covered by the update, then we apply the flip to the node, toggle the flip flag (for itself, but since the entire range is covered, we don't need to propagate further unless the children are accessed later). But if the node is not a leaf and has children, when we have to process a flip on this node, we need to propagate the flip to the children before any operations that require their data.
+
+Wait, perhaps the correct approach is:
+
+When we have a node with a pending flip, we first apply the flip to itself, then propagate the flip to its children (marking their flip flag as toggled), and then clear the flip flag of the current node.
+
+But how?
+
+Let me think of an example. Suppose we have a node that has children. The node's flip flag is True. When we need to process this node (for example, during a query or an update), we first apply the flip:
+
+swap c0 and c1.
+
+inv becomes c0 * c1 - inv.
+
+Then, if the node is not a leaf, we propagate the flip to the children by toggling their flip flags (children's flip flags are XORed with True).
+
+Then, we clear the current node's flip flag.
+
+So, the process is:
+
+def propagate(node):
+
+    if node has a flip flag set:
+
+        swap node.c0 and node.c1
+
+        node.inv = node.c0 * node.c1 - node.inv
+
+        if node is not a leaf:
+
+            node.left.flip = not node.left.flip
+
+            node.right.flip = not node.right.flip
+
+        node.flip = False
+
+So, during any operation (update or query), when we visit a node, we first check if it has a pending flip. If yes, apply the flip to the node, propagate to children (if any), and clear the flip.
+
+This way, the node's data (c0, c1, inv) are up-to-date, and the children are marked with the flip if needed.
+
+Therefore, during the update or query process, whenever we access a node, we first call propagate to apply any pending flips and propagate them to children as needed.
+
+So for the update_range function:
+
+def update_range(node, l, r, ul, ur):
+
+    propagate(node)  # apply any pending flips
+
+    if node's current range is outside [ul, ur]:
+
+        return
+
+    if node's current range is entirely within [ul, ur]:
+
+        # apply flip to this node
+
+        node.c0, node.c1 = node.c1, node.c0
+
+        node.inv = node.c0 * node.c1 - node.inv
+
+        # mark children for flip (if not leaf)
+
+        if node is not a leaf:
+
+            node.left.flip = not node.left.flip
+
+            node.right.flip = not node.right.flip
+
+        return
+
+    # else, split into children and update each
+
+    update_range(node.left, l, mid, ul, ur)
+
+    update_range(node.right, mid+1, r, ul, ur)
+
+    # after updating children, recompute current node's data
+
+    node.c0 = node.left.c0 + node.right.c0
+
+    node.c1 = node.left.c1 + node.right.c1
+
+    node.inv = node.left.inv + node.right.inv + (node.left.c1 * node.right.c0)
+
+Similarly, for the query function:
+
+def query_range(node, l, r, ql, qr):
+
+    propagate(node)  # apply any pending flips
+
+    if node's range is outside [ql, qr]:
+
+        return (0, 0, 0)  # c0, c1, inv
+
+    if node's range is entirely within [ql, qr]:
+
+        return (node.c0, node.c1, node.inv)
+
+    left_result = query_range(node.left, l, mid, ql, qr)
+
+    right_result = query_range(node.right, mid+1, r, ql, qr)
+
+    combined_c0 = left_result[0] + right_result[0]
+
+    combined_c1 = left_result[1] + right_result[1]
+
+    combined_inv = left_result[2] + right_result[2] + (left_result[1] * right_result[0])
+
+    return (combined_c0, combined_c1, combined_inv)
+
+But how to represent the nodes in Python. Since Python doesn't have a built-in segment tree structure, we need to model the nodes. But using a class-based approach for each node may be memory-intensive for large N. So perhaps we can model the segment tree using a list of nodes, each node stored as a dictionary or a data class.
+
+But for N=2e5, the number of nodes is about 4*N, which is manageable. However, recursion depth may be an issue. For example, the height of the tree is log2(2e5) ≈ 18, so recursion should be okay.
+
+Alternatively, use an iterative segment tree, but that might be more complex.
+
+But given time constraints, perhaps a class-based approach with recursive functions is manageable.
+
+But how to represent the nodes. Let's think of a Node class.
+
+class Node:
+
+    def __init__(self, l, r):
+
+        self.l = l
+
+        self.r = r
+
+        self.left = None
+
+        self.right = None
+
+        self.c0 = 0
+
+        self.c1 = 0
+
+        self.inv = 0
+
+        self.flip = False
+
+But building such a structure for N=2e5 may be possible, but each node requires memory.
+
+But in Python, for 4e5 nodes (since for N=2e5, the segment tree has about 4*N nodes), each with a few integers and flags, it's manageable.
+
+Now, the build function would create the nodes recursively.
+
+def build(l, r, A):
+
+    node = Node(l, r)
+
+    if l == r:
+
+        val = A[l]
+
+        node.c0 = 1 if val == 0 else 0
+
+        node.c1 = 1 if val == 1 else 0
+
+        node.inv = 0
+
+        return node
+
+    mid = (l + r) // 2
+
+    node.left = build(l, mid, A)
+
+    node.right = build(mid+1, r, A)
+
+    node.c0 = node.left.c0 + node.right.c0
+
+    node.c1 = node.left.c1 + node.right.c1
+
+    node.inv = node.left.inv + node.right.inv + (node.left.c1 * node.right.c0)
+
+    return node
+
+But this may take O(N) time to build.
+
+For the update and query functions:
+
+def update_range(node, ul, ur):
+
+    # node represents [l, r]
+
+    # apply pending flips
+
+    if node.flip:
+
+        # apply flip and propagate to children if any
+
+        node.c0, node.c1 = node.c1, node.c0
+
+        node.inv = node.c0 * node.c1 - node.inv
+
+        node.flip = False
+
+        if node.left is not None:
+
+            node.left.flip = not node.left.flip
+
+        if node.right is not None:
+
+            node.right.flip = not node.right.flip
+
+    if node.r < ul or node.l > ur:
+
+        return
+
+    if ul <= node.l and node.r <= ur:
+
+        # flip this node
+
+        node.c0, node.c1 = node.c1, node.c0
+
+        node.inv = node.c0 * node.c1 - node.inv
+
+        if node.left is not None:
+
+            node.left.flip = not node.left.flip
+
+        if node.right is not None:
+
+            node.right.flip = not node.right.flip
+
+        return
+
+    update_range(node.left, ul, ur)
+
+    update_range(node.right, ul, ur)
+
+    # update current node's data
+
+    node.c0 = node.left.c0 + node.right.c0
+
+    node.c1 = node.left.c1 + node.right.c1
+
+    node.inv = node.left.inv + node.right.inv + (node.left.c1 * node.right.c0)
+
+Wait, but in this code, the node's l and r are stored in the node, and during the update, we check if the current node's [l, r] is within the update range [ul, ur]. But the code for propagate is handled by checking the flip flag at the beginning of the function.
+
+Wait, but the code above first checks if the current node's flip is True, applies the flip, propagates to children, then checks if the current node is within the update range.
+
+But the standard way to handle lazy propagation is to propagate when the node is to be split. So when the node's range is not entirely covered by the update range, and thus we need to process its children, we first propagate the flip (if any) to the children before proceeding.
+
+But in the code above, the propagate is done at the start of the update_range function. However, the update_range function is called recursively, so each time we enter a node, we first check if there's a pending flip and apply it.
+
+Wait, perhaps this is correct. Let's see:
+
+When entering a node during update_range, we first check if it has a pending flip. If yes, apply it (swap c0/c1, adjust inv, and toggle the flip flag for the children). Then proceed to check if the current node is within the update range.
+
+If the current node is entirely within the update range, then we flip it (swap c0/c1, adjust inv, and toggle the flip for the children), and return. Otherwise, we recursively update the left and right children.
+
+After updating the children, we recompute the current node's c0, c1, and inv based on the left and right children.
+
+But how do we propagate the flip to the children if the node is not a leaf? The code above does it when applying the flip.
+
+Yes. For example, when the node is to be flipped (either because it is part of the update range or because it has a pending flip), the code first checks the flip flag. If the flip flag is set, it applies the flip to the node, then propagates the flip to the children by toggling their flip flags.
+
+Thus, during the update, whenever a node's flip is processed, the children's flip flags are toggled (but their data is not immediately updated; their flips are applied when they are processed).
+
+This should ensure that the data is correctly updated.
+
+Similarly, for the query function:
+
+def query_range(node, ql, qr):
+
+    # apply pending flips
+
+    if node.flip:
+
+        node.c0, node.c1 = node.c1, node.c0
+
+        node.inv = node.c0 * node.c1 - node.inv
+
+        node.flip = False
+
+        if node.left is not None:
+
+            node.left.flip = not node.left.flip
+
+        if node.right is not None:
+
+            node.right.flip = not node.right.flip
+
+    if node.r < ql or node.l > qr:
+
+        return (0, 0, 0)  # c0, c1, inv
+
+    if ql <= node.l and node.r <= qr:
+
+        return (node.c0, node.c1, node.inv)
+
+    left_c0, left_c1, left_inv = query_range(node.left, ql, qr)
+
+    right_c0, right_c1, right_inv = query_range(node.right, ql, qr)
+
+    combined_c0 = left_c0 + right_c0
+
+    combined_c1 = left_c1 + right_c1
+
+    combined_inv = left_inv + right_inv + (left_c1 * right_c0)
+
+    return (combined_c0, combined_c1, combined_inv)
+
+But how to handle overlapping ranges. For example, the query range [ql, qr] may overlap with both left and right children. The code for query_range will split into left and right, and combine their results.
+
+But how to ensure that the left and right children are processed correctly with their own flip flags.
+
+The code seems to handle it by first propagating the flip when entering the node, then proceeding.
+
+Thus, the query function will return the correct c0, c1, and inv for the query range.
+
+Now, putting this all together.
+
+The steps for the code:
+
+Read N and Q.
+
+Read the array A as a list.
+
+Build the segment tree.
+
+Process each query:
+
+    For each query, read T_i, L_i, R_i.
+
+    If T_i is 1:
+
+        perform a range flip on L_i to R_i.
+
+    Else:
+
+        query the range L_i to R_i, get the inversion count and print it.
+
+In Python, the problem is the efficiency. Recursive functions for 2e5 queries may be too slow. However, given that each query is O(log N) time, for 2e5 queries, it's 2e5 * 20 = 4e6 operations. Python can handle that.
+
+But implementing this with a recursive segment tree may be too slow for Python. So perhaps we need a more efficient way.
+
+Alternative approach: since the array is binary, and the inversion count can be expressed in terms of the number of 1s and 0s, maybe there's a way to represent the problem with two BIT (Fenwick) trees, one for 0s and one for 1s, and track the number of 0s and 1s in ranges. But the inversion count requires knowing the order of elements, so this may not be straightforward.
+
+Alternatively, note that each flip operation toggles the bits in a range, and inversion count is the number of 1s before 0s in the subarray. So for a subarray, the inversion count is equal to the number of 1s in the subarray multiplied by the number of 0s in the subarray minus the number of 0s before 1s.
+
+Wait, no. The total possible pairs of 1 and 0 in the subarray is c1 * c0. The inversion count is the number of 1s before 0s. The number of 0s before 1s is (c0 * c1) - inv. So flipping the subarray would swap these two values.
+
+But perhaps for each query of type 2, the inversion count can be calculated using the number of 1s and 0s in the subarray and some other information.
+
+Wait, but the inversion count depends on the order of the elements, which can't be directly derived from the counts of 1s and 0s. For example, two different subarrays with the same counts of 1s and 0s can have different inversion counts.
+
+So that approach won't work. Therefore, the segment tree approach is necessary.
+
+But given that, perhaps in Python, the recursive approach is too slow. So perhaps we need to find a way to model the segment tree using an iterative approach, which may be more efficient.
+
+Alternatively, let's think of a way to model the segment tree using a flat array. For example, each node is stored in a list, and the children of a node at index i are at 2i+1 and 2i+2. But this is not efficient for large N.
+
+Alternatively, use a list-based representation where each node is stored in a list, and each node's left and right are stored via indices.
+
+But this can get complicated.
+
+Alternatively, use a non-recursive approach for the segment tree.
+
+But this requires more code.
+
+Alternatively, use a binary indexed tree (Fenwick tree), but this seems challenging since BITs are good for prefix sums but not for range updates and range queries involving complex operations.
+
+Another idea: since the elements are binary and flip operations are range-based, we can use a binary indexed tree (BIT) to track the number of flips in a range, and then compute the current state of each element. However, when querying the inversion count, it's still unclear how to compute it efficiently.
+
+Let me think differently. For each position i, after applying all flips up to now, the current value is A_i XOR (number of flips covering i, mod 2). So if we can track the number of flips applied to a range, then for any query, we can compute the current value of each element in the query range as original XOR flips.
+
+But inversion count depends on the order of the elements. So for a query, we need to know the actual elements (after flips) in the subarray [L, R], and then compute the inversion count.
+
+But computing this naively is O(R-L+1) per query, which is too slow for large R-L.
+
+So the problem is to find a way to compute the inversion count for a subarray [L, R], considering the flips applied to overlapping ranges.
+
+But how to model this.
+
+Hmm. Let's model the current state of the array as the original array with some ranges flipped. Each flip toggles the values in a range.
+
+For any query, the inversion count is computed based on the current state of the array in the subarray.
+
+To compute this, we need to track for each element whether it has been flipped an odd or even number of times. But even if we track that, calculating the inversion count would require knowing the current state of each element in the subarray and then counting the number of 1s followed by 0s.
+
+But how to compute this efficiently.
+
+Another idea: the inversion count can be represented as the sum over all i in [L, R) of the number of elements j > i in [L, R] where A_i (current) is 1 and A_j (current) is 0.
+
+So for each element i in the subarray, the number of elements j > i where current A_i is 1 and current A_j is 0.
+
+The sum of these values is the inversion count.
+
+The current value of A_i is original_A_i XOR flip_count_i, where flip_count_i is the number of flips that include i (mod 2).
+
+But how to compute this sum.
+
+Alternatively, split into cases based on the flip status of the ranges.
+
+But this seems complex.
+
+Another approach: For each element i, track the number of flips that have been applied to it. But since flips are applied in ranges, we need a range-update and point-query data structure. This can be done using a BIT or a segment tree with range updates.
+
+But again, even if we can track the current value of each element, we need to compute the inversion count for a subarray. Which requires knowing the current elements and their order.
+
+But how to compute that efficiently.
+
+An alternative approach is to track for each possible flip range, but this seems impractical.
+
+Perhaps we can precompute the original inversion count and track the effect of flips.
+
+But for each flip of [a, b], the inversion count for the entire array changes in a way that depends on the number of 1s and 0s in [a, b] and their positions. But this approach may not work for arbitrary subarrays.
+
+So, perhaps the initial approach of using a segment tree with flip lazy propagation is the correct way.
+
+But implementing this in Python with a recursive approach may not be efficient enough. Let's think of some optimizations.
+
+Another idea: Since the elements are binary, perhaps the inversion count can be expressed as the sum of 1s in the left part multiplied by 0s in the right part for each possible split. But this is exactly how the segment tree's merge works.
+
+So the segment tree approach is still the way to go.
+
+But to implement it efficiently in Python, perhaps using a class-based approach with memoization of the nodes.
+
+Alternatively, use a list-based approach for the nodes.
+
+But in Python, recursion may be too slow for large Q. So perhaps we can model the segment tree iteratively.
+
+An alternative approach is to note that the inversion count can be expressed in terms of the number of 1s and 0s and the number of transitions between 0 and 1. But I'm not sure.
+
+Alternatively, for each element in the array, when it is a 1, the number of 0s to its right is the contribution to the inversion count. So for the entire array, the inversion count is the sum over all 1s of the number of 0s to their right. So for a subarray [L, R], it's the sum for all positions i in [L, R] where A[i] is 1, multiplied by the number of 0s in [i+1, R].
+
+But how to compute this efficiently.
+
+If we can precompute for each position the number of 0s to the right, then for a query, we can sum the values for the 1s in the subarray. However, this approach requires updates to flip ranges, which would affect the counts of 0s and 1s and the right counts.
+
+But with range flips, maintaining this information is challenging.
+
+For example, if we have a BIT that tracks the number of 0s in ranges, then for each 1 in [L, R], the number of 0s in [i+1, R] can be computed. But when a flip is applied to a range, all 1s become 0s and vice versa, which would swap the 0s and 1s counts and alter the right counts.
+
+But this seems difficult to track.
+
+So perhaps the only feasible approach is the segment tree with flip lazy propagation.
+
+But implementing this in Python may require some optimizations.
+
+Another idea: use a flat array to represent the segment tree, with each node's parameters stored in a list. Each node can be represented by an index, and the children of node i are 2i and 2i+1. But for large N, this can take O(4*N) space, which is manageable.
+
+But in Python, even for N=2e5, 4*2e5=8e5 nodes are manageable.
+
+Let's outline how this could be done.
+
+Each node in the segment tree is represented by an index in a list. For each node, we store:
+
+- l, r: the range it covers.
+
+- c0, c1: number of 0s and 1s.
+
+- inv: inversion count.
+
+- flip: a boolean indicating if a flip is pending.
+
+But storing this for each node would require a list of objects or a list of dictionaries. But in Python, dictionaries may be slow. So perhaps use separate arrays for each parameter. For example:
+
+size = 1 << (ceil(log2(N)) + 1)
+
+c0 = [0] * size
+
+c1 = [0] * size
+
+inv = [0] * size
+
+flip = [False] * size
+
+But building this would be tricky. Alternatively, since the segment tree is built in a bottom-up manner, perhaps we can compute the parameters for each node.
+
+But this requires a non-recursive approach.
+
+Alternatively, use a recursive approach but with the nodes stored in a list, and each node's children indexes computed.
+
+But this is getting complicated.
+
+Perhaps, given time constraints, the best approach is to proceed with the recursive class-based segment tree and see if it can pass the test cases.
+
+But in Python, recursion depth is manageable for N=2e5. Let's proceed.
+
+So, in code:
+
+Read N and Q.
+
+Read the array A as a list of integers.
+
+Build the segment tree.
+
+For each query:
+
+    if T_i is 1:
+
+        call update_range(root, L_i, R_i)
+
+    else:
+
+        call query_range(root, L_i, R_i) and print the inv value.
+
+But the root is the root node of the segment tree.
+
+The problem is the code's efficiency. For Python, each recursive call is relatively slow. So for 2e5 queries, each with O(log N) recursive steps, it's possible that the code will get TLE (time limit exceeded).
+
+But given the problem's constraints, perhaps this is the best we can do.
+
+Now, let's test the code with the sample input.
+
+Sample input:
+
+5 5
+
+0 1 0 0 1
+
+2 1 5
+
+1 3 4
+
+2 2 5
+
+1 1 3
+
+2 1 2
+
+Expected output:
+
+2
+
+0
+
+1
+
+Let's simulate.
+
+Initial array: [0, 1, 0, 0, 1]
+
+First query: type 2, L=1, R=5. Compute inversion count.
+
+The subarray is [0,1,0,0,1]. The inversions are:
+
+(1,3): 1 followed by 0
+
+(1,4): 1 followed by 0
+
+(2,3): 0 followed by 0? No, 1 is at position 2 (A_2=1), then positions 3 and 4 are 0. So the pairs are (1,3), (1,4), (5 is 1). So the inversion count is 2 (wait sample output says 2 for first query).
+
+Wait, sample output's first line is 2.
+
+Let's compute it:
+
+In the initial array, the inversion count in [1..5] is:
+
+Indices 1-based:
+
+elements: 0, 1, 0, 0, 1.
+
+Pairs (i<j):
+
+i=1, j=2: 0 and 1 → 0<1 → no inversion.
+
+i=1, j=3: 0 and 0 → no.
+
+i=1, j=4: 0 and 0 → no.
+
+i=1, j=5: 0 and 1 → no.
+
+i=2, j=3: 1 and 0 → inversion. Counts as 1.
+
+i=2, j=4: 1 and 0 → inversion. Counts as 2.
+
+i=2, j=5: 1 and 1 → no.
+
+i=3, j=4: 0 and 0 → no.
+
+i=3, j=5: 0 and 1 → no.
+
+i=4, j=5: 0 and 1 → no.
+
+Total inversion count is 2, which matches the sample.
+
+So the first query returns 2.
+
+Second query is type 1, flip 3-4. So the array becomes:
+
+0, 1, 1, 1, 1.
+
+Third query: type 2, L=2, R=5. Subarray is [1,1,1,1]. No inversions → output 0.
+
+Fourth query: type 1, flip 1-3. The array becomes:
+
+1, 0, 0, 1, 1.
+
+Fifth query: type 2, L=1-2. Subarray is [1, 0]. This is one inversion → output 1.
+
+So the sample output is correct.
+
+Now, let's see if the code would handle this.
+
+The segment tree's root would build the initial array.
+
+For the first query, querying 1-5 would return inv=2.
+
+Then, the flip of 3-4. The segment tree nodes covering 3-4 would be flipped.
+
+Then, the query of 2-5 would return 0.
+
+Then, flip 1-3. The nodes covering 1-3 would be flipped.
+
+Query 1-2 would return 1.
+
+Thus, the code would handle it correctly.
+
+Now, in Python, the code would look something like this:
+
+But how to implement the Node class and the build/update/query functions.
+
+Here's a possible code outline:
+
+class Node:
+    def __init__(self, l, r):
+        self.l = l
+        self.r = r
+        self.left = None
+        self.right = None
+        self.c0 = 0
+        self.c1 = 0
+        self.inv = 0
+        self.flip = False
+
+def build(l, r, A):
+    node = Node(l, r)
+    if l == r:
+        val = A[l-1]  # assuming 1-based to 0-based
+        node.c0 = 1 if val == 0 else 0
+        node.c1 = 1 if val == 1 else 0
+        node.inv = 0
+        return node
+    mid = (l + r) // 2
+    node.left = build(l, mid, A)
+    node.right = build(mid+1, r, A)
+    node.c0 = node.left.c0 + node.right.c0
+    node.c1 = node.left.c1 + node.right.c1
+    node.inv = node.left.inv + node.right.inv + (node.left.c1 * node.right.c0)
+    return node
+
+def update_range(node, l, r):
+    # Apply pending flips
+    if node.flip:
+        node.c0, node.c1 = node.c1, node.c0
+        node.inv = node.c0 * node.c1 - node.inv
+        node.flip = False
+        if node.left:
+            node.left.flip ^= True
+        if node.right:
+            node.right.flip ^= True
+
+    if node.r < l or node.l > r:
+        return
+
+    if l <= node.l and node.r <= r:
+        # Flip this node
+        node.c0, node.c1 = node.c1, node.c0
+        node.inv = node.c0 * node.c1 - node.inv
+        if node.left:
+            node.left.flip ^= True
+        if node.right:
+            node.right.flip ^= True
+        return
+
+    update_range(node.left, l, r)
+    update_range(node.right, l, r)
+
+    node.c0 = node.left.c0 + node.right.c0
+    node.c1 = node.left.c1 + node.right.c1
+    node.inv = node.left.inv + node.right.inv + (node.left.c1 * node.right.c0)
+
+def query_range(node, l, r):
+    # Apply pending flips
+    if node.flip:
+        node.c0, node.c1 = node.c1, node.c0
+        node.inv = node.c0 * node.c1 - node.inv
+        node.flip = False
+        if node.left:
+            node.left.flip ^= True
+        if node.right:
+            node.right.flip ^= True
+
+    if node.r < l or node.l > r:
+        return (0, 0, 0)
+
+    if l <= node.l and node.r <= r:
+        return (node.c0, node.c1, node.inv)
+
+    left_c0, left_c1, left_inv = query_range(node.left, l, r)
+    right_c0, right_c1, right_inv = query_range(node.right, l, r)
+
+    combined_c0 = left_c0 + right_c0
+    combined_c1 = left_c1 + right_c1
+    combined_inv = left_inv + right_inv + (left_c1 * right_c0)
+
+    return (combined_c0, combined_c1, combined_inv)
+
+Then, the main code:
+
+import sys
+
+def main():
+    import sys
+    sys.setrecursionlimit(1 << 25)
+    input = sys.stdin.read().split()
+    ptr = 0
+    N = int(input[ptr])
+    ptr +=1
+    Q = int(input[ptr])
+    ptr +=1
+    A = list(map(int, input[ptr:ptr+N]))
+    ptr +=N
+    # Build the segment tree with 1-based indices
+    root = build(1, N, A)
+    for _ in range(Q):
+        T = int(input[ptr])
+        ptr +=1
+        L = int(input[ptr])
+        ptr +=1
+        R = int(input[ptr])
+        ptr +=1
+        if T == 1:
+            update_range(root, L, R)
+        else:
+            c0, c1, inv = query_range(root, L, R)
+            print(inv)
+
+if __name__ == '__main__':
+    main()
+
+But wait, in the build function, the array is accessed as A[l-1], which assumes that the indices are 1-based. Yes, because the original problem uses 1-based indices for the array.
+
+But the code may have a bug here. Let's see. For example, in the build function, when l == r, which is the 1-based index, then for the original array (0-based), we use A[l-1].
+
+Yes. So the initial array A is read as a list of N elements, and the segment tree is built for 1-based indices from 1 to N. So for a leaf node with l = 1, it uses A[0], which is correct.
+
+Now, testing this code with the sample input.
+
+Sample input is:
+
+5 5
+
+0 1 0 0 1
+
+Queries:
+
+2 1 5 → output 2.
+
+Then flip 3-4 (indices 3 to4 in 1-based) → array becomes 0, 1, 1, 1, 1.
+
+Then query 2-5: inversion count is 0.
+
+Then flip 1-3 → array becomes 1, 0, 0, 1, 1.
+
+Query 1-2: inversion is 1.
+
+Thus, the code should output 2, 0, 1.
+
+But in the code, when the query_range is called for L=1 and R=5, it will return the inv value of the root node, which should be 2.
+
+But let's see.
+
+Potential issues:
+
+- The update_range function may not correctly propagate the flips to the children.
+
+- The query function may not correctly combine the segments.
+
+Another potential issue is that during the update_range, after recursively updating the left and right children, the parent's c0, c1, and inv are recomputed. But in the code, after the recursive calls, the left and right children's data may have been modified. But how?
+
+Yes. After updating the left and right children, the parent's data is recomputed by summing the left and right's data. So this should be correct.
+
+Another possible issue is that the segment tree's update and query functions use 1-based indices, which matches the problem's input.
+
+But overall, the code seems correct.
+
+However, in Python, this code may be too slow for large inputs. Because each query or update involves recursive calls, which are slower than iterative ones.
+
+But given that the problem allows Python solutions, perhaps this code is sufficient. However, in practice, it's possible that the code will get TLE.
+
+To optimize, perhaps we can represent the segment tree using an iterative approach. But that's more complex.
+
+Alternatively, use a different approach.
+
+Alternative approach:
+
+We can model the array as a series of events and track for each element whether it's flipped. Then, for a given query, we can compute the inversion count based on the original array and the number of flips applied.
+
+But how?
+
+This is a more mathematical approach. Let's denote that a range [a, b] has been flipped k times (k mod 2). For each element i, the number of flips that include i is f_i. The current value of the element is A_i XOR (f_i % 2).
+
+The inversion count for a subarray [L, R] is the number of pairs (i, j) where i < j, L ≤ i < j ≤ R, and (A_i XOR f_i) > (A_j XOR f_j).
+
+This is equivalent to (A_i XOR f_i) = 1 and (A_j XOR f_j) = 0.
+
+But how to compute this efficiently.
+
+If we can track the number of flips that each element has undergone, then for any query, we can compute the current value of each element. But the problem is that the number of elements is up to 2e5, and queries are up to 2e5. So per query processing must be O(1) or O(log N) time.
+
+But even if we can track f_i for each element (using a binary indexed tree to track range updates), how to compute the inversion count for the subarray [L, R] based on the current values.
+
+The inversion count is the number of pairs (i,j) where i < j, current A_i is 1 and current A_j is 0.
+
+This is equivalent to:
+
+sum_{i=L to R-1} (number of j in [i+1, R] where current A_j is 0 and current A_i is 1).
+
+But to compute this, for each i in [L, R], we need to know the current A_i (A_i XOR f_i), and the current A_j for j > i.
+
+But how to compute this sum efficiently.
+
+Perhaps we can split into four cases based on the original A_i and A_j, and the number of flips in their ranges.
+
+But this seems complex.
+
+Alternatively, note that the current value of A_i is A_i XOR (f_i mod 2). So for each pair (i,j), current A_i is 1 and current A_j is 0 if:
+
+A_i XOR (f_i mod 2) = 1 and A_j XOR (f_j mod 2) = 0.
+
+This can be rewritten as:
+
+(A_i, f_i mod 2) = (0, 1) → 0 XOR 1 = 1
+
+(A_i, f_i mod 2) = (1, 0) → 1 XOR 0 = 1
+
+Similarly for A_j.
+
+But this requires tracking for each element whether it has been flipped an odd number of times.
+
+But how to compute the sum over pairs (i,j) in [L, R], i<j, where the above condition holds.
+
+This seems challenging. But perhaps we can model it with two binary indexed trees: one for tracking the number of 1s and another for the number of 0s, considering the current flips.
+
+But I'm not sure.
+
+Another idea: For each element, track whether it has been flipped even or odd times. For a range [L, R], the inversion count is the sum for i < j of (current A_i == 1 and current A_j == 0).
+
+But current A_i is 1 if (original A_i + number of flips covering i) is odd.
+
+So, for each query, we can model the current array as follows:
+
+element i is 1 if A_i ^ flip_count_i is 1.
+
+Thus, the inversion count is the sum over all i < j in [L, R] of (A_i ^ flip_count_i) > (A_j ^ flip_count_j).
+
+This can be broken down into four cases based on the original A_i and A_j and the parity of flips for i and j.
+
+But this approach doesn't seem to lead to an efficient solution.
+
+Thus, it seems that the initial approach with a segment tree is the only viable way.
+
+But to optimize the Python code, perhaps we can avoid using a class-based Node and instead represent the segment tree with arrays.
+
+But in Python, using a list of objects may be possible. For example, each node can be represented as a dictionary in a list. But for large N, this may be slow.
+
+Alternatively, precompute all nodes in a list, and represent each node's children by their indices.
+
+But this is more complex.
+
+Alternatively, use a non-recursive segment tree implementation.
+
+An iterative segment tree implementation for range updates with lazy propagation is more complex, but possible.
+
+But given time constraints, perhaps the initial code is the best approach, but with some optimizations.
+
+For example, avoiding using a class and instead using separate arrays to store the parameters.
+
+But this would require a lot of code.
+
+Alternatively, using a class with slots to optimize attribute access.
+
+For example, using __slots__ in the Node class to speed up attribute access.
+
+class Node:
+    __slots__ = ['l', 'r', 'left', 'right', 'c0', 'c1', 'inv', 'flip']
+    def __init__(self, l, r):
+        self.l = l
+        self.r = r
+        self.left = None
+        self.right = None
+        self.c0 = 0
+        self.c1 = 0
+        self.inv = 0
+        self.flip = False
+
+This can speed up attribute access in Python.
+
+Another optimization is to use a memoization approach for the nodes, but I'm not sure.
+
+Alternatively, use a tuple-based approach for each node, but this would be difficult for mutable objects.
+
+In any case, the code as written should be correct, but its performance may not be sufficient for the largest test cases in Python.
+
+But given the time constraints and the problem's requirements, this is the best approach I can think of.
+
+Thus, the final code is as written above.
+</think>
+To solve this problem, we need to efficiently handle two types of queries on a binary array: flipping elements in a range and calculating the inversion count of a subarray. Given the constraints, a naive approach would be too slow, so we use a segment tree with lazy propagation to manage range updates and queries efficiently.
+
+### Approach
+1. **Segment Tree Structure**: Each node in the segment tree stores the number of 0s (c0), the number of 1s (c1), the inversion count (inv), and a flip flag for lazy propagation.
+2. **Lazy Propagation**: When a range flip is applied, we toggle the flip flag of the affected nodes and propagate the flip to child nodes only when necessary, ensuring efficient updates.
+3. **Inversion Count Calculation**: The inversion count for a subarray is computed by combining results from the left and right children of the segment tree nodes, considering cross inversions between the left and right segments.
+
+### Solution Code
+```python
+import sys
+sys.setrecursionlimit(1 << 25)
+
+class Node:
+    __slots__ = ['l', 'r', 'left', 'right', 'c0', 'c1', 'inv', 'flip']
+    def __init__(self, l, r):
+        self.l = l
+        self.r = r
+        self.left = None
+        self.right = None
+        self.c0 = 0
+        self.c1 = 0
+        self.inv = 0
+        self.flip = False
+
+def build(l, r, A):
+    node = Node(l, r)
+    if l == r:
+        val = A[l-1]  # Convert 1-based to 0-based index
+        node.c0 = 1 if val == 0 else 0
+        node.c1 = 1 if val == 1 else 0
+        node.inv = 0
+        return node
+    mid = (l + r) // 2
+    node.left = build(l, mid, A)
+    node.right = build(mid + 1, r, A)
+    node.c0 = node.left.c0 + node.right.c0
+    node.c1 = node.left.c1 + node.right.c1
+    node.inv = node.left.inv + node.right.inv + (node.left.c1 * node.right.c0)
+    return node
+
+def update_range(node, l, r):
+    # Apply pending flips
+    if node.flip:
+        node.c0, node.c1 = node.c1, node.c0
+        node.inv = node.c0 * node.c1 - node.inv
+        node.flip = False
+        if node.left:
+            node.left.flip ^= True
+        if node.right:
+            node.right.flip ^= True
+
+    if node.r < l or node.l > r:
+        return
+
+    if l <= node.l and node.r <= r:
+        # Flip this node
+        node.c0, node.c1 = node.c1, node.c0
+        node.inv = node.c0 * node.c1 - node.inv
+        if node.left:
+            node.left.flip ^= True
+        if node.right:
+            node.right.flip ^= True
+        return
+
+    update_range(node.left, l, r)
+    update_range(node.right, l, r)
+
+    node.c0 = node.left.c0 + node.right.c0
+    node.c1 = node.left.c1 + node.right.c1
+    node.inv = node.left.inv + node.right.inv + (node.left.c1 * node.right.c0)
+
+def query_range(node, l, r):
+    # Apply pending flips
+    if node.flip:
+        node.c0, node.c1 = node.c1, node.c0
+        node.inv = node.c0 * node.c1 - node.inv
+        node.flip = False
+        if node.left:
+            node.left.flip ^= True
+        if node.right:
+            node.right.flip ^= True
+
+    if node.r < l or node.l > r:
+        return (0, 0, 0)
+
+    if l <= node.l and node.r <= r:
+        return (node.c0, node.c1, node.inv)
+
+    left_c0, left_c1, left_inv = query_range(node.left, l, r)
+    right_c0, right_c1, right_inv = query_range(node.right, l, r)
+
+    combined_c0 = left_c0 + right_c0
+    combined_c1 = left_c1 + right_c1
+    combined_inv = left_inv + right_inv + (left_c1 * right_c0)
+
+    return (combined_c0, combined_c1, combined_inv)
+
+def main():
+    input = sys.stdin.read().split()
+    ptr = 0
+    N = int(input[ptr])
+    ptr += 1
+    Q = int(input[ptr])
+    ptr += 1
+    A = list(map(int, input[ptr:ptr+N]))
+    ptr += N
+
+    root = build(1, N, A)
+
+    for _ in range(Q):
+        T = int(input[ptr])
+        ptr += 1
+        L = int(input[ptr])
+        ptr += 1
+        R = int(input[ptr])
+        ptr += 1
+        if T == 1:
+            update_range(root, L, R)
+        else:
+            c0, c1, inv = query_range(root, L, R)
+            print(inv)
+
+if __name__ == '__main__':
+    main()
+```
+
+### Explanation
+- **Segment Tree Construction**: The tree is built recursively, with each node storing the number of 0s, 1s, and inversion count for its range.
+- **Range Flip Update**: Using lazy propagation, we toggle the flip flag for nodes and propagate the flip to child nodes only when necessary, ensuring efficient updates.
+- **Inversion Count Query**: The inversion count for a subarray is calculated by combining results from left and right children, considering cross inversions between them.
+
+This approach efficiently handles both types of queries in O(log N) time per operation, making it suitable for large input sizes.
+</bot>

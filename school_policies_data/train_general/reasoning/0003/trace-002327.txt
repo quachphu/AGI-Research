@@ -1,0 +1,1227 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.A programming contest is held every year at White Tiger University. When the total number of teams is N, each team is assigned a team ID from 1 to N. The contest starts with all teams scoring 0 and runs continuously for L seconds.
+
+This year's contest will be broadcast on TV. Only the team with the highest score at the time will be shown on TV during the contest. However, if there are multiple applicable teams, the team with the smallest team ID will be displayed. When the team to be projected changes, the camera changes instantly.
+
+You got the contest log. The log contains all the records when a team's score changed. Each record is given in the form of "Team d scored x points t seconds after the start of the contest". The current score may be less than 0 because points may be deducted.
+
+Create a program that takes the contest log as input and reports the ID of the team that has been on TV for the longest time between the start and end of the contest.
+
+
+
+input
+
+The input consists of one dataset. The input is given in the following format.
+
+
+N R L
+d1 t1 x1
+d2 t2 x2
+::
+dR tR xR
+
+
+The first line consists of three integers. N (2 ≤ N ≤ 100000) is the number of teams and R (0 ≤ R ≤ 1000000) is the number of records in the log. L (1 ≤ L ≤ 1000000) represents the time (length) of the contest. The information of each record is given in the following R line. Each record shows that team di (1 ≤ di ≤ N) has scored or deducted xi (-1000 ≤ xi ≤ 1000) points ti (0 <ti <L) seconds after the start of the contest. However, ti and xi are integers, and ti-1 ≤ ti.
+
+output
+
+The ID of the team that has been shown on TV for the longest time between the start and end of the contest is output on one line. However, if there are multiple teams with the longest length, the team with the smallest team ID is output.
+
+Example
+
+Input
+
+3 4 600
+3 100 5
+1 200 10
+2 400 20
+3 500 20
+
+
+Output
+
+1
+</user>
+<bot>
+<think>
+Okay, let's tackle this programming problem. Hmm, the problem statement is a bit complex, so I need to make sure I understand all the requirements correctly.
+
+So, the task is to find out which team was shown on TV for the longest cumulative time. The rules for which team is displayed are: at any moment, the team with the highest score, and in case of a tie, the smallest ID. Whenever the displayed team changes, the camera switches instantly. We have to process all the log entries of score changes and calculate the durations each team was on top.
+
+The input gives N teams, R log entries, and the total contest duration L. The logs are in order of time (since ti is non-decreasing). Each log entry is a team's score change at a certain time. The contest starts at time 0 and ends at time L.
+
+The main challenge here is efficiently tracking the current leading team and the time intervals during which each team holds the top spot. Since R can be up to 1e6 and N up to 1e5, we need an approach that's O(R) time complexity to handle the constraints.
+
+Let me think about how to model this.
+
+First, the initial state is that all teams have 0 points. So, the initial leading team is team 1 (since all have the same score, smallest ID wins). But wait, the contest starts at 0 and ends at L. So, the initial period is from time 0 until the first event, then between events, and finally from the last event until L.
+
+For each interval between two consecutive events (including the start and end times), we need to determine which team is leading during that interval and accumulate the duration to that team's total time.
+
+So the steps could be:
+
+1. Initialize the scores of all teams to 0.
+2. Keep track of the current leading team (current_leader) and its score.
+3. The events are processed in order of increasing time. For each event, we first calculate the time between the previous event (or 0) and the current event's time. During this interval, the current_leader is the one shown. So we add this duration to their total time.
+4. Then, process the event: update the team's score. After this, we need to determine if the leader has changed.
+5. After processing all events, there's the final interval from the last event's time to L. Again, add that duration to the current leader's time.
+
+But how do we efficiently track the current leader and detect changes after each update?
+
+The naive approach would be, after each update, to check all teams to find the maximum score and smallest ID. But with N up to 1e5 and R up to 1e6, that's O(R*N), which is way too slow.
+
+We need a data structure that allows us to quickly find the team with the maximum score (and smallest ID in case of a tie). A priority queue (heap) comes to mind. However, standard heaps are not efficient for dynamic updates where elements can change. For example, when a team's score changes, we can't efficiently update its position in the heap.
+
+Alternative approach: maintain a max-heap where each element is a tuple of (score, -team_id), so that the team with the highest score (and smallest ID if tied) is at the top. But the problem is that when a team's score is updated, we need to update the heap accordingly. However, with a standard heap structure, this is not possible efficiently. Because we can't find the element in the heap in O(1) time. So this approach might not work.
+
+Another idea: since all updates are additive (each log entry adds x points to a team), maybe we can track the maximum score and the team(s) that have that maximum. But after each update, we need to check if the updated team's score affects the current maximum.
+
+Wait, but the updates can be positive or negative. So after each event, only the score of one team changes. So perhaps we can track the current maximum score and the list of teams with that maximum. Then, after each update, we check:
+
+- If the updated team's new score is higher than the current max: then the new max is this team's score, and the list is only this team. The leader changes.
+- If the updated team's new score equals the current max: add it to the list (if not already there), and the leader is the smallest ID in the list.
+- If the updated team's new score is less than the current max, then check if this team was part of the current max group. If it was, then we need to recompute the max and the list.
+
+Hmm, this approach might work. Let's elaborate.
+
+We can maintain:
+
+- A dictionary (or array) that maps team IDs to their current scores.
+- The current maximum score and a sorted list (by team ID) of teams that have this maximum score.
+
+When processing a score change for team d:
+
+1. Update team d's score.
+2. Check if team d's previous score was part of the current max group.
+   - If yes, remove it from the max group.
+   - Then, after updating, check if the new score is:
+     a. Greater than the current max: then new max is this team's score. The max group is [d], sorted (but only one element).
+     b. Equal to current max: add d to the max group (if not already there), and sort to maintain order.
+     c. Less than current max: no change to max group, unless the previous max group becomes empty after removing d. In that case, we have to find the new max.
+
+But this seems complicated. For example, after removing d from the max group (if it was part of it), if the max group is now empty, then we need to scan all teams to find the new maximum. Which is O(N) and would be too slow for large N.
+
+This suggests that this approach isn't feasible for large N. So we need a better way.
+
+Alternative approach: since the events are processed in order, and each event affects only one team, perhaps we can use a data structure that allows us to track the maximum in O(1) time with each update.
+
+Wait, here's an idea inspired by the problem's constraints. Since each event affects only a single team's score, maybe after each event, the new maximum can only be either the previous maximum (if it wasn't the team that was updated) or the updated team's new score.
+
+So let's think:
+
+- We track the current maximum score (current_max) and the best team (the smallest ID team with current_max).
+
+- For each event, when a team's score changes:
+
+   a. The previous score of the team is stored.
+
+   b. The new score is previous + x (the event's x).
+
+   c. If the team was not the current best team:
+
+      i. If the new score is greater than current_max: then current_max is updated to new_score, and the best team is this team (since it's now higher).
+
+      ii. Else if the new score is equal to current_max: compare this team's ID with the current best team. If it's smaller, then the best team becomes this team.
+
+      iii. Else: no change to current_max or best team.
+
+   d. If the team was the current best team:
+
+      i. Update the score. Now, the new score could be higher, lower, or same.
+
+      ii. If the new score is higher: current_max increases. The best team is still this team.
+
+      iii. If the new score is lower: we need to find the new maximum and best team. This would involve scanning all teams to find the new max and the corresponding smallest ID. But this is O(N), which is not feasible for N=1e5 and R=1e6.
+
+So the problem is when the current best team's score decreases, leading to a situation where the new maximum may come from another team. How can we handle that efficiently?
+
+In that case, we need to find the new maximum after the update. But doing this by iterating all teams is O(N), which is too slow.
+
+Hmm. This suggests that we need a way to track the maximum in O(1) time, even when the current maximum is invalidated.
+
+This is where a priority queue (heap) could come into play. However, the standard heap structure allows us to get the maximum in O(1) time, but if elements are modified, the heap property isn't maintained. So for this to work, we need a way to efficiently manage possible outdated elements in the heap.
+
+An alternative is to use a max-heap that stores (score, -team_id) for all teams. Each time a team's score is updated, we push a new entry into the heap. However, when we check the top of the heap, the entry may not correspond to the current score of that team. So, when we check the top, we first verify if the stored score matches the current score of that team. If not, we pop it and check the next one. This is called a "lazy" heap approach.
+
+This could work. Let's think through the steps:
+
+1. Maintain a max-heap where each element is (current_score, -team_id). The heap is ordered by the tuple, so the maximum element is the one with highest score, and smallest ID in case of tie.
+
+2. Also, maintain a dictionary (or array) that maps team IDs to their current scores.
+
+3. When processing an event:
+
+   a. Update the team's score in the dictionary.
+
+   b. Push the new (score, -team_id) into the heap.
+
+4. When determining the current leader after an update:
+
+   a. Look at the top of the heap. Check if the stored score is equal to the current score of the team in the dictionary.
+
+   b. If yes, that's the current leader.
+
+   c. If not, pop that element from the heap and check the next top element until we find one that is valid.
+
+This way, even if the heap has outdated entries, we can discard them as we encounter them. The key is that each time we need to find the current leader, we check the heap's top elements until we find a valid one.
+
+The question is, how efficient is this approach? Each event adds a new entry to the heap. So the heap size could be up to O(R + N) in the worst case (since each event adds an entry, and initial entries are for the initial scores).
+
+But when R is up to 1e6, the heap could have up to 1e6 + 1e5 entries, which is manageable. However, each time we have to check the heap for valid entries, which could take O(k) steps where k is the number of invalid entries. But in practice, if we process events in order and the heap entries are ordered by time, perhaps the number of invalid entries per check is manageable. For example, if after an event, the top of the heap is valid, we don't have to pop anything. Otherwise, we might pop a few entries before finding a valid one.
+
+In the worst case, this approach could be O(R log R) time, which for R=1e6 is 1e6 * 20 = 2e7 operations, which should be acceptable.
+
+So, the plan is:
+
+- For each time interval between events, compute the duration, and add that to the current leader's total time.
+
+- The current leader is determined by the top of the heap, after popping any invalid entries.
+
+But how do we handle the initial state?
+
+Initially, all teams have 0. So the leader is team 1. So the initial leader is known.
+
+Then, each event is processed in order. Between events, we have a time interval. For example, between the previous event's time (or 0 for the first event) and the current event's time. During that interval, the leader is determined as per the state after the previous events.
+
+Wait, but after each event, the scores are updated, and the leader may change. So the time intervals are:
+
+prev_time = 0 (initial state)
+
+for each event in order:
+
+   current_time = event's time
+
+   duration = current_time - prev_time
+
+   add duration to the current leader's total time
+
+   process the event (update the team's score, push new entry to heap)
+
+   then, determine the new current leader (by checking the heap)
+
+   prev_time = current_time
+
+after all events, process the final interval from prev_time to L.
+
+So the key steps are:
+
+1. Initialize all team scores to 0.
+
+2. Initialize the heap with all teams' initial scores (0, -team_id). Since initially, all are 0, the heap's top is (-0, -1) → (0, -1), so the team with ID 1.
+
+But building a heap of N elements is O(N), which is acceptable for N=1e5.
+
+Wait, but if N is 1e5, then building the heap would take O(N) time, which is manageable.
+
+But for each event, we need to push a new (score, -team_id) entry into the heap. For R=1e6 events, that's 1e6 heap operations, each O(log (N + R)), which is acceptable.
+
+But when we check the current leader after each event, we might have to pop some elements from the heap. Each pop is O(1) (since heap is a priority queue), but the popping is done as needed when checking the current leader.
+
+Wait, the heap is a max-heap. So when we process the event and update a team's score, we push the new (score, -team_id) into the heap. Then, to find the current leader, we check the top of the heap. But that top might have a score that's not the team's current score. So we have to pop those invalid entries until we find one that's valid.
+
+For example:
+
+Suppose team 3's score is 5, and it's the current leader. Then, an event reduces team 3's score to 3. We push (3, -3) into the heap. Now, the heap's top might still be (5, -3) (from a previous event), but that's invalid. So when we check, we pop (5, -3) because when we check team 3's current score, it's 3, not 5. So we discard the old entry and check the next top.
+
+But how do we track the current score of each team? We can have an array (scores) where scores[d] is the current score of team d.
+
+So during the process of checking the current leader:
+
+current_max_score = -infinity
+
+current_leader = None
+
+while the heap is not empty:
+
+   top_score, top_team_neg = heap[0]  # peek, not pop
+
+   top_team = -top_team_neg
+
+   if scores[top_team] == top_score:
+
+       current_max_score = top_score
+
+       current_leader = top_team
+
+       break
+
+   else:
+
+       heappop(heap)
+
+But this is a max-heap. Wait, in Python, the heapq module only implements a min-heap. To simulate a max-heap, we can store the negative values. So for each team, we store (-score, team_id). Then the heap is a min-heap, but the top element has the maximum score (since stored as -score). Alternatively, perhaps the (score, -team_id) approach can be used, and the heap is a max-heap. But in Python, heapq only supports min-heap. So the way to implement a max-heap is to invert the scores.
+
+Wait, let me think. Suppose we want to have a max-heap based on the score, and in case of tie, the smallest team ID. So the elements in the heap are tuples of (-score, team_id). Because when using a min-heap, the tuple with the smallest (-score) (i.e., largest score) will be popped first. And for the same score, the team with the smallest ID comes first.
+
+Wait, no. Let's see:
+
+If two elements are (-5, 1) and (-5, 2), the first is considered smaller (since 1 < 2) in the tuple comparison. So in the min-heap, (-5,1) would come before (-5,2). So when popped first, the team with ID 1 is considered first. That's correct.
+
+So the heap elements are (-score, team_id). The heap is a min-heap, so the top element has the smallest (-score), which corresponds to the largest score. For teams with the same score, the team with smaller ID comes first.
+
+Thus, the heap is built correctly.
+
+So the steps for each event:
+
+1. Between the previous time (prev_t) and current event time (t), the duration is t - prev_t. The current leader (from the previous state) is the one to accumulate this duration.
+
+2. Process the event: add x to the team's score. Then, push (-new_score, team_id) into the heap.
+
+3. Then, determine the new current leader. To do this:
+
+   a. Peek at the top of the heap (smallest (-score, team_id)), which is the current maximum.
+
+   b. Check if the stored (-score) is equal to -scores[team_id]. If yes, then this is the valid leader.
+
+   c. If not, pop this element from the heap and repeat.
+
+   d. Once a valid leader is found, that's the new current_leader.
+
+But during this process, how do we handle the case where the heap becomes empty? Well, initially, all teams have 0, and after that, each time a team's score is updated, we push a new entry. So the heap should not be empty as long as there are teams. Because even if all entries are invalid, there must be some team with the current maximum.
+
+But perhaps in the code, after popping all invalid entries, the heap could be empty. But that's impossible because all teams are in the heap with their initial entries. Wait, but when we process events, we push new entries. So the initial entries might have the score 0, but after events, other entries are pushed. So when the team's score changes, the initial entry for that team (0) becomes invalid, but there's a new entry in the heap with the updated score.
+
+So when the code checks the heap, it might have many invalid entries, but eventually, there must be a valid one.
+
+Thus, the code can proceed safely.
+
+But here's the problem: after processing a lot of events, the heap might accumulate many outdated entries, leading to slower performance when finding the valid leader. But given that the heap is processed in a "lazy" way, each entry is only checked once. So even if there are R entries, each is popped at most once. Thus, the total number of heap operations (pushes and pops) is O(R + K), where K is the number of pops. But K is O(R), since each event pushes one entry, and each entry can be popped at most once. So overall, the total time for heap operations is O(R log R), which should be manageable.
+
+Now, let's outline the steps in code:
+
+Initialize:
+
+- scores array: scores[1..N] = 0.
+
+- time_accumulated array: time_accumulated[1..N] = 0.
+
+- prev_time = 0.
+
+- heap = a priority queue (min-heap in Python) initialized with (-0, team_id) for each team in 1..N.
+
+- import heapq.
+
+But initializing the heap with N elements when N is 1e5 is feasible? Because for N=1e5, creating a list of 1e5 elements and heapifying it would take O(N) time. In Python, heapify is O(N), which is acceptable.
+
+But in Python, creating a list with 1e5 elements is manageable.
+
+So code steps:
+
+Read N, R, L.
+
+scores = [0] * (N + 1)  # assuming 1-based team IDs.
+
+heap = [ (-0, team_id) for team_id in 1..N ]
+
+heapq.heapify(heap)
+
+current_leader = None
+
+prev_time = 0
+
+Then, read the R events. But the events are given in the order of ti. So we can process them in the order given.
+
+Wait, the problem statement says: "ti-1 ≤ ti", so the events are sorted in non-decreasing order. So we can process them as they come.
+
+For each event in order:
+
+   d, t, x = parse the line.
+
+   duration = t - prev_time
+
+   if duration > 0:
+
+       # find the current_leader, which is the team at the top of the heap, after popping invalid entries.
+
+       # but wait, after previous events, the current_leader may have been updated.
+
+       # Wait, perhaps during the previous steps, after processing events, we keep track of the current_leader.
+
+       # So the current_leader is the valid leader at the start of the interval (prev_time to current t).
+
+       # So we need to have the current_leader determined before this step.
+
+       # So, during each interval, the current_leader is the one determined by the previous state.
+
+       # So, during processing the first interval (0 to first event's time), the current_leader is 1 (since all scores are 0).
+
+       # Wait, but how do we track the current_leader between events?
+
+Hmm, this suggests that after processing each event, we determine the current_leader, which will be used for the next interval.
+
+Wait, let's clarify:
+
+The intervals are:
+
+0 to t1: leader is determined by initial state (all 0s, so team 1).
+
+t1 to t2: leader is determined by the state after processing the first event.
+
+and so on.
+
+But when processing each event, after updating the team's score and adding to the heap, we need to find the current_leader (the new leader after the event). However, the duration between prev_time and current event's time is added to the previous leader's time.
+
+So, the process is:
+
+- prev_time starts at 0.
+
+- current_leader is initially determined by the initial state (team 1).
+
+But wait, the initial leader is team 1. So before any events, during the interval [0, t1), the leader is team 1.
+
+But how do we determine that?
+
+Alternatively, before processing any events, the initial leader is team 1. So for the first interval (0 to t1), we add t1 - 0 to the initial leader's time.
+
+But after processing the first event, we need to find the new leader, which will be used for the next interval (t1 to t2, etc.).
+
+So the code should be structured as:
+
+prev_time = 0
+
+current_leader = find_initial_leader()  # which is team 1.
+
+for each event in events:
+
+    event_time = t
+
+    duration = event_time - prev_time
+
+    time_accumulated[current_leader] += duration
+
+    process the event: update team d's score, push new entry to heap.
+
+    # determine the new current_leader
+
+    while True:
+
+        if heap is empty:
+
+            # impossible, but handle?
+
+            break
+
+        current_score_neg, team = heap[0]
+
+        current_score = -current_score_neg
+
+        if scores[team] == current_score:
+
+            # valid leader
+
+            new_leader = team
+
+            break
+
+        else:
+
+            # invalid entry, pop it
+
+            heapq.heappop(heap)
+
+    current_leader = new_leader
+
+    prev_time = event_time
+
+# after all events, process the remaining time from last event to L.
+
+duration = L - prev_time
+
+time_accumulated[current_leader] += duration
+
+Then, after all this, find the team with the maximum time_accumulated, and smallest ID if tied.
+
+But wait, how do we find the initial current_leader (team 1) before processing the first event?
+
+Because the heap is initialized with all teams' initial scores (0), and when the initial current_leader is determined by checking the heap.
+
+Wait, in the initial state, after heapify, the heap's top is the smallest (score_neg, team_id), which is (0, 1). Because all teams have 0, and team 1 is the smallest ID.
+
+So when processing the first interval (before any events), the code would first have current_leader determined by the initial state.
+
+Wait, in the code outline above, before the loop, current_leader is determined as the initial leader. Let's see:
+
+prev_time = 0
+
+current_leader = ?
+
+To find the initial current_leader, we need to check the heap.
+
+But initially, the heap has all teams with (0, team_id) stored as (-0, team_id) = (0, team_id). Wait, no. Wait, the initial entries are (-0, team_id) for each team. So stored as (0, 1), (0, 2), ..., (0, N). When we heapify, the min-heap will have the smallest tuple. So the smallest tuple is (0, 1), which is the first entry. So the initial current_leader is team 1.
+
+So the code after initializing the heap would have to process the heap to find the initial current_leader. So perhaps the code for finding the initial current_leader is:
+
+# Determine initial current_leader
+
+current_leader = None
+
+while True:
+
+    if not heap:
+
+        break  # impossible
+
+    current_score_neg, team = heap[0]
+
+    current_score = -current_score_neg
+
+    if scores[team] == current_score:
+
+        current_leader = team
+
+        break
+
+    else:
+
+        heapq.heappop(heap)
+
+So after initializing the heap, we pop invalid entries until we find the current_leader.
+
+But initially, all teams have score 0, so all entries in the heap are (0, team_id), which are valid. So the first entry is (0, 1), which is valid. So current_leader is set to 1.
+
+But in code, the initial scores array is 0 for all, so scores[team] is 0. So when checking, current_score_neg is 0 (since the heap entry is (0, 1)), so current_score is 0. Then, scores[1] is 0, so it's valid.
+
+So current_leader is 1.
+
+Then, the first event is processed.
+
+Wait, but the code outline I had earlier didn't include this initial step. So perhaps in the code, after building the heap, we need to determine the initial current_leader by checking the heap.
+
+So modifying the code steps:
+
+prev_time = 0
+
+# determine initial current_leader
+
+current_leader = None
+
+while True:
+
+    if not heap:
+
+        break
+
+    current_score_neg, team = heapq.heappop(heap)
+
+    current_score = -current_score_neg
+
+    if scores[team] == current_score:
+
+        current_leader = team
+
+        # push back the entry into the heap, since other entries are still there?
+
+        heapq.heappush(heap, (current_score_neg, team))
+
+        break
+
+But this approach is problematic. Because when you pop the entry, you lose it. But in reality, the heap may have other entries for the same team with the same score. Wait, no. Initially, each team has exactly one entry in the heap. Because each team's initial entry is added once.
+
+Wait, no. The initial heap is built with N entries, each for a team. So for team 1, there is one entry (0, 1). For team 2, (0, 2), etc.
+
+So when we process the initial leader, we pop the first entry (0,1), check if it's valid (which it is), and then set current_leader to 1. But since we popped it from the heap, the heap is now missing this entry. But the rest of the entries are (0, 2), (0, 3), etc. But after processing the first event, we need to have the heap entries for all teams, but the initial entry for team 1 is gone.
+
+But that's a problem. Because, when team 1's score changes, the new entry is pushed to the heap. But other teams' entries are still in the heap, but with 0 score.
+
+Wait, but after the initial check for the leader, we have to push the entry back into the heap. Because the heap must contain all possible entries (including the current ones) for future checks.
+
+So perhaps the correct way to check the current leader is to peek at the top of the heap, not pop it. But in Python's heapq, you can't peek without popping. So the only way to check the top is to pop it, and if it's valid, put it back.
+
+But that's not feasible for a large heap, as each time you pop and push, it's O(log N) time.
+
+So this suggests that the approach to find the current leader is to pop entries from the heap until a valid one is found, which becomes the current leader. But once found, the remaining entries (invalid ones) are left in the heap, and the valid ones (including the current leader's entry) are still in the heap.
+
+Wait, no. Because when a team's score changes, we push a new entry into the heap. The old entries for that team (with previous scores) are still in the heap but are invalid. So when we process events, after each event, we have to check the heap for the current leader by popping invalid entries until a valid one is found.
+
+But the popped entries are invalid and can be discarded. Because their scores are outdated.
+
+For example:
+
+Initially, the heap has (0, 1), (0, 2), (0,3), etc.
+
+We process the initial leader by popping (0,1) → valid. So current_leader is 1. Then, the heap now contains (0,2), (0,3), etc. But team 1's entry is gone. However, this is incorrect, because team 1's entry in the heap is needed for future checks. For example, if team 1's score is updated later, we need the new entries to be in the heap.
+
+But the initial approach is incorrect because popping the entry removes it from the heap, which is not desired. Because after processing the initial leader, the heap must still contain all possible entries (like (0, 1)) except that when the leader is determined, the code removes it from the heap. Which is wrong.
+
+So this approach of popping entries to find the current leader is flawed. Because it removes valid entries from the heap that could be needed for future steps.
+
+Thus, the initial idea of using a heap with "lazy" removal may not work as intended. Because the process of finding the current leader requires removing entries from the heap, which could include entries that are still valid for other teams.
+
+So what's the alternative?
+
+Alternative idea: track the maximum score and the current leader. After each event, if the updated team's score is higher than the current maximum, update the maximum and current leader. If it's lower, and the team was the current leader, then rescan all teams to find the new maximum.
+
+But rescanning all teams is O(N), which is too slow for large N and R.
+
+Thus, this approach isn't feasible.
+
+Hmm, perhaps there's another way. Since all events are processed in order and each event only affects one team, maybe we can track for each team the last time their score was updated, and keep track of the current maximum.
+
+Wait, but this brings us back to the problem of needing to track the maximum efficiently.
+
+Another approach is to use a balanced binary search tree (BST) that allows us to keep track of the maximum (score, team_id) pairs. Insertions, deletions, and finding the maximum can be done in O(log K) time, where K is the number of unique (score, team_id) entries. But in Python, there's no built-in balanced BST. However, the 'Sorted Containers' module provides a SortedList which can be used, but it's not part of the standard library and thus can't be used in programming contests.
+
+So assuming that we can't use such modules, we need to find an alternative.
+
+Let me think again about the problem. Since all events are processed in order, perhaps after each event, we can track the current leader. The problem arises when the current leader's score decreases, requiring a recheck of all teams.
+
+But how often does that happen? For example, if the current leader's score is reduced, but after the reduction, it's still higher than all other teams, then no recheck is needed. Only when the current leader's score becomes lower than some other team's score do we need to find the new maximum.
+
+But how to detect this efficiently.
+
+Another idea: for each team, track their current score and the maximum score among all teams. We can track the current maximum.
+
+The current leader is the smallest ID team with the maximum score.
+
+So when a team's score is updated:
+
+- If the team was not the current leader:
+
+   a. If the new score > current_max: then current_max becomes new score, leader is this team.
+
+   b. Else if the new score == current_max: compare ID with current leader. If smaller, leader is this team.
+
+   c. Else: no change.
+
+- If the team was the current leader:
+
+   a. new_score = previous_score + x.
+
+   b. current_max = new_score.
+
+   c. Then, check if there exists any team with score >= current_max.
+
+   d. If not, then current_max is new_score (leader remains the same).
+
+   e. Else, find the new current_max and the leader.
+
+But again, step e requires checking all teams, which is O(N) and not feasible.
+
+But perhaps we can track the second maximum. But that also complicates things.
+
+Alternatively, maybe the number of times the current leader's score decreases is small enough, making the O(N) checks acceptable. But this depends on the input data, which can be adversarial, leading to worst-case O(R*N) time.
+
+This approach isn't suitable.
+
+Hmm. So back to the initial idea of using a heap with lazy removal. The key insight is that even though we may have outdated entries in the heap, each entry is processed at most once. So the total number of heap operations is O(R + K), where K is the number of popped entries. Each heap operation is O(log (R + N)), which for R=1e6 is manageable.
+
+But the problem is that when we pop entries from the heap, we remove them, which could include valid entries for other teams. But that's not the case. Because each time we process an event, we only check the top entries until we find a valid one. The other entries remain in the heap. So when other teams' scores change, their new entries are pushed into the heap. The old entries (even if valid) are not considered until they reach the top.
+
+Wait, but when we check the current leader after an event, we only check the top of the heap. We pop entries until we find a valid one, which becomes the current leader. Other entries in the heap (possibly valid) are left there. For example, if team 3 has a valid entry in the heap but is not at the top, it's not processed. But when the current leader's score is reduced, the next check will pop the old entries until finding the next valid one.
+
+But this approach will work because the next valid entry in the heap is the current maximum. Because the heap is a priority queue, it ensures that the next valid entry is the one with the highest score (and smallest ID).
+
+So, the code outline is:
+
+- Maintain the scores array.
+
+- Maintain the heap.
+
+- For each time interval, add the duration to the current leader's time.
+
+- After processing each event, push the new (score, -team_id) to the heap.
+
+- To find the new current leader, pop elements from the heap until finding one where the stored score matches the team's current score.
+
+Thus, even if there are multiple valid entries for other teams in the heap, the first valid one encountered (after popping the invalid ones) is the current maximum.
+
+Let's test this with the sample input.
+
+Sample input:
+
+3 4 600
+
+3 100 5 → team 3 adds 5 at 100s.
+
+1 200 10 → team 1 adds 10 at 200s.
+
+2 400 20 → team 2 adds 20 at 400s.
+
+3 500 20 → team 3 adds 20 at 500s.
+
+Initial state: all scores 0. Heap has entries (0,1), (0,2), (0,3). The current_leader is 1.
+
+Process first event (t=100):
+
+duration = 100 - 0 → 100 seconds. Add 100 to team 1's time.
+
+Update team 3's score to 5. Push (-5, 3) into the heap.
+
+Now, check the heap to find current_leader.
+
+The heap's top is (-5,3). Check if team 3's score is 5. Yes. So current_leader is 3.
+
+prev_time becomes 100.
+
+Next event (t=200):
+
+duration 200-100=100. Add 100 to team 3's time (now 100).
+
+Process event: team 1's score increases by 10 → score 10. Push (-10,1) into the heap.
+
+Check the heap's top. The top is (-10,1). Team 1's score is 10. Valid. So current_leader is 1.
+
+prev_time becomes 200.
+
+Third event (t=400):
+
+duration 400-200=200. Add 200 to team 1's time (total 200).
+
+Process event: team 2's score increases by 20 → score 20. Push (-20,2) into the heap.
+
+Check the heap's top: (-20,2). Team 2's score is 20. Valid. So current_leader is 2.
+
+prev_time becomes 400.
+
+Fourth event (t=500):
+
+duration 500-400=100. Add 100 to team 2's time (100).
+
+Process event: team 3's score increases by 20 → previous score was 5 → new 25. Push (-25,3) into the heap.
+
+Check the heap's top: (-25,3). Team 3's score is 25 → valid. current_leader is 3.
+
+prev_time becomes 500.
+
+Finally, process the remaining time 600-500=100. Add 100 to team 3's time (100 + 100 = 200).
+
+Total times:
+
+Team 1: 100 (initial) + 200 (from event 2) → 300?
+
+Wait, no. Let's see:
+
+Initial interval 0-100 → 100 seconds → team 1.
+
+After first event (t=100), leader is team 3. The next event is at t=200. So the interval is 100-200: 100 seconds. So team 3's time is 100.
+
+Then, event 2 (t=200) adds 10 to team 1. Leader becomes team 1. The next event is at 400: interval 200-400 is 200 seconds. Team 1's time increases by 200 → total 100 (initial) + 200 = 300.
+
+Then event 3 at 400: team 2's score is 20. Leader is team 2. Next event at 500: interval 400-500 is 100 seconds → team 2's time is 100.
+
+After event 4 (t=500): leader is team 3. Final interval 500-600: 100 seconds → team 3's time is 100.
+
+So team 3's total is 100 (first interval) + 100 (final) = 200?
+
+Wait no. Let's re-calculate:
+
+Initial interval 0-100: team 1's time is 100.
+
+Event 1: team 3's score becomes 5. Leader is 3.
+
+Interval 100-200: 100 seconds added to team 3. So team 3 has 100.
+
+Event 2: team 1's score becomes 10. Leader is 1.
+
+Interval 200-400: 200 seconds added to team 1. So team 1 has 100+200=300.
+
+Event 3: team 2's score becomes 20. Leader is 2.
+
+Interval 400-500: 100 seconds added to team 2. So team 2 has 100.
+
+Event 4: team 3's score becomes 25. Leader is 3.
+
+Interval 500-600: 100 seconds added to team 3. So team 3 has 100 + 100 = 200.
+
+Final totals:
+
+Team 1: 300.
+
+Team 2: 100.
+
+Team 3: 200.
+
+So the winner is team 1. Which matches the sample output.
+
+Thus, the approach works for the sample.
+
+So, the code should be structured to track the intervals and use the heap to find the current leader after each event.
+
+Now, implementing this in Python.
+
+But there's a problem: in Python, the heapq module is a min-heap, so we need to store tuples of (-score, team_id) to simulate a max-heap. The team with the highest score (and smallest ID in case of ties) will be at the top.
+
+Let's proceed.
+
+The steps in code:
+
+1. Read N, R, L.
+
+2. Read R events, store them as a list sorted by time. But according to the input description, the events are given in non-decreasing order of ti.
+
+3. Initialize the scores array. scores[team] = 0 for all 1 <= team <= N.
+
+4. Initialize the heap with entries (-0, team_id) for all teams. Then heapify.
+
+5. Determine the initial current_leader by checking the heap.
+
+6. Process each event in order:
+
+   a. Calculate the duration between prev_time and current event's time. Add this duration to the current_leader's time_accumulated.
+
+   b. Process the event: update the team's score.
+
+   c. Push the new (-score, team_id) into the heap.
+
+   d. Determine the new current_leader by checking the heap.
+
+7. After all events, process the final interval.
+
+8. Find the team with the maximum accumulated time. If there's a tie, choose the smallest ID.
+
+So code:
+
+But in Python, for the heap, we can push the new entries after each event. Then, when finding the current leader, we pop elements from the heap until we find a valid one.
+
+But to implement this, after processing each event, we need to:
+
+- While the top of the heap has an entry where the stored score does not match the current score of the team, pop it.
+
+- The first valid entry is the new current leader.
+
+But in Python, we can't peek at the heap's top; we have to pop elements. But once popped, they are removed from the heap. So this would leave the heap without those entries. However, since each time a team's score changes, we push a new entry into the heap, even if we pop old entries, the new ones are present.
+
+For example:
+
+Team 3 has entries in the heap for scores 0, 5, 25. When we process event 1 (score 5), we push (-5,3). Then, after processing event 4, we push (-25,3). When the current leader is determined after event 4, we pop entries from the heap until we find (-25,3), which is valid.
+
+But in the heap, there are also entries like (-5,3) and (-0,3), but those are invalid and will be popped once they reach the top.
+
+Thus, the code will correctly find the current leader.
+
+But in the code, after popping invalid entries, the valid ones are left in the heap.
+
+But for the initial current leader:
+
+After heap initialization, we need to find the current_leader by popping entries until we find a valid one.
+
+But since all entries are valid at initialization (scores are 0), the first entry is (-0,1), which is valid. So current_leader is 1.
+
+But how to do this in code:
+
+Initially:
+
+heap = [ (0, team) for team in range(1, N+1) ]
+
+heapq.heapify(heap)
+
+current_leader = None
+
+while True:
+
+    if not heap:
+
+        break  # should not happen
+
+    current_score_neg, team = heapq.heappop(heap)
+
+    current_score = -current_score_neg
+
+    if scores[team] == current_score:
+
+        current_leader = team
+
+        # push back the entry into the heap, because other entries are still there?
+
+        heapq.heappush(heap, (current_score_neg, team))
+
+        break
+
+But this is problematic because after popping and pushing back, the heap is back to its previous state, but the code has determined the current_leader. But this process may leave other entries in the heap that are valid. For example, after popping (0,1) and pushing back, the heap is restructured, but other valid entries are present.
+
+But the code after this step processes the first event, which is t=100.
+
+But in the sample input, this initial step correctly finds team 1 as the current_leader.
+
+But the problem is that after popping (0,1) and pushing it back, the heap still contains all entries. However, during the initial step, the code would pop (0,1), check it's valid, set current_leader to 1, and push it back. Then the heap is reorganized, but the entries are all valid.
+
+But this approach would not work for the initial step. Because after pushing back (0,1), the heap has all the entries again, including (0,1). So during the first event processing, the code will process the interval 0 to t1 (100) and add to current_leader (1) the duration.
+
+But then, after processing the first event (team 3's score increases by 5 to 5), we push (-5,3) into the heap.
+
+Then, to find the new current_leader, we pop entries from the heap until we find a valid one. The heap's top is now the smallest entry, which would be (-5,3) → which is valid, since team 3's score is 5. So current_leader becomes 3.
+
+But after that, the heap still contains all other entries (like (0,1), (0,2), (-5,3)), but the top is (-5,3).
+
+But when team 1's score changes later, a new entry is pushed into the heap.
+
+So the code would work correctly.
+
+But the initial step of finding the current_leader is causing us to pop and push back (0,1). This is necessary to check the top entry.
+
+But how else can we get the top entry?
+
+Alternatively, perhaps we can avoid popping the initial entry. But in Python, there's no way to peek the heap without popping.
+
+Thus, this approach of popping and pushing back is the only way to check the initial leader. However, this is O(1) for the initial step (since the top entry is valid), but for subsequent steps, it's possible that multiple entries are popped until a valid one is found.
+
+Thus, the code for the initial current_leader is:
+
+current_leader = None
+
+while True:
+
+    if not heap:
+
+        break
+
+    current_score_neg, team = heapq.heappop(heap)
+
+    current_score = -current_score_neg
+
+    if scores[team] == current_score:
+
+        current_leader = team
+
+        heapq.heappush(heap, (current_score_neg, team))
+
+        break
+
+    else:
+
+        # This entry is invalid, so discard
+
+        pass
+
+But after this, the heap has all entries except the popped ones. But in the initial case, the first entry is valid and pushed back. So the heap remains the same.
+
+But this code would work.
+
+But for the initial case, after popping (0,1), checking it's valid, and pushing it back, the heap is re-heapified. But since the heap is a priority queue, pushing back the same element would not change the structure much. The heap is now correctly ordered.
+
+So, in code:
+
+import heapq
+
+def main():
+
+    import sys
+
+    input = sys.stdin.read().split()
+
+    ptr = 0
+
+    N = int(input[ptr])
+
+    ptr +=1
+
+    R = int(input[ptr])
+
+    ptr +=1
+
+    L = int(input[ptr])
+
+    ptr +=1
+
+    events = []
+
+    for _ in range(R):
+
+        d = int(input[ptr])
+
+        ptr +=1
+
+        t = int(input[ptr])
+
+        ptr +=1
+
+        x = int(input[ptr])
+
+        ptr +=1
+
+        events.append( (t, d, x) )
+
+    # Sort events by time (already sorted per input description)
+
+    # Initialize scores
+
+    scores = [0]*(N+1)  # 1-based
+
+    # Initialize heap: (-score, team)
+
+    heap = []
+
+    for team in range(1, N+1):
+
+        heapq.heappush(heap, (0, team))  # since initial score is 0, stored as -0 = 0
+
+    current_leader = None
+
+    # Determine initial leader
+
+    while True:
+
+        if not heap:
+
+            current_leader = 1  # should not happen
+
+            break
+
+        current_score_neg, team = heapq.heappop(heap)
+
+        current_score = -current_score_neg
+
+        if scores[team] == current_score:
+
+            current_leader = team
+
+            heapq.heappush(heap, (current_score_neg, team))
+
+            break
+
+    prev_time = 0
+
+    time_accumulated = [0]*(N+1)
+
+    for t, d, x in events:
+
+        duration = t - prev_time
+
+        if duration >0:
+
+            time_accumulated[current_leader] += duration
+
+        # Update the team's score
+
+        scores[d] += x
+
+        # Push new entry into heap
+
+        heapq.heappush(heap, ( -scores[d], d ))
+
+        # Find new current_leader
+
+        new_leader = None
+
+        while True:
+
+            if not heap:
+
+                break  # impossible
+
+            current_score_neg_candidate, team_candidate = heapq.heappop(heap)
+
+            current_score_candidate = -current_score_neg_candidate
+
+            if scores[team_candidate] == current_score_candidate:
+
+                new_leader = team_candidate
+
+                heapq.heappush(heap, (current_score_neg_candidate, team_candidate))
+
+                break
+
+        if new_leader is None:
+
+            new_leader = current_leader  # should not happen
+
+        current_leader = new_leader
+
+        prev_time = t
+
+    # Process final interval
+
+    duration = L - prev_time
+
+    if duration >0:
+
+        time_accumulated[current_leader] += duration
+
+    # Find the team with maximum time accumulated, smallest ID in case of tie
+
+    max_time = -1
+
+    result = N+1
+
+    for team in range(1, N+1):
+
+        if time_accumulated[team] > max_time or (time_accumulated[team] == max_time and team < result):
+
+            max_time = time_accumulated[team]
+
+            result = team
+
+    print(result)
+
+main()
+
+Wait, but in the code above, when finding the new current_leader after an event, we pop entries from the heap until finding a valid one. But each time we pop an entry, it's removed from the heap. However, once we find a valid entry, we push it back into the heap. Otherwise, invalid entries are discarded.
+
+But this could lead to a situation where the same valid entry is popped and pushed back multiple times. For example, if team 1 is the leader, and then another event updates team 1's score, causing it to be the leader again. But in between, other entries may have been popped and discarded.
+
+But in reality, this code pushes the new entry into the heap each time a team's score is updated. So the heap will have the latest entry for each team.
+
+But the code as written may have a problem: when we find a valid entry, we push it back into the heap. This way, the heap always contains all valid entries (but also potentially many outdated ones). But when processing future events, the code will pop invalid entries until finding a valid one.
+
+This should work.
+
+Testing this code with the sample input.
+
+Sample Input:
+
+3 4 600
+
+3 100 5 → t=100
+
+1 200 10 → t=200
+
+2 400 20 → t=400
+
+3 500 20 → t=500
+
+Initial scores: [0,0,0,0]
+
+Initial heap has entries (0,1), (0,2), (0,3).
+
+Initial current_leader is found as 1.
+
+prev_time is 0.
+
+Processing first event (t=100):
+
+duration = 100 -0 =100 → added to team 1's time (100).
+
+Update team 3's score to 5. Push (-5,3) into heap.
+
+Then, find new leader:
+
+Pop entries from heap:
+
+First, (0,1) is popped. Current score of 1 is 0. So stored score is 0. scores[1] is 0. So valid. But wait, no. Wait, after the first event is processed, the current_leader is 1. Then, after the first event's processing, the code adds 100 to team 1's time. Then, the code updates team 3's score to 5, and pushes (-5,3) into the heap.
+
+Then, to find the new current_leader:
+
+The code pops entries until a valid one is found.
+
+But the heap now contains:
+
+The initial entries after pushing (-5,3) and the existing ones. The heap after pushing (-5,3) has elements:
+
+(0,1), (0,2), (-5,3), (0,3), (0,2), (0,1) → but heap is a priority queue, so the smallest element is (-5,3) → because in Python's heapq, the smallest tuple is popped first. So (-5,3) is smaller than (0,1).
+
+So when the code processes the first event's new current_leader:
+
+The code pops entries from the heap. The first popped entry is (-5,3). The current score of team 3 is 5. So stored score is 5. Which matches the team's current score. So new_leader is 3. Push (-5,3) back into the heap. So the heap now has this entry again, along with others.
+
+Thus, current_leader becomes 3.
+
+Proceed to next event.
+
+And this continues correctly.
+
+Thus, the code should work.
+
+But there's a possible issue: when pushing back the valid entry, it's added to the heap again. This could lead to multiple entries for the same team in the heap, but with different scores. But when the code processes the heap in future steps, it will always pop the top (highest score), and check validity. So the latest entry for the team will have the highest score.
+
+But wait, no. If a team has multiple entries in the heap with varying scores, the heap will contain all of them. But when a team's score increases, the new entry will have a higher (negative) score (e.g., -10 is less than -5, so the entry (-10, team) is smaller than (-5, team), so in the min-heap, the new entry (-10, team) would be placed in the heap in such a way that it appears after entries with smaller (more negative) scores. Wait, no. For example, if a team's score is 5, entry is (-5, team). Later, the team's score increases to 10, and the entry (-10, team) is pushed. Since -10 < -5, the (-10, team) entry is considered smaller than (-5, team), so in the min-heap, the (-10, team) entry would be at the top. So the heap will prefer higher scores, as intended.
+
+Thus, the code is correct.
+
+The code's time complexity is O(R log (R + N)) + O(N) for initial heap setup, which should be acceptable for the given constraints.
+
+Thus, the code should work correctly.
+</think>
+To solve this problem, we need to determine which team was shown on TV for the longest cumulative time during a programming contest. The team with the highest score at any given time is shown, and in case of a tie, the team with the smallest ID is chosen. The contest log records score changes, and we need to process these records efficiently to compute the result.
+
+### Approach
+1. **Initialization**: Start with all teams having a score of 0. The initial leader is team 1 since all scores are tied at zero.
+2. **Heap Data Structure**: Use a max-heap (simulated using a min-heap with negative scores) to efficiently track the team with the highest score. Each entry in the heap is a tuple of the form (-score, team_id), ensuring that the highest score (and smallest team ID in case of ties) is always at the top.
+3. **Event Processing**: For each event, calculate the duration since the last event and add it to the current leader's total time. Update the team's score and push the new score into the heap.
+4. **Leader Determination**: After each score update, check the heap to find the new valid leader by popping invalid entries (outdated scores) until the top entry matches the current score of the team.
+5. **Final Interval**: After processing all events, account for the remaining time from the last event to the end of the contest.
+
+### Solution Code
+```python
+import heapq
+import sys
+
+def main():
+    input = sys.stdin.read().split()
+    ptr = 0
+    N = int(input[ptr])
+    ptr += 1
+    R = int(input[ptr])
+    ptr += 1
+    L = int(input[ptr])
+    ptr += 1
+    events = []
+    for _ in range(R):
+        d = int(input[ptr])
+        ptr += 1
+        t = int(input[ptr])
+        ptr += 1
+        x = int(input[ptr])
+        ptr += 1
+        events.append((t, d, x))
+    
+    scores = [0] * (N + 1)  # 1-based indexing
+    heap = []
+    
+    # Initialize heap with all teams' initial scores (0)
+    for team in range(1, N + 1):
+        heapq.heappush(heap, (0, team))  # stored as (-score, team)
+    
+    # Determine initial current_leader
+    current_leader = None
+    while True:
+        if not heap:
+            current_leader = 1
+            break
+        current_score_neg, team = heapq.heappop(heap)
+        current_score = -current_score_neg
+        if scores[team] == current_score:
+            current_leader = team
+            heapq.heappush(heap, (current_score_neg, team))
+            break
+    
+    prev_time = 0
+    time_accumulated = [0] * (N + 1)
+    
+    for t, d, x in events:
+        duration = t - prev_time
+        if duration > 0:
+            time_accumulated[current_leader] += duration
+        
+        # Update the team's score
+        scores[d] += x
+        # Push new entry into the heap
+        heapq.heappush(heap, (-scores[d], d))
+        
+        # Find new current_leader
+        new_leader = None
+        while True:
+            if not heap:
+                break  # This should not happen as per problem constraints
+            score_neg, candidate = heapq.heappop(heap)
+            candidate_score = -score_neg
+            if scores[candidate] == candidate_score:
+                new_leader = candidate
+                heapq.heappush(heap, (score_neg, candidate))
+                break
+        if new_leader is not None:
+            current_leader = new_leader
+        prev_time = t
+    
+    # Process the remaining time after the last event
+    duration = L - prev_time
+    if duration > 0:
+        time_accumulated[current_leader] += duration
+    
+    # Determine the team with the maximum accumulated time
+    max_time = -1
+    result = N + 1
+    for team in range(1, N + 1):
+        if time_accumulated[team] > max_time or (time_accumulated[team] == max_time and team < result):
+            max_time = time_accumulated[team]
+            result = team
+    print(result)
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+- **Heap Initialization**: The heap is initialized with all teams' starting scores (0) to ensure the initial leader (team 1) is correctly identified.
+- **Event Processing**: Each event updates a team's score and pushes the new score into the heap. The heap is then checked to determine the new leader by popping invalid entries until a valid one is found.
+- **Efficiency**: The use of a heap allows efficient tracking of the maximum score, and the lazy removal of outdated entries ensures we only process valid scores, leading to an overall time complexity of O(R log(R + N)), which is efficient for large input sizes.
+</bot>

@@ -1,0 +1,773 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.You are given an array of N integers A[1] , A[2] , ... , A[N] . You have to answer Q queries. Each query consists of 3 integers L, R and K. For each query, you have to find the value of the Skipping Sum in the following manner :
+
+       def skipping_sum(L,R,K) :
+              sum = 0
+              while L ≤ R :
+                    sum = sum + A[L]
+                    L = L + K 
+              return sum
+Input
+The first line consists of 2 space separated integers N and Q. The next line consists of N space separated integers, the i^th integer being A[i]. Then, Q lines follow, each line consisting of 3 space separated integers L, R and K.
+Output
+Print the answer to each query on a new line.
+Constraints
+1 ≤ N ≤ 10^5
+1 ≤ Q ≤ 10^5
+0 ≤ A[i] ≤ 10^5
+1 ≤ L ≤ R ≤ N
+1 ≤ K ≤ 10  
+
+NOTE:
+We are using 1-based indexing for array A. 
+
+SAMPLE INPUT
+8 6
+5 4 2 1 7 9 10 9
+1 8 1
+1 8 2
+4 8 9
+3 7 2
+3 7 3
+3 7 4
+
+SAMPLE OUTPUT
+47
+24
+1
+19
+11
+12
+
+Explanation
+
+For query 1 : A[1] + A[2] + A[3] + A[4] + A[5] + A[6] + A[8] = 47
+For query 2 : A[1] + A[3] + A[5] + A[7] = 24
+For query 3 : A[4] = 1
+For query 4 : A[3] + A[5] + A[7] = 19
+For query 5 : A[3] + A[6] = 11
+For query 6 : A[3] + A[7] = 12
+</user>
+<bot>
+<think>
+Okay, I need to solve this programming problem. Let's read the problem carefully.
+
+So, the task is to process Q queries on an array. Each query gives L, R, K, and we have to compute the sum of elements starting at L, then adding K each time until we exceed R. For example, if L=1, R=8, K=2, then we sum A[1], A[3], A[5], A[7]. The sum would be those elements added together.
+
+The constraints are N and Q up to 1e5. So O(Q*N/K) is probably too slow. Because for K=1, each query would take O(N) time, and with Q=1e5, that's 1e10 operations, which is way beyond acceptable. So we need a more efficient approach.
+
+So the problem is to find a way to answer each query in O(1) or O(K) time. Let's think about pre-processing.
+
+Let me consider possible K values. The maximum K is 10. So K can be from 1 to 10. That's a small number. Maybe we can precompute prefix sums for each possible K and each possible modulus.
+
+For each K (1 to 10), we can create K different arrays. For modulus m (0 to K-1), the array would store the sum of elements starting at positions congruent to m modulo K. Then, for a query with K, we can determine which modulus the starting index L has, and then compute how many terms there are and sum the appropriate elements.
+
+Wait, let's think. For example, K=2. The possible moduli are 0 and 1. But when you start at L=1, which is 1 mod 2. Then the next elements are 3 (1+2), which is 1 mod 2 again. Wait, no. Wait, 1 mod 2 is 1, 3 mod 2 is 1, etc. So when K=2, and starting at L with some modulus, the sequence is L, L+K, L+2K, etc. All these positions have the same remainder mod K as L. Because L mod K is r, then L + nK mod K is r + 0 mod K. So all elements in the sequence are congruent to r mod K, where r is L mod K.
+
+Wait, but that's only if K is fixed. So for each K, the sequence for a particular starting L will consist of elements at positions that are congruent to (L-1) mod K. Because arrays are 1-based. For example, L=1, K=2: positions 1,3,5,7. 1-1=0 mod 2 is 0. So maybe the modulus is (L-1) mod K. Because when K=2, positions 1,3,5... (1-based) have (1-1) =0 mod 2, 3-1=2 mod 2=0, etc. So for a given K, each starting position L corresponds to a modulus m = (L-1) mod K. The elements in the sequence are those with index (m+1) + n*K, which is m+1 + K*n. So for K=3, m can be 0,1,2. For example, m=0: positions 1,4,7, etc.
+
+So the idea is: precompute for each K (1..10) and for each modulus m (0..K-1), a prefix sum array. Then, for a query (L, R, K), we can compute the modulus m = (L-1) % K. Then, the starting position is L, then L+K, etc. The elements in the sequence are all positions in the array that are >= L, <= R, and congruent to (L-1) mod K. So, for each K, precompute for each modulus m, a list of the elements in the array that are at positions (m+1) + t*K, where t is 0,1,2..., and then precompute the prefix sums for these lists.
+
+Once we have those prefix sums, then for a query:
+
+1. Determine K.
+2. Compute m = (L-1) mod K. Because the starting position is L, which is (L-1) mod K in terms of modulus. For example, position 1: (1-1) mod K = 0. So for K=2, the modulus is 0. The elements are 1,3,5... which are positions that are m+1 + K*t, where m=0: 0+1=1, then 1+2=3, etc.
+
+Wait, maybe the correct way is that for each K, and modulus m in 0..K-1, the positions in the array that are of the form m+1 + t*K. Because m is 0-based, so m+1 is 1-based. For example, K=2, m=0: positions 1,3,5..., m=1: positions 2,4,6...
+
+So for each K and m, precompute a list of elements in the array that are in positions m+1, m+1 + K, m+1 + 2K, etc. Then, for each such list, compute the prefix sum array. Then, for a query with L, R, K, we can find the correct m (m = (L-1) % K), and then find the indices in the precomputed list that are >= L and <= R. Then, sum those elements.
+
+But how do we efficiently find the indices in the precomputed list that are between L and R?
+
+Each list for K and m can be considered as an ordered list of positions. For example, for K=2 and m=0, the positions are 1,3,5,7... up to N. So for each such list, we can store the elements in the order they appear, along with their positions, and then for a query, we can perform binary search to find the first position in the list that is >= L and <= R, and the last position in the list that is <= R. Then, the sum would be the sum of elements between those two indices in the prefix sum array.
+
+But storing the positions for each K and m is possible. However, since K can be up to 10, and for each K, m ranges up to K-1, the total storage would be 10*10=100 such lists. For each list, the size depends on how many elements are in the array for that modulus and K. For example, for K=1, m can be 0, so the list is all elements (since every position is 1 + 0*1 + t*1). So for K=1, the list would have all elements, and the prefix sum array would be the same as the array's prefix sum.
+
+But for K=10 and m=0, the list would be positions 1,11,21,... up to N.
+
+So the plan is:
+
+1. Preprocess for each K from 1 to 10, and for each m from 0 to K-1:
+
+   a. Collect all the positions in the array that are congruent to m+1 mod K (since positions are 1-based). Wait, maybe m is (pos-1) mod K. So pos-1 mod K = m → pos ≡ m+1 mod K (since pos is 1-based). So for K=2, m=0 → pos ≡1 mod 2. So m=0 corresponds to positions 1,3,5..., etc.
+
+   So for each K, m in 0..K-1:
+
+      collect all the elements A[pos] where (pos-1) mod K == m. Then, create a prefix sum array for this list.
+
+      Also, store the positions for each element in this list. Because when we query for L and R, we need to find the elements in this list that are >= L and <= R.
+
+2. For a query (L, R, K):
+
+   a. Compute m = (L-1) % K. Because the first element is L, which has (L-1) mod K = m.
+
+   b. Get the list of positions and prefix sums for K and m.
+
+   c. Find the first position in the list >= L.
+
+   d. Find the last position in the list <= R.
+
+   e. The sum is the sum of elements from the first to the last in this list.
+
+   f. If there are no elements between L and R, the sum is 0.
+
+How to perform steps c and d efficiently? Since the positions in each list are sorted (since they are increasing by K each step), we can use binary search.
+
+For example, for the list of positions in K=2 and m=0: [1,3,5,7,...], which is sorted in increasing order.
+
+So for a given L and R, we can find the leftmost index in the list where position >= L. Similarly, the rightmost index where position <= R. The elements between these indices (inclusive) are the ones contributing to the sum.
+
+Once we have the indices in the list, say start_idx and end_idx, the sum can be computed as prefix_sum[end_idx] - prefix_sum[start_idx - 1], assuming prefix_sum is 1-based (with prefix_sum[0] = 0).
+
+So, the steps are:
+
+- For each K (1-10), and each m (0 to K-1), precompute:
+
+   - a list of positions (sorted) and a list of elements.
+
+   - a prefix sum array for the elements.
+
+Then, for each query:
+
+   Given L, R, K:
+
+   m = (L-1) % K.
+
+   Get the list of positions and prefix sums for K and m.
+
+   In the positions list, find the first position >= L and <= R. Wait, no: first position >= L. Then, check if it is <= R.
+
+   Also, find the last position <= R.
+
+   The indices between these two (if any) are the ones to sum.
+
+   For example, if the positions list is [1,3,5,7,9], and L=3, R=8, then the positions are 3,5,7. So start index is 1 (position 3), end index is 3 (position7). Sum is elements[1] + elements[2] + elements[3], which is prefix_sum[3] - prefix_sum[0] (assuming prefix_sum starts at 0).
+
+So the steps are:
+
+   1. Find the leftmost index in the positions list where pos >= L.
+
+   2. Find the rightmost index in the positions list where pos <= R.
+
+   3. If left_idx > right_idx: sum is 0.
+
+   Else, sum is prefix_sum[right_idx] - prefix_sum[left_idx-1].
+
+But how to compute left_idx and right_idx?
+
+Using the bisect module in Python:
+
+For the leftmost index >= L:
+
+left_idx = bisect.bisect_left(positions, L)
+
+Wait, positions is a sorted list. So bisect_left returns the insertion point for L in the list. If the element at that index is >= L, then that's the first position. But need to check that the index is within the list.
+
+Similarly, for the rightmost index <= R:
+
+right_idx = bisect.bisect_right(positions, R) - 1
+
+But then, if positions[right_idx] <= R, then that's the last element. Otherwise, there are no elements <= R.
+
+Wait, let me think with an example. Suppose positions is [1,3,5,7,9], R=8.
+
+bisect_right(positions, 8) returns the index where 8 would be inserted. Since 7 < 8 <9, bisect_right returns 4. So right_idx =4-1=3. positions[3] is 7, which is <=8.
+
+Another example, R=7: bisect_right returns 4 (since 7 is present in the list, and bisect_right returns the index after the last occurrence of 7). So right_idx=4-1=3, which is correct.
+
+If R=5, bisect_right returns 3, right_idx=2. positions[2] is 5.
+
+If R=0, bisect_right returns 0, right_idx=-1, which is invalid, so no elements.
+
+So steps:
+
+left_idx = bisect.bisect_left(positions, L)
+
+if left_idx >= len(positions), then no elements.
+
+right_idx = bisect.bisect_right(positions, R) -1
+
+if right_idx <0, no elements.
+
+If left_idx > right_idx, no elements. Sum is 0.
+
+Else, sum is prefix_sum[right_idx +1] - prefix_sum[left_idx]
+
+Wait, because the prefix sum array is constructed with a 0 at the start. For example:
+
+elements = [a, b, c]
+
+prefix_sum[0] =0
+
+prefix_sum[1] =a
+
+prefix_sum[2] =a+b
+
+prefix_sum[3] =a+b+c
+
+So if left_idx is i, and right_idx is j, then sum is prefix_sum[j+1] - prefix_sum[i]
+
+Yes.
+
+So the prefix sum array is of length len(elements)+1.
+
+So putting this all together, the plan is:
+
+Precompute for each K and m:
+
+- positions: list of positions (1-based) in the array that belong to this group (positions where (pos-1) mod K ==m)
+
+- elements: list of A[pos-1] for each pos in positions (since Python uses 0-based arrays)
+
+- prefix_sums: a list where prefix_sums[0] =0, prefix_sums[1] = elements[0], etc.
+
+So for K from 1 to 10, for each m in 0..K-1:
+
+positions[K][m] = list of positions (sorted)
+
+elements[K][m] = list of A[pos-1]
+
+prefix_sums[K][m] = [0] + cumulative sum of elements.
+
+Then, for each query L, R, K:
+
+Compute m = (L-1) % K.
+
+Get the positions list and prefix_sums list for K and m.
+
+Find left_idx using bisect_left on positions for L.
+
+If left_idx >= len(positions) or positions[left_idx] > R: sum 0.
+
+Else:
+
+Find right_idx = bisect.bisect_right(positions, R) -1.
+
+If right_idx < left_idx: sum 0.
+
+Else:
+
+sum = prefix_sums[right_idx +1] - prefix_sums[left_idx]
+
+Return sum.
+
+Now, considering the constraints:
+
+N is up to 1e5, and K up to 10. For each K, there are K groups. Each group's positions list will have O(N/K) elements. So total data is O(10*N) which is acceptable (since 10*1e5 = 1e6 elements).
+
+The preprocessing time is O(N *10) since for each element, we compute which K and m it belongs to. For each K from 1 to 10, and for each position, compute m = (pos-1) % K. Then, append the element to the appropriate list.
+
+Yes. So preprocessing is manageable.
+
+Now, for each query, each step is O(log M), where M is the length of the positions list for that K and m. Since M is up to 1e5 /1 (for K=1) but for K=10, M is 1e4. So log M is around 17 steps. For Q=1e5, total steps would be 1e5 * 17 * 2 (bisect left and right) which is 3.4e6 steps, which is acceptable.
+
+So this approach should work.
+
+Now, let's test this logic against the sample input.
+
+Sample Input:
+
+8 6
+
+5 4 2 1 7 9 10 9
+
+Queries:
+
+1 8 1 → sum all elements from 1 to8, step 1. Sum is 5+4+2+1+7+9+10+9= 47. Correct.
+
+For K=1, m is (1-1) mod1=0.
+
+The positions for K=1, m=0 are 1,2,3,4,5,6,7,8. The elements are 5,4,2,1,7,9,10,9. Prefix sum is [0,5,9,11,12,19,28,38,47]. So for L=1, R=8, left_idx=0, right_idx=7. Sum is 47-0=47. Correct.
+
+Second query: 1 8 2 → K=2. m=(1-1) mod2=0. So positions for K=2, m=0 are 1,3,5,7. Elements are 5,2,7,10. Sum is 5+2+7+10=24. Correct.
+
+Third query:4 8 9 → K=9. m=(4-1) mod9=3 mod9=3. So positions are those where (pos-1) mod9=3 → pos=4,13, etc. But N=8, so only pos=4. So sum A[4] =1. Correct.
+
+Fourth query:3 7 2 → K=2. m=(3-1) mod2=2 mod2=0. Positions for K=2,m=0 are 1,3,5,7. But L=3. So in the positions list, find first >=3 → index 1 (pos3). R=7. So positions are 3,5,7. Elements 2+7+10=19. Correct.
+
+So the logic works.
+
+Now, coding this.
+
+In Python, for each K from 1 to 10, and m from 0 to K-1, we need to create the positions, elements, and prefix_sums.
+
+But in Python, creating a list of lists for K from 1 to10, each containing a list for each modulus m.
+
+We can precompute a dictionary or a list of lists.
+
+But since K can be up to 10, and m up to K-1, perhaps we can precompute for each K in 1..10, a list of m in 0..K-1, and for each, store the positions, elements, and prefix_sums.
+
+So:
+
+precomputed = { K : { m : (positions, prefix_sums) } }
+
+But in code, perhaps a list of lists. Since K can be up to 10, for K in 1 to10, and m in 0..K-1.
+
+So:
+
+pre = [[] for _ in range(11)]  # pre[K] for K=0..10. K ranges from 1 to10.
+
+for K in 1 to10:
+
+   pre[K] = [[] for _ in range(K)]
+
+   for m in 0..K-1:
+
+       pre[K][m] is a tuple (positions list, prefix_sum list)
+
+But for each K and m, collect the elements.
+
+So code steps:
+
+Read N and Q.
+
+Read the array as a list (0-based).
+
+Then, for each K in 1 to10:
+
+   for m in 0 to K-1:
+
+       positions = list()
+
+       elements = list()
+
+       for pos in 1 to N:
+
+           if (pos-1) % K == m:
+
+               positions.append(pos)
+
+               elements.append(A[pos-1])
+
+       # compute prefix sums
+
+       prefix = [0]
+
+       current =0
+
+       for e in elements:
+
+           current +=e
+
+           prefix.append(current)
+
+       pre[K][m] = (positions, prefix)
+
+But for N=1e5 and K=10, this loop would take O(N) per K. Since K ranges to 10, total O(1e6) operations. Which is acceptable.
+
+But in Python, for N=1e5 and K=10, this would take 1e5 iterations per K and m. For K=10, m ranges from 0-9, so 10*1e5=1e6 iterations. For 10 K values, 1e7. Hmm, but 1e7 operations in Python may be tight. Let's see.
+
+Wait, for each K (1-10), and for each position in 1..N, compute (pos-1) mod K, and if equal to m (for each m in 0..K-1). Wait, but that's not the way. For each pos, for each K, compute m = (pos-1) mod K, and add it to the list for K and m. So for each pos from 1 to N:
+
+for K in 1 to10:
+
+   m = (pos-1) % K
+
+   pre[K][m][0].append(pos)
+
+   pre[K][m][1].append(A[pos-1])
+
+But building this for each pos and each K is O(N*10) time, which is acceptable for 1e5*10=1e6 steps.
+
+But in Python, building lists for each K and m can be done efficiently by first initializing for each K a list of K empty lists.
+
+So code steps:
+
+Initialize pre as a dictionary or a list of lists.
+
+But perhaps:
+
+pre = [[] for _ in range(11)]  # pre[K] for K 0..10
+
+for K in range(1, 11):
+
+   pre[K] = [ [] for _ in range(K) ]
+
+   for m in range(K):
+
+       pre[K][m] = ( [], [] )  # positions and elements
+
+But no, perhaps better to precompute for each K, and for each pos, compute m, and append to the appropriate list.
+
+Wait, perhaps:
+
+pre = [ None ] * 11  # pre[K] for K from 0 to10
+
+for K in 1 to10:
+
+   pre[K] = [ ( [], [] ) for _ in range(K) ]  # for each m, positions and elements.
+
+Then, for each pos in 1..N:
+
+   for K in 1 to10:
+
+       m = (pos-1) % K
+
+       pre[K][m][0].append(pos)
+
+       pre[K][m][1].append(A[pos-1])
+
+But for N=1e5 and K=10, this would be 1e5 *10 =1e6 iterations. Which is manageable.
+
+But this is O(N*10) time. For N=1e5, 1e6 steps, which is acceptable.
+
+Once the positions and elements are built for each K and m, then compute the prefix sums.
+
+So for each K in 1 to10:
+
+   for m in 0 to K-1:
+
+       positions = pre[K][m][0]
+
+       elements = pre[K][m][1]
+
+       prefix = [0]
+
+       current =0
+
+       for e in elements:
+
+           current +=e
+
+           prefix.append(current)
+
+       pre[K][m] = (positions, prefix)
+
+But wait, after building positions and elements, the elements are in the order of the positions. Since the positions are added in order of increasing pos, so the positions list is sorted. Because for each K, m, when we process pos from 1 to N, we check if (pos-1) mod K ==m. So for K=2 and m=0, the positions added are 1,3,5, etc. So the positions list is sorted.
+
+Thus, the positions list is already sorted, so we don't need to sort it.
+
+Once the prefix sums are computed, the pre[K][m] has the positions and prefix_sum list.
+
+Then, for each query:
+
+Read L, R, K.
+
+m = (L-1) % K.
+
+positions, prefix_sums = pre[K][m]
+
+Now, perform bisect_left on positions for L.
+
+left_idx = bisect.bisect_left(positions, L)
+
+if left_idx >= len(positions), then no elements → sum 0.
+
+Else:
+
+if positions[left_idx] > R → sum 0.
+
+Else:
+
+right_idx = bisect.bisect_right(positions, R) -1
+
+if right_idx < left_idx → sum 0.
+
+Else:
+
+sum = prefix_sums[right_idx +1] - prefix_sums[left_idx]
+
+print sum.
+
+Now, code:
+
+But how to handle K=0? Well, K is given as between 1 and10, so the code for K=0 is not needed.
+
+But in the sample input, K can be up to 9 (like in third query, K=9).
+
+Now, code in Python:
+
+But the problem is that in Python, for K=1e5 and Q=1e5, this approach may be too slow, but in the constraints, K is up to 10, so it's manageable.
+
+Now, let's code.
+
+But first, the code structure:
+
+Read N and Q.
+
+Read the array as a list (0-based).
+
+Precompute for each K=1 to10 and m=0 to K-1:
+
+   positions list and prefix sum.
+
+Then, read Q queries, process each.
+
+Now, code:
+
+But building the pre structure for K=1 to10 and m=0..K-1.
+
+But how?
+
+Alternative approach: for each K from 1 to10, precompute for each m=0..K-1, the positions list and prefix sums.
+
+But code steps:
+
+import bisect
+
+n, q = map(int, input().split())
+
+A = list(map(int, input().split()))
+
+# Precompute for each K (1-10) and m (0..K-1)
+
+pre = [None]*(11)  # pre[K] for K 0..10
+
+for K in range(1, 11):
+
+    # Initialize for K: m ranges from 0 to K-1
+
+    pre[K] = [ ([], []) for _ in range(K) ]  # each m has a tuple (positions, prefix_sum)
+
+    # positions and elements for each m
+
+    for pos in range(1, n+1):
+
+        m = (pos-1) % K
+
+        pre[K][m][0].append(pos)  # positions list for K, m
+
+        pre[K][m][1].append(A[pos-1])  # elements list for K, m
+
+    # Now compute prefix sums for each m in K
+
+    for m in range(K):
+
+        positions = pre[K][m][0]
+
+        elements = pre[K][m][1]
+
+        # compute prefix_sum
+
+        prefix = [0]
+
+        current =0
+
+        for e in elements:
+
+            current += e
+
+            prefix.append(current)
+
+        pre[K][m] = (positions, prefix)
+
+But wait, in the code above, for each K, we first build for each m the positions and elements lists. Then, compute the prefix sum for each m.
+
+But in Python, appending to the lists for each pos and K is O(N*10) steps, which is manageable.
+
+Once this is done, for each query:
+
+for _ in range(q):
+
+    L, R, K = map(int, input().split())
+
+    m = (L-1) % K
+
+    positions, prefix = pre[K][m]
+
+    # find left_idx: first position >= L
+
+    left_idx = bisect.bisect_left(positions, L)
+
+    if left_idx >= len(positions) or positions[left_idx] > R:
+
+        print(0)
+
+        continue
+
+    # find right_idx: last position <= R
+
+    right_idx = bisect.bisect_right(positions, R) -1
+
+    if right_idx < left_idx:
+
+        print(0)
+
+        continue
+
+    # sum from left_idx to right_idx inclusive
+
+    total = prefix[right_idx +1] - prefix[left_idx]
+
+    print(total)
+
+Wait, but let's test with sample input.
+
+Sample Input:
+
+8 6
+
+5 4 2 1 7 9 10 9
+
+Let's look at K=2:
+
+For K=2, there are m=0 and m=1.
+
+For m=0:
+
+positions are 1,3,5,7.
+
+elements are 5,2,7,10.
+
+prefix_sum is [0,5,7,14,24].
+
+For m=1:
+
+positions are 2,4,6,8.
+
+elements are 4,1,9,9.
+
+prefix_sum is [0,4,5,14,23].
+
+So for query 1 8 2 → K=2, m=(1-1)%2=0.
+
+positions are [1,3,5,7], L=1, R=8.
+
+left_idx is 0 (bisect_left finds 1 at index 0), right_idx is bisect_right(positions,8) → 4, subtract 1 →3. positions[3] is7 <=8.
+
+sum is prefix[3+1] - prefix[0] →24-0=24. Which matches sample output.
+
+Another sample query: 3 7 2. K=2, m=(3-1)%2=2%2=0.
+
+positions are [1,3,5,7], L=3, R=7.
+
+bisect_left(positions,3) → index 1 (positions[1]=3). bisect_right(positions,7) →4-1=3. So sum is prefix[4] - prefix[1] →24 -5=19. Which matches sample.
+
+So the code should work.
+
+But let's see for K=9, query4 8 9.
+
+K=9, m=(4-1) mod9=3. So positions for K=9, m=3 are pos where (pos-1) mod9=3 → pos-1=3 mod9 → pos=4, 13, 22, etc. But in N=8, pos=4.
+
+So positions list is [4], elements [1], prefix [0,1].
+
+So L=4, R=8. left_idx is 0. right_idx is bisect_right([4],8) →1-1=0. So sum is prefix[0+1] - prefix[0] →1-0=1. Correct.
+
+So this code should handle the sample correctly.
+
+Now, considering the constraints. For N=1e5, K=10, m=0-9, each m's list is about 1e5/10=1e4 elements. For 1e5 queries, each with bisect_left and bisect_right (O(log n)), it's manageable.
+
+But the code may have some issues with the precomputation. For example, building the pre structure for K=1 to10 and for all m in 0..K-1 may take some time.
+
+But given that K is small, this is feasible.
+
+Potential optimizations:
+
+Instead of building for each K and m, precompute the lists once.
+
+But the code as written should work.
+
+Now, edge cases:
+
+Test case where K=1. All elements are in the same m=0 group. So the positions list is 1,2,3,...,N. The sum of L to R with K=1 is the sum of elements from L to R. So the prefix sum for K=1, m=0 is the prefix sum of the entire array. So for a query (L, R,1), the sum is sum(A[L..R]).
+
+Another test case: K=10, L=1, R=10, K=10. m=(1-1) mod10=0. positions list for K=10 and m=0 is 1, 11, 21, etc. So if N is 10, only position1. So sum is A[1-1] = A[0].
+
+But if L=1 and R=10, K=10, then sum is A[0].
+
+Another edge case: when L=R. So sum is A[L-1], regardless of K.
+
+Now, code should handle these.
+
+Another possible issue: when K is larger than R-L+1. For example, K=5, L=3, R=4. Then, K=5, m=(3-1) mod5=2. The positions are 3, 8,13, etc. If R=4, then after 3, next is 8 which is >R=4. So only 3 is in range. But 3 <=4, so sum is A[2].
+
+So code would find left_idx=0 (positions[3] >=3). right_idx=0 (bisect_right(positions,4) returns 1-1=0). Sum is prefix[1] - prefix[0] = A[2].
+
+Thus, correct.
+
+Now, the code seems correct.
+</think>
+To solve this problem, we need to efficiently compute the sum of elements in an array based on multiple queries that specify a range and a step value. The challenge lies in handling up to 100,000 queries efficiently, which requires a precomputation strategy to avoid excessive repeated calculations.
+
+### Approach
+1. **Precomputation for Efficient Query Handling**:
+   - For each possible step value \( K \) (from 1 to 10), precompute the positions and prefix sums of elements that would be included in the sum for each possible starting position modulo \( K \).
+   - This involves creating lists of positions and corresponding elements for each combination of \( K \) and modulus value \( m \) (from 0 to \( K-1 \)). These lists are then used to compute prefix sums, which allow for quick range sum calculations.
+
+2. **Binary Search for Range Queries**:
+   - For each query, determine the relevant precomputed lists based on the given \( K \) and the starting position modulo \( K \).
+   - Use binary search to quickly find the range of indices within the precomputed positions that fall within the query's specified range. This allows us to compute the sum using the precomputed prefix sums in logarithmic time.
+
+### Solution Code
+```python
+import bisect
+
+def main():
+    import sys
+    input = sys.stdin.read
+    data = input().split()
+    idx = 0
+    N = int(data[idx])
+    idx += 1
+    Q = int(data[idx])
+    idx += 1
+    
+    A = list(map(int, data[idx:idx+N]))
+    idx += N
+    
+    # Precompute for K=1 to 10
+    pre = [None] * 11  # pre[K] for K from 0 to 10
+    
+    for K in range(1, 11):
+        # Initialize for each K and m=0 to K-1
+        pre[K] = [ ([], []) for _ in range(K) ]
+        for pos in range(1, N+1):
+            m = (pos - 1) % K
+            pre[K][m][0].append(pos)
+            pre[K][m][1].append(A[pos-1])
+        
+        # Compute prefix sums for each m in K
+        for m in range(K):
+            positions, elements = pre[K][m]
+            prefix = [0]
+            current = 0
+            for e in elements:
+                current += e
+                prefix.append(current)
+            pre[K][m] = (positions, prefix)
+    
+    # Process queries
+    output = []
+    for _ in range(Q):
+        L = int(data[idx])
+        idx +=1
+        R = int(data[idx])
+        idx +=1
+        K_val = int(data[idx])
+        idx +=1
+        
+        m = (L - 1) % K_val
+        positions, prefix = pre[K_val][m]
+        
+        # Find left_idx: first position >= L
+        left_idx = bisect.bisect_left(positions, L)
+        if left_idx >= len(positions) or positions[left_idx] > R:
+            output.append('0')
+            continue
+        
+        # Find right_idx: last position <= R
+        right_idx = bisect.bisect_right(positions, R) - 1
+        if right_idx < left_idx:
+            output.append('0')
+            continue
+        
+        total = prefix[right_idx +1] - prefix[left_idx]
+        output.append(str(total))
+    
+    print('\n'.join(output))
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Precomputation**:
+   - For each \( K \) from 1 to 10, and each modulus \( m \) from 0 to \( K-1 \), we generate lists of positions and their corresponding elements. These positions are those that would be included in a sum starting from a position congruent to \( m \) modulo \( K \).
+   - We then compute prefix sums for these lists, which allows us to quickly calculate the sum of any sublist.
+
+2. **Query Handling**:
+   - For each query, we determine the modulus \( m \) based on the starting position \( L \). Using binary search, we find the range of indices in the precomputed positions that fall within the query's range [L, R].
+   - Using the precomputed prefix sums, we efficiently compute the sum of the elements in this range, ensuring each query is handled in logarithmic time relative to the number of elements involved.
+
+This approach ensures that each query is answered in \( O(\log M) \) time, where \( M \) is the number of elements relevant to the query's \( K \) and modulus, making the solution efficient even for large input sizes.
+</bot>

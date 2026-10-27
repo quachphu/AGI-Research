@@ -1,0 +1,972 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Not long ago Billy came across such a problem, where there were given three natural numbers A, B and C from the range [1, N], and it was asked to check whether the equation AB = C is correct. Recently Billy studied the concept of a digital root of a number. We should remind you that a digital root d(x) of the number x is the sum s(x) of all the digits of this number, if s(x) ≤ 9, otherwise it is d(s(x)). For example, a digital root of the number 6543 is calculated as follows: d(6543) = d(6 + 5 + 4 + 3) = d(18) = 9. Billy has counted that the digital root of a product of numbers is equal to the digital root of the product of the factors' digital roots, i.e. d(xy) = d(d(x)d(y)). And the following solution to the problem came to his mind: to calculate the digital roots and check if this condition is met. However, Billy has doubts that this condition is sufficient. That's why he asks you to find out the amount of test examples for the given problem such that the algorithm proposed by Billy makes mistakes.
+
+Input
+
+The first line contains the only number N (1 ≤ N ≤ 106).
+
+Output
+
+Output one number — the amount of required A, B and C from the range [1, N].
+
+Examples
+
+Input
+
+4
+
+
+Output
+
+2
+
+
+Input
+
+5
+
+
+Output
+
+6
+
+Note
+
+For the first sample the required triples are (3, 4, 3) and (4, 3, 3).
+</user>
+<bot>
+<think>
+Okay, let's see. The problem is about counting the number of triples (A, B, C) where each is between 1 and N inclusive. These triples are the ones where Billy's method gives the wrong answer. Billy's method checks if the digital root of A*B equals the digital root of C. But actually, the equation AB = C must be checked. So the problem is to find all triples where the digital roots condition holds (so Billy's method says it's correct) but the actual product AB is not equal to C.
+
+Hmm. So the count is the number of triples where d(d(A) * d(B)) == d(C), but AB != C.
+
+First, I need to compute for all possible A, B, C in [1, N], how many satisfy those two conditions.
+
+But directly iterating over all possible A, B, C would be O(N^3), which is impossible when N is up to 1e6. So we need a smarter approach.
+
+Let's break it down. The total number of triples where d(d(A)*d(B)) == d(C) is S. The number of correct triples where AB = C is T. The answer should be S - T.
+
+Wait, because Billy's method would accept all the S cases, but out of those, only T are correct. So the number of mistakes is S - T.
+
+Yes. So the answer is the total number of triples that pass Billy's test (S) minus the number of correct triples (T).
+
+So our task reduces to computing S and T.
+
+First, compute T. T is the number of triples (A,B,C) where AB = C and 1 ≤ A, B, C ≤ N.
+
+But since C is AB, and C must be <= N, then for each A and B where AB <= N, the triple is counted once. So T is the sum over A in 1..N, B in 1..N, such that AB <= N of 1.
+
+Alternatively, T is the number of pairs (A,B) where AB <= N. Because for each such pair, C is fixed as AB, and since AB <= N, C is valid.
+
+So T can be computed efficiently by iterating A from 1 to N, and for each A, find the maximum B such that B <= N/A. So for each A, the number of B's is min(N, floor(N /A )). Summing this over all A gives T.
+
+But wait, since A and B can each be up to N, and AB <= N. So for each A, B can be from 1 to floor(N / A). But A can't be zero. So for A from 1 to N:
+
+count_B = floor(N / A) if A <= N else 0. Wait, no. For example, if A is larger than N, then floor(N/A) is zero, but A is in 1..N, so that's not possible. So for each A in 1..N, the number of B's is floor(N / A). Summing all these gives the total T.
+
+So for T, the sum is sum_{A=1 to N} min(N, floor(N/A)), but since A >=1, N/A is <= N. So it's sum_{A=1}^N floor(N/A). That's the standard way to compute this sum.
+
+But for N up to 1e6, this is O(N), which is manageable.
+
+Now compute S. S is the number of triples (A,B,C) where d(d(A)*d(B)) == d(C). Since digital roots can be from 1 to 9, perhaps we can precompute for all possible digital roots of A, B, and C, and count how many combinations satisfy the equation.
+
+Let me think. Let's precompute for each x in 1..N, its digital root. Then, for each possible triplet (dr_a, dr_b, dr_c), we can find if d(dr_a * dr_b) == dr_c. Then, the total S is the sum over all possible dr_a, dr_b, dr_c that satisfy this condition of (count of A with digital root dr_a) * (count of B with digital root dr_b) * (count of C with digital root dr_c).
+
+So the steps would be:
+
+1. Precompute the digital root for all numbers 1..N. For each number x, dr[x] = (x-1)%9 +1. Because digital roots repeat every 9. So for x=0, it's 9, but since x starts from 1, it's (x-1) mod 9 +1.
+
+But wait, let's test. For example:
+
+x=1: (0) mod9=0 → 0+1=1. Correct.
+
+x=9: (8 mod9)=8 → +1=9. Correct.
+
+x=10: (9 mod9=0 → +1=1. Correct.
+
+Yes, that formula works.
+
+So for each x from 1 to N, dr[x] = (x-1) %9 +1.
+
+So we can compute for each possible dr (1-9), the count of numbers in 1..N with that dr.
+
+Let’s create an array cnt_dr where cnt_dr[dr] is the number of numbers in 1..N with digital root dr.
+
+Once we have cnt_dr, then for all possible dr_a, dr_b, dr_c where d(dr_a * dr_b) == dr_c, the contribution to S is cnt_dr[dr_a] * cnt_dr[dr_b] * cnt_dr[dr_c].
+
+So first, compute cnt_dr for each dr from 1 to 9.
+
+Then, for all possible dr_a and dr_b, compute dr_ab = d(dr_a * dr_b). Then, for each dr_c that equals dr_ab, add the product of the counts.
+
+So the steps to compute S:
+
+Compute cnt_dr for each digital root.
+
+Initialize S to 0.
+
+For each dr_a in 1..9:
+
+   for each dr_b in 1..9:
+
+       compute product = dr_a * dr_b
+
+       dr_ab = digital root of product (which is (product-1) %9 +1)
+
+       then, the count of C that have dr_c == dr_ab is cnt_dr[dr_ab]
+
+       so add to S: cnt_dr[dr_a] * cnt_dr[dr_b] * cnt_dr[dr_ab]
+
+This would be O(9*9) = 81 operations, which is very efficient.
+
+So once we have the cnt_dr array, this part is easy.
+
+So putting it all together:
+
+The answer is S - T.
+
+Now, the problem is to compute S and T efficiently.
+
+Let's see how to compute cnt_dr.
+
+The digital root for x is (x-1) mod9 +1. So for x in 1..N, the dr is (x-1) mod9 +1.
+
+So for each dr in 1..9, the count is the number of x in 1..N where (x-1) mod9 +1 == dr.
+
+Wait, (x-1) mod9 +1 = dr → (x-1) mod9 = dr -1 → x mod9 = dr mod9. Because x-1 ≡ dr-1 mod9 → x ≡ dr mod9.
+
+So x ≡ dr mod9. So x can be written as x = 9k + (dr mod9). But since dr ranges from 1 to9, dr mod9 is 1 to9. For dr=9, mod9 is 0, but dr is 9. Wait, wait.
+
+Wait, the formula (x-1) mod9 +1 gives the digital root. Let's take dr=9:
+
+We need (x-1) mod9 +1 =9 → (x-1) mod9 =8 → x-1 ≡8 mod9 → x ≡9 mod9 → x is divisible by9. So x can be 9, 18, etc.
+
+So for each dr in 1..9:
+
+If dr ==9:
+
+Then x must be congruent to 0 mod9 (since x-1 mod9 is 8 → x=9k).
+
+Wait, no: (x-1) mod9 +1 =9 → (x-1) mod9 =8 → x-1 =9k +8 → x=9k +9 → x=9(k+1). So x must be a multiple of9.
+
+So for dr=9, x must be a multiple of9. For dr=1, x-1 mod9 is0 → x=1, 10, 19, etc.
+
+So for each dr, the numbers x in 1..N with dr(x) =dr are the numbers congruent to dr mod9, except when dr=9. Because for dr=9, the numbers are x=9k, which is 0 mod9. So:
+
+Wait, the digital root dr for x can be 1-9.
+
+So for dr in 1-8:
+
+x ≡ dr mod9.
+
+For dr=9: x ≡0 mod9.
+
+So for each dr in 1-9:
+
+If dr is not 9: numbers x ≡dr mod9.
+
+If dr is9: numbers x ≡0 mod9.
+
+So for each dr in 1..9:
+
+count_dr[dr] = number of x in [1, N] where x mod9 == (dr %9) if dr !=9, else x mod9 ==0.
+
+Wait, perhaps a better approach is to compute for each residue r in 0..8 (since mod9 has residues 0-8), how many numbers in 1..N have x mod9 = r.
+
+Then, for dr from 1 to9:
+
+If dr <9: residue is dr.
+
+If dr=9: residue is 0.
+
+So:
+
+residue_counts[r] = number of x in 1..N where x mod9 == r.
+
+Then, cnt_dr[dr] = residue_counts[dr] if dr <9, else residue_counts[0].
+
+So how to compute residue_counts?
+
+For each residue r (0-8):
+
+The numbers in 1..N with x mod9 ==r are:
+
+The first number >=1 with x ≡r mod9 is 1 + (r -1 mod9) if r is not0. Wait, perhaps it's easier to compute.
+
+Let's think:
+
+For residue r, the numbers are x = k*9 + r, where k is a non-negative integer.
+
+But x must be >=1 and <=N.
+
+So for r=0: numbers are 9, 18, 27, ..., up to <=N.
+
+For r=1: 1, 10, 19, ... etc.
+
+So for each r in 0..8:
+
+The numbers are of the form 9k + r, but for r=0, the numbers are 9k, and k starts from 1 (since x=0 is not in [1, N]).
+
+Wait, no. For example, r=0: numbers are 9, 18, 27, etc. So x=9k where k >=1. So the count is floor((N)/9) if N >=9k, etc.
+
+Alternatively, for residue r (0-8):
+
+count_r = floor( (N - r + 9) /9 )
+
+Wait, let's see. For r=1:
+
+Numbers are 1,10,19,...
+
+The first number is 1 = 0*9 +1. The next is 1+9=10, etc. So the count is the number of terms in the sequence 1 +9k, where 1+9k <=N.
+
+So 9k <= N-1 → k <= (N-1)/9 → floor( (N-1)/9 ) +1 (since k starts at 0).
+
+Similarly, for r=0:
+
+Numbers are 9,18, etc. 9k <=N → k <= N/9. So count is floor(N/9).
+
+Wait, for r=0, x=9k where k >=1. So the maximum k is floor(N/9). So count is floor(N/9).
+
+For other residues r (1-8):
+
+x =9k + r, where k >=0. The maximum x is <=N → 9k +r <=N →9k <= N -r →k <= (N -r)/9 → since k is >=0, the maximum k is floor( (N - r)/9 ). The number of terms is floor( (N - r)/9 ) +1 (since k starts at 0).
+
+So for r in 1-8: count_r = floor( (N - r)/9 ) +1.
+
+For r=0: count_r = floor(N /9).
+
+So how to compute residue_counts for each r in 0..8.
+
+Once we have residue_counts, then:
+
+cnt_dr[dr] = residue_counts[dr] for dr 1-8.
+
+cnt_dr[9] = residue_counts[0].
+
+So the steps are:
+
+Compute residue_counts for r in 0..8.
+
+For each r in 0..8:
+
+if r ==0:
+
+   residue_counts[0] = N //9
+
+else:
+
+   residue_counts[r] = ((N - r) //9) +1 if (N >= r) else 0.
+
+Wait, but when N < r, then (N -r) is negative, and ((N -r) //9) is negative. Then adding 1 could be zero. Let's check.
+
+For example, N=5, r=6:
+
+N -r =5-6 =-1.
+
+//9 is -1 (since in Python, integer division is floor division). So ((5-6)//9) =-1//9 = -1. Adding 1 gives 0. Which is correct, since there are no numbers <=5 with mod9 =6.
+
+So the formula works.
+
+So for r in 0..8:
+
+if r ==0:
+
+   count = N //9
+
+else:
+
+   count = ((N - r) //9) +1
+
+But wait, for r=0:
+
+Numbers are 9, 18, etc. So 9*1, 9*2, etc. So the maximum x is 9*k <=N. So k can be up to N//9. Hence the count is N//9.
+
+For example, N=9: count is 9//9 =1. Which is correct (9).
+
+N=17: 17//9=1. So count is 1 (9).
+
+Yes.
+
+So to compute residue_counts, for each r in 0..8:
+
+if r ==0:
+
+   residue_counts[r] = N //9
+
+else:
+
+   if r > N:
+
+       residue_counts[r] =0
+
+   else:
+
+       residue_counts[r] = ((N -r) //9) +1
+
+But the formula ((N -r) //9) +1 works even when r <=N. For example, N=5, r=5:
+
+N -r=0. 0//9=0. +1 gives 1. So x=5 (5=9*0 +5). So count is 1. Correct.
+
+So yes, the formula works.
+
+Once we have residue_counts, then cnt_dr can be filled as:
+
+cnt_dr[1] = residue_counts[1]
+
+cnt_dr[2] = residue_counts[2]
+
+...
+
+cnt_dr[8] = residue_counts[8]
+
+cnt_dr[9] = residue_counts[0]
+
+So now, S can be computed as follows:
+
+For all pairs (dr_a, dr_b), compute their product, find the digital root of that product (d(dr_a * dr_b)), then multiply the counts of dr_a, dr_b, and the count of dr_c which is the digital root of the product.
+
+So for each dr_a in 1..9:
+
+   for each dr_b in 1..9:
+
+       product = dr_a * dr_b
+
+       dr_ab = (product -1) %9 +1
+
+       dr_c_needed = dr_ab
+
+       count = cnt_dr[dr_a] * cnt_dr[dr_b] * cnt_dr[dr_c_needed]
+
+       S += count
+
+So that's how to compute S.
+
+Now, the next step is to compute T, the number of triples where AB=C.
+
+As discussed earlier, T is the number of pairs (A,B) such that AB <=N.
+
+So T can be computed as the sum over A from 1 to N of the number of B's such that B <= N/A.
+
+But for A=1, B can be up to N (since 1*B <=N → B <=N).
+
+For A=2, B can be up to floor(N/2).
+
+And so on.
+
+So the sum is sum_{A=1}^N floor(N / A).
+
+But for A > N, floor(N/A) is zero, but A can't exceed N.
+
+So the sum is sum_{A=1}^N floor(N /A).
+
+But when N is up to 1e6, this sum can be computed in O(N) time, which is acceptable.
+
+So now, putting all together:
+
+The steps are:
+
+1. Compute residue_counts for r in 0..8.
+
+2. Compute cnt_dr for dr in 1..9.
+
+3. Compute S as the sum over all dr_a, dr_b, and cnt_dr[dr_ab], multiplied by their counts.
+
+4. Compute T as the sum of floor(N/A) for A from 1 to N.
+
+5. The answer is S - T.
+
+Now, let's test with the sample input.
+
+Sample Input 1: 4
+
+Sample Output: 2.
+
+Let's compute S and T.
+
+First, compute residue_counts:
+
+For N=4.
+
+r=0: 4//9=0. So residue_counts[0] =0.
+
+r=1: ((4-1)/9) +1 → (3//9=0) +1=1.
+
+r=2: (4-2)/9=2/9=0 →0 +1=1.
+
+r=3: (4-3)/9=1/9=0 →1 →1.
+
+r=4: (4-4)/9=0 →0+1=1.
+
+r=5: (4-5) →-1//9 is -1, +1=0. So 0.
+
+Similarly for r=6,7,8: counts are 0.
+
+So residue_counts is:
+
+residue_counts[0] =0
+
+r=1:1, r=2:1, r=3:1, r=4:1, others 0.
+
+cnt_dr[1] =1, cnt_dr[2]=1, cnt_dr[3]=1, cnt_dr[4]=1, cnt_dr[5]=0, cnt_dr[6]=0, cnt_dr[7]=0, cnt_dr[8]=0, cnt_dr[9]=0 (since residue_counts[0] is 0).
+
+So S is computed as follows:
+
+For all dr_a, dr_b in 1-9:
+
+But since cnt_dr for dr >=5 is zero, except for dr=1,2,3,4.
+
+So possible dr_a and dr_b are 1,2,3,4.
+
+For each pair (a, b):
+
+product = a*b.
+
+dr_ab = (product-1) mod9 +1.
+
+Then, the count is cnt_dr[a] * cnt_dr[b] * cnt_dr[dr_ab].
+
+Let's compute all possible pairs:
+
+dr_a ranges 1-4, dr_b ranges 1-4.
+
+For each combination:
+
+a | b | product | dr_ab | cnt_dr[a] | cnt_dr[b] | cnt_dr[dr_ab]
+1 1 →1 →1 →1*1*1=1 →1. cnt_dr[1] is1. So contribution is 1*1 * cnt_dr[1] →1*1*1=1.
+But wait, dr_ab is (1*1-1) mod9 +1 →0 mod9 +1=1.
+
+So cnt_dr[dr_ab=1] is1. So contribution is 1*1 *1=1.
+
+So for (1,1), the contribution is 1.
+
+Similarly, let's compute all possible pairs:
+
+There are 4 *4 =16 pairs.
+
+Let's go through them:
+
+a=1:
+
+   b=1: product=1 → dr_ab=1. cnt=1*1*1=1.
+
+   b=2: product=2 → dr_ab= (2-1) mod9 +1 →1+1=2. cnt=1*1*1 (since cnt_dr[2] is1). So 1*1*1=1.
+
+   b=3: product=3 → dr_ab=3. cnt=1*1*1=1.
+
+   b=4: product=4 → dr_ab=4. cnt=1*1*1=1.
+
+a=1 contributes 1+1+1+1=4.
+
+a=2:
+
+   b=1: product=2 → dr_ab=2. cnt=1*1 *1 (since cnt_dr[2] is1). So 1.
+
+   b=2: product=4 → dr_ab=4. cnt=1*1*1=1.
+
+   b=3: product=6 → (6-1)=5 →5 mod9=5 →5+1=6. dr_ab=6. cnt_dr[6] is0. So contribution 1*1*0=0.
+
+   b=4: product=8 → (8-1) mod9=7 →7+1=8. dr_ab=8. cnt_dr[8] is0. So 0.
+
+So sum for a=2 is 1+1+0+0=2.
+
+a=3:
+
+   b=1: product=3 → dr_ab=3. cnt=1*1*1=1.
+
+   b=2: product=6 → dr_ab=6. cnt=1*1*0=0.
+
+   b=3: product=9 → (9-1)=8 mod9=8 →8+1=9. dr_ab=9. cnt_dr[9] is0. So 0.
+
+   b=4: product=12 →12-1=11 mod9=2 →2+1=3. dr_ab=3. cnt=1*1*1=1.
+
+Sum:1 +0 +0 +1=2.
+
+a=4:
+
+   b=1: product=4 → dr_ab=4. cnt=1*1*1=1.
+
+   b=2: product=8 → dr_ab=8 → cnt=0. So 1*1*0=0.
+
+   b=3: product=12 → dr_ab=3 → cnt=1. 1*1*1=1.
+
+   b=4: product=16 →16-1=15 mod9=6 →6+1=7. dr_ab=7 → cnt_dr[7] is0. So 0.
+
+Sum:1+0+1+0=2.
+
+Total S =4 (a=1) +2 (a=2) +2 (a=3) +2 (a=4) → total S= 4+2+2+2=10.
+
+But wait, wait. Wait the counts for a=1, b=1, etc. But the actual cnt_dr for a=1 is 1 (since residue_counts[1] is1). Same for others.
+
+So S=10.
+
+Now compute T.
+
+T is sum_{A=1}^4 floor(4/A).
+
+For A=1: 4//1=4.
+
+A=2:4//2=2.
+
+A=3:4//3=1.
+
+A=4:4//4=1.
+
+Sum:4+2+1+1=8.
+
+So answer is 10-8=2. Which matches the sample.
+
+So the approach works.
+
+Another sample:
+
+Input 5 → Output 6.
+
+Let's compute:
+
+N=5.
+
+Compute residue_counts.
+
+r=0:5//9=0.
+
+r=1: (5-1)/9=4/9=0 →0 +1=1.
+
+r=2:5-2=3 →3//9=0 →0+1=1.
+
+r=3:5-3=2 →0+1=1.
+
+r=4:5-4=1 →0+1=1.
+
+r=5:5-5=0 →0//9=0 →0+1=1.
+
+r=6:5-6= -1 →-1//9=-1 →-1 +1=0.
+
+Similarly r=7,8 →0.
+
+So residue_counts:
+
+0 →0
+
+1 →1
+
+2 →1
+
+3 →1
+
+4 →1
+
+5 →1
+
+6→0
+
+7→0
+
+8→0.
+
+cnt_dr:
+
+dr1: residue_counts[1] →1.
+
+dr2:1.
+
+dr3:1.
+
+dr4:1.
+
+dr5:1.
+
+dr6-8:0.
+
+dr9: residue_counts[0] →0.
+
+So cnt_dr is:
+
+1:1, 2:1, 3:1,4:1,5:1, others (6-9):0 except 9 is 0.
+
+Now compute S.
+
+For all possible dr_a and dr_b (1-5, since others have 0 counts).
+
+For each pair (a, b):
+
+product =a*b.
+
+dr_ab = (product-1) mod9 +1.
+
+Then, contribution is cnt_dr[a] * cnt_dr[b] * cnt_dr[dr_ab].
+
+So possible a and b are 1-5.
+
+But for a and b in 1-5:
+
+Let's see:
+
+There are 5*5=25 pairs.
+
+But let's compute each:
+
+For example:
+
+a=1:
+
+   b=1: product=1 →dr_ab=1. contribution 1*1*1=1.
+
+   b=2: product 2 →dr_ab=2 →1*1*1=1.
+
+   b=3: product3 →3 →contribution 1*1*1=1.
+
+   b=4: product4 →4 →1*1*1=1.
+
+   b=5: product5 →5 →1*1*1=1.
+
+Sum a=1:5.
+
+a=2:
+
+   b=1: product2 →2 → contribution 1*1*1=1.
+
+   b=2:4 →4 →1*1*1=1.
+
+   b=3:6 → dr_ab is (6-1)=5 mod9=5 →5+1=6. So dr_c=6. cnt_dr[6] is0. So contribution 0.
+
+   b=4:8 →8-1=7 mod9=7 →7+1=8 →dr_c=8. cnt is0 → 0.
+
+   b=5:10 →10-1=9 mod9=0 →0+1=1 →dr_c=1. cnt_dr[1] is1. So contribution 1*1*1=1.
+
+So sum for a=2: 1 +1 +0 +0 +1 =3.
+
+a=3:
+
+   b=1 → product3 →dr=3. contribution 1.
+
+   b=2 →6 →dr=6 →0.
+
+   b=3 →9 →dr_ab=9 →cnt_dr[9]=0.
+
+   b=4 →12 →12-1=11 mod9=2 →dr=3 →dr_ab=3. cnt=1 →1*1*1=1.
+
+   b=5 →15 →15-1=14 mod9=5 →5+1=6 →dr_ab=6. cnt=0. contribution 0.
+
+Sum for a=3:1 +0 +0 +1 +0 =2.
+
+a=4:
+
+   b=1 →4 →dr_ab=4 →1.
+
+   b=2 →8 →dr=8 →0.
+
+   b=3 →12 →dr_ab=3 →1*1*1=1.
+
+   b=4 →16 →16-1=15 mod9=6 →6+1=7 →dr_ab=7 →0.
+
+   b=5 →20 →20-1=19 mod9=1 →1+1=2 →dr_ab=2 →cnt_dr[2]=1. contribution 1*1*1=1.
+
+Sum a=4:1 +0 +1 +0 +1 →3.
+
+a=5:
+
+   b=1 →5 →dr=5 →1*1*1=1.
+
+   b=2 →10 →dr=1 → contribution 1*1*1=1.
+
+   b=3 →15 →dr=6 →0.
+
+   b=4 →20 →dr=2 →1.
+
+   b=5 →25 →25-1=24 mod9=6 →6+1=7 →dr_ab=7 →0.
+
+Sum a=5:1 +1 +0 +1 +0 →3.
+
+Total S is 5 (a=1) +3 (a=2) +2 (a=3) +3 (a=4) +3 (a=5) →5+3+2+3+3=16.
+
+Now compute T: sum floor(5/A) for A=1-5.
+
+A=1:5 →5.
+
+A=2:5//2=2.
+
+A=3:5//3=1.
+
+A=4:5//4=1.
+
+A=5:1.
+
+Sum 5+2+1+1+1=10.
+
+Answer:16-10=6. Which matches the sample.
+
+So the approach is correct.
+
+Now, to implement this in Python.
+
+The steps:
+
+Read N.
+
+Compute residue_counts.
+
+Compute cnt_dr.
+
+Compute S.
+
+Compute T.
+
+Return S - T.
+
+Now, code.
+
+First, compute residue_counts.
+
+Initialize residue_counts = [0]*9.
+
+For r in 0..8:
+
+if r ==0:
+
+   residue_counts[r] = N //9
+
+else:
+
+   residue_counts[r] = ((N - r) //9) +1 if (N >=r) else 0.
+
+Wait, but for N < r, then ((N -r) //9) +1 could be zero. For example, if N=3, r=4: N-r= -1 → ((N-r)//9) →-1//9 is -1 → -1+1=0. Which is correct.
+
+But in code:
+
+for r in range(9):
+
+   if r ==0:
+
+       residue_counts[r] = N //9
+
+   else:
+
+       if N < r:
+
+           residue_counts[r] =0
+
+       else:
+
+           residue_counts[r] = ((N - r) //9) +1
+
+Alternatively, in Python, ((N - r) //9) can be negative, but adding 1 may not be correct.
+
+Wait, let's see:
+
+For N=5, r=6: N-r= -1 → (N -r)//9 = -1 //9 = -1 → +1 → 0. Correct.
+
+So code can be written as:
+
+residue_counts = [0] *9
+
+for r in range(9):
+
+    if r ==0:
+
+        residue_counts[r] = N //9
+
+    else:
+
+        residue_counts[r] = ((N - r) //9) +1 if N >= r else 0
+
+But in Python, even if N < r, (N -r) can be negative, but ((N -r) //9) would be a negative number, but adding 1 would give (negative number) +1.
+
+But the 'if N >= r' ensures that we set it to zero when r > N. So for N <r, residue_counts[r] is zero.
+
+Alternatively, code can be written as:
+
+for r in range(9):
+
+    if r ==0:
+
+        cnt = N //9
+
+    else:
+
+        if N < r:
+
+            cnt =0
+
+        else:
+
+            cnt = ((N -r) //9) +1
+
+    residue_counts[r] = cnt
+
+Yes.
+
+Once residue_counts is computed, compute cnt_dr:
+
+cnt_dr = [0] *10 # indexes 0-9, but 0 unused.
+
+for dr in range(1, 10):
+
+    if dr <9:
+
+        cnt_dr[dr] = residue_counts[dr]
+
+    else:
+
+        cnt_dr[dr] = residue_counts[0]
+
+Then compute S:
+
+s =0
+
+for a in range(1, 10):
+
+    for b in range(1, 10):
+
+        product = a * b
+
+        dr_ab = (product -1) %9 +1
+
+        s += cnt_dr[a] * cnt_dr[b] * cnt_dr[dr_ab]
+
+Then compute T:
+
+t =0
+
+for a in range(1, N+1):
+
+    t += N //a
+
+The answer is s -t.
+
+But for N up to 1e6, the loop for T is 1e6 iterations, which is acceptable. Wait, 1e6 iterations in Python are manageable, as each iteration is simple.
+
+But for N=1e6, the loop would run 1e6 times, which can be done quickly enough.
+
+But let's test for N=1e6:
+
+summing for a in 1..1e6, N//a.
+
+But in Python, this loop may take a bit of time, but for 1e6 iterations, each step is a simple division and addition. It's acceptable.
+
+Now, code.
+
+Putting it all together.
+
+Read N.
+
+Compute residue_counts.
+
+Compute cnt_dr.
+
+Compute S.
+
+Compute T.
+
+Output S-T.
+
+So the code:
+
+def main():
+    import sys
+    N = int(sys.stdin.readline())
+    
+    # Compute residue_counts
+    residue_counts = [0] *9
+    for r in range(9):
+        if r ==0:
+            residue_counts[r] = N //9
+        else:
+            if N < r:
+                residue_counts[r] =0
+            else:
+                residue_counts[r] = ((N -r) //9) +1
+    
+    # Compute cnt_dr
+    cnt_dr = [0]*10 # indexes 0-9
+    for dr in range(1,10):
+        if dr <9:
+            cnt_dr[dr] = residue_counts[dr]
+        else:
+            cnt_dr[dr] = residue_counts[0]
+    
+    # Compute S
+    S =0
+    for a in range(1,10):
+        for b in range(1,10):
+            product = a * b
+            dr_ab = (product -1) %9 +1
+            S += cnt_dr[a] * cnt_dr[b] * cnt_dr[dr_ab]
+    
+    # Compute T
+    T =0
+    for A in range(1, N+1):
+        T += N //A
+    
+    print(S - T)
+
+if __name__ == "__main__":
+    main()
+
+This should work.
+
+Testing sample input 4 gives output 2. Sample input5 gives 6.
+
+Yes.
+
+So this is the code.
+</think>
+To solve this problem, we need to determine the number of triples (A, B, C) where the digital root check proposed by Billy incorrectly validates the product AB as C. The solution involves calculating the number of valid triples using digital root properties and then subtracting the correct triples where AB actually equals C.
+
+### Approach
+1. **Digital Root Calculation**: Compute the digital root for each number from 1 to N using the formula `d(x) = (x - 1) % 9 + 1`.
+2. **Residue Counts**: Calculate how many numbers fall into each residue class modulo 9. This helps in efficiently counting numbers with specific digital roots.
+3. **Valid Triples Using Digital Roots (S)**: Use precomputed residue counts to determine the number of valid triples (A, B, C) where the digital root of the product of A and B matches the digital root of C.
+4. **Correct Triples (T)**: Count the number of correct triples where AB = C directly by iterating through possible values of A and B.
+5. **Result Calculation**: The result is the difference between the valid triples using digital roots (S) and the correct triples (T).
+
+### Solution Code
+```python
+def main():
+    import sys
+    N = int(sys.stdin.readline())
+    
+    # Compute residue counts for each residue 0-8 mod 9
+    residue_counts = [0] * 9
+    for r in range(9):
+        if r == 0:
+            residue_counts[r] = N // 9
+        else:
+            if N < r:
+                residue_counts[r] = 0
+            else:
+                residue_counts[r] = ((N - r) // 9) + 1
+    
+    # Compute cnt_dr for each digital root 1-9
+    cnt_dr = [0] * 10  # Using indices 1-9
+    for dr in range(1, 10):
+        if dr < 9:
+            cnt_dr[dr] = residue_counts[dr]
+        else:
+            cnt_dr[dr] = residue_counts[0]
+    
+    # Calculate S: number of triples where digital root condition holds
+    S = 0
+    for a in range(1, 10):
+        for b in range(1, 10):
+            product = a * b
+            dr_ab = (product - 1) % 9 + 1
+            S += cnt_dr[a] * cnt_dr[b] * cnt_dr[dr_ab]
+    
+    # Calculate T: number of correct triples where AB = C
+    T = 0
+    for A in range(1, N + 1):
+        T += N // A
+    
+    # The answer is S - T
+    print(S - T)
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Residue Count Calculation**: For each residue class modulo 9, determine how many numbers from 1 to N fall into that class. This helps in quickly determining the count of numbers with specific digital roots.
+2. **Digital Root Count (cnt_dr)**: Convert residue counts into counts for each digital root (1-9). Digital root 9 corresponds to residue 0.
+3. **Valid Triples (S)**: Using the counts of digital roots, compute the number of valid triples where the digital root of the product of A and B matches the digital root of C. This is done by iterating over all possible pairs of digital roots for A and B, computing the product, and checking the corresponding digital root for C.
+4. **Correct Triples (T)**: Directly count the number of valid products AB = C by iterating over all possible values of A and summing the valid counts of B for each A.
+5. **Result**: The final result is the difference between the valid triples found using digital roots and the actual correct triples, giving the number of false positives from Billy's method.
+</bot>

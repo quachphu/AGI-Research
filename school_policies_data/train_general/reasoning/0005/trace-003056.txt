@@ -1,0 +1,766 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.There is a directed graph with N vertices and M edges. The i-th edge (1≤i≤M) points from vertex a_i to vertex b_i, and has a weight c_i. We will play the following single-player game using this graph and a piece.
+
+Initially, the piece is placed at vertex 1, and the score of the player is set to 0. The player can move the piece as follows:
+
+* When the piece is placed at vertex a_i, move the piece along the i-th edge to vertex b_i. After this move, the score of the player is increased by c_i.
+
+
+
+The player can end the game only when the piece is placed at vertex N. The given graph guarantees that it is possible to traverse from vertex 1 to vertex N.
+
+When the player acts optimally to maximize the score at the end of the game, what will the score be? If it is possible to increase the score indefinitely, print `inf`.
+
+Constraints
+
+* 2≤N≤1000
+* 1≤M≤min(N(N-1),2000)
+* 1≤a_i,b_i≤N (1≤i≤M)
+* a_i≠b_i (1≤i≤M)
+* a_i≠a_j or b_i≠b_j (1≤i<j≤M)
+* -10^9≤c_i≤10^9 (1≤i≤M)
+* c_i is an integer.
+* In the given graph, there exists a path from vertex 1 to vertex N.
+
+Input
+
+Input is given from Standard Input in the following format:
+
+
+N M
+a_1 b_1 c_1
+a_2 b_2 c_2
+:
+a_M b_M c_M
+
+
+Output
+
+Print the maximum possible score at the end of the game, if it is finite. If it is possible to increase the score indefinitely, print `inf`.
+
+Examples
+
+Input
+
+3 3
+1 2 4
+2 3 3
+1 3 5
+
+
+Output
+
+7
+
+
+Input
+
+2 2
+1 2 1
+2 1 1
+
+
+Output
+
+inf
+
+
+Input
+
+6 5
+1 2 -1000000000
+2 3 -1000000000
+3 4 -1000000000
+4 5 -1000000000
+5 6 -1000000000
+
+
+Output
+
+-5000000000
+</user>
+<bot>
+<think>
+Okay, let's see. The problem is about finding the maximum possible score when moving from vertex 1 to vertex N in a directed graph. And we need to determine if there's a way to have an infinitely increasing score, which would happen if there's a positive cycle that's reachable from the start and can reach the end. Hmm.
+
+So, first, the main idea is to detect if there's a path from 1 to N that includes a cycle with a positive total weight. Because if such a cycle exists, the player can loop around it infinitely to gain more and more points, making the maximum score unbounded (so we print 'inf'). If not, then we need to find the longest path from 1 to N, but since the graph can have negative edges, this is tricky. Wait, but the problem says "act optimally to maximize the score," so it's a maximum path problem.
+
+But in a general graph, the longest path problem is NP-hard. However, here the graph might have cycles. So how do we handle this?
+
+Wait, but if the graph is a DAG (directed acyclic graph), then we can process the nodes in topological order and compute the maximum distances. But the presence of cycles complicates things. However, if there's a cycle with a positive total weight (i.e., the sum of the edges in the cycle is positive) and that cycle is on a path from 1 to N, then the answer is 'inf' because we can loop that cycle as many times as possible, each time adding a positive amount to the score. So the key steps are:
+
+1. Check for any positive cycles that are on a path from 1 to N. If any exist, output 'inf'.
+2. If there are no such cycles, compute the longest path from 1 to N, which can be done using Bellman-Ford if we handle the nodes correctly.
+
+But since the graph can have negative edges and cycles (as long as they are not positive), we need to find the maximum possible score. But standard Bellman-Ford is used for shortest paths. For longest paths, perhaps we can invert the weights (multiply by -1) and find the shortest path, but that's only applicable if the graph is a DAG. Since the problem allows for cycles with non-positive total weight, but not positive ones, maybe Bellman-Ford can be modified here.
+
+Wait, but how to compute the maximum path. Let's think: for each node, we can track the maximum distance (score) from node 1. But in the presence of cycles, this could loop indefinitely. However, if there's a positive cycle on the path from 1 to N, then the answer is 'inf'. So the steps would be:
+
+- Find all nodes that are reachable from node 1 and can reach node N. Any cycle that is in this subset of nodes could potentially be a candidate for creating an infinite score.
+
+So first, we need to check for any positive cycles in the subgraph of nodes that are both reachable from 1 and can reach N. Because only those cycles can contribute to an infinite score.
+
+Once we've confirmed that there are no such positive cycles, then the problem reduces to finding the longest path from 1 to N. Since the graph has no positive cycles in that subgraph, the longest path can be found using a modified Bellman-Ford algorithm, which can detect if the maximum distance can be increased even after the standard number of relaxations. Wait, but Bellman-Ford is typically for detecting negative cycles. For longest paths, perhaps the approach is similar but reversed.
+
+Let me think: For longest paths, each edge's weight is considered as a gain, so we want to maximize the total gain. However, since the graph can have cycles, the presence of a cycle with a positive total weight (even if not part of any path to N) would allow infinite gains. But in our problem, such a cycle is only a problem if it's part of a path from 1 to N. So first, we need to identify all nodes that are on some path from 1 to N. Then, check for any cycles in those nodes that have a positive total weight.
+
+So the plan is:
+
+1. Preprocess the graph to find all nodes that are on some path from 1 to N. Let's call this set S. The nodes not in S can be ignored because they don't affect the game (since the player must reach N to end the game, and the initial position is 1, edges not in S can't be part of any valid path from 1 to N).
+
+2. For each edge in the graph, check if both the source and destination are in S. Only those edges are relevant.
+
+3. Then, check if there's a positive cycle in the subgraph S. If yes, output 'inf'.
+
+4. If not, compute the longest path from 1 to N in the subgraph S. Since there are no positive cycles, the longest path is well-defined (the number of edges is finite, even though the graph might have cycles, but those cycles cannot contribute to increasing the path's total because their total weight is non-positive).
+
+But how do we compute the longest path in this case?
+
+The standard approach for finding longest paths in graphs without positive cycles is to use the Bellman-Ford algorithm, but with some modifications. For example, since we are looking for the maximum path, we can initialize distances to negative infinity except for the starting node (distance 0), and then relax edges in a way that maximizes the distance. If after N-1 iterations, we can still relax an edge (increase the distance), then there's a positive cycle. But in our case, since we have already checked for positive cycles in the relevant subgraph (S), we can proceed to relax the edges N-1 times and the maximum distance to N should be correct.
+
+Wait, but Bellman-Ford is typically used for shortest paths, but by reversing the signs of the edge weights, we can use it for longest paths. So the algorithm would be similar. Let's see:
+
+- Initialize dist[1] = 0, all others to -infinity.
+- For each node in 1..N-1 (since the longest path can have at most N-1 edges if there are no positive cycles), relax all edges.
+- After N-1 relaxations, check if any edge can still be relaxed (i.e., dist[b] < dist[a] + c for edge a->b with weight c). If such an edge exists and the node is in S (i.e., on a path from 1 to N and can reach N), then there's a positive cycle, so output 'inf'.
+- Otherwise, the maximum distance to N is the answer.
+
+Wait, but how do we handle the checking in step 3? Because even if there's a cycle that can be relaxed, but it's not on a path to N, then it's not a problem. So the process would be:
+
+- After performing N-1 relaxations, for each edge (a -> b) in the graph, check if dist[a] + c > dist[b]. If yes, then there's a possibility of a positive cycle. But we need to check if this edge is part of a path that leads to N. That is, if a is reachable from 1 (since dist[a] is not -infinity), and b can reach N. If such an edge exists, then there's a way to create an arbitrarily large score by looping around the cycle. So the answer would be 'inf'.
+
+So the steps are:
+
+1. Find all nodes reachable from 1 (using BFS or DFS).
+2. Find all nodes that can reach N (using reverse graph BFS/DFS).
+3. The set S is the intersection of these two sets. Only edges in S are considered.
+4. Then, perform Bellman-Ford to compute the maximum possible score. However, after N-1 iterations, if any edge (a->b) in S can still be relaxed (i.e., there's a way to increase the score), and a is in S (so reachable from 1) and b is in S (can reach N), then there's a positive cycle in S, so output 'inf'.
+5. Otherwise, the maximum score is dist[N].
+
+But how do we compute the reachable nodes and the nodes that can reach N?
+
+For step 1: Do a BFS starting from node 1, following edges in their direction. All nodes visited are reachable from 1.
+
+For step 2: Do a BFS starting from node N, but following edges in reverse direction (i.e., for each edge a -> b, we consider edges b <- a). So any node that can reach N would be part of this BFS.
+
+Then, the set S is the intersection of nodes reachable from 1 and nodes that can reach N. So any node in S is on some path from 1 to N.
+
+Now, for the Bellman-Ford part:
+
+We need to run Bellman-Ford on the subgraph S. The edges that are considered are those where both a and b are in S.
+
+But how to model this. So during the Bellman-Ford steps, we only process edges where a is reachable (so dist[a] is not -infinity) and b is in S (can reach N). Otherwise, even if the edge exists, it's not part of any path that can lead to N.
+
+Wait, no. Because for the edge a->b to be part of a path from 1 to N, a must be reachable from 1 (so in the first set), and b must be able to reach N (so in the second set). So during the preprocessing, we can create a list of edges that have a in the reachable set and b in the can-reach-N set. Then, during Bellman-Ford, we can process only these edges.
+
+Alternatively, during the Bellman-Ford steps, for each edge, we can check if a is in the reachable set and b is in the can-reach-N set, and only process those edges.
+
+So, in code:
+
+First, compute the reachable_from_1 set (nodes that can be reached from 1 via any path).
+
+Then, compute the can_reach_N set (nodes that have a path to N).
+
+The relevant edges are those edges (a_i, b_i) where a_i is in reachable_from_1 and b_i is in can_reach_N.
+
+Only these edges can be part of a path from 1 to N.
+
+Then, for these edges, perform the Bellman-Ford algorithm to find the maximum possible score.
+
+Wait, but the Bellman-Ford algorithm will process each edge in each iteration. So during each iteration, for each edge in the list of relevant edges, check if we can relax (increase) the distance of b_i.
+
+So, the steps in code would be:
+
+1. Read the input.
+
+2. Find reachable_from_1 via BFS.
+
+3. Find can_reach_N via reverse BFS (i.e., build a reverse adjacency list and BFS from N).
+
+4. Create a list of edges that are in the relevant set (a is in reachable_from_1 and b is in can_reach_N).
+
+5. Initialize dist array: dist[1] = 0, others to -infinity.
+
+6. For i in 0 to N-1:
+
+   a. For each edge in relevant edges:
+
+       i. a, b, c = edge.
+
+       ii. if dist[a] is not -infinity and dist[b] < dist[a] + c:
+
+           dist[b] = dist[a] + c
+
+7. After N-1 iterations, check for any edge in the relevant edges where dist[a] is not -infinity and dist[a] + c > dist[b]. If such an edge exists, then there's a positive cycle in the relevant subgraph. So output 'inf'.
+
+8. Else, output dist[N].
+
+This approach should work.
+
+But wait, why does the check after N-1 iterations work? Because if there's a cycle that can be relaxed after N-1 iterations, then that cycle has a positive total sum. Because in the Bellman-Ford algorithm, after N-1 iterations, all possible shortest paths (or longest paths in this case) should have been found. If there's still a possible relaxation, then there's a cycle that can be used to increase the distance infinitely. But since we have already filtered the edges to those in the relevant subgraph (which can reach N), then such a cycle is part of a path from 1 to N, and thus the score can be made infinitely large.
+
+So this approach should correctly identify if there's a positive cycle in the relevant subgraph. If so, output 'inf'. Otherwise, output the maximum distance to N.
+
+Now, let's test this approach against the sample inputs.
+
+Sample Input 1:
+
+3 3
+
+1 2 4
+
+2 3 3
+
+1 3 5
+
+Reachable from 1: 1, 2, 3.
+
+Can reach N (3): 3, 2 (since 2 can reach 3), 1 (since 1 can reach 3 via 1-3 or 1-2-3).
+
+So all edges are relevant.
+
+Edges:
+
+1->2 (c=4). Both 1 is reachable, 2 can reach N.
+
+2->3 (3). 2 is reachable, 3 can reach N.
+
+1->3 (5). 1 is reachable, 3 can reach N.
+
+Bellman-Ford steps:
+
+Initial dist[1] = 0, others -inf.
+
+After iteration 0:
+
+Check all edges.
+
+For 1->2: dist[2] becomes 0+4=4.
+
+For 1->3: dist[3] becomes 5.
+
+For 2->3: 4+3=7 >5 → dist[3] becomes 7.
+
+After iteration 1:
+
+Check edges again.
+
+1->2: no change.
+
+2->3: 4+3=7 → dist[3] is already 7.
+
+1->3: 0+5=5 <7.
+
+No changes.
+
+So after N-1=2 iterations, dist[3] is 7. Now check if any edge can be relaxed. Let's see:
+
+Check each edge:
+
+1->2: 0+4=4. dist[2] is 4. No.
+
+2->3: 4+3=7. dist[3] is 7. No.
+
+1->3: 0+5=5 <7. No.
+
+No edges can be relaxed. So output 7. Which matches sample.
+
+Sample Input 2:
+
+2 2
+
+1 2 1
+
+2 1 1
+
+Reachable from 1: 1 and 2 (since 1→2 and 2→1, but since the game starts at 1, all nodes are reachable).
+
+Can reach N=2: nodes 1 and 2 (since 2 can reach itself, and 1 can reach 2 via 1→2 or 1→2→1→2, etc).
+
+So all edges are relevant.
+
+Edges are 1→2 (c=1), 2→1 (c=1).
+
+Now, during Bellman-Ford:
+
+N=2, so N-1=1 iteration.
+
+Initial dist[1] =0.
+
+Iteration 0:
+
+Process edges.
+
+First, 1→2: dist[2] becomes 0+1=1.
+
+Then 2→1: dist[1] is max(-inf, 1+1=2). So dist[1] becomes 2.
+
+After iteration 0 (the first and only iteration), dist is [2 at 1, 1 at 2].
+
+Now, check if any edges can be relaxed in the next check.
+
+Check 1→2: 2+1=3>1 → yes. So this edge can be relaxed. Since 1 is reachable (as per step 4), and 2 can reach N (2), which is true. So there's a positive cycle. So output 'inf'.
+
+Which matches the sample.
+
+Third sample:
+
+6 nodes, 5 edges, all with c_i=-1e9. The path is 1→2→3→4→5→6. Each step adds -1e9. The total is sum of 5 edges (since 6 is the end). So 5 * -1e9 = -5e9. 
+
+But let's see how the algorithm works.
+
+Reachable_from_1: all nodes 1-6 via the path.
+
+Can_reach_N (6): nodes 6, 5,4,3,2,1 (since they are on the path to 6).
+
+So all edges are relevant.
+
+Edges are 1→2, 2→3, etc. All are part of the path.
+
+Bellman-Ford steps:
+
+Initial dist[1] =0, others -inf.
+
+N=6, so 5 iterations.
+
+Iteration 0:
+
+Process edges in order. Let's say edges are in order 1→2, 2→3, etc.
+
+1→2: dist[2] =0-1e9 =-1e9.
+
+2→3: dist[3] =-1e9 -1e9 =-2e9.
+
+3→4: -3e9.
+
+4→5: -4e9.
+
+5→6: -5e9.
+
+After first iteration, dist[6] is -5e9.
+
+Iteration 1: check edges again.
+
+For 1→2: 0-1e9 is -1e9, which is same as current dist[2].
+
+Other edges also cannot be updated, because all steps are sequential. So after each iteration, no changes occur.
+
+So after 5 iterations, dist[6] is -5e9. Then check if any edge can be relaxed. All edges are in a straight line, no cycles. So no edges can be relaxed. So output -5e9, which matches the sample.
+
+So the algorithm works for these cases.
+
+Now, to code this.
+
+First, code steps:
+
+1. Read N and M.
+
+2. Read M edges.
+
+3. Compute reachable_from_1: use BFS starting from 1, following edges.
+
+4. Compute can_reach_N: build a reverse adjacency list (for each node, list of incoming edges), then BFS from N in the reverse graph.
+
+Wait, no. To find nodes that can reach N, the reverse approach is to build a reverse graph where each edge a → b is treated as b → a, and then BFS from N. So any node that can reach N in the original graph will be reachable in the reversed graph from N.
+
+Yes. So for the can_reach_N set, build a reverse adjacency list where each edge is b → a (for original a → b edges), then perform BFS from N. All nodes visited in this BFS can reach N in the original graph.
+
+Once we have these two sets, the relevant edges are those edges (a_i, b_i) where a_i is in reachable_from_1 and b_i is in can_reach_N.
+
+Then, perform Bellman-Ford on these edges.
+
+Initialize dist array to -inf, except dist[1] =0.
+
+Then, for each of N-1 iterations:
+
+   for each edge in relevant_edges:
+
+      a, b, c = edge
+
+      if dist[a] is not -inf and dist[b] < dist[a] + c:
+
+          dist[b] = dist[a] + c
+
+After N-1 iterations, check if any edge in relevant_edges can be relaxed again. If yes, output 'inf', else output dist[N].
+
+But for large N (up to 1000), and M up to 2000, the Bellman-Ford loop is O(N*M) which is 1e6 operations. That's manageable.
+
+So the code steps in Python:
+
+Implement BFS for reachable_from_1.
+
+Implement reverse BFS for can_reach_N.
+
+Collect relevant edges.
+
+Run Bellman-Ford.
+
+Check for possible relaxation after N-1 steps.
+
+Now, code.
+
+But for BFS:
+
+For reachable_from_1:
+
+adj = [[] for _ in range(N+1)]
+
+for each edge in edges:
+
+   a, b, c = edge
+
+   adj[a].append(b)
+
+Then BFS from 1.
+
+Similarly, for can_reach_N:
+
+reverse_adj = [[] for _ in range(N+1)]
+
+for each edge in edges:
+
+   a, b, c = edge
+
+   reverse_adj[b].append(a)
+
+Then BFS from N on reverse_adj.
+
+But wait, in the original graph, the edges are a_i -> b_i. For the reverse graph to find nodes that can reach N, we need edges in the direction of predecessors. So for the reverse graph, an edge from b to a (since in the original, a can go to b, so in reverse, to reach a, you can come from b). So the reverse adjacency list is built by adding for each original edge a->b, an entry in reverse_adj for b's adjacency list as a.
+
+Yes.
+
+So code for can_reach_N:
+
+visited = set()
+
+queue = deque([N])
+
+visited.add(N)
+
+while queue:
+
+   u = queue.popleft()
+
+   for v in reverse_adj[u]:
+
+       if v not in visited:
+
+           visited.add(v)
+
+           queue.append(v)
+
+can_reach_N = visited.
+
+Then, relevant_edges is all edges where a is in reachable_from_1 and b is in can_reach_N.
+
+Now, proceed with Bellman-Ford.
+
+In Python:
+
+Initialize dist as [ -inf ] * (N+1 )
+
+dist[1] = 0
+
+for i in range(N-1):
+
+   updated = False
+
+   for (a, b, c) in relevant_edges:
+
+       if dist[a] != -inf and dist[b] < dist[a] + c:
+
+           dist[b] = dist[a] + c
+
+           updated = True
+
+   if not updated:
+
+       break  # early exit
+
+But even if we break early, after N-1 steps, the check is necessary.
+
+Then, check for any edge in relevant_edges where a is reachable (dist[a] is not -inf) and (dist[a] + c) > dist[b]. If yes, then output 'inf'.
+
+Else, output dist[N].
+
+But in code:
+
+has_infinite = False
+
+for (a, b, c) in relevant_edges:
+
+   if dist[a] != -inf and dist[b] < dist[a] + c:
+
+       # check if b can reach N (but since we already included edges where b is in can_reach_N)
+
+       has_infinite = True
+
+       break
+
+if has_infinite:
+
+   print("inf")
+
+else:
+
+   print(dist[N] if dist[N] != -inf else 0)
+
+Wait, but according to the problem statement, there is a path from 1 to N. So if the code is correct, dist[N] should not be -inf. Because the relevant_edges include edges that are on a path from 1 to N.
+
+But in case the code is incorrect, perhaps we should check. But according to the problem statement, it's guaranteed that there's a path from 1 to N, so the code can proceed.
+
+But for safety, in the code, after Bellman-Ford, if dist[N] is still -infinity, then output 0 (but according to problem statement, this is impossible). But perhaps the code should handle it.
+
+But in our setup, the relevant edges are those that are part of a path from 1 to N, so the Bellman-Ford steps should ensure that dist[N] is properly calculated.
+
+So the code can safely output dist[N].
+
+Now, implement this.
+
+Test case 2: after processing, during the check after N-1 steps, there is an edge (1->2) where dist[1] is 2 (after iteration 0), dist[2] is 1. Then a=1, b=2, c=1: 2+1=3>1, so the edge can be relaxed. So has_infinite is True, output 'inf'.
+
+So code seems correct.
+
+Now, code:
+
+Read N and M.
+
+Read M edges.
+
+Build adjacency list for BFS from 1.
+
+Build reverse adjacency list for BFS from N.
+
+Compute reachable_from_1.
+
+Compute can_reach_N.
+
+Collect relevant edges.
+
+Run Bellman-Ford.
+
+Check for possible cycles.
+
+Now, code:
+
+But note that the nodes are numbered from 1 to N.
+
+Implement BFS for reachable_from_1:
+
+import sys
+
+from collections import deque
+
+n, m = map(int, sys.stdin.readline().split())
+
+edges = []
+
+adj = [[] for _ in range(n+1)]  # adj for original graph
+
+reverse_adj = [[] for _ in range(n+1)]  # reverse_adj for reverse graph (to find can_reach_N)
+
+for _ in range(m):
+
+    a, b, c = map(int, sys.stdin.readline().split())
+
+    edges.append( (a, b, c) )
+
+    adj[a].append(b)
+
+    reverse_adj[b].append(a)
+
+# Compute reachable_from_1
+
+reachable = set()
+
+q = deque([1])
+
+reachable.add(1)
+
+while q:
+
+    u = q.popleft()
+
+    for v in adj[u]:
+
+        if v not in reachable:
+
+            reachable.add(v)
+
+            q.append(v)
+
+# Compute can_reach_N
+
+can_reach_n = set()
+
+q = deque([n])
+
+can_reach_n.add(n)
+
+while q:
+
+    u = q.popleft()
+
+    for v in reverse_adj[u]:
+
+        if v not in can_reach_n:
+
+            can_reach_n.add(v)
+
+            q.append(v)
+
+# Collect relevant edges
+
+relevant_edges = []
+
+for a, b, c in edges:
+
+    if a in reachable and b in can_reach_n:
+
+        relevant_edges.append( (a, b, c) )
+
+# Bellman-Ford
+
+INF = float('-inf')
+
+dist = [INF] * (n+1)
+
+dist[1] = 0
+
+for i in range(n-1):
+
+    updated = False
+
+    for a, b, c in relevant_edges:
+
+        if dist[a] != INF and dist[b] < dist[a] + c:
+
+            dist[b] = dist[a] + c
+
+            updated = True
+
+    if not updated:
+
+        break
+
+# Check for infinite
+
+has_infinite = False
+
+for a, b, c in relevant_edges:
+
+    if dist[a] != INF and dist[b] < dist[a] + c:
+
+        has_infinite = True
+
+        break
+
+if has_infinite:
+
+    print("inf")
+
+else:
+
+    print(dist[n])
+
+But wait, in the case where dist[N] is -infinity, but according to the problem statement, there is at least one path. However, since the relevant edges are those that are on a path from 1 to N, then after Bellman-Ford, the dist[N] must be at least the sum of some path, which is possible. So in practice, dist[N] is not INF.
+
+But let's think: suppose all paths from 1 to N have edges with negative sums. Then, in the Bellman-Ford, the algorithm will pick the path with the maximum possible sum (least negative). So even if the path is all negative, the code will output the correct sum.
+
+So this code should handle all cases.
+
+Testing sample 3:
+
+After processing, the relevant edges are the 5 edges. The Bellman-Ford will relax each edge in sequence. After 5 iterations (n-1=5), the dist[6] is -5e9. Then, checking for any edge that can be relaxed again: all edges are part of a linear path. No edges can be relaxed again. So output is correct.
+
+So this code should work.
+</think>
+To solve this problem, we need to determine the maximum possible score when moving from vertex 1 to vertex N in a directed graph, considering the possibility of an infinitely increasing score due to positive cycles.
+
+### Approach
+1. **Graph Analysis**: First, identify all nodes reachable from vertex 1 and all nodes that can reach vertex N. This helps in focusing only on the relevant subgraph that can influence the score.
+2. **Cycle Detection**: Check if there exists a positive cycle within the relevant subgraph (nodes that are both reachable from vertex 1 and can reach vertex N). If such a cycle exists, the score can be made infinitely large.
+3. **Longest Path Calculation**: If no positive cycles are found, compute the longest path using a modified Bellman-Ford algorithm. This algorithm is adjusted to maximize the score instead of minimizing it.
+
+### Solution Code
+```python
+import sys
+from collections import deque
+
+def main():
+    n, m = map(int, sys.stdin.readline().split())
+    edges = []
+    adj = [[] for _ in range(n + 1)]
+    reverse_adj = [[] for _ in range(n + 1)]
+
+    for _ in range(m):
+        a, b, c = map(int, sys.stdin.readline().split())
+        edges.append((a, b, c))
+        adj[a].append(b)
+        reverse_adj[b].append(a)
+
+    # Compute nodes reachable from 1
+    reachable = set()
+    q = deque([1])
+    reachable.add(1)
+    while q:
+        u = q.popleft()
+        for v in adj[u]:
+            if v not in reachable:
+                reachable.add(v)
+                q.append(v)
+
+    # Compute nodes that can reach N
+    can_reach_n = set()
+    q = deque([n])
+    can_reach_n.add(n)
+    while q:
+        u = q.popleft()
+        for v in reverse_adj[u]:
+            if v not in can_reach_n:
+                can_reach_n.add(v)
+                q.append(v)
+
+    # Collect relevant edges
+    relevant_edges = []
+    for a, b, c in edges:
+        if a in reachable and b in can_reach_n:
+            relevant_edges.append((a, b, c))
+
+    # Bellman-Ford to find maximum path
+    INF = float('-inf')
+    dist = [INF] * (n + 1)
+    dist[1] = 0
+
+    for i in range(n - 1):
+        updated = False
+        for a, b, c in relevant_edges:
+            if dist[a] != INF and dist[b] < dist[a] + c:
+                dist[b] = dist[a] + c
+                updated = True
+        if not updated:
+            break
+
+    # Check for possible infinite score
+    has_infinite = False
+    for a, b, c in relevant_edges:
+        if dist[a] != INF and dist[b] < dist[a] + c:
+            has_infinite = True
+            break
+
+    if has_infinite:
+        print("inf")
+    else:
+        print(dist[n])
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Graph Traversal**: Use BFS to find all nodes reachable from vertex 1 and reverse BFS to find nodes that can reach vertex N. This helps in narrowing down the relevant subgraph.
+2. **Relevant Edges**: Filter edges to only those that start from a reachable node and end at a node that can reach vertex N.
+3. **Bellman-Ford Algorithm**: This algorithm is used to compute the longest path by relaxing edges up to N-1 times. If any edge can still be relaxed after N-1 iterations, it indicates a positive cycle, leading to an infinite score. Otherwise, the maximum score to vertex N is output.
+
+This approach efficiently handles the constraints and ensures optimal performance for the given problem limits.
+</bot>

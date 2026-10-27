@@ -1,0 +1,751 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.You are given a rectangular grid with n rows and m columns. The rows are numbered 1 to n, from bottom to top, and the columns are numbered 1 to m, from left to right.   
+
+You are also given k special fields in the form (row, column). For each i, where 0 ≤ i ≤ k, count the number of different paths from (1, 1) to (n, m) that contains exactly n special fields.  
+
+There is one rule you must follow. You are only allowed to make moves that are straight up or to the right. In other words, from each field (row, column), you can only move to field (row+1, column) or field (row, column+1).  
+
+Output an array of k + 1 elements. The i-th element (0-indexed) must be the number of different paths that contain exactly i special fields. Since, the answer can be too big, output it modulo 1000007.  
+
+Input: 
+First line contains three space separated integers, n, m and k.
+Next k lines, each contain two space separated integers, the coordinates of a special field.
+
+Output:
+k + 1 space separated integers, the answer to the question.  
+
+Constraints:
+1 ≤ n, m, k ≤ 100
+For all coordinates (r, c) - 1 ≤ r ≤ n, 1 ≤ c ≤ m
+All coordinates are valid and different.    
+
+SAMPLE INPUT
+3 3 2
+2 2
+3 2
+
+SAMPLE OUTPUT
+1 3 2
+
+Explanation
+
+0 special cell -
+    (1, 1) -> (1, 2) -> (1, 3) -> (2, 3) -> (3, 3)  
+
+1 special cell -
+    (1, 1) -> (2, 1) -> (2, 2) -> (2, 3) -> (3, 3)
+    (1, 1) -> (2, 1) -> (3, 1) -> (3, 2) -> (3, 3)
+    (1, 1) -> (1, 2) -> (2, 2) -> (2, 3) -> (3, 3)  
+
+2 special cells -
+    (1, 1) -> (2, 1) -> (2, 2) -> (3, 2) -> (3, 3)
+    (1, 1) -> (1, 2) -> (2, 2) -> (3, 2) -> (3, 3)
+</user>
+<bot>
+<think>
+Okay, let's try to solve this problem. So, the task is to count the number of paths from (1,1) to (n,m) that pass through exactly i special fields, for each i from 0 to k. The output is an array of k+1 elements. 
+
+Hmm. The paths can only move right or up, right? So, each path is a sequence of moves where you go right or up, starting at (1,1) and ending at (n,m). The number of steps needed is (n-1) + (m-1) steps. Since each path is determined by choosing when to go right or up, the total number of paths without any restrictions is combination of (n+m-2 choose n-1), but here we have special fields that need to be counted.
+
+The problem requires that for each i, we count the number of paths that include exactly i of the k special fields. 
+
+So, how to approach this? Let's think. 
+
+First, maybe we can model this with dynamic programming. For each cell (r,c), and for each possible count of special cells encountered so far, we can keep track of the number of paths to (r,c) that have exactly that count. Then, the answer for each i would be the value at (n,m) for that i.
+
+But the constraints are n and m up to 100, and k up to 100. So, the DP state would be (r, c, s), where s is the number of special cells encountered so far. The maximum s is k. So, the DP table would have dimensions 101 x 101 x 101 (since r and c can be up to 100, and s up to 100). That's manageable, since 100*100*100=1,000,000, which is acceptable.
+
+But wait, the modulo is 1e6+7, which is 1000007. So, we have to compute all numbers modulo that.
+
+So, the steps would be:
+
+1. Preprocess the grid: create a set of the special cells for O(1) lookups.
+
+2. Initialize a 3-dimensional DP array: dp[r][c][s] = number of paths to (r,c) with exactly s special cells.
+
+3. The base case is dp[1][1][s0], where s0 is 1 if (1,1) is a special cell, else 0. But since the starting cell is (1,1), if it's a special cell, then any path starting here will have at least 1 special cell. But according to the problem statement, the special cells are given, so we need to check if (1,1) is one of them.
+
+4. For each cell (r,c), for each possible s, we can come from the left (r, c-1) or from below (r-1, c). For each possible previous s', if coming from left, then the current s is s' plus whether the current cell (r,c) is a special cell. Similarly for coming from below.
+
+Wait, no. Because when you move to (r,c), if (r,c) is a special cell, then the count increases by 1. So, for each cell (r,c), the current count is the sum of the counts from the cells that can reach it (left and below), each adjusted by whether (r,c) is a special cell.
+
+So, the transitions would be:
+
+If coming from (r-1, c):
+
+then for each possible s_prev in dp[r-1][c], the new s would be s_prev + (1 if (r,c) is special else 0). Similarly for coming from (r, c-1).
+
+Wait, but the current cell (r,c) is either special or not. So, when moving into (r,c), if it's special, then any path arriving here via either direction (left or down) will have their s increased by 1. Otherwise, the s remains the same.
+
+So, for each cell (r,c), and for each possible s:
+
+dp[r][c][s] = sum of:
+
+- dp[r-1][c][s - is_special] (if moving from above)
+- dp[r][c-1][s - is_special] (if moving from the left)
+
+But we need to ensure that s - is_special is >=0. Because, for example, if (r,c) is a special cell, then is_special is 1, so the previous s_prev must be s-1. Otherwise, if it's not special, then s_prev must be s.
+
+So, for each cell (r,c), we first check whether it's a special cell. Then, for each possible s, the contribution from above and left would depend on that.
+
+So, the process would be:
+
+For each cell in order (maybe row-major order), and for each possible s, accumulate the possible paths.
+
+But what's the order in which to process the cells? Since each cell can only be processed after all cells above and to the left (since you can only come from left or below). So, the processing order can be row by row, from top to bottom, and left to right? Or from left to right in each row. Wait, no. Because (r,c) can be reached from (r-1, c) (the cell above) and (r, c-1) (the cell to the left). So, processing cells in order from (1,1) to (n,m), row-wise, processing each row from left to right, and each row starting from the first row (but rows are numbered from 1 to n, bottom to top). Wait, no, the rows are numbered from 1 (bottom) to n (top). So, moving up increases the row number. So, the cell (n,m) is the top-right corner.
+
+So, for example, in the sample input, the grid is 3 rows (from bottom to top: 1, 2, 3). So, cell (3,3) is the top-right.
+
+So, when processing the cells, perhaps we can process them in order from (1,1) up to (n,m), row-wise. For each cell (r,c), process it after (r-1,c) and (r, c-1). So, the order can be row by row, starting from row 1, then row 2, etc., up to row n. And within each row, process columns from 1 to m.
+
+Wait, but for row 1, columns start from 1 to m. So, cell (1,1) is processed first. Then (1,2), (1,3), etc. Then row 2's cells: (2,1), (2,2), etc. Because (2,1) can be reached from (1,1) (down) or (2,0) which is invalid. So, for (2,1), the only way is from (1,1). So, in processing order, as long as cells are processed in order of rows from 1 to n, and within each row, columns from 1 to m, then each cell's left and down neighbors (from which you can come) are already processed. Because for cell (r,c), left is (r, c-1) which is processed earlier in the same row, and down is (r-1, c), which was processed in the previous row.
+
+Yes. So the order is correct.
+
+So, the plan is:
+
+- Create a grid of cells, and for each cell, check if it's a special field.
+
+- Initialize a 3D DP array. Since rows and columns can be up to 100, and s up to 100, the array size is manageable.
+
+- Start with (1,1). If (1,1) is a special field, then dp[1][1][1] = 1, else dp[1][1][0] = 1.
+
+- Then, for each cell (r,c) in row-major order (from row 1 to n, column 1 to m):
+
+   For each possible s (from 0 to k):
+
+      The value for dp[r][c][s] is the sum of:
+
+         If (r-1, c) is a valid cell (r >=2), then add dp[r-1][c][s_prev], where s_prev is s minus (1 if current cell is special else 0). Wait, no. Wait, when moving from (r-1, c) to (r,c), the current cell (r,c) is special or not. So, the count increases by 1 if current cell is special. So, if the current cell is special, then the s_prev would be s -1. Else, s_prev is s.
+
+      Similarly for moving from (r, c-1) to (r,c).
+
+So, for each cell (r,c):
+
+   is_special = 1 if (r,c) is in the special fields set, else 0.
+
+   Then, for each possible s in 0..k:
+
+      sum_val = 0
+
+      if r > 1:
+
+          prev_s = s - is_special
+
+          if prev_s >=0:
+
+              sum_val += dp[r-1][c][prev_s]
+
+      if c > 1:
+
+          prev_s = s - is_special
+
+          if prev_s >=0:
+
+              sum_val += dp[r][c-1][prev_s]
+
+      sum_val %= MOD
+
+      dp[r][c][s] = sum_val
+
+Wait, but this would be the case for all cells except (1,1). For (1,1), we have to handle it as the base case.
+
+Yes.
+
+So, the steps are:
+
+1. Read n, m, k.
+
+2. Read the k special cells. Check if any are duplicates (but the problem says all are different). Store them in a set for O(1) lookups.
+
+3. Initialize the DP array. Since n and m can be up to 100, and s up to 100, we can use a 3D list.
+
+But in Python, for 100x100x100, that's 1e6 entries, which is manageable.
+
+4. For (r, c) starting from (1,1) to (n,m):
+
+   For each cell (r, c):
+
+      Check if it's a special cell (is_special).
+
+      For s in 0..k:
+
+          if r ==1 and c ==1:
+
+              if is_special:
+
+                  if s ==1: set dp[r][c][s] =1
+
+                  else: 0
+
+              else:
+
+                  if s ==0: 1
+
+                  else: 0
+
+          else:
+
+              sum_val =0
+
+              if r >1:
+
+                  prev_s = s - is_special
+
+                  if prev_s >=0 and prev_s <=k:
+
+                      sum_val += dp[r-1][c][prev_s]
+
+              if c>1:
+
+                  prev_s = s - is_special
+
+                  if prev_s >=0 and prev_s <=k:
+
+                      sum_val += dp[r][c-1][prev_s]
+
+              dp[r][c][s] = sum_val % MOD
+
+But in code, we need to process the cells in order. So, in code, perhaps we can loop through r from 1 to n, and for each r, loop c from 1 to m. Then for each (r,c), compute the sum based on the cells above and to the left.
+
+Wait, but for (r,c), the cells above would be (r-1, c), which was processed in the previous row. The cell to the left is (r, c-1), which was processed in the same row. So, processing in row-major order (rows first, then columns) is correct.
+
+So, the code outline would be:
+
+Read n, m, k.
+
+special = set of tuples (r, c) for the k special fields.
+
+MOD = 1000007.
+
+Initialize dp as a 3D array. Since Python uses 0-based indices, but the problem uses 1-based for the grid, perhaps it's easier to use 1-based indices for r and c. So, for example, dp is (n+1) rows, (m+1) columns, and (k+1) s values.
+
+But in Python, initializing a 3D list can be done as:
+
+dp = [[[0]*(k+1) for _ in range(m+1)] for __ in range(n+1)]
+
+Then, for (r, c) in (1,1):
+
+Check if (r,c) is in special. If yes, then dp[1][1][1] =1. Else, dp[1][1][0] =1.
+
+Then, for each r from 1 to n:
+
+   for each c from 1 to m:
+
+      if r ==1 and c ==1: continue (already handled)
+
+      else:
+
+          is_special = 1 if (r,c) in special else 0
+
+          for s in 0 to k:
+
+              sum_val =0
+
+              if r >1:
+
+                  prev_s = s - is_special
+
+                  if prev_s >=0 and prev_s <=k:
+
+                      sum_val += dp[r-1][c][prev_s]
+
+              if c>1:
+
+                  prev_s = s - is_special
+
+                  if prev_s >=0 and prev_s <=k:
+
+                      sum_val += dp[r][c-1][prev_s]
+
+              dp[r][c][s] = sum_val % MOD
+
+Wait, but for the first cell (1,1), it's handled separately. Then, for other cells, for each possible s, the sum is computed based on whether the cell is special and the possible previous s values.
+
+Once all cells are processed, the answer is the values dp[n][m][0], dp[n][m][1], ..., dp[n][m][k].
+
+But wait, the problem statement says that for each i from 0 to k, output the number of paths with exactly i special fields. So, the answer array has k+1 elements, where the i-th element is the count of paths with exactly i special fields.
+
+So, after building the DP table, the output is the list [dp[n][m][0], dp[n][m][1], ..., dp[n][m][k} ].
+
+But let's test this approach with the sample input.
+
+Sample input:
+
+3 3 2
+
+2 2
+
+3 2
+
+So, n=3, m=3, k=2.
+
+Special cells are (2,2) and (3,2).
+
+The starting cell is (1,1). Is (1,1) a special cell? No. So, dp[1][1][0] =1, others are 0.
+
+Then, processing other cells in order. For example, next cells in row 1: (1,2), (1,3). Then row 2: (2,1), (2,2), (2,3). Then row 3: (3,1), (3,2), (3,3).
+
+Let's see for cell (2,2):
+
+It's a special cell. So, for each s in 0..2.
+
+For s=0: prev_s would be 0 -1 =-1 (invalid). So no contribution.
+
+For s=1: prev_s =0. So contributions from (1,2) and (2,1) with s_prev=0.
+
+But (1,2) would have been processed in row 1, column 2. Let's see:
+
+For cell (1,2):
+
+It is not a special cell. So, for each s:
+
+sum_val comes from left (1,1) and below (0,2, which is invalid). So, only left (1,1).
+
+prev_s for (1,2) is s - 0 =s. So, for cell (1,2), s can be 0 or 1.
+
+But for (1,2), since it's not special, the sum is from (1,1) (left) and (0,2) (invalid). So, (1,1) is left.
+
+At (1,1), s was 0. So for cell (1,2), for s=0: prev_s is 0 -0=0. So, sum_val is dp[1][1][0] =1. So, dp[1][2][0] =1.
+
+Similarly, other cells.
+
+But this is getting complicated. Let's see what the sample output would generate.
+
+In the sample, the output is 1 3 2. So, for i=0, 1 path. For i=1, 3 paths. For i=2, 2 paths.
+
+The final cell is (3,3). We need to compute dp[3][3][0], dp[3][3][1], dp[3][3][2].
+
+But how?
+
+Let's think of how the code would process.
+
+For cell (3,3):
+
+Check if it's a special cell. The special cells are (2,2) and (3,2). So, (3,3) is not a special cell. So, is_special=0.
+
+Then, for each s in 0-2:
+
+prev_s = s - 0 =s.
+
+sum_val comes from up (2,3) and left (3,2).
+
+So, for s in 0-2:
+
+sum_val = dp[2][3][s] + dp[3][2][s]
+
+So, let's compute these values.
+
+First, for (3,2):
+
+It is a special cell. So, is_special=1.
+
+For s in 0-2:
+
+sum_val is from up (2,2) and left (3,1).
+
+For each s:
+
+prev_s = s -1.
+
+For example, for s=0: prev_s = -1 → invalid. So contributions are 0.
+
+For s=1: prev_s=0. So contributions from up (2,2) with s_prev=0 and left (3,1) with s_prev=0.
+
+So, dp[3][2][1] = dp[2][2][0] + dp[3][1][0]
+
+But (3,1) is the cell (3,1). Let's compute that.
+
+Cell (3,1):
+
+Not a special cell. So, is_special=0.
+
+sum_val comes from up (2,1) and left (3,0 → invalid). So, only up.
+
+prev_s for s is s -0 = s.
+
+So, for each s, dp[3][1][s] = dp[2][1][s]
+
+So, for cell (2,1):
+
+Not a special cell. So, is_special=0.
+
+sum_val comes from up (1,1) and left (2,0 → invalid). So, only up (1,1).
+
+prev_s = s -0 =s.
+
+So, for cell (2,1), s can be 0 or 1 (since k=2, but here possible s ranges up to the maximum possible steps).
+
+Wait, but in the code, for all s from 0 to k. So, for cell (2,1), for each s in 0-2:
+
+prev_s = s -0 =s. Since (2,1) is not special.
+
+So, for cell (2,1):
+
+sum_val is from (1,1) with s_prev =s.
+
+So, for s=0: sum_val is dp[1][1][0] =1.
+
+s=1: sum_val is dp[1][1][1] =0 (since (1,1) is not special).
+
+s=2: same as dp[1][1][2] which is 0.
+
+So, dp[2][1][0] =1, others 0.
+
+So, cell (3,1) for s=0: dp[3][1][0] = dp[2][1][0] =1.
+
+s=1: dp[3][1][1] = dp[2][1][1] =0.
+
+s=2: dp[3][1][2] =0.
+
+So, back to cell (3,2), s=1:
+
+sum_val is dp[2][2][0] (from up) + dp[3][1][0] (from left).
+
+What's dp[2][2][0]?
+
+Cell (2,2) is a special cell. So, is_special=1.
+
+Processing cell (2,2):
+
+For each s in 0-2:
+
+prev_s = s -1 (since is_special=1).
+
+So, for s=0: prev_s = -1 → invalid. So, sum_val is 0.
+
+For s=1: prev_s=0.
+
+sum_val comes from up (1,2) and left (2,1).
+
+dp[1][2][0] is 1 (from earlier steps), and dp[2][1][0] is 1. So sum_val=1+1=2. So dp[2][2][1] =2.
+
+Similarly, for s=2: prev_s=1. sum_val comes from up (1,2) with s_prev=1 and left (2,1) with s_prev=1. But dp[1][2][1] is 0 (since (1,2) is not a special cell, so previous steps would have ... let's see: cell (1,2) is not special, so for s=1, when processing (1,2), sum_val is from left (1,1) with prev_s=1 -0=1. But dp[1][1][1] is 0. So, dp[1][2][1] is 0. So, for (2,2) s=2: sum_val is 0 (from up) + dp[2][1][1] (0) → sum_val=0.
+
+So, dp[2][2][1] = 2, others are 0.
+
+So, back to cell (3,2) s=1:
+
+sum_val = dp[2][2][0] (which is 0) + dp[3][1][0] (1). Wait, no. For cell (3,2), when s=1, prev_s =1 -1=0. So, contributions from up (2,2) with s_prev=0, which is 0 (since dp[2][2][0] is 0), and left (3,1) with s_prev=0 (dp[3][1][0] is 1). So sum_val is 0 +1=1. So dp[3][2][1] =1.
+
+So, for cell (3,3):
+
+sum_val for s=0 is dp[2][3][0] + dp[3][2][0].
+
+But dp[3][2][0] is 0 (since (3,2) is special, and for s=0, prev_s would be 0-1= -1, which is invalid).
+
+What about dp[2][3][0]?
+
+Let's compute cell (2,3):
+
+Is it a special cell? The special cells are (2,2) and (3,2). So (2,3) is not special.
+
+So, is_special=0.
+
+sum_val comes from up (1,3) and left (2,2).
+
+For s in 0-2:
+
+prev_s =s -0 =s.
+
+So, for each s:
+
+sum_val = dp[1][3][s] + dp[2][2][s]
+
+But what is dp[1][3][s]?
+
+Processing cell (1,3):
+
+It's not a special cell. So, sum comes from left (1,2) and up (0,3). So, only left.
+
+So for each s:
+
+dp[1][3][s] = dp[1][2][s]
+
+For s=0: dp[1][2][0] =1.
+
+s=1: 0.
+
+s=2:0.
+
+So, dp[1][3][0] =1, others 0.
+
+Then, for cell (2,3):
+
+sum_val for s=0:
+
+dp[1][3][0] (1) + dp[2][2][0] (0) → sum_val=1. So dp[2][3][0] =1.
+
+For s=1: sum_val= dp[1][3][1] (0) + dp[2][2][1] (2) → 2. So dp[2][3][1] =2.
+
+For s=2: sum_val=0 + dp[2][2][2] (0) →0.
+
+So, cell (2,3) has dp[2][3][0] =1, dp[2][3][1]=2.
+
+Now, for cell (3,3) s=0:
+
+sum_val = dp[2][3][0] (1) + dp[3][2][0] (0) →1. So dp[3][3][0] =1.
+
+Which matches the sample output's first element.
+
+For s=1: sum_val = dp[2][3][1] (2) + dp[3][2][1] (1) →3. So dp[3][3][1] =3.
+
+Which matches the sample's second element.
+
+For s=2: sum_val = dp[2][3][2] (0) + dp[3][2][2] (from s=2, which is computed as follows:
+
+For cell (3,2), s=2:
+
+prev_s=2-1=1. So contributions from up (2,2) with s_prev=1 (which is 2) and left (3,1) with s_prev=1 (which is 0). So sum_val=2+0=2. So dp[3][2][2] =2.
+
+Thus, sum_val for s=2 in cell (3,3) is dp[2][3][2] (0) + dp[3][2][2] (2) →2. So dp[3][3][2] =2.
+
+Which matches the sample's third element. So the code works for the sample.
+
+So, the approach seems correct.
+
+Now, coding this in Python.
+
+The code steps:
+
+Read n, m, k.
+
+Then read k lines of (r, c) pairs. Store them in a set as tuples.
+
+Initialize the DP array. Since in Python, it's easier to use 1-based indices for r and c. So, dp is a 3D list of (n+1) x (m+1) x (k+1) elements. All initialized to 0.
+
+Then, check if (1,1) is a special cell. If yes, then dp[1][1][1] =1. Else, dp[1][1][0] =1.
+
+Then, for r from 1 to n:
+
+   for c from 1 to m:
+
+      if r ==1 and c ==1: continue.
+
+      is_special = 1 if (r, c) in the special set else 0.
+
+      for s in range(k+1):
+
+          sum_val =0
+
+          if r >1:
+
+              prev_s = s - is_special
+
+              if prev_s >=0 and prev_s <=k:
+
+                  sum_val += dp[r-1][c][prev_s]
+
+          if c >1:
+
+              prev_s = s - is_special
+
+              if prev_s >=0 and prev_s <=k:
+
+                  sum_val += dp[r][c-1][prev_s]
+
+          dp[r][c][s] = sum_val % MOD
+
+Once all cells are processed, output the dp[n][m][0], ..., dp[n][m][k], space-separated.
+
+But wait, k can be up to 100, so the output is k+1 elements, from 0 to k inclusive.
+
+Now, code.
+
+But for handling input, the coordinates are given as row and column. The sample input has coordinates (2,2) which is row 2, column 2.
+
+In code, the special set is created by reading the k lines. So, for each line, read r, c as integers, and add (r, c) to the set.
+
+Now, code:
+
+MOD = 1000007
+
+n, m, k = map(int, input().split())
+
+special = set()
+
+for _ in range(k):
+
+    r, c = map(int, input().split())
+
+    special.add( (r,c) )
+
+# Initialize DP
+
+dp = [ [ [0]*(k+1) for _ in range(m+1) ] for __ in range(n+1) ]
+
+# Base case: (1,1)
+
+if (1,1) in special:
+
+    dp[1][1][1] =1
+
+else:
+
+    dp[1][1][0] =1
+
+for r in range(1, n+1):
+
+    for c in range(1, m+1):
+
+        if r ==1 and c ==1:
+
+            continue
+
+        is_sp = 1 if (r, c) in special else 0
+
+        for s in range(k+1):
+
+            total =0
+
+            # from up (r-1, c)
+
+            if r >1:
+
+                prev_s = s - is_sp
+
+                if prev_s >=0 and prev_s <=k:
+
+                    total += dp[r-1][c][prev_s]
+
+            # from left (r, c-1)
+
+            if c>1:
+
+                prev_s = s - is_sp
+
+                if prev_s >=0 and prev_s <=k:
+
+                    total += dp[r][c-1][prev_s]
+
+            dp[r][c][s] = total % MOD
+
+# The answer is the values in dp[n][m][0 ...k]
+
+ans = dp[n][m][:k+1]
+
+print(' '.join(map(str, ans)))
+
+But wait, in Python, when you do dp[r][c][s], the indices are correct? Let's see.
+
+Yes, because the loops are r from 1 to n, c from 1 to m.
+
+Testing with sample input:
+
+Sample input:
+
+3 3 2
+
+2 2
+
+3 2
+
+special set is {(2,2), (3,2)}.
+
+Then, in code:
+
+dp[1][1][0] =1.
+
+Then, when r=1, c=2:
+
+is_sp is 0 (since (1,2) not in special).
+
+For s in 0-2:
+
+from left (1,1):
+
+prev_s = s -0 =s.
+
+So, for s=0: add dp[1][1][0] →1. From up (r=0, invalid). So sum is 1. So dp[1][2][0] =1.
+
+s=1: sum is dp[1][1][1] =0. So 0.
+
+s=2: sum is 0.
+
+Then, c=3, r=1: similar.
+
+Then, when r=2, c=2 (special cell):
+
+for s in 0-2:
+
+is_sp is 1.
+
+prev_s = s -1.
+
+So, for s=0: prev_s =-1 → no contribution.
+
+s=1: prev_s=0.
+
+sum from up (1,2) and left (2,1).
+
+For up (1,2), s_prev=0 → dp[1][2][0] =1.
+
+left (2,1), s_prev=0 → dp[2][1][0] =1 (since dp[2][1][0] was set when r=2, c=1).
+
+So sum is 1+1=2 → dp[2][2][1] =2.
+
+Which matches earlier analysis.
+
+So, code seems correct.
+
+Thus, the code should work for the sample and other cases.
+</think>
+To solve this problem, we need to count the number of different paths from the bottom-left corner (1, 1) to the top-right corner (n, m) of a grid, moving only right or up, that pass through exactly i special fields for each i from 0 to k. The solution must be computed modulo 1000007.
+
+### Approach
+1. **Dynamic Programming (DP) Setup**: Use a 3D DP array `dp[r][c][s]` where `dp[r][c][s]` represents the number of paths from (1, 1) to (r, c) that pass through exactly `s` special fields.
+2. **Initialization**: Start from the bottom-left corner (1, 1). If this cell is a special field, initialize `dp[1][1][1]` to 1; otherwise, initialize `dp[1][1][0]` to 1.
+3. **Transition**: For each cell (r, c), compute the number of paths considering the paths from the left cell (r, c-1) and the cell below (r-1, c). Adjust the count of special fields based on whether the current cell is a special field.
+4. **Modulo Operation**: Ensure all operations are performed modulo 1000007 to handle large numbers and prevent overflow.
+
+### Solution Code
+```python
+MOD = 1000007
+
+n, m, k = map(int, input().split())
+special = set()
+for _ in range(k):
+    r, c = map(int, input().split())
+    special.add((r, c))
+
+# Initialize DP table
+dp = [[[0] * (k + 1) for _ in range(m + 1)] for __ in range(n + 1)]
+
+# Base case: starting cell (1,1)
+if (1, 1) in special:
+    dp[1][1][1] = 1
+else:
+    dp[1][1][0] = 1
+
+for r in range(1, n + 1):
+    for c in range(1, m + 1):
+        if r == 1 and c == 1:
+            continue  # already handled
+        is_sp = 1 if (r, c) in special else 0
+        for s in range(k + 1):
+            total = 0
+            # Check the cell above (r-1, c)
+            if r > 1:
+                prev_s = s - is_sp
+                if 0 <= prev_s <= k:
+                    total += dp[r-1][c][prev_s]
+            # Check the cell to the left (r, c-1)
+            if c > 1:
+                prev_s = s - is_sp
+                if 0 <= prev_s <= k:
+                    total += dp[r][c-1][prev_s]
+            dp[r][c][s] = total % MOD
+
+# Collect the results for the top-right corner (n, m)
+result = dp[n][m][:k+1]
+print(' '.join(map(str, result)))
+```
+
+### Explanation
+1. **Input Reading**: Read the grid dimensions and the list of special fields.
+2. **DP Initialization**: Initialize the DP array and set the base case for the starting cell (1, 1).
+3. **DP Transition**: For each cell (r, c), compute the number of paths by considering paths from the left and below, adjusting the count of special fields based on whether the current cell is special.
+4. **Result Extraction**: Extract the results from the DP table for the top-right corner (n, m) for all counts of special fields from 0 to k.
+
+This approach efficiently computes the number of valid paths using dynamic programming, ensuring correctness and efficiency within the given constraints.
+</bot>

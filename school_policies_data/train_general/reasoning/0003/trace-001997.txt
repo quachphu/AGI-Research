@@ -1,0 +1,1043 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.There is an automatic door at the entrance of a factory. The door works in the following way:
+
+  * when one or several people come to the door and it is closed, the door immediately opens automatically and all people immediately come inside, 
+  * when one or several people come to the door and it is open, all people immediately come inside, 
+  * opened door immediately closes in d seconds after its opening, 
+  * if the door is closing and one or several people are coming to the door at the same moment, then all of them will have enough time to enter and only after that the door will close. 
+
+
+
+For example, if d = 3 and four people are coming at four different moments of time t1 = 4, t2 = 7, t3 = 9 and t4 = 13 then the door will open three times: at moments 4, 9 and 13. It will close at moments 7 and 12.
+
+It is known that n employees will enter at moments a, 2·a, 3·a, ..., n·a (the value a is positive integer). Also m clients will enter at moments t1, t2, ..., tm.
+
+Write program to find the number of times the automatic door will open. Assume that the door is initially closed.
+
+Input
+
+The first line contains four integers n, m, a and d (1 ≤ n, a ≤ 109, 1 ≤ m ≤ 105, 1 ≤ d ≤ 1018) — the number of the employees, the number of the clients, the moment of time when the first employee will come and the period of time in which the door closes.
+
+The second line contains integer sequence t1, t2, ..., tm (1 ≤ ti ≤ 1018) — moments of time when clients will come. The values ti are given in non-decreasing order.
+
+Output
+
+Print the number of times the door will open.
+
+Examples
+
+Input
+
+1 1 3 4
+7
+
+
+Output
+
+1
+
+
+Input
+
+4 3 4 2
+7 9 11
+
+
+Output
+
+4
+
+Note
+
+In the first example the only employee will come at moment 3. At this moment the door will open and will stay open until the moment 7. At the same moment of time the client will come, so at first he will enter and only after it the door will close. Thus the door will open one time.
+</user>
+<bot>
+<think>
+Okay, let's see. I need to solve this problem where I have to calculate how many times the automatic door opens given the times when employees and clients arrive. Hmm, the door opens when someone arrives and it's closed. Then, after opening, it closes after d seconds. But if people come while it's closing (like exactly when it's about to close), they can enter, and the closing is delayed.
+
+So the input is n employees coming at a, 2a, 3a, ..., na. And m clients coming at times given in a sorted list. The goal is to find out how many times the door opens.
+
+First, I need to merge all the arrival times of employees and clients, sort them, and then process them in order. But since n can be up to 1e9 and m up to 1e5, I can't generate all employee times explicitly. So I have to find a way to merge the employee times (which are a, 2a, ..., na) with the client times (given sorted) without storing all of them. Because even merging them would take O(n + m) time, which is impossible for n up to 1e9.
+
+So the approach must be to process events in a way that efficiently handles both the employee and client events, perhaps by considering their order and how they contribute to the door opening.
+
+Let's think about how the door works. Each time the door opens, it stays open for d seconds, but during that time, any arrivals can enter without triggering a new opening. So the door will close at (opening time) + d, unless someone arrives exactly at that closing time. Wait, the problem says that if the door is closing (i.e., it's scheduled to close at time T), and someone comes at T, then they enter and the door closes after them. So in that case, the closing time is T. So the door closes at T even if someone comes at T. Wait, no: the problem statement says that when the door is closing (so after d seconds from opening), if people come at that moment, they can enter, and then the door closes. So perhaps the closing is delayed by 0 seconds in that case. Or perhaps the closing happens after processing those people.
+
+Wait, the third bullet says: opened door immediately closes in d seconds after its opening. The fourth bullet says that if the door is closing (like, the time is exactly the closing time), and people arrive then, they enter and then the door closes. So the closing time is extended to after processing those arrivals.
+
+Wait, no. Let me re-read that. 
+
+"if the door is closing and one or several people are coming to the door at the same moment, then all of them will have enough time to enter and only after that the door will close."
+
+So if the door is closing at time T (was opened at T - d, and closes at T). If people come at T, they enter, and then the door closes. So the closing time remains T. Because the door was scheduled to close at T, but during the closing moment, people arrive, so they enter immediately, and then the door closes. So the door closes at T. So the next opening would be when someone arrives after T.
+
+Wait, but what if someone arrives exactly at T? Because the door is closing at T. So according to the fourth bullet, those people will enter, and then the door closes. So the door's state after that is closed. So for example, if the door opens at time S, closes at S + d. If someone arrives at S + d, they enter, and the door closes immediately after. So any arrivals after S + d would need to trigger a new opening.
+
+So the main idea is to track the current closing time of the door. For each event (either employee or client) in order, if the event's time is after the closing time, then the door must open again. Otherwise, the person enters without opening the door. But if the event's time is exactly equal to the closing time, then the person enters, and the closing time remains the same (since after processing, the door closes). So the next event after that would have to be after the closing time to trigger a new opening.
+
+So the algorithm is as follows:
+
+Initialize the door as closed (closing time is -infinity or something). For each event in sorted order:
+
+If the event time is > current closing time: door opens, increment count. The new closing time is event_time + d.
+
+Else: the event is during the open period (or exactly at closing time, which is allowed to enter). So the closing time remains the same as before.
+
+Wait, but if the event is at exactly the closing time, then after processing, the door closes. So if the next event is also at the closing time, they can still enter. So for example, if events are at time T, T, T (all equal to closing time), then the door is open until T, each of them enters at T, and after all, the door closes. So for all events at the same time as the closing time, they can enter, but the door closes after that.
+
+So the key is: the door's closing time is determined when it's opened. Once opened, it's set to (current opening time) + d. Then, any events that are <= that closing time can enter, but if an event is exactly at the closing time, the door will close after that event.
+
+So the steps are:
+
+- All events are processed in order.
+
+- For each event, if it's after the current closing time, the door opens again, count increases by 1, and closing time is set to event_time + d.
+
+- Otherwise, the person enters, but the closing time remains as before.
+
+So, the problem reduces to processing all events in order, keeping track of the current closing time, and for each event, if it's after the closing time, open the door and update the closing time.
+
+But how do we merge the employee events and client events in order without generating all of them? Because n can be up to 1e9, which is way too big to process each employee's time individually.
+
+So the approach here is to process all events (employees and clients) in chronological order. But since the employees are in an arithmetic sequence and the clients are given in a sorted list, we can merge them efficiently.
+
+But how? Let's think of the employee times as a sequence a, 2a, ..., na. These are sorted in increasing order. The client times are also sorted. So merging the two sorted sequences can be done efficiently by iterating through both sequences in order, similar to the merge step in merge sort.
+
+But since the employee sequence is a, 2a, ..., na, and a can be up to 1e9, and n up to 1e9, we can't generate all elements. So we need a way to "merge" the two sequences by generating the next event (either the next employee time or the next client time) on the fly.
+
+So the idea is to have pointers for the next employee time and the next client time. Then, at each step, pick the smaller of the two, and process it. Then advance the corresponding pointer. For the employee times, since they are generated as multiples of a, we can compute the next employee time as current_employee + a. But since n is up to 1e9, we can't have a loop that runs n times. So we need a smarter way.
+
+Wait, but even merging n and m elements would take O(n + m) time, which is impossible when n is 1e9. So we need a way to handle the employee events in batches. For example, if there's a range of employee times that are all before the next client time, we can process all of them in a single step, determining how many of them fall into the current door's open interval, and how many require new openings.
+
+But how?
+
+Alternatively, let's think of all events (employees and clients) as a merged list. To process them in order, we can generate the next event each time, which is the minimum of the next employee time and the next client time.
+
+But since n can be 1e9, generating each employee time step by step is impossible. So we need to find a way to find, for a given current position in the employee sequence and client sequence, the next event.
+
+Wait, perhaps we can model the employee times as a pointer to the k-th employee, where the k-th employee arrives at time k*a. Initially, k is 1. The next employee time is k*a. Similarly, the client times are given in a list, sorted. So we can process the next event (minimum of next employee time and next client time) each time. However, for n=1e9 and m=1e5, this would take O(n + m) steps, which is not feasible for n=1e9. So we need to optimize this.
+
+So the problem is, if the employee times are a, 2a, ..., na and the clients are a sorted list. We need to merge them, but without generating all employee times.
+
+Hmm. So the key is to find, for each client time, the range of employee times that are before or after that client, and process them in a way that skips large batches.
+
+Alternatively, we can model the merged events as a list where we process the next event in order, but when there's a long sequence of employees that come before the next client, process them all at once.
+
+So here's the approach:
+
+We have two pointers: one for the next employee (current_employee_time = a * k, where k starts at 1), and one for the next client (current_client_index, starting at 0). Then, at each step, we compare the next employee time (a * k) with the next client time (t[current_client_index]). We take the smaller of the two as the next event.
+
+But when a sequence of employee times is all before the next client, we can process all those employees in a batch, determining how they contribute to the door openings.
+
+But how? Let's see.
+
+Suppose that the next client is at time T. Let's find how many employees are between the current k (say, k starts at current_k) and the maximum k where a*k <= T.
+
+If there are M such employees, then we can process all of them, along with the next client, but we need to process their times in order, and see how the door's state changes.
+
+But even that might not be efficient, but perhaps for cases where there are many employees between two clients, this approach can reduce the number of steps.
+
+Alternatively, think of the problem as processing all events in the merged list in order. However, the employee events are a, 2a, ..., na. The client events are given as t_1 <= t_2 <= ... <= t_m.
+
+So the merged list is the combination of these two sorted lists. To process them efficiently, perhaps we can use a two-pointer approach where we track the next employee and the next client, and choose the earliest between them as the next event. But when there are a lot of employees before the next client, we can process them all in a single step, considering how they affect the door's state.
+
+But how?
+
+Let me think of an example. Suppose the current closing time is C. The next employee is at time E = a*k, and the next client is at time T. The earliest next event is min(E, T). Let's say E is earlier than T. Now, if E > C, then the door opens again. So we process E, increment the count, set the new closing time to E + d. Then, the next employee is (k+1)*a.
+
+But if E is <= C, then the employee enters without opening the door. So we can process this employee and any subsequent employees that are <= C. But how?
+
+Wait, if E is the next employee time, and E <= C, then this employee arrives during the open period. So processing this employee doesn't trigger a door opening. Then, the next employee is (k+1)*a. If that is also <= C, then same thing. But how many employees are there between the current k and the maximum k where a*k <= C?
+
+This is a key observation. If the next employee time is <= the current closing time C, then all employees up to a*k <= C can be skipped, because they will arrive during the open period and not trigger a door opening. So the next relevant employee is the first one after C.
+
+So the steps could be:
+
+1. Initialize variables:
+
+   - current_closing = -infinity (door is closed initially)
+
+   - count = 0
+
+   - employee_index = 1 (the first employee is at a*1)
+
+   - client_index = 0 (first client is t[0])
+
+   - process events in order.
+
+2. While there are employees or clients left to process:
+
+   a. Determine the next event (employee or client) that comes first.
+
+   b. If the next event is an employee (a*employee_index <= current client time):
+
+      i. If the employee's time is > current_closing:
+
+         - Open the door (count +=1), set current_closing = employee_time + d.
+
+      ii. Else:
+
+         - Do nothing (employee enters during open period)
+
+      iii. Move to the next employee (employee_index +=1)
+
+   c. Else, process the client:
+
+      i. If the client's time is > current_closing:
+
+         - Open the door (count +=1), set current_closing = client_time + d.
+
+      ii. Else:
+
+         - Do nothing.
+
+      iii. Move to next client (client_index +=1)
+
+But this approach would process each employee and client one by one, which is O(n + m) time. For n up to 1e9, this is impossible. So we need to find a way to process batches of employees when possible.
+
+So here's the key optimization: when the next event is an employee, and that employee's time is <= current_closing, then all subsequent employees up to current_closing can be skipped, because they will all arrive during the open period. So we can find how many employees are there in the interval [current employee time, current_closing], and skip them all in one step.
+
+Similarly, if the next event is an employee, and the employee's time is > current_closing, but the next employee after that (employee_time +a) is also <= next client time, and possibly many employees can be processed as a group.
+
+Wait, let's think. Suppose the current_closing is C. The next employee is E = a * k. If E > C, then we process that employee, which triggers a door opening. The new current_closing is E + d. Now, the next employee is E +a. If E +a <= next client time T, and also E +a > current_closing (E +d), then we have to process each employee one by one. But if E +a is <= current_closing (E +d), then the next employee would arrive during the new open period. So for example, if a is 2, d is 5, then E = 10, then current_closing is 15. The next employee is 12, which is <=15. So the next employee arrives during the open period. So how many employees can be skipped here?
+
+Wait, in this case, the next employee is at E +a =12. Since 12 <=15, the employee comes during the open period. So the next employee after that is 14, which is also <=15. Then 16, which is >15. So between 10 and 15, the employees are 12,14. So three employees (10,12,14) arrive, but 10 is the one that opened the door. So the other employees (12,14) are processed during the open period. So in this scenario, after processing E=10, we can compute how many employees are in the interval (10, 10 +d]. Each such employee arrives during the open period, so they don't trigger a new opening. So the number of such employees is floor( (current_closing - E) / a ) - 0 (since E is included). Wait, E is the first employee that triggered the opening. Then the next employees are E+a, E+2a, etc. So the maximum employee time that is <= current_closing (E +d) is E + k*a <= E +d. So k is floor( (d)/a ), but maybe not exactly. Wait, E is the first employee. The next employees are E+a, E+2a, etc. So the maximum such that E + k*a <= E +d is k_max = floor( (d) / a ). Because (E + k*a) <= E +d → k*a <=d → k <=d//a (since a is integer and d can be up to 1e18).
+
+So after processing the first employee E, the next k_max employees (if any) will arrive during the open period. So if n >= k + k_max +1, then all these employees can be skipped. Because they will arrive during the open period and not trigger a new opening.
+
+Wait, let's think again. Let's say the current employee is at E = a *k. We process E, which is > current_closing. So count increases by 1, current_closing becomes E +d. Now, the next possible employees are a*(k+1), a*(k+2), etc. How many of them are <= current_closing?
+
+The maximum possible is (current_closing - a*k) /a → (E +d - E)/a → d/a. So the number of employees in this interval is floor(d/a). But since a is an integer, and E is a multiple of a, then the next employees are E + a, E +2a, etc. So the maximum employee in this interval is E + m*a where m*a <=d → m <= d//a.
+
+So the number of employees here is m = d//a. So the next m employees after E are during the open period. So if there are enough employees (n >= k + m), then these m employees can be skipped. So the new employee index becomes k + m +1 (since the first is E, then E+a, E+2a, ..., E + m*a). Wait, the number of employees in this batch is m. So after E, there are m more employees arriving during the open period.
+
+But how does this affect the employee index? For example, if the current employee index is k, after processing E = a*k, the next employees would be a*(k+1), a*(k+2), etc. But if m is the number of employees in this batch, then after processing, the employee index should be k + m +1? Wait, no. Let's see: E is a*k. The next employee is a*(k+1). Then, a*(k+2), and so on up to a*(k + m) <= E +d.
+
+So the maximum m is such that a*(k +m) <= E +d → a*k + a*m <= a*k +d → a*m <=d → m <=d//a.
+
+So the number of employees that can be skipped here is m = d//a. But this is only possible if there are enough employees left (i.e., employee_index + m <=n).
+
+So after processing E (employee k), we can compute how many employees (m) can be processed in this batch. Then, if there are at least m employees remaining, we can skip them, and set employee_index to k + m +1. But wait, the first employee in the batch is k, then next m employees are k+1, k+2, ..., k +m. But how does this work?
+
+Wait, no. The first employee is at k=employee_index, which is a*k. Then, after processing that employee, the next employees are at a*(employee_index +1), a*(employee_index +2), etc. So for each employee in the batch after the first one, we need to see if their arrival times are <= current_closing (E +d).
+
+So after processing E = a*employee_index, the current_closing is E +d. Now, the next employee is a*(employee_index+1). The maximum number of employees that can be skipped (processed without opening the door) is the number of employees where a*(employee_index + x) <= E +d. Solving for x:
+
+a*(employee_index +x) <= E +d → a*employee_index +a*x <= a*employee_index +d → a*x <=d → x <=d//a.
+
+So x can be up to d//a. But employee_index can't exceed n, so x_max is min(d//a, n - employee_index).
+
+So the number of employees that can be skipped (after the first one) is x_max = min( d//a, n - employee_index).
+
+Wait, but the first employee (employee_index) is already processed. So after that, the next employees are employee_index +1, up to employee_index +x_max. But employee_index starts at 1, so after processing the first, the next x_max employees can be skipped.
+
+So the total number of employees processed in this batch is 1 (the first one) + x_max (the ones that can be skipped). But wait, no: the first one (employee_index) is processed, and then x_max employees (employee_index+1 to employee_index +x_max) are skipped. So after processing, the employee index becomes employee_index + x_max +1? Or employee_index + x_max + 0? Because employee_index starts at 1. Let me see:
+
+Suppose employee_index is k. Then the employees are k, k+1, ..., k +x_max. The first one (k) is processed, and the next x_max employees (k+1 to k+x_max) can be skipped. So the total is x_max +1 employees. Then, the next employee_index should be k +x_max +1.
+
+Yes, because after processing k, and then skipping k+1 to k+x_max, the next possible employee is k+x_max +1.
+
+But how to model this in code? Let's say that when we process the first employee (k), then after that, the next possible employees are k+1, etc. But since their times are a*(k+1), a*(k+2), etc., which are <= E +d (which is a*k +d), we can compute x_max = min( (d) // a, n -k ).
+
+Because the maximum x is such that (k +x) <=k + (d//a), but also k +x <=n.
+
+So x_max = min( (d // a ), n -k )
+
+Then, the number of employees that can be processed in this batch is x_max. But since we already processed the first one (k), then the total employees processed in this batch is x_max +1? Or no: the first employee is processed, and then x_max more employees are skipped. So the total employees processed in this step is 1 (the first) + x_max (the others that are skipped). So after that, the employee index becomes k + x_max +1.
+
+Wait, the first employee is at k. Then, the next x_max employees are k+1, k+2, ..., k + x_max. Each of these has arrival times a*(k+1), a*(k+2), etc. Each of these times is <= a*k +d. So when processing the first employee (k), the current_closing becomes a*k +d. Then, all employees from k+1 up to k +x_max have arrival times <= current_closing. So when processing them, they are skipped. So for all of them, their arrival times are <= current_closing, so they don't trigger a door opening. So after processing the first employee, we can skip all of these x_max employees. So the employee index can be set to k +x_max +1 (since the next possible employee is k +x_max +1).
+
+Thus, in this case, the code can process these employees in a batch. For example, when the first employee in the batch triggers a door opening, then all subsequent x_max employees can be skipped because they arrive during the open period.
+
+So the algorithm would be:
+
+- For employees and clients, process the next event (earlier time) each time.
+
+- When processing an employee:
+
+   - If the employee's time > current_closing:
+
+      - Open the door (count +=1)
+
+      - Compute x_max = min( d//a, n -k )
+
+      - Skip x_max employees (they arrive during the open period)
+
+      - Update employee_index to k + x_max + 1
+
+      - current_closing is set to a*k +d
+
+   - Else:
+
+      - This employee is skipped (they arrive during open period)
+
+      - employee_index +=1
+
+Wait, but if the employee's time is <= current_closing, then they are skipped, and we move to the next employee. So how to process that in batches.
+
+Wait, if the next employee is <= current_closing, then their time is during the open period. So we can find how many consecutive employees (starting from the current employee index) have times <= current_closing.
+
+The maximum possible is such that a* (k + x) <= current_closing → x <= (current_closing - a*k)/a → x <= (current_closing //a ) -k.
+
+But current_closing is a known value. So x_max = floor( (current_closing) /a ) -k.
+
+But since a*k is the time for the current employee (if it's the first one in a possible batch), then if the next employee is k+1, his time is a*(k+1). So for x employees to be <= current_closing:
+
+a*(k +x) <= current_closing → x <= (current_closing)/a -k.
+
+So x_max = floor( (current_closing)/a ) -k.
+
+But then, since the current employee is k, and the next is k+1, and so on up to k +x_max, their times are all <= current_closing. So these x_max +1 employees can be skipped. Wait, no: the employee at k is already the next employee to be processed. Wait, no. Let's say that the current employee is k. The code is in a loop where it checks the next employee (k) and client (current_client_index). If the employee's time is <= current_closing, then processing it (just increment employee_index). But if there are a lot of such employees, this would take O(n) time. So we need to find a way to process them in a batch.
+
+So for example, if the next employee's time is <= current_closing, then all employees from k to k +x_max have times <= current_closing. So we can compute x_max = floor( (current_closing) /a ) -k +1 ?
+
+Wait, let's think. The next employee is at a*k. If a*k <= current_closing, then all employees from k to k +x, where x is the maximum possible such that a*(k +x) <= current_closing.
+
+So x is the maximum integer where a*(k +x) <= current_closing → x <= (current_closing - a*k)/a → x <= (current_closing /a ) -k.
+
+So x_max = floor( (current_closing) /a ) -k.
+
+But the number of employees that can be skipped is x_max, because the next employee after k is k+1, and so on up to k +x_max. So total employees is x_max +1 (from k to k +x_max). But wait, when x_max is 0, that would mean only employee k is <= current_closing.
+
+So in this case, x_max = (current_closing //a ) -k.
+
+So the number of employees that can be skipped in this case is x_max +1 (if x_max >=0).
+
+Wait, example:
+
+current_closing = 20, a=5, k=3 (employee time is 15). Then, next employees are 20, 25, etc. current_closing is 20. So a*k is 15 <=20. So x_max = (20//5) -3 =4-3=1. So x_max is 1. So the employees are k=3 (15), k=4 (20), and k=5 (25) which is >20. So x_max is 1, which gives employees 3,4 (times 15 and 20). Both are <=20. So the number of employees is 2 (k=3 and k+1=4). So x_max is (20//5) -3 =4-3=1. So x_max +0? Because the employees are k, k+1, ...,k +x_max.
+
+Wait, a*(k +x_max) = a*(3+1) =5*4=20 ≤20. So x_max=1. So the employees are 3,4 (x_max +1 employees). So to compute how many employees can be skipped when the next employee is <= current_closing, we need to find how many consecutive employees (starting from k) have time <= current_closing. So x_max = (current_closing //a ) -k.
+
+But then the number of employees is x_max +1 if a*(k +x_max) <= current_closing. Wait, but (current_closing//a) is floor(current_closing /a), so a*(current_closing//a) is <= current_closing.
+
+Yes. So in the example, current_closing=20, a=5, 20//5=4. So x_max =4-3=1. So k=3, x_max=1. So the employees are 3 and 4 (times 15 and 20). So the total employees is x_max+1=2.
+
+So the number of employees to skip is x_max+1, but x_max is (current_closing//a ) -k. So the code can compute x_max = (current_closing//a) -k. If x_max >=0, then the number of employees is x_max +1. But since k can be up to n, we need to take the minimum between x_max+1 and n -k +1 (since there can be only n employees).
+
+Wait, but the employee_index starts at k. So the maximum possible employees in this batch is min( x_max +1, n -k +1 ). Wait, no. Because the employees are numbered from 1 to n. So employee k is the first in the batch. So the total employees in the batch is the number of employees from k to k +x_max, inclusive. So the count is x_max +1. But we need to make sure that k +x_max <=n. So x_max is min( (current_closing//a ) -k, n -k ).
+
+Wait, no. For example, if current_closing is 20, a=5, k=3, n=5. Then x_max= (20//5) -3=4-3=1. So k +x_max=4, which is <=5. So the employees are 3 and4. So x_max+1=2 employees. But if n=3, then employee k=3 is the last. So x_max would be (current_closing//a) -k. But current_closing//a is 4, k=3. x_max=1. But k +x_max=4, which is >n=3. So the maximum x_max is n -k. So x_max is min( (current_closing//a) -k, n -k ). Then the number of employees in the batch is x_max +1.
+
+So the code can compute:
+
+x_max = min( (current_closing //a ) -k, n -k )
+
+But wait, if current_closing//a is less than k, then x_max would be negative. So we need to take the maximum between 0 and that value. Because if the current_closing is less than a*k, then x_max would be negative, which means no employees can be skipped. So x_max = max( 0, (current_closing //a ) -k )
+
+But if current_closing < a*k, then x_max is 0. So in that case, there are 0 employees in the batch.
+
+So the correct formula is:
+
+x_max = max( 0, (current_closing //a ) -k )
+
+But then x_max can't exceed n -k. So x_max = min( max(0, (current_closing//a) -k ), n -k )
+
+So the code would compute x_max = min( (current_closing //a ) -k, n -k )
+
+But if (current_closing//a ) -k is negative, then x_max is 0. So in code:
+
+x_max = min( (current_closing // a) -k, n -k )
+
+But if (current_closing//a) -k is negative, min with n -k (which is non-negative) could give a negative. So need to take max(0, ...).
+
+So x_max = max( 0, min( (current_closing // a) -k, n -k ) )
+
+Hmm, this is getting complicated. Maybe in code, we can calculate:
+
+start_time = a *k
+
+if start_time > current_closing:
+
+   process this employee (opens the door)
+
+else:
+
+   compute how many employees from k onwards are <= current_closing.
+
+   the maximum possible is x_max = (current_closing - start_time) // a
+
+   x_max = (current_closing - a*k) //a 
+
+   because a*k + x_max*a <= current_closing → x_max = (current_closing - a*k ) //a 
+
+   but this must be >=0.
+
+   then, the number of employees is x_max +1 (since from k to k+x_max)
+
+   but we need to make sure that k +x_max <=n.
+
+   So x_max = min( x_max, n -k )
+
+   So x_max = min( (current_closing -a*k ) //a, n -k )
+
+   then, if x_max >=0:
+
+      employee_index += x_max +1
+
+   else:
+
+      employee_index +=1
+
+Yes, this approach would work. Because for a given employee index k, their arrival time is a*k. If that is <= current_closing, then all employees from k to k +x_max can be skipped, where x_max is the maximum x such that a*(k +x) <= current_closing. Which is x_max = (current_closing -a*k) //a.
+
+But x_max can be negative, which means no employees can be skipped. So we need to take max(0, x_max).
+
+Then, the number of employees is x_max +1. But we can't have more than n -k employees, so x_max is the minimum between (current_closing -a*k )//a and (n -k).
+
+So x_max = min( (current_closing - a*k ) //a, n -k )
+
+But if (current_closing - a*k ) is negative, then x_max is negative. So in code:
+
+x_max = max( 0, min( (current_closing -a*k )//a, n -k ) )
+
+But (current_closing -a*k) can be negative, in which case the min is also negative. So max(0, ...) ensures x_max is 0.
+
+So the code would be:
+
+if employee_time (a*k) <= current_closing:
+
+   x_max = (current_closing - a*k ) //a 
+
+   x_max = min(x_max, n -k )
+
+   x_max = max(x_max, 0)
+
+   employee_index += x_max +1
+
+else:
+
+   process the employee (opens door)
+
+   compute x_max as min(d//a, n -k )
+
+   employee_index += x_max +1
+
+   current_closing = employee_time +d
+
+   count +=1
+
+So this way, when the employee's time is <= current_closing, we can skip x_max +1 employees (including the current one). Otherwise, process the employee, compute how many can be skipped due to the door being open for d seconds.
+
+So the code will process employees in batches, avoiding the O(n) loop.
+
+Now, integrating this with the client processing.
+
+The algorithm steps are:
+
+Initialize:
+
+count =0
+
+current_closing =-infinity
+
+employee_index =1
+
+client_index =0
+
+n_employees =n
+
+m_clients =m
+
+employee_time = a * employee_index
+
+client_time = t[client_index] if client_index <m else infinity
+
+While employee_index <=n or client_index <m:
+
+   next_employee = a * employee_index if employee_index <=n else infinity
+
+   next_client = t[client_index] if client_index <m else infinity
+
+   if next_employee < next_client:
+
+      # process employee
+
+      if next_employee > current_closing:
+
+          count +=1
+
+          current_closing = next_employee +d
+
+          # compute how many employees can be skipped in this batch
+
+          x_max = d //a 
+
+          x_max = min(x_max, n - employee_index )
+
+          employee_index += x_max +1
+
+      else:
+
+          # compute how many employees can be skipped (arrive during open period)
+
+          x_max = (current_closing - next_employee) //a 
+
+          x_max = min(x_max, n - employee_index )
+
+          x_max = max( x_max, 0 )
+
+          employee_index += x_max +1
+
+   else:
+
+      # process client
+
+      if next_client > current_closing:
+
+          count +=1
+
+          current_closing = next_client +d
+
+      client_index +=1
+
+So the code will process each employee and client in order, but in batches when possible.
+
+Let me test this logic with the first example:
+
+Example 1:
+
+Input:
+
+1 1 3 4
+
+7
+
+So n=1, m=1, a=3, d=4. Clients: [7].
+
+Processing:
+
+current_closing = -inf
+
+employee_index=1 (next_employee=3*1=3)
+
+client_index=0 (next_client=7)
+
+3 <7 → process employee.
+
+3 > current_closing (-inf), so count +=1 → count=1.
+
+current_closing =3+4=7.
+
+x_max =d//a =4//3=1. n -employee_index=1-1=0. So x_max =0.
+
+employee_index +=0 +1=2. Now, employee_index=2>1 → no more employees.
+
+Now, next employee is infinity. Process client next_client=7.
+
+7 is == current_closing (7). So it's not > current_closing. So client is processed without opening door. client_index becomes1, which is >=m (1). So loop ends.
+
+Total count is 1. Which matches the example.
+
+Example 2:
+
+Input:
+
+4 3 4 2
+
+7 9 11
+
+Employees:4,8,12,16.
+
+Clients:7,9,11.
+
+d=2.
+
+Output is4.
+
+Let's see:
+
+current_closing =-inf.
+
+employee_index=1 (4), next_employee=4.
+
+client_index=0 (7).
+
+4 <7 → process employee.
+
+4> current_closing (-inf) → count +=1 (count=1).
+
+current_closing=4+2=6.
+
+x_max =d//a=2//4=0. n -employee_index=4-1=3 → x_max=0.
+
+employee_index +=0+1=2.
+
+next_employee=8.
+
+client_index=0 (7).
+
+next_employee (8) >7 → process client.
+
+7>6 → count +=1 (2). current_closing=7+2=9.
+
+client_index=1.
+
+next_client=9.
+
+employee_index=2 (8).
+
+8 <9 → process employee.
+
+8> current_closing (9?) No: 8 <=9. So the employee arrives during the open period.
+
+So compute x_max = (9-8)/4 →1//4=0. min(0,4-2=2) →0.
+
+employee_index +=0+1=3.
+
+next_employee=12.
+
+next_client=9.
+
+12>9 → process client.
+
+9 is equal to current_closing (9). So no opening. client_index=2.
+
+next_client=11.
+
+current_closing is9.
+
+employee_index=3 (12).
+
+12>9 → process employee.
+
+12>9 → count +=1 (3). current_closing=12+2=14.
+
+x_max =2//4=0. employee_index=3, n=4 → min(0,4-3=1) →0. employee_index becomes4.
+
+next_employee=16.
+
+next_client=11.
+
+16>11 → process client.
+
+11>9 → but 11 <14 (current_closing=14). So no opening. client_index=3, which is >=m=3.
+
+Now process employees. next_employee=16.
+
+16>14 → count +=1 (4). current_closing=16+2=18.
+
+x_max=2//4=0. employee_index +=0+1=5>4. So no more employees.
+
+Total count is4, which matches the example.
+
+So this logic seems to work.
+
+Now, coding this in Python.
+
+But first, handling the merging of employee and client events. The code must handle the case where employees and clients are processed in order, using a two-pointer approach.
+
+The code will loop while employee_index <=n or client_index <m.
+
+At each step:
+
+Compute next_employee = a * employee_index if employee_index <=n else infinity.
+
+next_client = t[client_index] if client_index <m else infinity.
+
+Choose the smaller of the two.
+
+Process the event.
+
+But when processing an employee, after possibly opening the door, we need to compute x_max (employees to skip) and advance employee_index.
+
+Similarly, when processing a client, if it's after current_closing, open the door.
+
+But for large m (up to 1e5), the code must process clients in O(m) time.
+
+So the code outline:
+
+Read n, m, a, d.
+
+Read the list t, and sort it (but the input says it is given in non-decreasing order).
+
+But the problem statement says that the client times are given in non-decreasing order, so we don't need to sort.
+
+employee_index starts at 1 (since employees are a*1, a*2, etc.).
+
+current_closing = -infinity (or 0, but in code, comparing times will work as long as initial current_closing is less than any possible arrival time).
+
+count =0
+
+client_index =0
+
+while employee_index <=n or client_index <m:
+
+    next_employee = a * employee_index if employee_index <=n else float('inf')
+
+    next_client = t[client_index] if client_index <m else float('inf')
+
+    if next_employee < next_client:
+
+        # process employee
+
+        if next_employee > current_closing:
+
+            count +=1
+
+            current_closing = next_employee +d
+
+            x_max = d // a
+
+            remaining_employees =n - employee_index 
+
+            x_max = min(x_max, remaining_employees)
+
+            employee_index += x_max +1
+
+        else:
+
+            x_max = (current_closing - next_employee) //a 
+
+            remaining_employees =n - employee_index 
+
+            x_max = min(x_max, remaining_employees)
+
+            x_max = max(x_max, 0)
+
+            employee_index += x_max +1
+
+    else:
+
+        # process client
+
+        if next_client > current_closing:
+
+            count +=1
+
+            current_closing = next_client +d
+
+        client_index +=1
+
+print(count)
+
+Wait, but in the code, for the employee case when next_employee is <= current_closing:
+
+We compute x_max = (current_closing - next_employee) //a.
+
+This is because next_employee is a*employee_index. Then, the next employees are a*(employee_index +1), a*(employee_index +2), etc. We need to find how many of these are <= current_closing.
+
+So next_employee is a*employee_index. So current_closing - next_employee = current_closing - a*employee_index.
+
+Divided by a gives the number of steps (each step is +a) that can be taken. So x_max is the maximum x where a*(employee_index +x) <= current_closing.
+
+So x_max is (current_closing - a*employee_index ) //a.
+
+But since employee_index is the current index, the next employee is employee_index+1.
+
+Wait, for example, next_employee is a*employee_index. So employee_index is k. The next employees are k+1, k+2, etc. So the current_closing is C.
+
+We need to find the maximum x where a*(k) <= C (which is true), a*(k+1) <=C, ..., a*(k +x) <=C.
+
+So x is (C -a*k ) //a.
+
+But this includes the current employee (k) in the count.
+
+Wait, no: when processing an employee, the code is already at employee_index, which is k. So the next_employee is a*k. We are processing this employee now (whether it is a new opening or not). But if it is not a new opening (because a*k <= current_closing), then all employees from k to k +x_max can be skipped, including the current employee.
+
+But wait, no. In the code, when the employee is being processed, it's because it is the next event. So the code is handling this employee. Then, after processing, the code needs to skip any subsequent employees that are <= current_closing.
+
+But if the current employee is k, and a*k is <= current_closing, then this employee is skipped (no door opening). The code needs to find how many employees after k can be skipped.
+
+But in the code, after processing this employee, the code skips x_max employees (including this one?), or x_max+1?
+
+Wait, in the code, when we process an employee and it's <= current_closing, the code computes x_max = (current_closing - a*employee_index ) //a. remaining_employees is n - employee_index.
+
+Then, x_max = min(x_max, remaining_employees). Then, employee_index += x_max +1.
+
+But x_max is the number of employees after the current one (employee_index) that can be skipped. So the current employee is being processed and skipped (no action), and x_max employees after him are also skipped. So total x_max +1 employees are skipped (employee_index, employee_index+1, ... employee_index +x_max).
+
+Yes. For example, employee_index=3, x_max=2. Then, after processing, employee_index becomes 3+2+1=6. So employees 3,4,5 are skipped (x_max +1 =3 employees). So this is correct.
+
+So the code correctly skips x_max +1 employees, including the current one.
+
+Yes. So in the code, when processing an employee that is <= current_closing, we compute x_max as the maximum number of subsequent employees (including current) that can be skipped. So x_max = (current_closing - a*employee_index ) //a → the maximum x where a*(employee_index +x) <= current_closing → x = (current_closing - a*employee_index ) //a.
+
+But since employee_index is k, the employees are k, k+1, ..., k +x. So the total number is x+1 employees. But x is computed as (current_closing -a*k )//a. So this code is correct.
+
+So the code should work.
+
+Now, testing the code.
+
+First example:
+
+n=1, m=1, a=3, d=4.
+
+t=[7]
+
+employee_index=1 (next_employee=3), client_index=0 (7).
+
+3<7: process employee.
+
+3> current_closing (-inf). count=1. current_closing=3+4=7.
+
+x_max=4//3=1. remaining_employees=0 (n=1, employee_index=1, 1-1=0). x_max=0.
+
+employee_index +=0+1=2. Now, employee_index>1.
+
+Process client:7. next_client=7> current_closing (7? No, 7 is equal). So no count. client_index=1.
+
+Loop ends. Count is1. Correct.
+
+Second example:
+
+n=4, m=3, a=4, d=2.
+
+t=[7,9,11]
+
+Employees at 4,8,12,16.
+
+Clients at 7,9,11.
+
+Process employee 4 (next_employee=4 <7). count=1. current_closing=6.
+
+x_max=2//4=0. employee_index +=0+1=2.
+
+next_employee=8. next_client=7.
+
+Process client 7. 7>6 → count=2. current_closing=9.
+
+client_index=1.
+
+Process next_employee=8 <9.
+
+8 <=9 → compute x_max=(9-8)/4=0.25 →0.
+
+employee_index +=0+1=3. next_employee=12.
+
+next_client=9. Process client 9. 9=current_closing. No count. client_index=2.
+
+Process next_client=11. next_employee=12>11. Process client 11. 11>9. count=3. current_closing=13.
+
+client_index=3. done.
+
+Now process next_employee=12. 12>13? No, 12<13. So compute x_max=(13-12)/4=0.25 →0. employee_index +=0+1=4. next_employee=16.
+
+16> current_closing (13). So count=4. current_closing=18. x_max=2//4=0. employee_index=4+0+1=5>4. done.
+
+Total count=4. Correct.
+
+Another test case: sample input 2.
+
+Yes.
+
+So the code should work.
+
+Now, implementing this in Python.
+
+But in Python, for very large numbers (like 1e18), we need to use integers, but Python handles that well.
+
+The code must read the clients' times as a list, sorted. The input says the client times are non-decreasing, so no need to sort.
+
+Read n, m, a, d from first line.
+
+Then read the list of m integers.
+
+Handle the case where m=0.
+
+Now, code:
+
+Read the first line as integers.
+
+Then, read the second line, split into integers.
+
+Then, the code.
+
+So the code would look like:
+
+n, m, a, d = map(int, input().split())
+
+t = list(map(int, input().split())) if m else []
+
+employee_index = 1
+
+client_index = 0
+
+current_closing = -1  # initialized to a value less than any possible arrival time (which is >=1)
+
+count =0
+
+while employee_index <=n or client_index <m:
+
+    next_employee = a * employee_index if employee_index <=n else float('inf')
+
+    next_client = t[client_index] if client_index <m else float('inf')
+
+    if next_employee < next_client:
+
+        # process employee
+
+        if next_employee > current_closing:
+
+            count +=1
+
+            current_closing = next_employee +d
+
+            x_max = d // a
+
+            remaining = n - employee_index
+
+            x_max = min(x_max, remaining)
+
+            employee_index += x_max +1
+
+        else:
+
+            delta = current_closing - next_employee
+
+            x_max = delta //a
+
+            remaining = n - employee_index
+
+            x_max = min(x_max, remaining)
+
+            x_max = max(x_max, 0)
+
+            employee_index += x_max +1
+
+    else:
+
+        # process client
+
+        if next_client > current_closing:
+
+            count +=1
+
+            current_closing = next_client +d
+
+        client_index +=1
+
+print(count)
+
+But wait, in the case where a=0? No, the input says a is a positive integer (1 ≤ n, a ≤ 1e9). So a is at least 1.
+
+So this code should handle all cases.
+
+Testing with the examples.
+
+Yes.
+
+Another test case:
+
+Input:
+
+4 3 4 2
+
+7 9 11
+
+The code outputs 4 as expected.
+
+Another test case where multiple employees are skipped:
+
+n=5, m=0, a=2, d=5.
+
+Employees at 2,4,6,8,10.
+
+Door opens at 2, closes at 7. Then, employees 4,6 arrive before 7. So after processing 2, x_max =d//a=5//2=2. remaining=5-1=4. x_max=2. So employee_index becomes1+2+1=4. So employees 2,4,6 are processed (the first opens the door, the next two are skipped). Then, employee_index=4, next_employee=8. 8>7 → count increases to 2, closing time 8+5=13. x_max=5//2=2. remaining=5-4=1. x_max=1. employee_index becomes4+1+1=6>5. So total count is2. But employees are 2,8,10. Wait, no:
+
+Wait, after processing employee 2:
+
+current_closing=2+5=7.
+
+x_max=5//2=2. remaining=5-1=4. So x_max=2. So employee_index becomes1+2+1=4. employees 2,4,6 are processed (the first opens door, 4 and 6 are skipped).
+
+Then, employee_index=4. next_employee=4*2=8. current_closing is7. 8>7. count becomes2. current_closing=8+5=13.
+
+x_max=5//2=2. remaining=5-4=1. x_max=1.
+
+employee_index +=1+1=4+2=6>5. So employees 8 and 10 are processed. 8 opens door, 10 is in 8+5=13. So 10 <=13. So after processing 8, x_max=5//2=2. But remaining is5-4=1. x_max=1. employee_index=4+1+1=6. So next_employee is 6*2=12>13. So the code would process 8, and skip 10?
+
+Wait, employee_index after processing 8 is4. x_max is5//2=2. remaining=5-4=1. x_max=1. So employee_index +=1+1=6. So employee_index=6>5. So next_employee is infinity. So 10 is never processed. But according to the problem statement, employees are at 2,4,6,8,10. So after processing 2, the code skips 4,6. Then processes 8 (count 2, current_closing=13). Then, x_max=5//2=2. But remaining is1. So x_max=1. employee_index=4 +1+1=6>5. So no processing of employee 10. But employee 10 is 10, which is <=13. So the code is missing that employee.
+
+Ah, here's a mistake.
+
+Wait, when processing employee 8 (employee_index=4), next_employee=8.
+
+current_closing is7. So 8>7. count increases to2. current_closing becomes13.
+
+x_max =d//a=5//2=2. remaining employees:5-4=1.
+
+x_max=min(2,1)=1. So employee_index +=1+1=4+1+1=6. So employees 8 and 10 (employee_index=4 and5) are processed. Because employee_index=4, and we skip 1 employee (4+1=5). So employee_index becomes6. So employee 5 (10) is not processed.
+
+But employee 5's time is a*5=10. Which is <=13. So the code is skipping it.
+
+But according to the code, after processing employee 4 (time8), x_max is1. So employee_index becomes4+1+1=6. So employees 4 and5 are skipped. So employee5's time is a*5=10, which is <=13. So the code is correct in skipping them.
+
+But employee5's time is10, which is <=13. So during the door's open period (8 to13), employees4 (8),5 (10) arrive. The code processes employee4 (opens door), then skips employee5. So employee5 is processed during the open period, and does not trigger a new door opening.
+
+Yes.
+
+So in this case, employees are 2,4,6,8,10.
+
+The code processes:
+
+2: count=1, current_closing=7. x_max=5//2=2. remaining=4. x_max=2. employee_index=1+2+1=4. So employees2,4,6 are processed (2 opens, 4 and6 are skipped).
+
+Then, employee_index=4: next_employee=8. 8>7. count=2. current_closing=13. x_max=5//2=2. remaining=5-4=1. x_max=1. employee_index=4+1+1=6. So employees8 and10 are processed (8 opens, 10 is skipped because 10<=13).
+
+So the door opens twice. Employees6,10 are skipped.
+
+So the code's count is2.
+
+But the employees are:
+
+2 (opens, closing at7). Employees4,6 arrive at4,6<=7. So they enter during the open period. Employee8 arrives at8>7 → opens door, closing at13. Employees10 arrives at10 <=13 → enters during open period. So the total openings are2. Which is correct.
+
+So code works.
+
+Thus, the code should handle all cases correctly.
+</think>
+To solve this problem, we need to determine how many times an automatic door opens given the arrival times of employees and clients. The door opens when someone arrives and it is closed, and it closes after a specified duration unless someone arrives exactly at the closing time.
+
+### Approach
+1. **Event Processing**: The employees arrive at times forming an arithmetic sequence (a, 2a, 3a, ..., na), while clients arrive at specified times given in non-decreasing order. We need to process these events in chronological order.
+2. **Efficient Batch Processing**: Given the constraints (n up to 10^9), we cannot generate all employee times explicitly. Instead, we process batches of employees efficiently by calculating how many can be skipped during the door's open period.
+3. **Two-pointer Technique**: We use two pointers to track the next employee and client events. For each event, we determine if the door needs to open and update the closing time accordingly. If an event occurs while the door is open, we skip processing those events until the door closes.
+
+### Solution Code
+```python
+n, m, a, d = map(int, input().split())
+t = list(map(int, input().split())) if m else []
+
+employee_index = 1
+client_index = 0
+current_closing = -1  # initialized to a value less than any possible arrival time (>=1)
+count = 0
+
+while employee_index <= n or client_index < m:
+    next_employee = a * employee_index if employee_index <= n else float('inf')
+    next_client = t[client_index] if client_index < m else float('inf')
+    
+    if next_employee < next_client:
+        if next_employee > current_closing:
+            count += 1
+            current_closing = next_employee + d
+            x_max = d // a
+            remaining = n - employee_index
+            x_max = min(x_max, remaining)
+            employee_index += x_max + 1
+        else:
+            delta = current_closing - next_employee
+            x_max = delta // a
+            remaining = n - employee_index
+            x_max = min(x_max, remaining)
+            x_max = max(x_max, 0)
+            employee_index += x_max + 1
+    else:
+        if next_client > current_closing:
+            count += 1
+            current_closing = next_client + d
+        client_index += 1
+
+print(count)
+```
+
+### Explanation
+1. **Initialization**: We initialize pointers for the next employee and client, and track the current closing time of the door.
+2. **Event Comparison**: For each iteration, we compare the next employee and client times to determine the next event to process.
+3. **Employee Processing**: If the next employee arrives when the door is closed, the door opens, and we calculate how many subsequent employees can be processed in a batch during this open period. If the employee arrives while the door is open, we skip all subsequent employees during this period.
+4. **Client Processing**: Similarly, if a client arrives when the door is closed, the door opens. If they arrive while the door is open, they enter without triggering a new opening.
+5. **Efficiency**: By using batch processing for employees and efficiently merging events, we handle large values of n and m within feasible time complexity.
+
+This approach ensures that we efficiently process all events in chronological order while minimizing redundant operations, making the solution both optimal and scalable.
+</bot>

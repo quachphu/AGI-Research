@@ -1,0 +1,623 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Arkady and his friends love playing checkers on an n × n field. The rows and the columns of the field are enumerated from 1 to n.
+
+The friends have recently won a championship, so Arkady wants to please them with some candies. Remembering an old parable (but not its moral), Arkady wants to give to his friends one set of candies per each cell of the field: the set of candies for cell (i, j) will have exactly (i^2 + j^2) candies of unique type.
+
+There are m friends who deserve the present. How many of these n × n sets of candies can be split equally into m parts without cutting a candy into pieces? Note that each set has to be split independently since the types of candies in different sets are different.
+
+Input
+
+The only line contains two integers n and m (1 ≤ n ≤ 10^9, 1 ≤ m ≤ 1000) — the size of the field and the number of parts to split the sets into.
+
+Output
+
+Print a single integer — the number of sets that can be split equally.
+
+Examples
+
+Input
+
+
+3 3
+
+
+Output
+
+
+1
+
+
+Input
+
+
+6 5
+
+
+Output
+
+
+13
+
+
+Input
+
+
+1000000000 1
+
+
+Output
+
+
+1000000000000000000
+
+Note
+
+In the first example, only the set for cell (3, 3) can be split equally (3^2 + 3^2 = 18, which is divisible by m=3).
+
+In the second example, the sets for the following cells can be divided equally: 
+
+  * (1, 2) and (2, 1), since 1^2 + 2^2 = 5, which is divisible by 5; 
+  * (1, 3) and (3, 1); 
+  * (2, 4) and (4, 2); 
+  * (2, 6) and (6, 2); 
+  * (3, 4) and (4, 3); 
+  * (3, 6) and (6, 3); 
+  * (5, 5). 
+
+
+
+In the third example, sets in all cells can be divided equally, since m = 1.
+</user>
+<bot>
+<think>
+Okay, let's see. The problem is to find out how many cells (i, j) in an n x n grid satisfy that i² + j² is divisible by m. And then output the count. But n can be up to 1e9, and m up to 1000. So we need an efficient approach here.
+
+Hmm. So for each cell (i,j), we need (i² + j²) mod m == 0. So we need to count the number of pairs (a, b) where a² + b² ≡ 0 mod m, and a and b are between 1 and n, inclusive.
+
+The straightforward approach would be to precompute all possible residues of squares mod m, then find for each residue a, how many residues b satisfy (a + b) mod m == 0. Then multiply the counts of a's and b's and sum over all such pairs. But since m is up to 1000, this is manageable.
+
+Wait, but how do we compute the number of times a certain residue appears for squares mod m in the range 1..n?
+
+Yes. Let's think: for each possible residue r mod m, compute how many numbers x in [1, n] satisfy x² ≡ r mod m. Then, for all pairs (r1, r2) where r1 + r2 ≡ 0 mod m, the count is the product of the counts of r1 and r2. Sum all such products, and that's the answer.
+
+So the steps are:
+
+1. Precompute all possible residues mod m for squares. So for each r in 0..m-1, compute how many x in 1..n have x² ≡ r mod m.
+
+2. Then, for each possible pair of residues (a, b), check if (a + b) mod m == 0. Sum the product of counts of a and counts of b.
+
+But since the grid is n x n, each (i,j) pair is considered once, so the order matters. However, since in the problem statement, (i,j) and (j,i) are considered different cells unless i=j. So the pairs are ordered. So when a and b are different residues, their counts are multiplied and added twice (since (a,b) and (b,a) are separate), except when a and b are the same. Wait, no: if a and b are two residues that sum to 0 mod m, then the number of i's with residue a and j's with residue b is count_a * count_b. But since i and j can be in any order, except when a and b are the same. So in that case, for a pair (a, b) where a != b, but a + b ≡ 0 mod m, each contributes count_a * count_b + count_b * count_a? No, wait. Because (a, b) and (b, a) are two separate pairs, but only if a + b ≡ 0 mod m. Wait, no: if a + b ≡ 0 mod m, then b + a ≡ 0 mod m as well. So in that case, for the pair (a, b), the product is count_a * count_b. Similarly, the pair (b, a) would be another possible pair contributing count_b * count_a, but if a + b ≡0 mod m, then both (a,b) and (b,a) are valid. But in the case where a and b are distinct residues, but (a + b) mod m is 0, then all pairs (x, y) where x is a residue a and y is residue b, and vice versa, contribute to the total. So for each pair (a, b) where a + b ≡ 0 mod m, if a != b, the total contribution is 2 * count_a * count_b. But if a == b, then it's count_a^2.
+
+Wait, no. Because a and b are residues, and for each (i, j) pair, if i is in residue a and j is in residue b, and a + b ≡0 mod m, then that pair contributes. So regardless of whether a and b are the same or not. So for all a and b such that a + b ≡0 mod m, the count is the product of the count of a (number of i's with x² ≡a mod m) multiplied by the count of b (number of j's with x² ≡b mod m).
+
+So the total is sum over all a and b where a + b ≡0 mod m of (cnt_a * cnt_b).
+
+So the key is to compute all possible pairs (a, b) where a + b ≡0 mod m, and sum the products of their counts.
+
+Now, how do we compute the counts for each residue?
+
+For each residue r in 0..m-1, how many numbers x in [1, n] have x² ≡ r mod m.
+
+To compute this, we can note that for x in 1..n, x mod m can be any value from 0 to m-1. So x² mod m depends only on x mod m. So for each possible residue s (x mod m), compute s² mod m, and see if it equals r. Then, for all x in [1..n], the residue s of x mod m is s = (x-1) mod m +1? Wait, no. Let's think. For x, x mod m is in 0..m-1. So x ≡ s mod m, where s is 0 <= s < m. So x² mod m is (s²) mod m.
+
+So for each possible s in 0..m-1, compute s² mod m. Then, for each residue r, the numbers x that have x² ≡ r mod m are those x where x mod m is in the set S_r, where S_r is {s | s² mod m = r}.
+
+So for each residue r, the count is the number of x in 1..n such that x mod m is in S_r.
+
+To compute this, for each residue r, collect all s in 0..m-1 where s² ≡ r mod m. Then, for each x in 1..n, x mod m is s, and if s is in S_r, then x contributes to the count for residue r.
+
+So for each residue r, the count is:
+
+count_r = floor((n - s)/m) + 1 for each s in S_r, then sum over all s in S_r.
+
+Wait, no. For example, suppose S_r has elements s1, s2, ..., sk. Then for each s in S_r, the numbers x congruent to s mod m in the range [1, n] are:
+
+The numbers x can be written as x = m * k + s, for k >=0. We need x >=1 and x <=n.
+
+So the minimal x is s+0*m if s >=1, but when s is 0, x is m*1 +0 = m. So we need to find all k such that m*k + s <=n and m*k + s >=1.
+
+So for s in S_r:
+
+If s ==0:
+
+The x's are m*1, m*2, ..., m*t where m*t <=n. So t ranges from 1 to floor(n/m).
+
+So the count is floor(n/m).
+
+Else (s >=1):
+
+x = m*k +s, where k >=0. We need x <=n.
+
+So m*k + s <=n => k <= (n -s)/m. Since k must be >=0.
+
+So the maximum k is floor((n -s)/m).
+
+The number of x's for this s is floor((n -s)/m) + 1.
+
+So for each s in S_r:
+
+if s ==0:
+
+count += floor(n/m)
+
+else:
+
+count += floor( (n - s)/m ) + 1
+
+So, the approach is:
+
+1. Precompute for each residue r (0 <= r < m), the set S_r of residues s (0 <= s < m) where s² ≡ r mod m.
+
+2. For each residue r, compute the count of x in [1, n] such that x mod m is in S_r. This is done by summing for each s in S_r, the count as per s being 0 or not.
+
+3. Once we have for each residue r, the count of x's where x² ≡ r mod m, then the problem reduces to finding all pairs (a, b) where a + b ≡0 mod m. For each such pair, multiply the counts of a and b, and sum all these products.
+
+So the steps for the code:
+
+First, precompute for each residue r, the set of s where s² ≡ r mod m. Let's call this a dictionary or a list, where for each r, we have the list of s's.
+
+Then, for each r in 0..m-1, compute the count of x's that have x² ≡r mod m. Let's call this cnt[r].
+
+Once cnt is built, the answer is sum over all a and b where (a +b) mod m ==0 of cnt[a] * cnt[b].
+
+But considering that a and b can be in 0..m-1.
+
+Wait, but in the problem statement, (i^2 + j^2) must be divisible by m. So (i^2 + j^2) mod m ==0.
+
+Which is equivalent to (i² mod m + j² mod m) mod m ==0. So yes.
+
+So the approach is correct.
+
+Now, the key is to compute cnt[r] for each r in 0..m-1.
+
+But m can be up to 1000, so for each r, the set S_r can be precomputed by iterating s from 0 to m-1 and checking s^2 mod m.
+
+For example, for m=3:
+
+s can be 0,1,2.
+
+s² mod 3 is 0, 1, 1. So for r=0, S_0 is {0}, r=1: {1,2}, r=2: empty.
+
+So for each s in 0 to m-1, compute s² mod m, and group them into S_r.
+
+Once we have S_r for each r, compute the count as explained.
+
+Then, for each pair (a, b) where (a +b) mod m ==0, sum cnt[a] * cnt[b].
+
+Now, the question is how to efficiently compute this sum.
+
+An O(m^2) approach is acceptable here since m is up to 1000. So 1e6 operations, which is manageable.
+
+So the plan is:
+
+- Precompute S_r for all r in 0..m-1.
+
+- For each r, compute cnt[r], the number of x in 1..n where x² ≡r mod m.
+
+- For each a in 0..m-1, and for each b in 0..m-1, check if (a + b) mod m ==0. If yes, add cnt[a] * cnt[b] to the answer.
+
+But to optimize, we can precompute for each a, the required b's. For example, for a given a, the required b is (-a) mod m. So for each a, compute b = (m - a % m) % m. Then check if (a +b) mod m is 0. Then, the sum can be computed by, for each a, add cnt[a] * cnt[b], where b is (m -a) mod m.
+
+Wait, but in that case, the total sum would be sum_{a=0 to m-1} cnt[a] * cnt[ (m -a) mod m ].
+
+But since for each a, there's exactly one b that satisfies (a +b) mod m=0. So the sum is over all a, cnt[a] * cnt[ (m -a) mod m ].
+
+But wait, when a=0, then b=0. So that's handled. If m is even, then for a = m/2, the b would be m/2. But this is correct.
+
+So this way, the sum is O(m) instead of O(m^2). Which is better.
+
+Yes, that's a smarter approach. For each a in 0..m-1, compute the required b as (m - a) mod m. Then sum cnt[a] * cnt[b].
+
+But wait, this would count each pair (a, b) where a +b ≡0 mod m. But since (a, b) and (b, a) are two different pairs when a and b are different, but in this approach, since for each a, we take b=(m -a) mod m, then for a and b different, each pair (a,b) and (b,a) would be considered twice. Wait, no. Because for a given a, the required b is (m -a) mod m. So if a and b are different, then when a is processed, we count cnt[a] * cnt[b], and when b is processed, we count cnt[b] * cnt[a]. Which would add twice the product. So the sum would be double for such pairs. But that's incorrect.
+
+Wait, no. Because in the approach where for each a, we take b = (m -a) mod m, then for each a, the pair (a, b) is considered once. But when a and b are different, the pair (b, a) is considered when a is (m -b) mod m, which would be the same as the original a. For example, if a=1, and m=3, then b=2. When a=2, then b=1. So both are considered, leading to cnt[1] * cnt[2] + cnt[2] * cnt[1] = 2 * (cnt[1] * cnt[2]). Which would count each pair twice.
+
+But in reality, (a, b) and (b, a) are both valid pairs when a and b sum to 0 mod m. So the sum should include both. So this approach is correct. For example, when a=1, b=2 mod 3, sum is cnt[1]*cnt[2] + cnt[2]*cnt[1} = 2* cnt[1] * cnt[2}.
+
+But when we compute sum for a in 0..m-1 of cnt[a] * cnt[b], where b is (m -a) mod m, then the sum would include both a=1 and a=2. So for each a, we add cnt[a] * cnt[b], and for a=1, b=2, and for a=2, b=1. So the product is added twice. Which is correct, because each such pair (i,j) where i has residue a and j has residue b, and vice versa, are two different cells (i,j) and (j,i), so they are both counted.
+
+So this approach works. But how to avoid double counting?
+
+Wait, no. Let's take an example. Suppose m=5, and a=1. Then b=4. So the pairs (1,4) and (4,1) are both considered. So when a=1, we add cnt[1] * cnt[4], and when a=4, we add cnt[4] * cnt[1}. So in the sum, these two terms are added, leading to 2 * cnt[1] * cnt[4}. Which is correct because the cells (i,j) where i has residue 1 and j has residue 4, and the cells where i has residue 4 and j has residue 1 are both counted. So the total sum is the sum over all ordered pairs (a, b) where a +b ≡0 mod m. So each (a, b) is considered once, and (b,a) is considered once if a≠b.
+
+So the approach of iterating through all a in 0..m-1 and adding cnt[a] * cnt[ (m -a) mod m ] is correct. Because for each a, the pair (a, m -a) is considered. So in this way, all possible ordered pairs are considered. So even when a and b are different, the sum is correctly accounting for all possible ordered pairs.
+
+Yes. For example, if m=5 and a=1, then (1,4) is considered. If a=4, then (4,1) is considered. So the sum includes both terms. So the approach is correct.
+
+So the sum can be computed as sum over a in 0..m-1 of cnt[a] * cnt[ (m -a) mod m ].
+
+But wait, (m -a) mod m is equivalent to (-a) mod m. So maybe compute that as (-a) % m.
+
+So the code can be written as:
+
+total = 0
+
+for a in range(m):
+
+    b = (-a) % m
+
+    total += cnt[a] * cnt[b]
+
+So that's O(m) time, which is acceptable.
+
+Now, the main steps are:
+
+1. Precompute S_r for each r in 0..m-1. S_r is the set of s in 0..m-1 such that s² ≡r mod m.
+
+2. For each r in 0..m-1, compute cnt[r] as the sum over s in S_r of the number of x in 1..n where x mod m = s. How?
+
+For each s in S_r:
+
+if s ==0:
+
+    count = n // m
+
+else:
+
+    count = (n - s) // m + 1 if s <=n else 0
+
+Wait, but if n < s, then (n -s) would be negative, so (n -s) //m would be negative. So for example, n=5, s=6 (but m=10). Then (5-6) //10 = (-1)//10 = -1. Adding 1 gives 0. Which is correct, since x=6 is larger than 5.
+
+So for s not zero, the count is max(0, (n - s) //m +1).
+
+So for each s in S_r, the contribution to cnt[r] is:
+
+if s ==0:
+
+    cnt += n // m
+
+else:
+
+    if s > n:
+
+        cnt +=0
+
+    else:
+
+        cnt += (n -s) // m +1
+
+But wait, when s is <=n, then x can be s, m +s, 2m +s, ... up to <=n.
+
+So the number of terms is k where m*k +s <=n. So k can be 0, 1, ..., t. t is floor( (n -s)/m ), since m*t +s <=n => t <= (n -s)/m.
+
+So the number of terms is t+1. Which is (n-s) //m +1.
+
+But if s is 0, then x must be >=1. So x can be m, 2m, ..., up to <=n. The count is n//m. Because x= m*1, m*2, etc. So floor(n/m) terms.
+
+So in code, for each s in S_r:
+
+if s ==0:
+
+    count_s = n // m
+
+else:
+
+    if s > n:
+
+        count_s =0
+
+    else:
+
+        count_s = (n - s) // m +1
+
+then, sum all count_s for s in S_r.
+
+So the code for this part would be:
+
+for each r in 0..m-1:
+
+    cnt[r] = 0
+
+    for s in S_r:
+
+        if s ==0:
+
+            cnt_r += n // m
+
+        else:
+
+            if s > n:
+
+                continue
+
+            else:
+
+                cnt_r += (n - s) // m +1
+
+So that's how cnt[r] is computed.
+
+Now, implementing this.
+
+But how to precompute S_r?
+
+We can loop s from 0 to m-1, compute s_squared = s*s %m, and add s to S_r for r = s_squared.
+
+So in Python:
+
+from collections import defaultdict
+
+squares = defaultdict(list)
+
+for s in range(m):
+
+    r = (s * s) % m
+
+    squares[r].append(s)
+
+Then, for each r in 0..m-1, S_r is squares.get(r, []).
+
+But m can be 0? No, m is at least 1.
+
+So now, putting it all together.
+
+Now, the code steps:
+
+Read n and m.
+
+If m is 1, then all cells are valid. Because any number is divisible by 1. So the answer is n*n.
+
+But wait, in that case, (i² + j²) mod 1 is 0. So yes, all pairs are valid. So the answer is n^2.
+
+But for m=1, the code would proceed normally. However, when m=1, all r are 0. So the code may take some time. But for m=1, the code will compute for each a in 0, and b in 0, since (a +b) mod 1 must be 0. So cnt[0] is n*m (wait, no: for m=1, the residue r can be 0. So S_0 is the set of s where s² mod 1 =0. Since 0 mod 1 is 0, and any s mod 1 is 0. So S_0 is {0}.
+
+But for m=1, the code will compute for each x in 1..n, x mod 1 is 0, so s is 0. So the count for r=0 is n//1 =n. So cnt[0] =n.
+
+Then, the sum is sum over a in 0..0 of cnt[a] * cnt[b], where b is (1 -a) mod 1. So (1 -0) mod 1 is 1 mod1=0. So cnt[0] * cnt[0} =n^2. So the code will output n^2, which is correct.
+
+So even for m=1, the code will handle it.
+
+But perhaps, in code, when m=1, we can handle it as a special case to avoid unnecessary computations. But given that m can be up to 1000, and for m=1, the code would run normally, perhaps it's not necessary.
+
+But let's proceed.
+
+So, code outline:
+
+Read n, m.
+
+Compute squares: a dictionary mapping residue r to list of s in 0..m-1 where s^2 mod m =r.
+
+Then, for each r in 0..m-1:
+
+   cnt[r] = sum over s in squares[r] of (n//m if s==0 else ((n -s) // m +1) if s <=n else 0)
+
+Then, compute answer as sum over a in 0..m-1 of cnt[a] * cnt[ (-a) % m ]
+
+But in code:
+
+But how to compute cnt[r]?
+
+In Python, for each r in 0..m-1:
+
+cnt_r = 0
+
+for s in squares.get(r, []):
+
+    if s ==0:
+
+        cnt_r += n // m
+
+    else:
+
+        if s > n:
+
+            continue
+
+        else:
+
+            cnt_r += (n -s) // m +1
+
+So, but for m=1, s can only be 0.
+
+But n can be up to 1e9. But these operations are O(m), which is acceptable.
+
+So the code can be written as:
+
+n, m = map(int, input().split())
+
+from collections import defaultdict
+
+squares = defaultdict(list)
+
+for s in range(m):
+
+    r = (s * s) % m
+
+    squares[r].append(s)
+
+cnt = [0] * m
+
+for r in range(m):
+
+    for s in squares[r]:
+
+        if s ==0:
+
+            cnt[r] += n // m
+
+        else:
+
+            if s > n:
+
+                continue
+
+            cnt[r] += (n - s) // m +1
+
+answer = 0
+
+for a in range(m):
+
+    b = (-a) % m
+
+    answer += cnt[a] * cnt[b]
+
+print(answer)
+
+Wait, but in the code, when r is not present in the squares dictionary, squares.get(r, []) returns empty list. So for such r, cnt[r] remains 0.
+
+Yes.
+
+Testing sample input 1:
+
+Sample input 1: 3 3
+
+So m=3.
+
+Compute squares:
+
+s ranges from 0 to 2.
+
+s=0: 0² mod3=0 → squares[0].append(0)
+
+s=1: 1 mod3=1 → squares[1].append(1)
+
+s=2: 4 mod3=1 → squares[1].append(2)
+
+So squares is {0: [0], 1: [1,2]}.
+
+Now, for each r in 0,1,2:
+
+r=0: S_r is [0]
+
+compute cnt[0] = 3 //3 (n=3, m=3) → 1.
+
+r=1: S_r is [1,2]. For s=1: s <=3. (3-1)/3=0.666 → 0. +1 →1. So 1+1=2. For s=2: (3-2)/3=0.333 →0. +1 →1. So cnt[1] =1+1=2.
+
+r=2: no s, so cnt[2] =0.
+
+Then, answer is sum over a=0,1,2:
+
+a=0: b=(3-0) mod3=0. cnt[0] * cnt[0} =1 *1=1.
+
+a=1: b=(3-1) mod3=2. cnt[1] * cnt[2} →2 *0=0.
+
+a=2: b=(3-2) mod3=1. cnt[2} is 0 * cnt[1} 2 →0.
+
+So total is 1+0+0=1. Which matches the first sample.
+
+Sample input 2: 6 5.
+
+But this is a bit more complex. But according to the sample explanation, the answer is 13.
+
+But let's see.
+
+The code for m=5:
+
+s ranges 0-4.
+
+s=0 →0 mod5 →0.
+
+s=1 →1 →1.
+
+s=2 →4 →4.
+
+s=3 →9 mod5=4.
+
+s=4 →16 mod5=1.
+
+So squares:
+
+0: [0]
+
+1: [1,4]
+
+4: [2,3]
+
+So for each residue r:
+
+r=0: S_r is [0]. cnt[0] =6//5=1 (since n=6, m=5. 6//5=1).
+
+r=1: S_r is [1,4].
+
+s=1: 1<=6 → (6-1)/5=1 →1+1=2. So contributes 2.
+
+s=4: 4<=6 → (6-4)/5=0.4 →0 +1 →1. So contributes 1. Total 3.
+
+r=4: S_r is [2,3].
+
+s=2: 2<=6 → (6-2)/5=0.8 →0 +1=1. Contributes 1.
+
+s=3: 3<=6 → (6-3)/5=0.6 →0 +1=1. Contributes 1. So cnt[4] =2.
+
+r=2 and r=3: no entries, so cnt=0.
+
+So the cnt array is:
+
+cnt[0] =1
+
+cnt[1] =3
+
+cnt[4] =2
+
+others 0.
+
+Then, for each a in 0-4:
+
+a=0: b=0. cnt[0]*cnt[0} →1*1=1.
+
+a=1: b=4 (since (5-1) mod5=4). cnt[1]*cnt[4} →3*2=6.
+
+a=2: b=3 → cnt[2} * cnt[3} →0*0=0.
+
+a=3: b=2 →0*0=0.
+
+a=4: b=1 →2*3=6.
+
+So total is 1+6+0+0+6=13. Which matches the sample.
+
+So the code works.
+
+Another sample: input 1e9 and m=1. Then, answer is (1e9)^2 →1e18. Which the code would compute.
+
+So the code seems correct.
+
+Thus, the final code is as above.
+</think>
+To solve this problem, we need to determine how many sets of candies on an n × n grid can be split equally into m parts. Each cell (i, j) on the grid has i² + j² candies, and we need to check if this value is divisible by m for each cell.
+
+### Approach
+1. **Residue Calculation**: For each possible residue modulo m, compute the residues of squares modulo m. This helps in determining which residues of i² and j² can sum up to a value divisible by m.
+2. **Count Valid Residues**: For each residue r, count how many numbers in the range [1, n] have squares that are congruent to r modulo m. This is done by checking how many numbers in the range have residues that result in the desired square residues.
+3. **Sum Valid Pairs**: For each pair of residues (a, b) such that their sum modulo m is zero, compute the product of their counts and sum these products. This gives the total number of valid cells.
+
+### Solution Code
+```python
+n, m = map(int, input().split())
+
+from collections import defaultdict
+
+# Precompute squares modulo m: for each residue r, list of s where s^2 ≡ r mod m
+squares = defaultdict(list)
+for s in range(m):
+    r = (s * s) % m
+    squares[r].append(s)
+
+# Calculate count[r] for each residue r
+cnt = [0] * m
+for r in range(m):
+    for s in squares[r]:
+        if s == 0:
+            # Numbers congruent to 0 mod m: m, 2m, ..., km <=n
+            cnt[r] += n // m
+        else:
+            if s > n:
+                continue
+            # Numbers congruent to s mod m: s, m+s, ..., km +s <=n
+            count = (n - s) // m + 1
+            cnt[r] += count
+
+# Compute the answer by checking pairs (a, b) where a + b ≡0 mod m
+answer = 0
+for a in range(m):
+    b = (-a) % m
+    answer += cnt[a] * cnt[b]
+
+print(answer)
+```
+
+### Explanation
+1. **Residue Calculation**: We first determine all possible residues of squares modulo m. This helps in identifying which residues of i and j will make i² + j² divisible by m.
+2. **Count Valid Residues**: For each residue r, we count how many numbers in the range [1, n] have squares that give a residue r modulo m. This is done by checking each possible residue s modulo m and counting how many times each residue appears in the range.
+3. **Sum Valid Pairs**: For each residue a, we find the corresponding residue b such that their sum is divisible by m. We then sum the products of their counts to get the total number of valid cells.
+
+This approach efficiently handles large values of n by focusing on residues and their properties, ensuring the solution is both optimal and scalable.
+</bot>

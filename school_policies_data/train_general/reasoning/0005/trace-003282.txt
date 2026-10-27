@@ -1,0 +1,859 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.There is a system of n vessels arranged one above the other as shown in the figure below. Assume that the vessels are numbered from 1 to n, in the order from the highest to the lowest, the volume of the i-th vessel is ai liters.
+
+<image>
+
+Initially, all the vessels are empty. In some vessels water is poured. All the water that overflows from the i-th vessel goes to the (i + 1)-th one. The liquid that overflows from the n-th vessel spills on the floor.
+
+Your task is to simulate pouring water into the vessels. To do this, you will need to handle two types of queries:
+
+  1. Add xi liters of water to the pi-th vessel; 
+  2. Print the number of liters of water in the ki-th vessel. 
+
+
+
+When you reply to the second request you can assume that all the water poured up to this point, has already overflown between the vessels.
+
+Input
+
+The first line contains integer n — the number of vessels (1 ≤ n ≤ 2·105). The second line contains n integers a1, a2, ..., an — the vessels' capacities (1 ≤ ai ≤ 109). The vessels' capacities do not necessarily increase from the top vessels to the bottom ones (see the second sample). The third line contains integer m — the number of queries (1 ≤ m ≤ 2·105). Each of the next m lines contains the description of one query. The query of the first type is represented as "1 pi xi", the query of the second type is represented as "2 ki" (1 ≤ pi ≤ n, 1 ≤ xi ≤ 109, 1 ≤ ki ≤ n).
+
+Output
+
+For each query, print on a single line the number of liters of water in the corresponding vessel.
+
+Examples
+
+Input
+
+2
+5 10
+6
+1 1 4
+2 1
+1 2 5
+1 1 4
+2 1
+2 2
+
+
+Output
+
+4
+5
+8
+
+
+Input
+
+3
+5 10 8
+6
+1 1 12
+2 2
+1 1 6
+1 3 2
+2 2
+2 3
+
+
+Output
+
+7
+10
+5
+</user>
+<bot>
+<think>
+Okay, let's see. We need to solve this problem where we have a series of vessels arranged vertically, and when we pour water into a vessel, any overflow goes to the next one below. Each query either adds water to a vessel or asks for the current amount in a specific vessel. 
+
+Hmm, the challenge is handling these operations efficiently, especially since the number of vessels and queries can be up to 2e5. So we need a solution that's O(m) or O(m log n) time. If we try to simulate each pour step by step, like cascading the overflow each time, that would be way too slow for large inputs. Because each pour could potentially affect all lower vessels, leading to O(n) per query in the worst case. That's 2e5 * 2e5 operations, which is 4e10—way too slow.
+
+So we need a smarter way to model the state of the vessels. Let's think about the vessels and how they overflow. Each vessel can only overflow into the next one once it's filled beyond capacity. The key observation here is that after all overflow is processed, each vessel is either completely full (up to its capacity) or has some amount that doesn't cause overflow. 
+
+Wait, but how do we represent the current state efficiently? Maybe we can track for each vessel how much water is in it, and for each addition, determine how much flows into subsequent vessels. But again, doing this naively is O(n) per query. So we need a data structure that allows us to quickly calculate how much water is in a vessel and manage the overflow.
+
+Let me think. The problem resembles the concept of a prefix sum, but with overflow. When you add water to vessel i, any excess flows to i+1, then any excess there flows to i+2, and so on. However, processing this step by step for each pour is too slow. 
+
+An alternative approach is to model the vessels in such a way that we can compute the overflow in a more mathematical way. For example, when adding x liters to vessel p, we can compute how much of that x stays in p, how much flows to p+1, etc. But again, how to do this efficiently.
+
+Wait, perhaps each vessel can only contribute to the ones below it once. So maybe the total water in each vessel is the minimum between its capacity and the sum of all pours into it and the overflow from above. But that's not straightforward.
+
+Alternatively, maybe we can model the current state as a set of "filled" vessels. For example, if vessel i is filled to capacity, then any overflow from i-1 would directly contribute to i's overflow. But how to track which vessels are filled?
+
+Wait, here's an idea. Let's model the current amount of water in each vessel as follows. For each vessel i, the amount of water it contains is either exactly its capacity (if there's overflow to the next vessel) or less. If we pour into vessel i, the overflow would go to the next vessel. But the problem is that pouring into i could cause a chain reaction. 
+
+Hmm, perhaps we can represent the vessels in a way that allows us to quickly find the next vessel that's not completely full. Then, when we add water to a vessel, we can calculate how much can be absorbed before overflowing, and then determine the next vessel that can take more water. 
+
+Wait, this reminds me of the union-find data structure. Because when a vessel is filled, any further overflow into it would immediately flow to the next vessel. So maybe we can track for each vessel, the next vessel that is not yet full. Then, when adding water, we can quickly find the range of vessels that are filled and compute the overflow.
+
+For example, when we pour x liters into vessel p, we first check how much space is left in p. If adding x doesn't exceed the capacity, then we just add it. Otherwise, the overflow (current amount + x - capacity) is passed to the next vessel, and p's current level is set to capacity. Then, we recursively process the next vessel with the overflow. But doing this step by step is O(n) in the worst case. So for 2e5 queries, this is not feasible.
+
+So we need a way to batch process the overflow. Let's think in terms of the maximum possible amount that can be added to a vessel and the remaining overflow. Suppose we have a way to find the first vessel after p that can accept some water. Then, we can calculate how much of the overflow can be absorbed by that vessel and so on. But again, how to model this efficiently.
+
+Alternatively, maybe we can model each vessel's current water level, and for each query of type 1, we can calculate how much can be added before overflow. Let's denote the current water in vessel i as w[i]. When adding x to vessel p, the maximum possible without overflow is a[p] - w[p]. If x <= that, then we just add x to w[p]. Otherwise, the overflow is (w[p] + x) - a[p] = x - (a[p] - w[p]). Then, we set w[p] to a[p], and add the overflow to the next vessel, and repeat. But again, for large n, this is O(n) per query.
+
+So the problem is how to handle these overflow steps efficiently. 
+
+Let's think of it as a tree where each vessel points to the next non-filled vessel. Using a union-find (disjoint set) structure where each node points to the next vessel that can accept overflow. For example, when a vessel is filled, we union it with the next vessel. Then, when adding overflow, we can find the next vessel quickly. 
+
+This approach might work. Let's elaborate:
+
+We can have a parent array, where parent[i] is the next vessel that can accept overflow from i. Initially, parent[i] = i for all i. When vessel i is filled to capacity, any overflow from i should go to i+1. But if i+1 is also filled, then the overflow goes to i+2, etc. So the parent array can help us find the next available vessel. 
+
+The steps for a type 1 query (add x to p) would be:
+
+1. Find the current vessel where we can start pouring the x. Let's start at vessel p. We need to find the next available vessel (using find(parent[p])).
+
+Wait, maybe the union-find approach is used here to track which vessels are filled. So for each vessel i, if it's filled (w[i] == a[i]), then parent[i] = i+1. Otherwise, parent[i] = i. Then, when we need to add x liters to vessel i, we can use find(i) to get the next available vessel. 
+
+Wait, maybe the idea is to track for each vessel, the next vessel that can receive overflow. So when we add water to vessel p, we first check how much space is left. If there's space, we add as much as possible. If there's overflow, we then proceed to the next vessel, and so on. But instead of processing each step, we can use the union-find data structure to jump to the next available vessel quickly.
+
+This is similar to the problem where you have a list of elements and you need to find the next available slot. For example, when allocating memory blocks. The union-find approach allows us to find the next available position in O(alpha(n)) time per operation.
+
+So here's the plan:
+
+- For each vessel i, track the current amount of water w[i]. Initially, all w[i] are 0.
+- The parent array is initialized such that parent[i] = i for all i. If vessel i is filled (w[i] == a[i]), then parent[i] is set to i+1. Otherwise, parent[i] remains i.
+- When processing a type 1 query (add x to p), we start at vessel p and find the first available vessel (find(p)). Let's call this current_vessel.
+- For current_vessel, calculate the available space: a[current_vessel] - w[current_vessel].
+- If available space >= x: add x to w[current_vessel]. Update the parent if necessary (if after adding x, the vessel is now filled, then parent[current_vessel] = current_vessel + 1).
+- Else: add as much as possible (available space) to w[current_vessel], subtract that from x, and set parent[current_vessel] to current_vessel + 1. Then, proceed to current_vessel + 1 with the remaining x. Repeat until x is 0 or we reach beyond the last vessel.
+
+But how to efficiently manage this in the union-find structure. Because once a vessel is filled, any subsequent overflow from above would directly go to the next available vessel.
+
+Wait, the find function in union-find is used to find the root of the current node. So if we have parent[i] pointing to the next available vessel, then when we call find(i), it gives the next available vessel. So when we add x to vessel p, we first find the current available vessel (say k = find(p)). Then, we calculate how much can be added to k. The remaining x after filling k is then added to find(k+1), and so on.
+
+This approach allows us to process the overflow in O(alpha(n)) per operation, which is acceptable for 2e5 queries.
+
+Let me outline the steps for a type 1 query (add x to p):
+
+1. Start with the initial vessel k = find(p).
+2. While x > 0 and k <= n:
+   a. available = a[k] - w[k]
+   b. if available >= x:
+      i. w[k] += x
+      ii. if w[k] == a[k], then union(k, k+1) (so parent[k] becomes find(k+1))
+      iii. x = 0
+   c. else:
+      i. x -= available
+      ii. w[k] = a[k]
+      iii. union(k, k+1)
+      iv. k = find(k)  # which is now k+1's root (i.e., next available)
+3. If x > 0, it spills to the floor (but we don't need to track that).
+
+The key is to use the union-find structure to quickly find the next available vessel each time.
+
+For type 2 queries (get the current amount in vessel k), we simply return w[k].
+
+Now, how to implement the union and find operations. Since we are only unioning a vessel to the next one, the parent array can be managed in a way that each filled vessel points to the next available.
+
+The find function would return the next available vessel. For example, if parent[k] is k, then the vessel is available. If it's pointing to a higher vessel, then that's the next available.
+
+Wait, the union-find here is slightly different. Each vessel, when filled, is merged into the next group. So when a vessel is filled (w[k] = a[k]), parent[k] is set to k+1. The find function for k would then recursively find the next available vessel.
+
+So the parent array starts as parent[i] = i for all i. When a vessel k is filled, we set parent[k] = find(k+1). This way, when we call find(k), it returns the next available vessel after k.
+
+Wait, perhaps the parent array is used to track the next available vessel. For example, if vessel k is filled, then parent[k] points to k+1. If vessel k+1 is filled, then parent[k+1] points to k+2. So when you call find(k), it returns the first available vessel after k. But how does this work?
+
+Alternatively, the parent array is a way to jump to the next available vessel. So, when vessel k is filled, we set parent[k] to k+1. So, when we call find(k), it returns find(k+1). So the find function would follow the parent pointers until it finds a vessel that is not filled (parent[i] = i).
+
+Wait, but how do we know if a vessel is filled or not. Because the parent array is part of the union-find structure, which is separate from the w array. Hmm, this might be a problem. Because when we fill a vessel, we need to update the parent array to point to the next vessel. So the parent array's state depends on which vessels are filled.
+
+But in this approach, the parent array is used to track the next available vessel. So when we process a vessel k and fill it, we set parent[k] to find(k+1). So, for example:
+
+Initially, parent[k] = k for all k.
+
+Vessel k is filled (w[k] == a[k]), so we set parent[k] = find(k+1). Then, the next time we look for parent[k], it points to the next available vessel.
+
+But how do we handle the case where multiple vessels are filled. For example, if k, k+1, k+2 are filled, then parent[k] should point to k+3.
+
+But how is this achieved through the union-find structure? Because when you set parent[k] to find(k+1), and if k+1 is filled, then find(k+1) would return parent[k+1], which is find(k+2), and so on.
+
+Yes, that's right. The find function would traverse the parent pointers until it finds a vessel that hasn't been filled (parent[i] = i). So when we fill a vessel k, we set its parent to find(k+1), which effectively links it to the next available vessel.
+
+So the steps for adding x to vessel p would be:
+
+1. Find the current available vessel (k) using find(p).
+2. If k exceeds n, then all overflow is spilled, so we stop.
+3. Calculate how much can be added to k: available = a[k] - w[k].
+4. If available >= x:
+   a. Add x to w[k].
+   b. If now w[k] == a[k], then set parent[k] = find(k+1) (this links k to the next available vessel).
+5. Else:
+   a. Add available to w[k], subtract available from x.
+   b. Set parent[k] = find(k+1) (since it's now filled).
+   c. Proceed with x remaining, and k = find(parent[k] (i.e., the next available vessel).
+6. Repeat until x is zero or k > n.
+
+This way, each addition operation is processed in O(alpha(n)) time, which is acceptable for 2e5 queries.
+
+For the type 2 queries, it's straightforward: just return w[k].
+
+Now, the next step is to implement this in Python.
+
+But wait, in Python, using a list for parent and the find function with path compression. Let's outline the code structure.
+
+First, read n, then a list of a_i (vessel capacities). Initialize w as [0] * (n+1) (since vessels are 1-based?), or 0-based? The problem says vessels are numbered 1 to n. So we can use 1-based indices.
+
+So n is the number of vessels, a[1..n], w[1..n], parent[1..n+1]. The parent array's size can be n+2 to handle vessel n+1 (which is the floor). For vessel n+1, parent[n+1] can be n+1, but any overflow to it is just spilled.
+
+Wait, but according to the problem statement, the overflow from the n-th vessel spills on the floor. So when adding to vessel n, if there's overflow, it's spilled. So in the code, when k >n, we stop processing.
+
+So the parent array can have indices up to n+1, but in practice, when k exceeds n, the overflow is spilled.
+
+So, initializing the parent array as parent[i] = i for i from 1 to n+1.
+
+But for the code, let's see:
+
+n = int(input())
+a = list(map(int, input().split()))  # a[0] is vessel 1? Or no. Wait, the input is given as a1 to an. So in the code, a will be 0-based, but the vessels are 1-based. So perhaps a is a list of length n, where a[0] is vessel 1, etc. No, that's not correct. Wait, in the code, better to use 1-based indices for the vessels.
+
+So, after reading n, read the next line as a list, then pad it so that a[1] is the first vessel, a[2] the second, etc. So:
+
+n = int(input())
+a = list(map(int, input().split()))
+m = int(input())
+queries = [ ... ]
+
+But in code, perhaps:
+
+a = [0] + list(map(...)) to make it 1-based.
+
+So:
+
+n = int(input())
+a = list(map(int, input().split()))
+# then make a 1-based array by inserting 0 at index 0
+a = [0] + a  # a[1] is the first vessel.
+
+Then, w is initialized as [0]*(n+2) (so that w[1..n] are the vessels, and w[n+1] is unused, but perhaps we can ignore it).
+
+parent = [i for i in range(n+2)]  # parent[i] for i from 1 to n+1.
+
+Wait, for vessel i, parent[i] is the next available vessel. So when i is filled, parent[i] = find(i+1). So for vessel n, parent[n] = find(n+1). Since n+1 is parent[n+1] =n+1, then find(n+1) returns n+1, which is beyond the vessels. So adding to vessel n's overflow would be spilled.
+
+The find function with path compression:
+
+def find(u):
+    while parent[u] != u:
+        parent[u] = parent[parent[u]]
+        u = parent[u]
+    return u
+
+But in Python, recursion for find is not efficient, so we need an iterative version.
+
+Now, processing a type 1 query (p, x):
+
+current = p
+while x > 0:
+    k = find(current)
+    if k > n:
+        break  # all spilled
+    available = a[k] - w[k]
+    if available <=0:
+        current = k +1
+        continue
+    if available >= x:
+        w[k] +=x
+        if w[k] == a[k]:
+            parent[k] = find(k+1)
+        x =0
+    else:
+        w[k] += available
+        x -= available
+        parent[k] = find(k+1)
+        current = parent[k]
+
+Wait, but how to manage the loop. Let's think again. For each step, we find the current available vessel (k). Then, we add as much as possible. Then, if the vessel is filled, we set its parent to the next available (find(k+1)), and then move to that next available vessel.
+
+But the code would look something like:
+
+current = p
+while x >0:
+    k = find(current)
+    if k >n:
+        break
+    available = a[k] - w[k]
+    if available ==0:
+        current = k+1
+        continue
+    if available <=x:
+        w[k] = a[k]
+        x -= available
+        # update parent[k] to find(k+1)
+        parent[k] = find(k+1)
+        current = k+1
+    else:
+        w[k] +=x
+        x =0
+        # check if the vessel is now filled
+        if w[k] == a[k]:
+            parent[k] = find(k+1)
+        current = k+1  # not sure
+
+Wait, perhaps there's a better way. Let's think of it as:
+
+When you add x to vessel p, the process is:
+
+current = find(p)
+while x>0 and current <=n:
+    available = a[current] - w[current]
+    if available <=0:
+        current = find(current +1)
+        continue
+    add = min(available, x)
+    w[current] += add
+    x -= add
+    if w[current] == a[current]:
+        # link current to current+1's find
+        parent[current] = find(current +1)
+    current = find(current +1)
+
+This way, after adding, we check if the current vessel is filled. If so, we update its parent to point to the next available. Then, the next current is find(current +1), which skips any filled vessels.
+
+This approach would handle the chain of filled vessels.
+
+But implementing this correctly is crucial.
+
+So the steps are:
+
+1. For the current vessel, find the first available (current = find(p)).
+2. While x is not zero and current <=n:
+   a. Calculate available space.
+   b. Add as much as possible (min(available, x)).
+   c. Subtract from x.
+   d. If the vessel is now filled, update its parent to the next available (find(current+1)).
+   e. Move to the next available vessel (current = find(current+1)).
+
+This loop should process all possible additions, handling overflow as needed.
+
+Let's test this logic with the first example:
+
+Sample Input 1:
+
+2
+5 10
+6
+1 1 4
+2 1
+1 2 5
+1 1 4
+2 1
+2 2
+
+After the first query (1 1 4):
+
+current = find(1) =1. available is 5-0=5. add 4. x becomes 0. w[1] =4. Since 4 <5, parent[1] remains 1. So output for 2 1 is 4.
+
+Second query is 1 2 5: current is 2. available is 10-0=10. add 5. x=0. w[2] =5. Since 5<10, parent[2] remains 2.
+
+Third query is 1 1 4: current is find(1)=1. available is 5-4=1. add 1 (x was 4, now x=3). w[1] becomes 5. Now, parent[1] = find(2). find(2) is 2. So parent[1] =2. Then current becomes find(1+1) =2. available is 10-5=5. add 3 (x=3-3=0). w[2] becomes 5+3=8. Since 8 <10, parent[2] remains 2. So after this, vessel 1 is filled (5), vessel 2 has 8. 
+
+So for the query 2 1, the answer is 5. For 2 2, it's 8. Which matches the sample output.
+
+So the logic seems to work here.
+
+Another test case is the second sample input. Let's see:
+
+Sample Input 2:
+
+3
+5 10 8
+6
+1 1 12
+2 2
+1 1 6
+1 3 2
+2 2
+2 3
+
+Let's process the first query: add 12 to vessel 1.
+
+current = find(1) =1. available 5. add 5. x becomes 7. Now vessel 1 is filled, parent[1] = find(2). find(2) is 2. So parent[1] is 2. current becomes find(2). find(2) is 2. available is 10-0=10. add 7. x becomes 0. vessel 2 now has 7. available is 3. So parent[2] remains 2. 
+
+So after first query, vessel 1 is filled (5), vessel 2 has 7, vessel 3 is 0. 
+
+The second query is to print vessel 2: output 7.
+
+Third query: add 6 to vessel 1.
+
+current is find(1) = parent[1] is 2. So current is find(2) =2. available is 10-7=3. add 3. x becomes 3. vessel 2 is filled (7+3=10). parent[2] = find(3). find(3) is 3. current becomes find(3). add 3. available is 8-0=8. add 3. x becomes 0. vessel 3 has 3. So after this, vessel 2 is filled (10), vessel 3 is 3. 
+
+Fourth query: add 2 to vessel 3. current is find(3) =3. available 8-3=5. add 2. x=0. vessel 3 has 5. not filled. 
+
+Now fifth query: print vessel 2. Since vessel 2 is filled (10), output 10.
+
+Sixth query: print vessel3. 5. So output is 5.
+
+Which matches the sample.
+
+So the logic seems correct.
+
+Now, the code implementation.
+
+Implementing the find function with path compression.
+
+In Python, since handling 2e5 queries, using a list for parent and an iterative find function with path compression is necessary.
+
+So, code steps:
+
+1. Read n.
+
+2. Read a list, then make it 1-based (a[0] is dummy, a[1..n] are the capacities).
+
+3. Read m.
+
+4. Read m queries.
+
+5. Initialize parent as list from 0 to n+1 (since vessels are 1-based, parent is 1-based up to n+1). So parent = [i for i in range(n+2)].
+
+6. Initialize w as a list of 0s, size n+2 (w[1..n] are the vessel's current water levels).
+
+Implement the find function as:
+
+def find(u):
+    while parent[u] != u:
+        parent[u] = parent[parent[u]]
+        u = parent[u]
+    return u
+
+But in Python, for speed, it's better to implement this as a function with a loop.
+
+Now, process each query:
+
+For a query of type 1:
+
+p, xi = ... (pi, xi)
+
+current = p
+
+x = xi
+
+while x >0:
+
+   k = find(current)
+
+   if k >n:
+
+       break
+
+   available = a[k] - w[k]
+
+   if available <=0:
+
+       current = k +1
+
+       continue
+
+   add = min(available, x)
+
+   w[k] += add
+
+   x -= add
+
+   if w[k] == a[k]:
+
+       # merge with next
+
+       parent[k] = find(k+1)
+
+   current = k +1
+
+But wait, after adding to k, the next current should be k+1. But k+1 might not be the next available. So perhaps after processing k, current should be set to find(k+1).
+
+Wait, the code in the loop:
+
+current = p
+
+while x>0 and current <=n:
+
+    k = find(current)
+
+    if k >n:
+
+        break
+
+    available = a[k] - w[k]
+
+    if available <=0:
+
+        current = k +1
+
+        continue
+
+    add = min(available, x)
+
+    w[k] += add
+
+    x -= add
+
+    if w[k] == a[k]:
+
+        parent[k] = find(k+1)
+
+    current = k +1
+
+But this is not correct. Because after adding to k, the current should be set to k+1, but if k+1's find is not the next vessel, this could miss some steps.
+
+Wait, the loop should set current to the next available vessel. So after processing k, the next vessel to process is find(k+1).
+
+So in code:
+
+current = find(p)
+
+while x>0 and current <=n:
+
+    available = a[current] - w[current]
+
+    if available <=0:
+
+        # the current vessel is already filled; find next
+
+        current = find(current +1)
+
+        continue
+
+    add = min(available, x)
+
+    w[current] += add
+
+    x -= add
+
+    if w[current] == a[current]:
+
+        # merge current to next
+
+        parent[current] = find(current +1)
+
+    # move to next vessel
+
+    current = find(current +1)
+
+This way, after adding to current, we check if it's filled. If yes, parent[current] is set to the next available. Then, current becomes find(current+1), which is the next available vessel.
+
+This seems correct.
+
+Let's test this code with sample input 1:
+
+Sample 1:
+
+n=2, a=[5,10], m=6.
+
+Initial parent array: [0,1,2,3].
+
+Queries:
+
+1 1 4:
+
+current = find(1) =1.
+
+available=5-0=5. add 4. x=0. w[1]=4. since 4 <5, parent[1] remains 1. current becomes find(2). find(2)=2.
+
+Loop ends. x is 0.
+
+Second query is 2 1: output 4.
+
+Third query 1 2 5: current=2. available=10-0=10. add 5. x=0. w[2]=5. parent[2] remains 2. current becomes find(3)=3 (which is >n). loop ends.
+
+Fourth query 1 1 4:
+
+current= find(1)=1. available=5-4=1. add 1. x=4-1=3. w[1]=5. parent[1] = find(2) =2. current becomes find(2) =2. available=10-5=5. add 3. x=0. w[2]=8. since 8 <10, parent remains 2. current becomes find(3)=3>n. loop ends.
+
+Then query 2 1: output 5. 2 2:8.
+
+Which matches sample.
+
+So the code works.
+
+Now, implementing this in Python.
+
+But for large n and m (up to 2e5), the code needs to be efficient. The find function with path compression is O(alpha(n)), which is acceptable.
+
+But in Python, loops for find can be slow for very large n and m. However, since each query is processed in O(alpha(n)) steps, it should be manageable.
+
+So code steps:
+
+Read n.
+
+Read a as list, then make it 1-based.
+
+Read m.
+
+Initialize parent as list from 0 to n+1.
+
+Initialize w as [0]*(n+2).
+
+Process each query:
+
+For each query line:
+
+if it's type 1:
+
+   p, xi = ... 
+
+   current = find(p)
+
+   x = xi
+
+   while x>0 and current <=n:
+
+       available = a[current] - w[current]
+
+       if available <=0:
+
+           current = find(current +1)
+
+           continue
+
+       add = min(available, x)
+
+       w[current] += add
+
+       x -= add
+
+       if w[current] == a[current]:
+
+           parent[current] = find(current +1)
+
+       current = find(current +1)
+
+elif type 2:
+
+   k = ...
+
+   print(w[k])
+
+But in Python, the find function is written as a separate function. However, in Python, functions are not as fast as in compiled languages. So to optimize, perhaps we can inline the find function as a helper, or use a list for parent and handle it with loops.
+
+But for code clarity, let's proceed with a find function.
+
+Implement the find function with path compression.
+
+In code:
+
+def find(u):
+
+    while parent[u] != u:
+
+        parent[u] = parent[parent[u]]
+
+        u = parent[u]
+
+    return u
+
+But for each find call, this may take a few steps. But with path compression, it's manageable.
+
+But in Python, even with 2e5 queries, each with a few find steps, it's acceptable.
+
+Now, putting it all together.
+
+Sample code:
+
+n = int(input())
+
+a = list(map(int, input().split()))  # a is 0-based here
+
+a = [0] + a  # make it 1-based
+
+m = int(input())
+
+parent = list(range(n + 2))  # 0 to n+1, but we use 1 to n+1
+
+w = [0] * (n + 2)  # w[1..n]
+
+def find(u):
+
+    while parent[u] != u:
+
+        parent[u] = parent[parent[u]]
+
+        u = parent[u]
+
+    return u
+
+for _ in range(m):
+
+    query = list(map(int, input().split()))
+
+    if query[0] == 1:
+
+        p, x = query[1], query[2]
+
+        current = find(p)
+
+        while x > 0 and current <= n:
+
+            available = a[current] - w[current]
+
+            if available <=0:
+
+                current = find(current +1)
+
+                continue
+
+            add = min(available, x)
+
+            w[current] += add
+
+            x -= add
+
+            if w[current] == a[current]:
+
+                # update parent[current]
+
+                # parent[current] = find(current +1)
+
+                # in the next find(current), it will point to find(current+1)
+
+                # but need to compute it now and set parent[current]
+
+                parent[current] = find(current +1)
+
+            current = find(current +1)
+
+    else:
+
+        k = query[1]
+
+        print(w[k])
+
+But wait, in Python, list indices start from 0. So when we read the a list, after inserting 0 at index 0, a[1] is the first vessel's capacity. Yes.
+
+But what about when n is 2, a = [5,10], then after inserting 0, a becomes [0,5,10]. So a[1] is correct.
+
+Yes.
+
+Now, let's test the code with the first sample:
+
+Sample 1:
+
+After first query (1 1 4):
+
+current = find(1) =1.
+
+available=5-0=5. add 4. x=0. So w[1] is 4. Not filled, so parent remains 1.
+
+Second query (1 2 5):
+
+current=find(2)=2. available 10-0=10. add 5. x=0. w[2] is 5. Not filled.
+
+Third query (1 1 4):
+
+current=find(1) is 1. available 5-4=1. add 1. x=3.
+
+w[1] becomes 5. parent[1] is find(2) → 2. So parent[1] =2.
+
+current becomes find(1+1)=find(2) =2. available=10-5=5. add 3. x=0. w[2] becomes 8.
+
+So after this, vessel 1 has 5, vessel 2 has 8. 
+
+The queries to output are 5 and 8, which is correct.
+
+Yes.
+
+The code should work.
+
+Now, for the second sample:
+
+Sample 2:
+
+After first query 1 1 12:
+
+current = find(1) =1. available 5. add 5. x=7.
+
+w[1] =5. parent[1] = find(2) → 2.
+
+current becomes find(2) =2. available 10-0=10. add7. x=0.
+
+w[2] =7. So parent[2] remains 2.
+
+So vessel 1 is filled (5), vessel 2 has 7. 
+
+Second query (2 2) outputs 7.
+
+Third query (1 1 6):
+
+current = find(1) is 2 (since parent[1] =2). find(2) is 2. available=10-7=3. add3. x=3.
+
+w[2] becomes 10. parent[2] is find(3) →3. current becomes find(3) =3. available 8-0=8. add3. x=0. w[3] is3. parent[3] remains3.
+
+Fourth query (1 3 2):
+
+current=find(3)=3. available 8-3=5. add2. x=0. w[3] is5. parent[3] remains3.
+
+Fifth query (2 2): vessel 2 is filled (10). So output 10.
+
+Sixth query (2 3): output5. Correct.
+
+The code should handle this.
+
+Thus, the code should work.
+</think>
+To solve this problem, we need to simulate pouring water into a series of vertically arranged vessels and handle overflow efficiently. The key challenge is to manage the overflow process in an optimal manner to avoid excessive computational complexity.
+
+### Approach
+1. **Problem Analysis**: When water is poured into a vessel, it can overflow into subsequent vessels. Each query either adds water to a vessel or requests the current amount of water in a specific vessel. Directly simulating each overflow step by step would be too slow for large inputs, so we need an optimized approach.
+
+2. **Union-Find Data Structure**: We use a union-find (disjoint set) data structure to efficiently track the next available vessel that can accept water. This helps in quickly finding the next vessel that is not yet full, allowing us to handle overflow in logarithmic time with path compression.
+
+3. **Handling Queries**:
+   - **Add Water**: When adding water to a vessel, we use the union-find structure to find the next available vessel. We distribute the water as much as possible and update the next available vessel if the current one becomes full.
+   - **Check Water Level**: Directly return the current water level from the stored array.
+
+### Solution Code
+```python
+import sys
+sys.setrecursionlimit(1 << 25)
+
+def main():
+    n = int(sys.stdin.readline())
+    a = list(map(int, sys.stdin.readline().split()))
+    a = [0] + a  # 1-based indexing
+    m = int(sys.stdin.readline())
+    
+    parent = list(range(n + 2))  # 1 to n+1, parent[n+1] = n+1
+    w = [0] * (n + 2)  # water in each vessel, 1-based to n
+
+    def find(u):
+        while parent[u] != u:
+            parent[u] = parent[parent[u]]
+            u = parent[u]
+        return u
+
+    for _ in range(m):
+        query = sys.stdin.readline().split()
+        if not query:
+            continue
+        if query[0] == '1':
+            p = int(query[1])
+            x = int(query[2])
+            current = find(p)
+            while x > 0 and current <= n:
+                available = a[current] - w[current]
+                if available <= 0:
+                    current = find(current + 1)
+                    continue
+                add = min(available, x)
+                w[current] += add
+                x -= add
+                if w[current] == a[current]:
+                    # Update parent to point to the next available
+                    parent[current] = find(current + 1)
+                # Move to the next available vessel
+                current = find(current + 1)
+        else:
+            k = int(query[1])
+            print(w[k])
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+- **Union-Find Structure**: This helps track the next available vessel efficiently. When a vessel is filled, we update its parent to point to the next available vessel, allowing subsequent queries to skip over filled vessels quickly.
+- **Path Compression**: This optimization ensures that each find operation runs in nearly constant time, making the union-find operations efficient even for large inputs.
+- **Efficient Overflow Handling**: By using the union-find structure, we avoid iterating through each vessel sequentially during overflow, instead jumping directly to the next available vessel.
+
+This approach ensures that each query is handled in logarithmic time, making the solution efficient and scalable for large inputs.
+</bot>

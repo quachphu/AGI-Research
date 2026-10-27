@@ -1,0 +1,998 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.You are given an integer sequence of length N, a = {a_1, a_2, …, a_N}, and an integer K.
+
+a has N(N+1)/2 non-empty contiguous subsequences, {a_l, a_{l+1}, …, a_r} (1 ≤ l ≤ r ≤ N). Among them, how many have an arithmetic mean that is greater than or equal to K?
+
+Constraints
+
+* All input values are integers.
+* 1 ≤ N ≤ 2 \times 10^5
+* 1 ≤ K ≤ 10^9
+* 1 ≤ a_i ≤ 10^9
+
+Input
+
+Input is given from Standard Input in the following format:
+
+
+N K
+a_1
+a_2
+:
+a_N
+
+
+Output
+
+Print the number of the non-empty contiguous subsequences with an arithmetic mean that is greater than or equal to K.
+
+Examples
+
+Input
+
+3 6
+7
+5
+7
+
+
+Output
+
+5
+
+
+Input
+
+1 2
+1
+
+
+Output
+
+0
+
+
+Input
+
+7 26
+10
+20
+30
+40
+30
+20
+10
+
+
+Output
+
+13
+</user>
+<bot>
+<think>
+Okay, I need to solve this problem where I have to find the number of contiguous subarrays whose arithmetic mean is at least K. Let's think about how to approach this.
+
+First, the arithmetic mean of a subarray from l to r is (a_l + a_{l+1} + ... + a_r) / (r - l + 1) >= K. If I rearrange this inequality, maybe I can simplify the problem. Multiply both sides by the length of the subarray (which is positive, so the inequality direction doesn't change). So the condition becomes (sum of elements from l to r) >= K * (r - l + 1).
+
+Let me denote the sum from l to r as S(l, r). So S(l, r) >= K*(r - l + 1). Hmm. Alternatively, if I subtract K from each element in the array, perhaps this can be transformed into a problem of finding subarrays with a sum >= 0.
+
+Yes! Because if I let b_i = a_i - K, then the sum of a subarray [l..r] in the original array minus K*(length) is the sum of b_i from l to r. So the condition is that the sum of the subarray in the transformed array b is >= 0. So the problem reduces to finding the number of contiguous subarrays in array b where the sum is non-negative.
+
+So now the problem becomes: count the number of subarrays in array b where the sum is >=0. How can I compute this efficiently?
+
+The naive approach would be O(n^2), which is too slow for n up to 2e5. So we need a smarter approach.
+
+Let's think about prefix sums. Let's compute the prefix sum array of b. Let's denote prefix_sum[0] = 0, and prefix_sum[i] = b_1 + b_2 + ... + b_i for i >=1. Then the sum of the subarray [l..r] is prefix_sum[r] - prefix_sum[l-1]. We want this difference to be >=0. So for each r, we need the number of l's (where l <= r) such that prefix_sum[r] - prefix_sum[l-1] >= 0. Rearranged, this is prefix_sum[r] >= prefix_sum[l-1].
+
+So for each r, the problem reduces to finding how many prefix_sum values (up to index r) are <= prefix_sum[r]. Because for each l, l-1 ranges from 0 to r-1.
+
+So the problem is to, for each r, count the number of elements in prefix_sum[0..r] that are <= prefix_sum[r]. Then sum all these counts.
+
+But how do we compute this efficiently? Because for each r, if we can query the number of elements <= prefix_sum[r] in the prefix_sum array up to index r-1 (since l-1 can be up to r-1), then sum all those counts.
+
+Wait, wait. Let's clarify. For a fixed r, we have l can range from 1 to r. So l-1 ranges from 0 to r-1. So the sum of the subarray [l..r] is prefix_sum[r] - prefix_sum[l-1]. We need this to be >=0. So for each r, we need the count of indices l-1 (0 <= l-1 <= r-1) where prefix_sum[l-1] <= prefix_sum[r].
+
+So for each r, we have to look at all the prefix sums up to index r-1 and count how many are <= prefix_sum[r]. Then sum all these counts for all r from 1 to N.
+
+The question is, how do we compute these counts efficiently for all r.
+
+The straightforward way would be to, for each r, iterate through all previous prefix_sum elements and count. But that would be O(n^2), which is too slow.
+
+So we need a data structure that allows us to perform two operations efficiently:
+
+1. Insert elements into the data structure as we process each r.
+2. For each new r, query the number of elements in the data structure that are <= prefix_sum[r].
+
+Then, the total count is the sum over all r of the number of elements <= prefix_sum[r] in the data structure at the time of processing r (before inserting prefix_sum[r] into the data structure).
+
+Wait, but when processing r, we have to first query the data structure (which contains prefix_sum[0] to prefix_sum[r-1]), then insert prefix_sum[r] into the data structure. So the insertion happens after the query.
+
+So the steps would be:
+
+Initialize a data structure with prefix_sum[0] (since for r=1, l can be 1, and l-1 is 0).
+
+Then, for r from 1 to N:
+
+- Compute prefix_sum[r] = prefix_sum[r-1] + b[r] (since b is 1-based here? Or maybe the array is 0-based. Need to clarify.)
+
+Wait, in the problem, the original array is given as a_1, a_2, ..., a_N. So when we create the transformed array b, each element is b_i = a_i - K. So for the prefix sum, prefix_sum[0] = 0, prefix_sum[1] = b_1, prefix_sum[2] = b_1 + b_2, etc.
+
+So the sum of the subarray [l..r] (original indices) is prefix_sum[r] - prefix_sum[l-1], since l starts at 1. So for each r (from 1 to N), the possible l's are 1 to r. So the l-1 indices are 0 to r-1.
+
+Thus, the data structure starts with prefix_sum[0], and for each r from 1 to N, we query the number of elements <= prefix_sum[r] in the data structure, then add prefix_sum[r] to the data structure.
+
+The data structure needs to support:
+
+- Insert a new element (as we process each r, insert prefix_sum[r] after processing r)
+- Query the number of elements <= X (where X is prefix_sum[r])
+
+The key is to do these operations in O(log n) time each, so that the total time is O(n log n), which is acceptable for n=2e5.
+
+What data structures can do this?
+
+A Binary Indexed Tree (Fenwick Tree) or a Segment Tree could work, but they require the elements to be mapped to a range of integers (coordinates compression). Since prefix_sum can be very large (as the a_i can be up to 1e9, and K can be up to 1e9, and multiplied by n up to 2e5, so the prefix sums can be up to 1e9*2e5 = 2e14, but with possible negatives as well), we can't directly use a BIT unless we compress the values.
+
+So the steps would be:
+
+1. Compute all prefix_sum values.
+2. Collect all the prefix_sum values (including all prefix_sum[0], ..., prefix_sum[N]), and sort them to determine their ranks for coordinate compression.
+3. Then, use a Fenwick Tree (BIT) that can handle these ranks.
+4. For each r from 1 to N:
+   a. Query the BIT for the number of elements <= prefix_sum[r], which are the elements in the BIT (which initially contains prefix_sum[0], and then as we process each r, we add prefix_sum[r-1] for the next steps)
+   Wait, no. Let me re-examine.
+
+Wait, the process is:
+
+We need to process each r from 1 to N. For each r, we have to consider prefix_sum[0] to prefix_sum[r-1], because l can be from 1 to r (so l-1 is 0 to r-1). So when processing r, the data structure should contain prefix_sum[0], prefix_sum[1], ..., prefix_sum[r-1]. Because for r=1, the data structure contains prefix_sum[0]. For r=2, after processing r=1, we added prefix_sum[1]. So during processing r=2, we query the data structure (contains prefix_sum[0] and 1), then add prefix_sum[2] after the query.
+
+So the steps would be:
+
+Initialize the data structure with prefix_sum[0].
+
+Then, for each r in 1 to N:
+
+   current prefix_sum_r = prefix_sum[r] (computed as sum up to index r)
+
+   query the data structure for the number of elements <= prefix_sum_r. Add this to the total.
+
+   then, insert prefix_sum[r] into the data structure.
+
+Wait, but when processing r, the data structure contains prefix_sum[0] to prefix_sum[r-1]. Because after processing r, we insert prefix_sum[r], which is for the next r+1.
+
+So during the processing of r (from 1 to N), the data structure contains prefix_sum[0] to prefix_sum[r-1], and we need to count how many are <= prefix_sum[r].
+
+So the steps are correct.
+
+Now, the problem is that the prefix_sum can be very large. So coordinate compression is needed.
+
+But to do coordinate compression, we need to collect all possible prefix_sum values and assign ranks to them.
+
+But how do we collect all possible prefix_sum values before processing the queries, since the data structure is built dynamically as we process each r?
+
+Wait, the prefix_sum is computed as follows:
+
+prefix_sum[0] = 0
+
+prefix_sum[1] = b_1 = a_1 - K
+
+prefix_sum[2] = b_1 + b_2 = (a_1 - K) + (a_2 - K) = (a_1 + a_2) - 2K
+
+...
+
+prefix_sum[i] = sum_{j=1 to i} (a_j - K) = sum_{j=1 to i} a_j - K*i
+
+So all prefix_sum[i] can be computed incrementally.
+
+But for coordinate compression, we need to collect all possible prefix_sum values that will be inserted into the data structure, which are prefix_sum[0], prefix_sum[1], ..., prefix_sum[N]. Because we process each r from 1 to N, and for each r, we query prefix_sum[0..r-1], and then insert prefix_sum[r].
+
+But wait, the data structure is built incrementally. But how can we collect all possible prefix_sum values in advance to compress them? Because prefix_sum[0] is known (0), and prefix_sum[1] is known after processing the first element, etc. But for coordinate compression, we need all the values that will be in the data structure when we perform the queries and inserts.
+
+But that's not possible unless we compute all the prefix_sum values first.
+
+Wait, yes. So the approach is:
+
+1. Compute all prefix_sum values for 0 to N.
+
+2. Collect all these values into a list.
+
+3. Compress the coordinates (sort and deduplicate them, then map each value to its rank in the sorted list).
+
+4. Then, process each r from 1 to N, using the compressed ranks in the Fenwick Tree.
+
+This way, the coordinate compression is based on all prefix_sum values (including all possible ones that will be inserted into the data structure). Because the data structure will contain all prefix_sum[0], prefix_sum[1], ..., prefix_sum[N], since for each r, we insert prefix_sum[r] after processing it.
+
+Wait, no. Let me think again. The data structure starts with prefix_sum[0]. Then, for each r from 1 to N:
+
+   We process r by querying the current data structure (which has prefix_sum[0], ..., prefix_sum[r-1]).
+
+   Then, we insert prefix_sum[r] into the data structure.
+
+So after processing all r, the data structure contains prefix_sum[0] to prefix_sum[N].
+
+Therefore, all possible values in the data structure are the prefix_sum array from 0 to N. So if we compute all of them first, we can collect them into a list, sort them, assign ranks, and then use those ranks in the Fenwick Tree.
+
+So the steps are:
+
+1. Compute the array b where each element is a_i - K.
+
+2. Compute the prefix_sum array for b. So prefix_sum[0] = 0, prefix_sum[1] = b[0], prefix_sum[2] = b[0] + b[1], etc. Wait, here the original array is 0-based or 1-based? Let's clarify:
+
+The input is given as a_1, a_2, ..., a_N. So in code, we can read them into a list (0-based or 1-based). But in Python, it's easier to process 0-based.
+
+So in code:
+
+Read N and K.
+
+Read N lines, each as a_i. So we can create a list a of length N.
+
+Then, compute the array b as [a_i - K for each a_i in a].
+
+Compute the prefix_sum array of length N+1, where prefix_sum[0] = 0, and for i >=1, prefix_sum[i] = prefix_sum[i-1] + b[i-1].
+
+So for example, prefix_sum[1] = b[0] (since i-1 is 0), prefix_sum[2] = b[0]+b[1], etc.
+
+Then, all the prefix_sum values are known. So we can collect all of them into a list and perform coordinate compression.
+
+So collect all prefix_sum values into a list s_list.
+
+Then, sort s_list and deduplicate to get the unique sorted values.
+
+Then, for each value in the original prefix_sum array, we can find its rank in this sorted list (using binary search).
+
+Once we have the ranks, we can proceed to use a Fenwick Tree that can handle queries of "number of elements <= X".
+
+But how does the Fenwick Tree handle these queries?
+
+The Fenwick Tree is usually used for prefix sums. So if we map the prefix_sum values to their sorted order, and for each value in the Fenwick Tree, we represent the count in their ranks, then when we want to find the number of elements <= X, we can find the largest value in the sorted list that is <= X, get its rank, and then query the Fenwick Tree's prefix sum up to that rank.
+
+But to do this, the sorted list should be sorted in ascending order.
+
+So here's the plan:
+
+- Compute all prefix_sum values (including prefix_sum[0] to prefix_sum[N]).
+
+- Collect all these values into a list s_list.
+
+- Sort s_list and remove duplicates to get a sorted unique list. Let's call this sorted_unique.
+
+- For a given X (prefix_sum[r]), the number of elements in the Fenwick Tree that are <= X is equal to the number of elements in the sorted_unique list that are <= X, and the Fenwick Tree tracks the count of each such element.
+
+But since we need to handle all possible X, which are the prefix_sum values, but the sorted_unique list is a sorted list of all possible prefix_sum values. So when we compress the coordinates, each prefix_sum is mapped to its position in the sorted_unique list.
+
+Wait, but when inserting into the Fenwick Tree, we need to insert the rank of the prefix_sum value. So for example, sorted_unique is a list where sorted_unique[0] is the smallest, sorted_unique[1] the next, etc.
+
+So for a value x in prefix_sum, its rank is the index in sorted_unique where it's found.
+
+But when querying for the number of elements <= X, X is a value in the prefix_sum array (since X is prefix_sum[r]). So when X is in the sorted_unique list, we can find the index via binary search, and then the count is the sum up to that index.
+
+If X is not present in the sorted_unique list (which can't happen because sorted_unique is made up of all prefix_sum values?), wait, no. Because sorted_unique is created by collecting all the prefix_sum values, then sorted and deduplicated. So X (which is a prefix_sum[r] for some r) must be present in sorted_unique. So for each X, we can find its position in sorted_unique.
+
+Wait, no. Because sorted_unique is the sorted list of all prefix_sum values (including all possible prefix_sum[r]). So when we compute X as a prefix_sum[r], X is in the s_list, and when sorted_unique is the sorted and deduplicated version, X must be present in sorted_unique.
+
+So for example, if the prefix_sum array has duplicates, sorted_unique will have those duplicates removed. So when you look for X in sorted_unique, you can find the index where X is present.
+
+Therefore, the coordinate compression is valid.
+
+So the steps for coordinate compression are:
+
+1. Compute all prefix_sum values (s_list = [prefix_sum[0], prefix_sum[1], ..., prefix_sum[N]]).
+
+2. Create a sorted list sorted_unique by sorting s_list and deduplicating (using a set, then sorted).
+
+3. For each x in s_list, find its index (rank) in sorted_unique using binary search. So rank(x) = bisect.bisect_left(sorted_unique, x) ?
+
+Wait, no. Because sorted_unique is sorted, so bisect.bisect_left returns the first position where x can be inserted. Since x is present in sorted_unique (because sorted_unique contains all unique elements from s_list, and x is in s_list), the bisect_left will return the correct index.
+
+But how?
+
+For example, sorted_unique is [1,3,5], and x is 3. bisect_left returns 1. So the rank is 1.
+
+So for each x, its rank is the position in the sorted_unique list where it is found.
+
+Once we have the ranks, we can proceed.
+
+So the Fenwick Tree will track the count of each rank. So when we insert a prefix_sum value x, we find its rank in the sorted_unique list, and update the Fenwick Tree at that rank.
+
+Then, for a query of how many elements are <= X (X is a prefix_sum[r]), which is x = X, we find the largest element in sorted_unique that is <= X. But since X is in the sorted_unique list (since all prefix_sum values are in sorted_unique), we can find the index of X in sorted_unique (using bisect_left), which gives the position. Then, the number of elements <= X in the Fenwick Tree is the sum of the frequencies up to that index.
+
+But wait, the Fenwick Tree is 1-based (as per usual implementations). So in code:
+
+sorted_unique is sorted in ascending order. So for x in s_list, the rank is the index in the sorted_unique list plus 1 (to make it 1-based). For example, if sorted_unique is [1,3,5], then 1 is rank 1, 3 is rank 2, 5 is rank 3.
+
+But let me see. Suppose the sorted_unique list is [v1, v2, ..., vm], sorted in ascending order. For a value x in s_list, x is present in this list. So bisect_left returns the index i where v_i == x. Then, the rank for x is i+1 (since Fenwick Trees are 1-based). Then, when inserting x into the Fenwick Tree, we increment the count at i+1. When querying for the number of elements <= x, we need to sum the counts from 1 to i+1.
+
+But wait, when x is the maximum element in the Fenwick Tree, the sum up to its rank would include all elements.
+
+Yes.
+
+So the steps in code would be:
+
+- Precompute sorted_unique as the sorted list of all unique prefix_sum values.
+
+- For each x in s_list, compute its rank in the Fenwick Tree as bisect.bisect_left(sorted_unique, x) + 1. Because sorted_unique is sorted, and x is present in sorted_unique (since all prefix_sum values are in s_list, and sorted_unique is the sorted unique list of s_list).
+
+So the Fenwick Tree's size is the length of sorted_unique.
+
+Now, the Fenwick Tree supports two operations:
+
+1. Insert x: find the rank of x (bisect_left +1), and do an update in the Fenwick Tree (add 1 to that position).
+
+2. Query x: find the rank of x (bisect_left +1), and query the prefix sum up to that rank.
+
+Wait, no. When querying how many elements in the Fenwick Tree are <= x, since x is a prefix_sum[r], and sorted_unique is sorted in ascending order, we can use bisect_right to find the upper bound. Wait, let's think again.
+
+Wait, for the query, we need to find the number of elements in the Fenwick Tree that are <= X. Since X is in sorted_unique, the bisect_left gives the first occurrence of X. But since all elements in the Fenwick Tree are in sorted_unique, and X is in the list, the number of elements <= X is the number of elements in the Fenwick Tree with rank <= the rank of X. Since sorted_unique is sorted, and all elements are unique, all elements before X's position are <= X.
+
+Wait, yes. Because sorted_unique is sorted, so elements with rank <= the rank of X are exactly those elements in sorted_unique that are <= X.
+
+So for example, sorted_unique is [1,3,5]. X is 3. The elements <=3 are 1 and 3, which are the first two elements. So their ranks are 1 and 2. So the sum up to rank 2 gives the count.
+
+So for X in sorted_unique, the count is the number of elements in the Fenwick Tree that are <= X. Which is the prefix sum up to the rank of X.
+
+Thus, the query can be done by finding the index of X in sorted_unique (using bisect_left), then query the Fenwick Tree for the sum up to index +1.
+
+So in code:
+
+index = bisect.bisect_left(sorted_unique, X)
+
+sum_count = fenwick.query(index + 1)
+
+But how about if X is not present in sorted_unique? But since X is a prefix_sum value, and sorted_unique is the sorted list of all unique prefix_sum values, X is present. So that's not a problem.
+
+So the steps are:
+
+Compute all prefix_sum values.
+
+Collect all into s_list.
+
+Sort and deduplicate to get sorted_unique.
+
+Initialize Fenwick Tree with size len(sorted_unique).
+
+Initialize Fenwick Tree with prefix_sum[0] (i.e., insert the rank of prefix_sum[0]).
+
+Then, for r from 1 to N:
+
+   current X is prefix_sum[r]
+
+   find the rank of X in sorted_unique (index = bisect_left(sorted_unique, X)), then rank = index +1.
+
+   query the Fenwick Tree for the sum up to rank.
+
+   add this sum to the total.
+
+   insert X into the Fenwick Tree (find its rank and update the Fenwick Tree).
+
+Wait, no. Wait, the initial Fenwick Tree after inserting prefix_sum[0] is for the first r=1. For r=1, we process X=prefix_sum[1], and the data structure contains prefix_sum[0]. So during the first iteration (r=1), we:
+
+- Query the Fenwick Tree (which has only prefix_sum[0]) for the count of elements <= X=prefix_sum[1].
+
+Then insert X=prefix_sum[1] into the Fenwick Tree.
+
+So the steps are correct.
+
+Now, the key part is to compute the prefix_sum array, then collect all elements for coordinate compression.
+
+Now, let's think about the code.
+
+In Python, we can do the following:
+
+Read N and K.
+
+Read a list of N integers.
+
+Compute b = [a_i - K for a_i in a]
+
+Compute the prefix_sum array:
+
+prefix_sum = [0] * (N+1)
+
+for i in range(1, N+1):
+
+    prefix_sum[i] = prefix_sum[i-1] + b[i-1]
+
+So the prefix_sum array has N+1 elements, 0 to N.
+
+Collect s_list = prefix_sum.
+
+Then, sorted_unique = sorted(list(set(s_list)))
+
+But sorted_unique must be sorted in ascending order. So sorted(list(set(s_list))) will give a sorted list of unique elements.
+
+But wait, when we have duplicates in s_list, the set will deduplicate, but the sorted list will be in ascending order.
+
+Yes.
+
+But, the problem is that when the elements are floating points or integers, but in this problem, all a_i and K are integers, so all prefix_sum elements are integers. So s_list is a list of integers.
+
+So sorted_unique is a list of unique integers from s_list, sorted in ascending order.
+
+Now, for each x in s_list, we can find its rank in the sorted_unique list using bisect.bisect_left.
+
+But bisect_left returns the index where x is found. For example:
+
+sorted_unique = [1,3,5]
+
+x=3: bisect_left returns 1.
+
+x=5: returns 2.
+
+So the rank is the index +1 (to make it 1-based for Fenwick Tree).
+
+Now, the Fenwick Tree needs to support point updates (adding 1 to a position) and prefix queries (sum from 1 to x).
+
+Implementing a Fenwick Tree in Python.
+
+The Fenwick Tree code could be:
+
+class FenwickTree:
+
+    def __init__(self, size):
+
+        self.size = size
+
+        self.tree = [0]*(size + 1)
+
+    def update(self, index, delta):
+
+        # index is 1-based
+
+        while index <= self.size:
+
+            self.tree[index] += delta
+
+            index += index & -index
+
+    def query(self, index):
+
+        # returns sum from 1 to index (inclusive)
+
+        res = 0
+
+        while index > 0:
+
+            res += self.tree[index]
+
+            index -= index & -index
+
+        return res
+
+But the size of the Fenwick Tree is the number of unique elements in sorted_unique.
+
+Now, what's the maximum possible size of sorted_unique? Since there are N+1 elements in s_list, the unique count can be up to N+1, which is 2e5 +1. So the Fenwick Tree can handle that.
+
+Now, putting it all together.
+
+But there's a problem: when the sorted_unique list is created, we need to have all the prefix_sum values. So the code can be written as:
+
+Read N, K.
+
+Read a_1 to a_N.
+
+Compute b_i = a_i - K for each.
+
+Compute prefix_sum array.
+
+Collect s_list = prefix_sum.
+
+sorted_unique = sorted(list(set(s_list)))
+
+sorted_unique.sort()
+
+size_ft = len(sorted_unique)
+
+ft = FenwickTree(size_ft)
+
+Then, for each x in prefix_sum, we can find their ranks.
+
+But in code, for each x in prefix_sum, the rank is bisect.bisect_left(sorted_unique, x) +1.
+
+But in Python, the bisect module's bisect_left function is used.
+
+So the code steps are:
+
+Compute all prefix_sum.
+
+sorted_unique = sorted(list(set(prefix_sum)))
+
+sorted_unique.sort()
+
+Then, the Fenwick Tree is initialized with size_ft.
+
+But in Python, sorted_unique is already sorted, so the list(set(...)) approach may not be ordered. Wait, set is unordered, so converting it to a list and then sorting gives the sorted list.
+
+Yes.
+
+Now, the code outline:
+
+import bisect
+
+n, k = map(int, input().split())
+
+a = [int(input()) for _ in range(n)]
+
+b = [num - k for num in a]
+
+prefix_sum = [0] * (n+1)
+
+for i in range(1, n+1):
+
+    prefix_sum[i] = prefix_sum[i-1] + b[i-1]
+
+s_list = prefix_sum
+
+sorted_unique = sorted(list(set(s_list)))
+
+sorted_unique.sort()
+
+size_ft = len(sorted_unique)
+
+ft = FenwickTree(size_ft)
+
+total = 0
+
+# Initially, insert prefix_sum[0] into the Fenwick Tree
+
+x = prefix_sum[0]
+
+rank = bisect.bisect_left(sorted_unique, x) +1
+
+ft.update(rank, 1)
+
+for r in range(1, n+1):
+
+    x = prefix_sum[r]
+
+    # Find the number of elements in the Fenwick Tree <= x
+
+    # The Fenwick Tree contains prefix_sum[0] ... prefix_sum[r-1]
+
+    # So query for x's rank
+
+    idx = bisect.bisect_left(sorted_unique, x)
+
+    cnt = ft.query(idx +1)
+
+    total += cnt
+
+    # Insert x into the Fenwick Tree
+
+    rank = bisect.bisect_left(sorted_unique, x) +1
+
+    ft.update(rank, 1)
+
+print(total)
+
+Wait, but wait, when inserting the initial x=prefix_sum[0], which is the 0th element, then for r in 1..n:
+
+In each iteration, we process prefix_sum[r], query the Fenwick Tree (which has prefix_sum[0], ..., prefix_sum[r-1], since after inserting x=prefix_sum[r], it's part of the Fenwick Tree for the next r.
+
+So the code is correct.
+
+But let's test this logic against the examples.
+
+First example:
+
+Input:
+
+3 6
+
+7
+
+5
+
+7
+
+So a = [7,5,7], K=6.
+
+b is [7-6=1, 5-6=-1, 7-6=1]
+
+prefix_sum:
+
+prefix_sum[0] = 0
+
+prefix_sum[1] = 1
+
+prefix_sum[2] = 1 + (-1) = 0
+
+prefix_sum[3] = 0 +1 = 1
+
+So s_list is [0,1,0,1].
+
+sorted_unique after deduplicate and sorted is [0,1].
+
+size_ft is 2.
+
+Now, the Fenwick Tree is initialized with x=0 (prefix_sum[0] is 0).
+
+For r from 1 to 3:
+
+r=1:
+
+x=1 (prefix_sum[1] =1)
+
+idx = bisect_left([0,1], 1) → returns 1.
+
+cnt = ft.query(1+1) = ft.query(2). The Fenwick Tree has only 0 (rank 0+1=1).
+
+ft.query(2) would sum up to rank 2. But the Fenwick Tree has elements at rank 1. So the sum is 1 (since rank 1 <=2).
+
+So cnt=1. Add to total (total becomes 1).
+
+Then, insert x=1, rank is bisect_left([0,1],1) →1, plus 1 →2. So ft.update(2,1).
+
+r=2:
+
+x=0 (prefix_sum[2] is 0).
+
+idx = bisect_left([0,1],0) →0. cnt = ft.query(0+1=1). The Fenwick Tree has ranks 1 and 2 (0 and 1 in prefix_sum). So the query(1) returns 1 (the count of elements <=0 is the element 0, which is rank 1. The Fenwick Tree has 0 (count 1) and 1 (count 1). So when querying for x=0, which is rank 1, the sum is 1. So cnt=1. total becomes 1+1=2.
+
+Then, insert x=0 (rank 0+1=1). So ft.update(1,1). Now the Fenwick Tree has 0 (count 2) and 1 (count 1).
+
+r=3:
+
+x=1.
+
+idx = bisect_left([0,1],1) →1. cnt = ft.query(2). The Fenwick Tree has counts 2 at rank 1 and 1 at rank 2. The sum up to rank 2 is 2+1=3. So cnt=3. total becomes 2+3=5.
+
+Then, insert x=1. rank=1+1=2. ft.update(2,1). Now, the counts are rank1:2, rank2:2.
+
+So total is 5, which matches the first example.
+
+So the code works for the first example.
+
+Another example: input 1 2 1.
+
+N=1, K=2.
+
+a = [1]. b = -1.
+
+prefix_sum[0] =0.
+
+prefix_sum[1] =0 + (-1) =-1.
+
+s_list is [0,-1]. sorted_unique is [-1, 0].
+
+Processing:
+
+Initialize Fenwick Tree with x=0. Its rank in sorted_unique is bisect_left([-1,0],0) →1. rank=1+1=2. So ft has size 2.
+
+For r=1 (prefix_sum[1] =-1):
+
+x=-1.
+
+idx = bisect_left(sorted_unique, -1) →0. cnt = ft.query(0+1=1). The Fenwick Tree has x=0 (rank 2). So query(1) would sum up to rank 1, which is 0. So cnt=0. So total is 0.
+
+Insert x=-1. rank is 0+1=1. ft.update(1,1). So Fenwick Tree now has 0 (count 1) and -1 (count 1).
+
+So the output is 0, which matches the example.
+
+Third example:
+
+Input 7 26
+
+10
+
+20
+
+30
+
+40
+
+30
+
+20
+
+10
+
+So K=26. a = [10,20,30,40,30,20,10]
+
+b_i = a_i -26 → [-16, -6,4,14,4,-6,-16]
+
+prefix_sum:
+
+prefix_sum[0] =0
+
+prefix_sum[1] =-16
+
+prefix_sum[2] =-16 + (-6) =-22
+
+prefix_sum[3] =-22 +4 =-18
+
+prefix_sum[4] =-18 +14 =-4
+
+prefix_sum[5] =-4 +4 =0
+
+prefix_sum[6] =0 + (-6) =-6
+
+prefix_sum[7] =-6 + (-16) =-22
+
+s_list = [0,-16,-22,-18,-4,0,-6,-22]
+
+sorted_unique is the sorted list of unique elements in s_list:
+
+sorted_unique = [-22, -18, -16, -6, -4, 0]
+
+Wait:
+
+s_list is [0, -16, -22, -18, -4, 0, -6, -22]
+
+So the set is {0, -16, -22, -18, -4, -6}
+
+Sorted list is:
+
+sorted_unique = [-22, -18, -16, -6, -4, 0]
+
+size_ft =6.
+
+Now, the Fenwick Tree is initialized with x=0 (prefix_sum[0] =0). The rank of 0 in sorted_unique is bisect_left(sorted_unique, 0) →5 (since sorted_unique[5] is 0). So rank=5+1=6. So ft has size 6. So initially, ft.update(6,1).
+
+Then, for r from 1 to 7:
+
+r=1: prefix_sum[1] =-16.
+
+Need to find how many elements in the Fenwick Tree (which has 0) are <=-16.
+
+But 0 is in the Fenwick Tree. So when x=-16, which is in sorted_unique at index 2. So idx=2. query(3) is sum up to rank 3.
+
+But the Fenwick Tree has only 0 (rank 6). So sum up to 3 is 0. So cnt=0. total remains 0.
+
+Insert x=-16: rank=2+1=3. ft.update(3,1).
+
+r=2: x=-22.
+
+idx = bisect_left(sorted_unique, -22) →0. query 0+1=1. Fenwick Tree has ranks 6 (0) and 3 (-16). So sum up to 1 is 0. cnt=0. total still 0.
+
+Insert x=-22: rank 0+1=1. ft.update(1,1).
+
+r=3: x=-18.
+
+idx = bisect_left(sorted_unique, -18) →1. query 2. Fenwick Tree has 6 (0),3 (-16), 1 (-22). Elements in Fenwick Tree are 0, -16, -22. The x is -18. Elements <=-18 are -22 (rank 1) and -18 (if present). But in sorted_unique, -18 is at index 1. So x=-18 is in the sorted_unique. So idx=1. query 2. The Fenwick Tree has elements with ranks 1 (x=-22), 3 (x=-16), 6 (x=0). The sum up to rank 2 is the sum of elements with rank <=2, which includes only rank 1 (count 1). So cnt=1. total becomes 1.
+
+Insert x=-18: rank 1+1=2. ft.update(2,1).
+
+r=4: x=-4.
+
+bisect_left finds x=-4 in sorted_unique, which is at index 4. query 4+1=5. The Fenwick Tree now contains 0 (6), -16 (3), -22 (1), -18 (2). The elements <=-4 are -22, -18, -16, -6, -4. Wait, but sorted_unique is [-22, -18, -16, -6, -4, 0]. So x=-4 is index 4. So query up to rank 5 (4+1=5). The Fenwick Tree elements are 0 (6), -16 (3), -22 (1), -18 (2), and the inserted elements up to this point. Let's see:
+
+After inserting up to r=3 (x=-18):
+
+Fenwick Tree has x=0 (rank6), x=-16 (3), x=-22 (1), x=-18 (2). So for r=4, x=-4 is being processed.
+
+The Fenwick Tree contains elements 0, -16, -22, -18. When querying for elements <=-4, which includes -22, -18, -16, -6, -4, but in the current Fenwick Tree, the elements are 0, -16, -22, -18. So the elements <=-4 are -22, -18, -16. So how many are there?
+
+So the Fenwick Tree for r=4, x=-4:
+
+query 5. But what's the sum up to rank5 (which is the index 4+1=5 in the Fenwick Tree)?
+
+sorted_unique for index 4 is -4. So rank5 is the index 4+1=5.
+
+But the Fenwick Tree contains ranks 1 (count1), 2 (count1),3 (count1),6 (count1). So the sum up to rank5 is the sum of ranks 1,2,3. So 1+1+1=3. So cnt=3. total becomes 1+3=4.
+
+Then, insert x=-4. rank4+1=5. ft.update(5,1).
+
+r=5: x=0. In sorted_unique, index5. query 5+1=6. Fenwick Tree has elements 0, -16, -22, -18, -4. The elements <=0 are all of them. So the sum up to rank6 (which is 5+1=6). The sum would be 1 (rank1) +1 (rank2) +1 (rank3) +1 (rank5) +1 (rank6) →5? Wait, wait:
+
+Wait, the Fenwick Tree after inserting up to r=4 (x=-4) has elements:
+
+0 (rank6, count1)
+
+-16 (rank3, count1)
+
+-22 (rank1, count1)
+
+-18 (rank2, count1)
+
+-4 (rank5, count1).
+
+Then, for r=5, x=0.
+
+query 5+1=6. The Fenwick Tree's query(6) returns the sum up to rank6. Which includes all elements inserted so far: 1+1+1+1+1=5. So cnt=5. total becomes 4+5=9.
+
+Then, insert x=0, which is rank6. ft.update(6,1). Now, the count for rank6 is 2.
+
+r=6: x=-6.
+
+bisect_left finds x=-6 in sorted_unique. sorted_unique is [-22, -18, -16, -6, -4, 0]. So x=-6 is at index3. query 3+1=4. The sum up to rank4 is the sum of ranks 1,2,3,4. But the elements inserted so far are:
+
+rank1: -22 (count1)
+
+rank2: -18 (count1)
+
+rank3: -16 (count1)
+
+rank5: -4 (count1)
+
+rank6:0 (count2).
+
+rank4 is -6. But in the Fenwick Tree, have we inserted any elements with rank4 (which is x=-6)?
+
+No. Up to r=6, the inserted elements are:
+
+After r=5, the elements are:
+
+0 (count2), -16 (count1), -22 (count1), -18 (count1), -4 (count1). Now, r=6: x=-6.
+
+So the query is for elements <=-6. The elements that are <=-6 in the Fenwick Tree are:
+
+-22 (<=-6), -18 (<=-6), -16 (<=-6?), -6 (not present yet), etc.
+
+Wait, x is -6, and the elements in the Fenwick Tree before inserting are:
+
+0 (count2), -16 (count1), -22 (count1), -18 (count1), -4 (count1), and in previous steps:
+
+At r=6, x=-6. So before inserting, the Fenwick Tree contains elements up to r=5.
+
+So in the Fenwick Tree, the elements present are:
+
+0 (count2), -16 (count1), -22 (count1), -18 (count1), -4 (count1).
+
+So the elements <=-6 are -22, -18, -16. Because -16 is <=-6? Wait, no. -16 is -16, which is less than -6. So elements <=-6 are -22, -18, -16.
+
+So the sum up to rank4 (which is x=-6's index3+1=4) is the sum of elements in the Fenwick Tree with rank <=4.
+
+Looking at the ranks:
+
+sorted_unique is [-22, -18, -16, -6, -4, 0]
+
+So rank4 is x=-6's position (index3 +1=4). So the query is up to rank4.
+
+The Fenwick Tree's elements are:
+
+rank1: count1
+
+rank2: count1
+
+rank3: count1
+
+rank5: count1
+
+rank6: count2
+
+So the sum up to rank4 is sum of ranks1-4.
+
+But rank3 is x=-16 (which is <=-6?), yes.
+
+So the sum is 1 (rank1) +1 (rank2) +1 (rank3) +0 (rank4) =3. So cnt=3. total becomes 9+3=12.
+
+Then, insert x=-6. Its rank is3+1=4. ft.update(4,1). Now, the Fenwick Tree has x=-6 (rank4) added.
+
+r=7: x=-22.
+
+bisect_left finds x=-22 in sorted_unique at index0. query 0+1=1. The Fenwick Tree contains elements:
+
+0 (count2), -16 (count1), -22 (count1), -18 (count1), -4 (count1), -6 (count1), and after inserting for r=6, x=-6 (count1 in rank4).
+
+Wait, after inserting x=-6 (rank4), so Fenwick Tree has:
+
+ranks1:1 (count1)
+
+rank2:1 (count1)
+
+rank3:1 (count1)
+
+rank4:1 (count1)
+
+rank5:1 (count1)
+
+rank6:2 (count2)
+
+So for r=7, x=-22.
+
+query up to rank1 (0+1=1). Which is the sum of elements in the Fenwick Tree with rank <=1. That is, the count at rank1 (x=-22). So cnt=1. total becomes 12+1=13.
+
+Then, insert x=-22. Its rank is0+1=1. ft.update(1,1). Now, rank1 has count2.
+
+So total is 13, which matches the third example's output.
+
+So the code seems correct.
+
+But in Python, the problem is that for large N (like 2e5), the code may be too slow. But the steps are O(n log n) because each bisect and Fenwick Tree operation is O(log n).
+
+But in Python, for N=2e5, this should be manageable.
+
+Now, let's code this.
+
+But wait, in the code, when we compute the sorted_unique list, sorted(list(set(s_list))) may not preserve the order, but after that, we sort it again. So sorted_unique is sorted.
+
+Wait, list(set(s_list)) creates a list of unique elements but in arbitrary order. Then, sorted() sorts them in ascending order.
+
+Yes.
+
+So the code should be correct.
+</think>
+To solve this problem, we need to determine the number of contiguous subarrays in a given sequence whose arithmetic mean is at least a specified integer \( K \). The solution involves transforming the problem into a sum-based problem using prefix sums and efficiently counting valid subarrays using a Fenwick Tree (Binary Indexed Tree) for coordinate compression.
+
+### Approach
+1. **Transform the Problem**: Convert each element \( a_i \) in the input array to \( b_i = a_i - K \). This transforms the problem into finding subarrays where the sum of \( b_i \) values is non-negative.
+2. **Prefix Sum Calculation**: Compute the prefix sums of the transformed array. The sum of a subarray from index \( l \) to \( r \) can be derived from the prefix sums.
+3. **Coordinate Compression**: Since the prefix sums can be very large, compress these values into a smaller range using sorting and deduplication.
+4. **Efficient Counting with Fenwick Tree**: Use a Fenwick Tree to efficiently count the number of valid subarrays by maintaining and querying prefix sums dynamically.
+
+### Solution Code
+```python
+import bisect
+
+class FenwickTree:
+    def __init__(self, size):
+        self.size = size
+        self.tree = [0] * (self.size + 1)  # 1-based indexing
+
+    def update(self, index, delta):
+        # Update the frequency at 'index' by delta
+        while index <= self.size:
+            self.tree[index] += delta
+            index += index & -index
+
+    def query(self, index):
+        # Return the sum from 1 to 'index'
+        res = 0
+        while index > 0:
+            res += self.tree[index]
+            index -= index & -index
+        return res
+
+def main():
+    import sys
+    input = sys.stdin.read().split()
+    ptr = 0
+    N = int(input[ptr])
+    ptr += 1
+    K = int(input[ptr])
+    ptr += 1
+    a = []
+    for _ in range(N):
+        a.append(int(input[ptr]))
+        ptr += 1
+
+    # Compute transformed array b
+    b = [num - K for num in a]
+
+    # Compute prefix sums
+    prefix_sum = [0] * (N + 1)
+    for i in range(1, N + 1):
+        prefix_sum[i] = prefix_sum[i - 1] + b[i - 1]
+
+    # Collect all prefix sums for coordinate compression
+    s_list = prefix_sum
+    sorted_unique = sorted(list(set(s_list)))
+    sorted_unique.sort()
+
+    # Initialize Fenwick Tree
+    size_ft = len(sorted_unique)
+    ft = FenwickTree(size_ft)
+
+    total = 0
+
+    # Insert prefix_sum[0] into Fenwick Tree
+    x = prefix_sum[0]
+    idx = bisect.bisect_left(sorted_unique, x)
+    rank = idx + 1
+    ft.update(rank, 1)
+
+    for r in range(1, N + 1):
+        x = prefix_sum[r]
+        # Find how many elements <= x in the current Fenwick Tree (prefix_sum[0..r-1])
+        idx = bisect.bisect_left(sorted_unique, x)
+        cnt = ft.query(idx + 1)
+        total += cnt
+
+        # Insert current x (prefix_sum[r]) into Fenwick Tree
+        idx_insert = bisect.bisect_left(sorted_unique, x)
+        rank_insert = idx_insert + 1
+        ft.update(rank_insert, 1)
+
+    print(total)
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Transformation**: By converting each element \( a_i \) to \( b_i = a_i - K \), we transform the problem into finding subarrays where the sum of \( b_i \) values is non-negative.
+2. **Prefix Sums**: The prefix sums array helps in quickly calculating the sum of any subarray. For a subarray from index \( l \) to \( r \), the sum is given by \( \text{prefix_sum}[r] - \text{prefix_sum}[l-1] \).
+3. **Coordinate Compression**: This step reduces the range of prefix sums to a manageable size, allowing efficient use of the Fenwick Tree.
+4. **Fenwick Tree Operations**: The Fenwick Tree is used to maintain the counts of prefix sums dynamically. For each new prefix sum, we query the tree to count how many previous sums are less than or equal to the current sum, which gives the number of valid subarrays ending at the current index.
+
+This approach efficiently handles the constraints, ensuring the solution runs in \( O(N \log N) \) time complexity.
+</bot>

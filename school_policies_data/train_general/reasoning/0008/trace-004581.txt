@@ -1,0 +1,1381 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Programmer Sasha has recently begun to study data structures. His coach Stas told him to solve the problem of finding a minimum on the segment of the array in <image>, which Sasha coped with. For Sasha not to think that he had learned all, Stas gave him a new task. For each segment of the fixed length Sasha must find the maximum element of those that occur on the given segment exactly once. Help Sasha solve this problem. 
+
+Input
+
+The first line contains two positive integers n and k (1 ≤ n ≤ 105, 1 ≤ k ≤ n) — the number of array elements and the length of the segment. 
+
+Then follow n lines: the i-th one contains a single number ai ( - 109 ≤ ai ≤ 109). 
+
+Output
+
+Print n–k + 1 numbers, one per line: on the i-th line print of the maximum number of those numbers from the subarray ai ai + 1 … ai + k - 1 that occur in this subarray exactly 1 time. If there are no such numbers in this subarray, print "Nothing".
+
+Examples
+
+Input
+
+5 3
+1
+2
+2
+3
+3
+
+
+Output
+
+1
+3
+2
+
+
+Input
+
+6 4
+3
+3
+3
+4
+4
+2
+
+
+Output
+
+4
+Nothing
+3
+</user>
+<bot>
+<think>
+Okay, let's see. The problem is that for each segment of length k in the array, we need to find the maximum element that occurs exactly once in that segment. If there are no such elements, output "Nothing". Hmm. So for each window of size k, check the elements, count their frequencies, find the max among those with frequency 1. 
+
+The challenge here is to do this efficiently because n can be up to 1e5. A naive approach where for each window we count frequencies from scratch would be O(nk) time, which would be too slow. So we need a way to process these sliding windows more efficiently.
+
+Let me think. Sliding window problems often use a data structure that allows adding and removing elements as the window slides. For each window, we need to track the frequency of each element and keep track of the elements that have a frequency of exactly 1, then find the maximum among them.
+
+So maybe we can use a hash map (dictionary) to track the frequency of elements in the current window. Then, another data structure to track the candidates (elements with frequency 1) and quickly find the maximum. But how to manage this as elements enter and leave the window?
+
+Each time the window moves, we remove the element leaving the window (the one that was at position i - k + 1 when moving to the next window) and add the new element entering the window. For each of these operations, we update the frequency map. Then, when the frequency of an element changes to 1, it becomes a candidate. If it was previously 1 and now increases to 2, we need to remove it from the candidates. Similarly, if it was 2 and now drops to 1 (though that can't happen when removing, since frequencies can't be negative). Wait, when you remove an element, its frequency decreases by 1. So if it was 2, it becomes 1, which makes it a candidate. But when adding an element, if it was 1 before, adding another makes it 2, so it's no longer a candidate.
+
+So the idea is to maintain a frequency map and a set (or some structure) that contains elements with frequency exactly 1. Then, for each window, the maximum of this set is our answer. If the set is empty, output "Nothing".
+
+But the problem is that maintaining a set and quickly finding the maximum each time. A regular set doesn't support max operations efficiently. So perhaps a better data structure would be a max-heap. However, when elements are added or removed from the candidates, the heap needs to be updated. But heaps are not efficient for arbitrary removals. Alternatively, maybe use a balanced binary search tree (like a TreeSet in Java), which allows O(1) access to the maximum and O(log n) insertions and deletions. But in Python, the standard library doesn't have a built-in TreeSet. However, we can use a module like 'sortedcontainers' which has a SortedList, but that's not part of the standard library and thus can't be used here.
+
+So, what can we do in Python without external libraries? Hmm. Maybe we can keep track of the candidates in a dictionary (to check existence) and also maintain a max variable. But maintaining the max is tricky because when elements are removed, we might need to recompute the max. 
+
+Alternatively, for each window, after updating the frequencies, collect all elements with frequency 1 and then take the max. But that would be O(k) per window, which is O(nk) time again. Which is not acceptable for n up to 1e5.
+
+So this approach isn't feasible. So we need a way to track the maximum in O(1) time per window.
+
+Another idea: For each element that enters or leaves the window, when we update their frequencies, we can track whether they are being added to or removed from the candidate set (frequency ==1). Then, when an element's frequency becomes 1, add it to a max-heap. But the problem is that the heap can contain elements that are no longer in the candidate set (because their frequency may have increased beyond 1 again). So the heap can have outdated elements.
+
+Wait, but perhaps we can manage this with a heap and a hash map. Here's the idea: when adding an element to the candidate set (frequency becomes 1), push it to the heap. But when the element's frequency increases beyond 1, it's no longer a candidate. So when we query the max, we need to pop elements from the heap until we find one that is still in the candidate set (frequency is exactly 1). However, since elements can be added multiple times (like if they go back to frequency 1 later), this approach might have duplicates in the heap, but as long as when we pop elements, we check if their current frequency is 1, that's okay.
+
+So the steps would be:
+
+1. Maintain a frequency map (count) for the current window.
+
+2. Maintain a max-heap that contains all elements that are in the candidate set (count=1), but possibly also some that are not (if their count changed after being pushed to the heap).
+
+3. For each window:
+
+   a. As we add a new element (current element), increment its count in the frequency map. If the count was 0 before, adding it to 1. Then, if the count is now 1, add it to the heap. If the count was 1 before, and now it's 2, then we need to note that it's no longer a candidate. However, since the heap may still have the element, we can't remove it from the heap, but when we check the max, we need to verify its current count.
+
+   b. Similarly, when removing the element that's leaving the window (old element), decrement its count. If the count was 2 before, now it's 1, so add it to the heap again (since it's now a candidate). If the count was 1 before, now it's 0, so it's removed from the candidate set.
+
+4. Then, for the current window, we need to find the maximum element in the candidate set. To do this, we pop elements from the heap until we find one that has a count of 1. The first such element is the maximum. However, if the heap becomes empty during this process, output "Nothing".
+
+But wait, how do we handle the elements that are pushed to the heap multiple times? For example, an element that was in the candidate set, then left, then came back. The heap would have multiple entries of the same element. But when we check the count each time, it's okay. The element's count is 1 only when it's a valid candidate.
+
+But this approach can be slow in the worst case. For example, if the heap has many elements that are no longer valid. Each time we process a window, we might have to pop a lot of elements from the heap. But perhaps in practice, this is manageable because each element is pushed and popped at most a few times. The time complexity would be O(n log n), which is acceptable for n up to 1e5.
+
+Let's think through an example. Take the first sample input:
+
+5 3
+
+1
+
+2
+
+2
+
+3
+
+3
+
+The windows are [1,2,2], [2,2,3], [2,3,3].
+
+For the first window, the elements are 1 (count 1), 2 (count 2). So the candidates are {1}, max is 1.
+
+For the second window: elements are 2 (count 2), 3 (count 1). Candidates {3}, max is 3.
+
+Third window: 3 (count 2), 3 (count 2), 2 is gone. Wait, no: third window is positions 3-5 (assuming 1-based?), but the elements are 2,3,3. So elements are 2 (count 1?), 3 (count 2). So candidates are {2}, max is 2. Which matches the sample output.
+
+So when processing each window, after adding new elements and removing old ones, the heap may have elements, and we need to check their counts.
+
+So the algorithm would be:
+
+Initialize a frequency dictionary (counts), and a max-heap. Also, since Python's heap is a min-heap, to simulate a max-heap, we can store the negative values.
+
+But for each element in the heap, when we pop, we check if its count is 1. If yes, that's the maximum. If not, we continue popping until we find one that's valid. If the heap is empty, output "Nothing".
+
+But the problem is that the same element can be pushed multiple times into the heap. For example, when an element's count becomes 1 again after being 2 (e.g., when elements are removed from the window). So each time the count transitions to 1, the element is pushed into the heap. So the heap may have duplicates. But during the check, we can just process them one by one.
+
+Now, let's outline the steps for the code:
+
+Read n and k.
+
+Read the array a as a list of integers.
+
+Initialize a deque (or some structure) to keep track of the current window's elements. But perhaps it's not necessary; instead, we can process each window by index.
+
+But since the window slides one element at a time, for each window i (from 0 to n-k), the window is a[i..i+k-1].
+
+For each element in the array, for each window that includes it, it is added when the window starts, and removed when the window moves past it.
+
+But for sliding window processing, when moving from window i to window i+1, the element leaving is a[i], and the element entering is a[i + k].
+
+Wait, the initial window is from index 0 to k-1. Then, when moving to the next window, we remove index 0 and add index k.
+
+So for each window starting at i (0-based), the elements are a[i], a[i+1], ..., a[i+k-1].
+
+Thus, when moving from window i to i+1, the element leaving is a[i], and the element entering is a[i+k] (if i+1 +k -1 < n). So the code would process elements from 0 to n-1.
+
+So the plan is:
+
+Initialize counts as a defaultdict(int). Then, for the first window (indices 0 to k-1), we add each element to counts. Then, for each element in the first window, if counts[element] ==1, we add it to the heap (as a negative value for min-heap to max-heap conversion). Then, after processing the first window, we check the heap.
+
+Wait, but when adding elements to the heap, we need to make sure that after all elements are added, only those with count 1 are considered. But in the initial processing, after adding all elements of the window to counts, we can iterate through the window and check which elements have count 1, then push them to the heap. But for large k, this could be O(k) time. Which is acceptable for the first window, but if k is up to 1e5, this would be O(1e5) time. Then for each subsequent window, the processing is O(1) for adding/removing elements, but when building the heap for the first window, O(k log k) time may be a problem.
+
+Wait, for example, if k is 1e5, then the initial step would take O(k) time. Which for n=1e5, the total time would be O(n), which is manageable. But for each window, the heap operations could take O(1) or O(log k) time. However, when checking the max for each window, we might have to pop multiple elements from the heap until we find a valid one. Each pop is O(1), but the heap may have O(k) elements in the worst case. So for each window, the time to find the max could be O(m), where m is the number of elements popped. However, each element is pushed into the heap once per time their count becomes 1. So for an element that is in multiple windows and has count 1 multiple times, it can be pushed multiple times. But once it's popped from the heap and found to be invalid (count !=1), it's discarded. So in the worst case, for each window, we might have to pop O(k) elements. Which would result in O(nk) time again. Which is not acceptable.
+
+So this approach isn't feasible for large k. So we need a better way.
+
+Alternative idea: Use a frequency map and a separate map that tracks the elements with frequency exactly 1. Then, the maximum can be tracked by maintaining a sorted list (like a heap) but in a way that allows O(1) access to the max.
+
+But in Python, we can't use a heap for this because the elements can be pushed multiple times. So maybe the only way is to track the current candidates (elements with frequency 1) and keep track of the maximum. But how to efficiently update the maximum when elements are added or removed from the candidates.
+
+Wait, perhaps for each window, after updating the counts, we can collect all elements with count 1 and then take the maximum. But this would be O(k) per window. For n=1e5, this would be O(nk) time, which is 1e10 operations, which is way too slow.
+
+So this approach isn't feasible.
+
+Hmm. So maybe there's a smarter way to process this.
+
+Wait, the problem requires that the element must appear exactly once in the window. So for each element in the array, when is it a candidate in some window? Let's think about all the positions where an element x occurs. For x to be a candidate in a window, the window must contain exactly one occurrence of x. So for each x, the windows that include exactly one occurrence of x are those that start between certain positions.
+
+But how can we track this efficiently?
+
+Alternatively, for each element x in the array, track all the indices where x appears. Then, for each occurrence of x, find the range of window indices where this occurrence is the only occurrence of x in the window. For each such window, x is a candidate. Then, the maximum x for each window would be the maximum of all x's that are candidates in that window.
+
+But how to compute this efficiently?
+
+This seems complicated. Let's think with an example.
+
+Take the first sample input. The array is [1,2,2,3,3]. For element 1: it occurs once at index 0. The windows that include it are from 0 to 2 (since k=3). So windows 0 (indices 0-2). So in window 0, 1 is a candidate. Then, after that, 1 is not in any window.
+
+For element 2, occurs at indices 1 and 2. So any window that includes exactly one of these indices. The first occurrence is in window 0 (indices 0-2: includes 1 and 2). So two 2's, so not a candidate. The next window (indices 1-3) includes indices 1 and 2 (two 2's again). Third window (indices 2-4) includes index 2 only, since the next element is 3. Wait, no: window 2-4 is elements [2,3,3]. So the 2 is at index 2, but the window is for the third window (i=2). So in this window, 2 occurs once, so it's a candidate.
+
+So the idea is, for each occurrence of x, find the interval of windows where this occurrence is the only one in the window. Then, for each window, collect all x's that have such intervals covering it, and track the maximum.
+
+But how to manage this for all x's and all windows.
+
+This seems like a possible approach but might be difficult to implement.
+
+Alternative approach: For each element x, precompute the positions where x appears. Then, for each occurrence of x at position i, the window can include i but not include any other occurrence of x. So the window's start must be >= (previous occurrence +1) and <= i. The window's end must be <= (next occurrence -1) and >= i. The window's start can be between max(prev_occurrence +1, i -k +1) and min(i, i +k -1 - (k-1)) )? Wait, perhaps I'm getting confused here.
+
+Alternatively, for an occurrence at index i, the earliest window that includes i is window s = max(0, i -k +1 +1) ? Wait, perhaps for a window of length k, the earliest window that includes i is s = max(0, i - k +1). Because the window starts at s and ends at s +k -1. So for i to be in the window, s <=i <= s +k -1. So s can be from max(0, i -k +1) down to i -k +1. Wait, no. For example, if i is 2 and k=3, the window starts at 0 (0-2), 1 (1-3), 2 (2-4). So for i=2, the earliest window is 0, and the latest window is 2 (if n is large enough). But the window's start must be such that the end is <=n-1.
+
+So for occurrence i of x, the windows that include i are those s where s <=i <= s +k -1. So s can be from max(0, i -k +1) to min(i, n -k). Because s can't be less than 0, and the window must fit (s +k-1 <=n-1).
+
+Now, for this occurrence to be the only x in the window, we need that the previous occurrence of x is before s, and the next occurrence of x is after s +k -1. So the previous occurrence of x is at pos p, and next occurrence is at pos q. So for the occurrence at i, the valid s is:
+
+s >= p +1 (if p exists) or 0 (if no p)
+
+s <= i -k +1 (so that the window starts at s and includes i)
+
+and also,
+
+s +k -1 < q (if q exists) or s +k -1 >=n-1 (if no q)
+
+But this seems complicated. But for each occurrence, we can compute the range of s where this occurrence is the only x in the window. Then, for each window s, collect all x's that have such ranges including s, and keep track of the maximum x for each s.
+
+But how to compute this for all s efficiently.
+
+This approach could be feasible if for each occurrence, we can compute the range of s where it's the only x in its window, then use a segment tree or a line sweep algorithm to track the maximum x for each s.
+
+But this requires precomputing for each occurrence of x the interval [start, end) of s values where the occurrence is the only x in the window. Then, for each such interval, we add x to the possible candidates for those s values, and then for each s, the maximum x in all active intervals at s is the answer.
+
+So steps would be:
+
+1. Preprocess the array to track for each x the list of indices where it occurs.
+
+2. For each x, process each occurrence in the list. For each occurrence at index i:
+
+   a. Find the previous occurrence (p) and next occurrence (q) of x. If no previous, p = -1. If no next, q =n.
+
+   b. The earliest window s that includes i is s_start = max(0, i -k +1).
+
+   c. The latest window s that includes i is s_end = min(i, n -k).
+
+   d. The valid s for this occurrence to be the only x in the window is s >= prev_p +1 and s <= s_end, and s +k -1 < next_q.
+
+   So the valid s must be in [max(prev_p +1, s_start), min(s_end, next_q -k)].
+
+   Wait, perhaps this is getting too complicated.
+
+Alternatively, for occurrence i of x, the valid s ranges are:
+
+s must be >= p +1 (if p exists), else 0.
+
+s must be <= i (since s +k -1 >=i).
+
+But also, s must be <= n -k.
+
+And s must be >= i -k +1 (since the window must include i).
+
+Additionally, q (next occurrence of x) must be > s +k -1.
+
+So s +k -1 < q.
+
+So s < q -k +1.
+
+But s must also be >= (p+1), <= min(i, n-k).
+
+So the valid s is [low, high], where:
+
+low = max(p +1, i -k +1)
+
+high = min(n -k, q -k, i)
+
+But this seems complicated. Let's see with the first sample:
+
+For x=2, occurrences at indices 1 and 2.
+
+For the first occurrence (i=1):
+
+prev_p = -1 (no previous), next_q=2.
+
+So:
+
+low = max(-1 +1, 1 -3 +1) = max(0, -1) =0.
+
+high = min(5-3 (n=5?), 2-3, 1) → n=5, so n-k is 5-3=2. 2-3= -1. So high is min(2, -1, 1) → -1. So invalid, so no valid s for this occurrence. Because the next occurrence is at 2, and the window can't include 2. So for occurrence 1 of x=2, no valid s.
+
+For occurrence i=2 of x=2:
+
+prev_p=1, next_q=5 (assuming next is beyond the array).
+
+low = max(1+1, 2-3+1) = max(2, 0) →2.
+
+high = min(5-3=2, 5-3=2, 2) →2.
+
+So s can be 2.
+
+So for s=2 (the third window, which is indices 2-4), the occurrence at 2 is the only one in the window. So x=2 is a candidate.
+
+So for each occurrence, compute the range of s where it is the only occurrence in the window. Then, for each s in that range, x is a candidate. Then, the answer for s is the maximum x among all candidates for that s.
+
+So to compute all such ranges, and for each s, track the maximum x in its candidates.
+
+This approach requires O(n) time for preprocessing, and then O(n) time for processing all ranges.
+
+But how to compute the ranges for each occurrence, and then for each s, track the maximum x in the candidates.
+
+This is a line sweep approach. For each occurrence's valid s interval, we can add x to that interval and track the maximum.
+
+But how to do this efficiently.
+
+The line sweep idea:
+
+- For each valid interval [a, b], add x to all s in a <= s <= b.
+
+- Then, for each s, the maximum x in all such intervals is the answer.
+
+But how to compute this efficiently.
+
+We can represent the intervals and use a max segment tree with range updates. Or, for each interval [a, b], we can add x to a and subtract x at b+1, then process all events in order and track the current maximum.
+
+But how to handle multiple intervals and track the maximum.
+
+Alternatively, we can use a sweep line algorithm where for each interval [a, b], we generate two events: at a, add x to the active set; at b+1, remove x from the active set. Then, as we process s from 0 to n-k, for each s, we process all events at s, update the active set, and then the answer for s is the maximum in the active set, or "Nothing" if the active set is empty.
+
+But maintaining the active set's maximum efficiently is key. Each time we add x to the active set, we need to track the current maximum, and when we remove x, we need to update the maximum accordingly. However, this is tricky because there could be multiple instances of the same x in the active set (if overlapping intervals). For example, if two intervals for x=3 overlap, adding x=3 multiple times. When removing one instance, if there are others, the maximum remains 3. But if all instances are removed, the maximum could drop.
+
+But how to track how many times each x is in the active set. So for the active set, we can have a frequency map. Then, the maximum is the maximum x where the frequency is positive.
+
+But maintaining the maximum with insertions and deletions can be done with a max-heap, but with the same problem as before: the heap can have elements that are no longer in the active set.
+
+Alternatively, use a sorted data structure. But in Python, this is not straightforward.
+
+Another idea: Use a dictionary (count) that tracks the number of times x is present in the active set. Also, maintain a variable that holds the current maximum. However, when x is added or removed, we update the count and check if the maximum needs to change.
+
+But inserting a new x that is larger than the current maximum would update the maximum. Removing x when x is the current maximum requires us to find the next maximum, which could be O(n) time.
+
+This approach would not be efficient for large n.
+
+So, perhaps, the best way is to use a max-heap with lazy deletion. The heap will store all x's that are in the active set. But since there can be duplicates (multiple intervals for the same x), the count map will track how many times x is active. When adding x, if the count was zero before, push x to the heap. When removing x, decrement the count. Then, when checking the current maximum, we pop elements from the heap until we find one with a count >0.
+
+So the steps are:
+
+1. Precompute all events (start and end of intervals for each occurrence's valid s).
+
+2. Sort all events by position s.
+
+3. Iterate through s from 0 to n-k:
+
+   a. Process all events at s:
+
+      i. For an add event (x added to active set), increment count[x]. If the count becomes 1, push x to the heap.
+
+      ii. For a remove event (x removed from active set), decrement count[x].
+
+   b. Then, after processing all events at s, check the heap. Pop elements from the heap until we find one where count[x] >0. If such an element is found, that's the maximum. Else, output "Nothing".
+
+But the problem is that the same x can be pushed multiple times into the heap. So when you pop x from the heap, you have to check if its count is still >0. If not, continue popping. However, this could take O(k) time per s, which is not feasible for large n.
+
+But perhaps, in practice, this is manageable. Let's see: each x is pushed once per interval where it's added. So for each x's interval, there are O(1) events. The total number of events is O(n), since for each occurrence, we may have two events (start and end). So the total events are O(n), and the heap operations are O(n log n).
+
+But when processing each s, the number of popped elements depends on how many have been invalid. For example, if the maximum x is still valid, we just take it. If it's invalid, we pop and check the next, and so on. The key is that once an x is popped and found to be invalid, it's not pushed back. So each x is popped at most once. Therefore, the total number of pop operations over all s is O(n), leading to an overall time complexity of O(n log n).
+
+This would be acceptable.
+
+So the plan is:
+
+- For each occurrence in the array, compute the valid s interval where it is the only occurrence in the window.
+
+- For each valid s interval [a, b], add two events: (a, 'add', x) and (b+1, 'remove', x).
+
+- Sort all events by their position.
+
+- Then, process each s from 0 to (n-k) in order. For each s:
+
+   - Process all events at s. Update the count map and the heap accordingly.
+
+   - After processing events, find the maximum x in the active set by popping elements from the heap until a valid one is found. Record this as the answer for s.
+
+   - The elements popped from the heap that are invalid are discarded. The valid one is the maximum, and it's kept (not popped) so that it can be considered in the next s.
+
+Wait, no. When we find a valid x, we need to get its value as the maximum. But if we pop it from the heap, it's removed. So how to handle that.
+
+Wait, the heap contains all x's that have been added. So when you pop an x, you check if its count is >0. If yes, that's the maximum. But since the heap is a max-heap, once you find such x, it's the maximum possible, so you can output it and then push it back into the heap if it's allowed to be considered again. Wait, no. Because other elements may also have count>0 but have lower x.
+
+Alternatively, perhaps we can't push it back. So, once you pop an x and see that it's valid, that's the maximum for this s, and you don't need to process further. But then, the next s may have the same x, but how to have it in the heap again.
+
+Ah, here's the problem: the heap is not a dynamic structure. Once you pop an element, even if it's valid, you lose it. So this approach won't work.
+
+So, perhaps this approach isn't feasible either.
+
+Alternative idea: Use a heap that contains all x's that have count >0. But how to maintain this efficiently.
+
+Wait, the count is tracked in a separate dictionary. So the heap can have duplicates (x can be present multiple times), but when the count[x] is positive, any occurrence of x in the heap is a candidate. So during the process of finding the maximum for s, we pop elements until we find an x where count[x] >0. Once found, that's the maximum. However, the other elements in the heap (including other copies of x) are left in the heap. But this x may still be valid for future s.
+
+So this approach can work, but the problem is that the heap can have a lot of invalid elements, which would require popping many elements for each s.
+
+But considering that each x is added once per interval, the total number of elements in the heap is O(n). And each element is popped once (when found to be invalid). So the total number of pop operations across all s is O(n). Each pop is O(1), but the heap's structure is maintained.
+
+Wait, but the heap is a priority queue. So each time you pop the maximum element. So when you process s=0, you might pop several elements, but once you find a valid one, the rest remain in the heap. For s=1, you again start by popping elements from the heap (which now may have the same elements as before plus new ones) until you find a valid one.
+
+But this would result in O(n log n) time, because each element is pushed once and popped once.
+
+So this approach could be feasible.
+
+So, to summarize the steps:
+
+1. Preprocess the array to find all the intervals where an occurrence of x is the only one in the window.
+
+   For each occurrence i of x:
+
+      a. Find the previous occurrence (p) and next occurrence (q).
+
+      b. Compute the valid s interval as:
+
+         low = max(p + 1, i -k +1)
+
+         high = min(q -k, i, n -k)
+
+         if low > high, then this occurrence has no valid s.
+
+         else, add events for (low, 'add', x) and (high+1, 'remove', x).
+
+2. Sort all events by their s value. Events with the same s can be processed in any order, but 'remove' events should be processed before 'add' events to avoid having the count temporarily be negative. Or, perhaps it doesn't matter as long as the events are processed in order.
+
+3. Initialize a max-heap (using negative values for Python's min-heap), a count dictionary, and a list to store the answers.
+
+4. Initialize a pointer to iterate through the sorted events.
+
+5. For each s in 0 to (n -k):
+
+   a. Process all events with s == current_s. For each event:
+
+      i. If it's an 'add' event, increment count[x]. If count[x] becomes 1, push x to the heap.
+
+      ii. If it's a 'remove' event, decrement count[x].
+
+   b. Now, find the maximum x in the active set (count[x] >0):
+
+      i. While the heap is not empty:
+
+           - Peek at the top element (since it's a max-heap, the top is the largest x).
+
+           - Check if count[x] >0. If yes, record x as the maximum and break.
+
+           - If not, pop x from the heap and continue.
+
+      ii. If the heap is empty, record "Nothing".
+
+6. Append the recorded value to the answers list.
+
+Once all s are processed, output the answers.
+
+This approach should work, but let's test it against the sample inputs.
+
+First sample input:
+
+n=5, k=3.
+
+array is [1,2,2,3,3]
+
+Processing each occurrence:
+
+1 at 0: prev_p = -1, next_q = None.
+
+low = max(-1+1, 0-3+1) → max(0, -2) =0.
+
+high = min(n-k=2, next_q is None (n=5, so q=5) →5-3=2, i=0 → min(2,0,2) →0.
+
+so interval is [0,0]. So add event (0, 'add',1) and (0+1=1, 'remove',1).
+
+2 at 1: prev_p is None, next_q is 2.
+
+low = max(0, 1-3+1) = max(0, -1) →0.
+
+high = min(2-3= -1,1,2) →-1. Invalid. So no interval.
+
+2 at 2: prev_p=1, next_q=5 (no next).
+
+low = max(1+1=2, 2-3+1=0) →2.
+
+high = min(5-3=2, 2, 2) →2.
+
+interval [2,2]. add event (2, 'add',2), (3, 'remove',2).
+
+3 at 3: prev_p is None (since first occurrence of 3), next_q=4.
+
+low = max(0, 3-3+1=1) →1.
+
+high = min(4-3=1,3,2) →1.
+
+interval [1,1]. add (1, 'add',3), (2, 'remove',3).
+
+3 at 4: prev_p=3, next_q=5.
+
+low = max(3+1=4,4-3+1=2) →4.
+
+high = min(5-3=2,4,2) →2. invalid.
+
+So events are:
+
+Event list sorted by s:
+
+s=0: add 1
+
+s=1: add 3
+
+s=1: remove 1 (s=0+1=1)
+
+s=2: add 2
+
+s=2: remove 3 (from event (2) of s=1's remove)
+
+s=3: remove 2 (from event (3) of s=2's add)
+
+Processing s=0:
+
+Process events at s=0: add 1. count[1] =1. push 1.
+
+Heap is [1]. Check the heap: top is 1, count[1] is 1 → valid. Output 1.
+
+For s=0, answer is 1.
+
+Processing s=1:
+
+Events at s=1: add 3 (count[3] becomes 1, push to heap), remove 1 (count[1] becomes 0).
+
+Heap now contains [3,1]. When we check, the top is 3. count[3] is 1 → valid. Output 3.
+
+s=1's answer is 3.
+
+Processing s=2:
+
+Events at s=2: add 2 (count[2]=1, push to heap), remove 3 (count[3]=0).
+
+Heap contains [2,3,1]. Check the top 3: count[3] is 0. Pop it. Next is 2: count[2] is 1 → valid. So answer is 2.
+
+s=2's answer is 2.
+
+Which matches the first sample.
+
+The second sample:
+
+Input:
+
+6 4
+
+3
+
+3
+
+3
+
+4
+
+4
+
+2
+
+The array is [3,3,3,4,4,2], k=4.
+
+The windows are:
+
+0-3: [3,3,3,4] → elements are 3 (3 times), 4 (once). Candidates: 4. max is4.
+
+1-4: [3,3,4,4] → 3 (2), 4 (2). No candidates. Output "Nothing".
+
+2-5: [3,4,4,2] → 3 once,4 twice, 2 once. Candidates:3 and 2. Max is3.
+
+So output is 4, Nothing, 3.
+
+Now, let's process the occurrences.
+
+For each occurrence of 3:
+
+Indices 0,1,2.
+
+For occurrence 0:
+
+prev_p = -1, next_q=1.
+
+low = max(-1+1=0, 0-4+1 =-3) →0.
+
+high = min(1-4= -3,0,6-4=2) →-3. invalid.
+
+No interval.
+
+Occurrence 1:
+
+prev_p=0, next_q=2.
+
+low = max(0+1=1, 1-4+1= -2) →1.
+
+high = min(2-4= -2,1, 2) →-2. invalid.
+
+No interval.
+
+Occurrence 2:
+
+prev_p=1, next_q=3.
+
+low = max(1+1=2, 2-4+1= -1) →2.
+
+high = min(3-4= -1,2,6-4=2) →-1. invalid.
+
+No interval.
+
+Occurrence 3 (4):
+
+prev_p is None (first occurrence of 4), next_q=4.
+
+low = max(0,3-4+1=0 →0.
+
+high = min(4-4=0,3,6-4=2) →0.
+
+So interval is s=0. add event (0, 'add',4), remove event (0+1=1).
+
+Occurrence4 (4):
+
+prev_p=3, next_q=5.
+
+low = max(3+1=4,4-4+1=1) →4.
+
+high = min(5-4=1,4,2) →1. invalid.
+
+Occurrence5 (2):
+
+prev_p is None (first occurrence), next_q is None.
+
+low = max(0,5-4+1=2) →2.
+
+high = min(6-4=2,5,2) →2.
+
+So interval s=2. add event (2, 'add',2), remove event (3).
+
+Now, events:
+
+For occurrence 3 (4) at index3: s=0 to 0 → events (0, add4), (1, remove4).
+
+For occurrence5 (2) at index5: s=2 to 2 → events (2, add2), (3, remove2).
+
+Other occurrences of 3 have no valid intervals.
+
+Other elements:
+
+At index3 (4) and 4 (4), but their valid intervals are s=0 and s=4 (invalid).
+
+So the events are sorted:
+
+s=0: add4.
+
+s=1: remove4.
+
+s=2: add2.
+
+s=3: remove2.
+
+Processing each s from 0 to 6-4=2 (since n=6, k=4, n-k=2):
+
+s=0:
+
+Process add4. count[4] becomes 1 → push to heap.
+
+Heap now has [4]. Check: top is4, count is1. Output4.
+
+s=0's answer is4.
+
+s=1:
+
+Process remove4. count[4] becomes0.
+
+Heap still has [4]. Check: top is4, count is0. Pop it. Heap is empty. Output "Nothing".
+
+s=1's answer is "Nothing".
+
+s=2:
+
+Process add2. count[2] becomes1 → push to heap.
+
+Heap has [2]. Check: top is2, count is1. So output2. But according to the sample, the third output is3. Wait, sample output is:
+
+4
+
+Nothing
+
+3
+
+Hmm. What's wrong here?
+
+Wait, for the third window (s=2) in the sample input, the window is [3,4,4,2], which contains elements 3 (once),4 (twice),2 (once). So the candidates are 3 and 2. The maximum is3. But according to our events, the only interval added at s=2 is for 2.
+
+Ah, because we missed the occurrence of3 in this window.
+
+So where is the error in our approach?
+
+Ah, in the occurrence of3 at index2.
+
+For the third window (s=2), the window is [3,3,4,4,2] no, wait:
+
+Wait, n=6, k=4. s=2 corresponds to elements indices 2,3,4,5: [3,4,4,2].
+
+In this window,3 occurs once (index2),4 occurs twice (indices3,4), 2 occurs once (index5).
+
+So the candidates are3 and2. So the maximum is3.
+
+But according to our events, the only interval added at s=2 is for2. So why is3 not considered?
+
+Because the occurrence of3 at index2 has a valid interval. Let's check:
+
+Occurrence of3 at index2:
+
+prev_p=1, next_q=3 (index3 is4, so next occurrence of3 is beyond the array, next_q=6).
+
+So:
+
+low = max(1+1=2, 2-4+1= -1) →2.
+
+high = min(6-4=2, 2,6-4=2) →2.
+
+So the valid s is 2. So for occurrence2 of3 (index2), we have an event add3 at s=2 and remove3 at s=3.
+
+So the events for this occurrence are (2, add3), (3, remove3).
+
+So in the events, we missed this. So this is the mistake.
+
+So the code's initial processing of occurrences needs to account for all occurrences, including those where x is not followed by another x.
+
+So why wasn't this occurrence processed?
+
+Let's re-examine the occurrence of3 at index2:
+
+prev_p=1 (index1), next_q=3 (index3 is4, so no next occurrence of3. So next_q=6 (n=6).
+
+So for occurrence2 of3:
+
+low = max(prev_p +1 =1+1=2, i-k+1=2-4+1= -1) →2.
+
+high = min(next_q -k=6-4=2, i=2, n-k=6-4=2) →2.
+
+So the valid s is 2. So the events are (2, add3), (3, remove3).
+
+So in the event list, we should have:
+
+s=0: add4.
+
+s=1: remove4.
+
+s=2: add3, add2.
+
+s=3: remove3, remove2.
+
+So when s=2, the events are add3 and add2.
+
+When processing s=2:
+
+count[3] is1, count[2] is1. The heap contains [3,2]. The maximum is3, which is valid. So output3.
+
+Ah, but the previous analysis missed this occurrence. So why?
+
+Because when we process the occurrence of3 at index2, the code is supposed to generate events for it. But in the initial code steps, for each occurrence, we process it and generate events.
+
+So the code needs to correctly generate events for all occurrences.
+
+So for the second sample input, the events include the occurrence of3 at index2:
+
+Processing s=2:
+
+add3 and add2 events.
+
+So after processing these, count[3]=1 and count[2]=1.
+
+The heap has3 and2. The max is3. So the answer for s=2 is3.
+
+Which matches the sample.
+
+So the code needs to correctly generate events for all valid occurrences.
+
+Thus, the algorithm works when all events are correctly generated.
+
+So the code needs to:
+
+For each occurrence i of x:
+
+   find previous occurrence (p): the last index before i where x occurs.
+
+   find next occurrence (q): the first index after i where x occurs.
+
+   then compute low and high.
+
+So the key steps are:
+
+For each element x in the array, track the list of indices where it appears. Then, for each occurrence i in that list:
+
+   p = list[pos-1] if pos>0 else -1.
+
+   q = list[pos+1] if pos < len(list)-1 else n.
+
+   then compute low and high as:
+
+   low = max(p +1, i -k +1)
+
+   high = min(q -k, i, n-k)
+
+   if low > high: skip.
+
+   else: add events for low and high+1.
+
+This would correctly process all occurrences.
+
+So now, the code can be written.
+
+Now, the code steps:
+
+Read n and k.
+
+Read the array a of size n.
+
+Create a dictionary to track the positions of each element. For example, positions[x] is a list of indices where x occurs.
+
+For each x in a, record its positions.
+
+Then, for each x in positions:
+
+   list = positions[x]
+
+   for each index i in list:
+
+       pos = index in list (e.g., list[j] =i)
+
+       p = list[j-1] if j>0 else -1
+
+       q = list[j+1] if j+1 < len(list) else n
+
+       low = max(p +1, i -k +1)
+
+       high = min(q -k, i, n-k)
+
+       if low > high:
+
+           continue
+
+       add event (low, 'add', x)
+
+       add event (high+1, 'remove', x)
+
+Sort all events by their s value. If two events have the same s, process 'remove' before 'add' to prevent negative counts.
+
+Then, process each s from 0 to (n-k) in order:
+
+   process all events with s == current_s.
+
+   for each event:
+
+       if add: increment count[x], and if count[x] ==1, push x to the heap.
+
+       if remove: decrement count[x].
+
+   then, find the maximum by popping elements from the heap until one is found with count[x] >0.
+
+   if found, record x; else, 'Nothing'
+
+   after finding, push back any valid x that was popped, but this is not needed. Because the heap is a max-heap, once we find the first valid x, it's the maximum.
+
+But no: when you pop x from the heap, it's removed. So if x is still valid (count[x] >0), and you pop it, you lose it. So this approach will miss x in subsequent s.
+
+Thus, the correct approach is to not pop the x from the heap. But how?
+
+Ah, here's the problem: the heap contains all x's that have been added, even if their count is now 0. But when you process s, you need to find the maximum x in the active set (count[x] >0). So to do that, you have to check the top of the heap, and if it's invalid, pop it. You continue popping until you find a valid x. The popped elements are discarded, even if they are valid in the future. But since the events have already been processed, the count[x] is correct for the current s.
+
+So when you process s=2 in the second sample:
+
+Heap contains [3,2]. The top is3. count[3] is1. So it's valid. Record3.
+
+No popping is done. So the heap remains [3,2]. For the next s=3:
+
+Process remove3 and remove2. count[3] becomes0, count[2] becomes0.
+
+When checking the heap, which still has3 and2. Pop3: count[3] is0. Pop2: count[2] is0. Heap is empty. Output "Nothing".
+
+But this is for s=3, which is beyond n-k=2. So the code is correct.
+
+But how to prevent the heap from accumulating invalid elements. Because, the events are processed for each s, and the heap is only used to find the current maximum for the current s.
+
+So the code will process each s correctly, and the heap is allowed to have invalid elements for previous s, but during the current s's processing, all invalid elements are popped and discarded. The remaining elements in the heap are those not checked yet, which may be valid or not.
+
+But once an element is popped and found to be invalid, it is discarded and will not be considered again, even if it's added back in future events.
+
+But when x is added again in future events, it will be pushed again to the heap, which is correct.
+
+Thus, the code is correct.
+
+Now, the code implementation.
+
+First, read n and k.
+
+Then read n lines of a.
+
+Then, build the positions dictionary.
+
+For example:
+
+positions = defaultdict(list)
+
+for i in range(n):
+
+    x = a[i]
+
+    positions[x].append(i)
+
+Then, for each x in positions:
+
+for each occurrence in the list:
+
+   j is the index in the list.
+
+   p = positions[x][j-1] if j>0 else -1
+
+   q = positions[x][j+1] if j < len(positions[x])-1 else n
+
+   i = positions[x][j]
+
+   low = max(p+1, i -k +1)
+
+   high = min(q -k, i, n -k)
+
+   if low > high:
+
+       continue
+
+   add event (low, 'add', x)
+
+   add event (high+1, 'remove', x)
+
+Sort the events. How to sort them?
+
+Each event is a tuple (s, type, x), where type is 'add' or 'remove'. We need to sort by s. For events with the same s, 'remove' should come before 'add' to avoid negative counts during processing. For example, if an 'add' and 'remove' event happen at the same s, processing the 'remove' first ensures that the count is correct.
+
+So when sorting, the event tuples can be sorted by s, and for tie-breakers, 'remove' comes before 'add'. We can represent 'remove' as 0 and 'add' as 1, so that events with the same s are sorted with remove first.
+
+So in Python, the events can be stored as tuples (s, t, x), where t is 0 for 'remove' and 1 for 'add'. Then, when sorted, events are ordered by s, then t.
+
+So when building the events:
+
+events = []
+
+for x in positions:
+
+    lst = positions[x]
+
+    for j in range(len(lst)):
+
+        i = lst[j]
+
+        prev_p = lst[j-1] if j >0 else -1
+
+        next_j = j+1
+
+        next_q = lst[next_j] if next_j < len(lst) else n
+
+        low = max(prev_p +1, i -k +1)
+
+        high = min(next_q -k, i, n -k)
+
+        if low > high:
+
+            continue
+
+        events.append( (low, 1, x) ) # 'add' event
+
+        events.append( (high+1, 0, x) ) # 'remove' event
+
+Sort events with a key that sorts by s first, then t.
+
+events.sort(key=lambda x: (x[0], x[1]))
+
+Now, process each s from 0 to (n -k):
+
+We can use a pointer to track which events have been processed up to each s.
+
+But in Python, it's easier to group the events by s.
+
+We can iterate over all events, keeping track of the current s.
+
+Initialize event_idx =0.
+
+answers = []
+
+count = defaultdict(int)
+
+heap = []
+
+for s in range(n -k +1):
+
+    # process all events with event[0] ==s
+
+    while event_idx < len(events) and events[event_idx][0] ==s:
+
+        typ = events[event_idx][1]
+
+        x = events[event_idx][2]
+
+        if typ ==1: # add
+
+            count[x] +=1
+
+            if count[x] ==1:
+
+                heapq.heappush(heap, -x) # using max-heap via negation
+
+        else: # remove
+
+            count[x] -=1
+
+        event_idx +=1
+
+    # find the maximum x with count[x] >0
+
+    current_max = None
+
+    while heap:
+
+        candidate = -heap[0] # get the current max
+
+        if count[candidate] >0:
+
+            current_max = candidate
+
+            break
+
+        else:
+
+            # remove invalid entry from heap
+
+            heapq.heappop(heap)
+
+    if current_max is not None:
+
+        answers.append(current_max)
+
+    else:
+
+        answers.append("Nothing")
+
+Finally, print each answer in the answers list.
+
+But wait, the s runs from 0 to (n-k), inclusive. For example, if n=5, k=3, then n-k=2, and s can be 0,1,2 (3 windows).
+
+Yes.
+
+Now, let's test this code on the second sample.
+
+Second sample:
+
+n=6, k=4.
+
+a = [3,3,3,4,4,2]
+
+positions:
+
+3: [0,1,2]
+
+4: [3,4]
+
+2: [5]
+
+Processing occurrence of3 at index0:
+
+j=0:
+
+prev_p =-1.
+
+next_q=1.
+
+low = max(0, 0-4+1= -3) →0.
+
+high = min(1-4= -3,0,6-4=2) →-3. invalid. no event.
+
+occurrence at index1:
+
+j=1.
+
+prev_p=0.
+
+next_q=2.
+
+low = max(0+1=1, 1-4+1= -2) →1.
+
+high = min(2-4= -2,1,2) →-2. invalid. no event.
+
+occurrence at index2:
+
+j=2.
+
+prev_p=1.
+
+next_q=6.
+
+low = max(1+1=2, 2-4+1= -1) →2.
+
+high = min(6-4=2, 2,6-4=2) →2.
+
+so add event (2, 'add',3), remove event (3, 'remove',3).
+
+For occurrence of4 at index3:
+
+j=0.
+
+prev_p =-1.
+
+next_q=4.
+
+low = max(0,3-4+1=0) →0.
+
+high = min(4-4=0,3,2) →0.
+
+add event (0, 'add',4), remove event (1, 'remove',4).
+
+For occurrence of4 at index4:
+
+j=1.
+
+prev_p=3.
+
+next_q=6.
+
+low = max(3+1=4,4-4+1=1) →4.
+
+high = min(6-4=2,4,2) →2. invalid.
+
+For occurrence of2 at index5:
+
+j=0.
+
+prev_p =-1.
+
+next_q=6.
+
+low = max(0,5-4+1=2) →2.
+
+high = min(6-4=2,5,2) →2.
+
+add event (2, 'add',2), remove event (3, 'remove',2).
+
+So events after sorting:
+
+event s=0, add4.
+
+s=0, type 1.
+
+event s=1, remove4.
+
+s=1, type0.
+
+event s=2, add3.
+
+s=2, type1.
+
+event s=2, add2.
+
+s=2, type1.
+
+event s=3, remove3.
+
+s=3, type0.
+
+event s=3, remove2.
+
+s=3, type0.
+
+Now, processing s from 0 to 6-4=2.
+
+s=0:
+
+process add4.
+
+count[4] =1.
+
+push -4 to heap.
+
+heap now contains [-4].
+
+check max:
+
+candidate is4. count is1 → valid. answer is4.
+
+s=1:
+
+process remove4.
+
+count[4] =0.
+
+heap is [-4].
+
+check candidate4: count0. pop from heap. heap empty. answer 'Nothing'.
+
+s=2:
+
+process add3 and add2.
+
+count[3] becomes1 → push-3.
+
+count[2] becomes1 → push-2.
+
+heap is [-3, -2].
+
+But in Python's heap, it's a min-heap. So the heap structure is sorted as a min-heap, but the top is the smallest, which is -3, which represents 3.
+
+So when we check:
+
+candidate is3. count[3] is1 → valid. answer is3.
+
+Thus, the answers are 4, Nothing,3.
+
+Which matches the sample.
+
+Thus, the code should work.
+
+Now, coding this in Python.
+
+But there's one thing to note: in Python, the heapq module only provides a min-heap. So to simulate a max-heap, we store the negatives of the elements. So the largest element is the smallest negative.
+
+Thus, when we push x into the heap, we push -x. The top of the heap is the smallest (most negative) number, which corresponds to the largest x.
+
+When checking the top, we take -heap[0].
+
+Now, the code:
+
+Read n and k.
+
+Then read n lines as integers.
+
+Then build the positions dictionary.
+
+Then generate events.
+
+Sort events.
+
+Process events.
+
+Finally, output the answers.
+
+So the code:
+
+import sys
+import heapq
+from collections import defaultdict
+
+def main():
+    n, k = map(int, sys.stdin.readline().split())
+    a = [int(sys.stdin.readline()) for _ in range(n)]
+    
+    positions = defaultdict(list)
+    for idx, num in enumerate(a):
+        positions[num].append(idx)
+    
+    events = []
+    for num in positions:
+        lst = positions[num]
+        for j in range(len(lst)):
+            i = lst[j]
+            prev_p = lst[j-1] if j > 0 else -1
+            next_j = j + 1
+            next_q = lst[next_j] if next_j < len(lst) else n
+            
+            low = max(prev_p + 1, i - k + 1)
+            high = min(next_q - k, i, n - k)
+            
+            if low > high:
+                continue
+            
+            # Add event for adding
+            events.append((low, 1, num))
+            # Add event for removing
+            events.append((high + 1, 0, num))
+    
+    # Sort events by s, and 'remove' comes before 'add' for the same s
+    events.sort(key=lambda x: (x[0], x[1]))
+    
+    answers = []
+    count = defaultdict(int)
+    heap = []
+    event_idx = 0
+    total_windows = n - k + 1
+    
+    for s in range(total_windows):
+        # Process all events for the current s
+        while event_idx < len(events) and events[event_idx][0] == s:
+            typ, x = events[event_idx][1], events[event_idx][2]
+            if typ == 1:
+                count[x] += 1
+                if count[x] == 1:
+                    heapq.heappush(heap, -x)
+            else:
+                count[x] -= 1
+            event_idx += 1
+        
+        # Find the maximum valid x
+        current_max = None
+        while heap:
+            candidate = -heap[0]
+            if count[candidate] > 0:
+                current_max = candidate
+                break
+            else:
+                heapq.heappop(heap)
+        
+        if current_max is not None:
+            answers.append(current_max)
+        else:
+            answers.append("Nothing")
+    
+    for ans in answers:
+        print(ans)
+
+if __name__ == "__main__":
+    main()
+</think>
+To solve this problem, we need to find the maximum element in each segment of length `k` that occurs exactly once in that segment. If no such element exists, we output "Nothing".
+
+### Approach
+1. **Track Positions**: For each element in the array, track the positions where it occurs.
+2. **Generate Events**: For each occurrence of an element, determine the valid segments where this occurrence is the only instance of the element. Generate events for adding and removing the element from consideration.
+3. **Process Events**: Use a max-heap to efficiently track the maximum element that occurs exactly once in the current segment. Process events in a sorted order to maintain the current valid elements.
+
+### Solution Code
+```python
+import sys
+import heapq
+from collections import defaultdict
+
+def main():
+    n, k = map(int, sys.stdin.readline().split())
+    a = [int(sys.stdin.readline()) for _ in range(n)]
+    
+    positions = defaultdict(list)
+    for idx, num in enumerate(a):
+        positions[num].append(idx)
+    
+    events = []
+    for num in positions:
+        lst = positions[num]
+        for j in range(len(lst)):
+            i = lst[j]
+            prev_p = lst[j-1] if j > 0 else -1
+            next_j = j + 1
+            next_q = lst[next_j] if next_j < len(lst) else n
+            
+            low = max(prev_p + 1, i - k + 1)
+            high = min(next_q - k, i, n - k)
+            
+            if low > high:
+                continue
+            
+            events.append((low, 1, num))
+            events.append((high + 1, 0, num))
+    
+    events.sort(key=lambda x: (x[0], x[1]))
+    
+    answers = []
+    count = defaultdict(int)
+    heap = []
+    event_idx = 0
+    total_windows = n - k + 1
+    
+    for s in range(total_windows):
+        while event_idx < len(events) and events[event_idx][0] == s:
+            typ, x = events[event_idx][1], events[event_idx][2]
+            if typ == 1:
+                count[x] += 1
+                if count[x] == 1:
+                    heapq.heappush(heap, -x)
+            else:
+                count[x] -= 1
+            event_idx += 1
+        
+        current_max = None
+        while heap:
+            candidate = -heap[0]
+            if count[candidate] > 0:
+                current_max = candidate
+                break
+            else:
+                heapq.heappop(heap)
+        
+        if current_max is not None:
+            answers.append(current_max)
+        else:
+            answers.append("Nothing")
+    
+    for ans in answers:
+        print(ans)
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Track Positions**: We use a dictionary to record the indices where each element occurs.
+2. **Generate Events**: For each occurrence of an element, we determine the valid segments where it is the only occurrence. We generate events for when the element starts being valid (add event) and when it stops being valid (remove event).
+3. **Process Events**: Events are sorted to ensure correct processing order. Using a max-heap (simulated with a min-heap by storing negative values), we track elements that could be valid. For each segment, we process events to update the current valid elements and then find the maximum valid element using the heap.
+
+This approach efficiently handles the sliding window problem by leveraging event-based processing and a heap to maintain the maximum element in O(n log n) time complexity.
+</bot>

@@ -1,0 +1,787 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.You are given a graph with n nodes and m directed edges. One lowercase letter is assigned to each node. We define a path's value as the number of the most frequently occurring letter. For example, if letters on a path are "abaca", then the value of that path is 3. Your task is find a path whose value is the largest.
+
+Input
+
+The first line contains two positive integers n, m (1 ≤ n, m ≤ 300 000), denoting that the graph has n nodes and m directed edges.
+
+The second line contains a string s with only lowercase English letters. The i-th character is the letter assigned to the i-th node.
+
+Then m lines follow. Each line contains two integers x, y (1 ≤ x, y ≤ n), describing a directed edge from x to y. Note that x can be equal to y and there can be multiple edges between x and y. Also the graph can be not connected.
+
+Output
+
+Output a single line with a single integer denoting the largest value. If the value can be arbitrarily large, output -1 instead.
+
+Examples
+
+Input
+
+5 4
+abaca
+1 2
+1 3
+3 4
+4 5
+
+
+Output
+
+3
+
+
+Input
+
+6 6
+xzyabc
+1 2
+3 1
+2 3
+5 4
+4 3
+6 4
+
+
+Output
+
+-1
+
+
+Input
+
+10 14
+xzyzyzyzqx
+1 2
+2 4
+3 5
+4 5
+2 6
+6 8
+6 5
+2 10
+3 9
+10 9
+4 6
+1 10
+2 8
+3 7
+
+
+Output
+
+4
+
+Note
+
+In the first sample, the path with largest value is 1 → 3 → 4 → 5. The value is 3 because the letter 'a' appears 3 times.
+</user>
+<bot>
+<think>
+Okay, let's see. I need to find the largest path value in a directed graph where each node has a character. The value is the maximum frequency of any character along the path. But if there's a cycle in the graph, then the value could be infinitely large because we can loop around the cycle as many times as we want. So first, I have to check if the graph has a cycle. If it does, output -1. Otherwise, it's a DAG (Directed Acyclic Graph), and I can process it to find the maximum path value.
+
+Wait, but how do cycles affect the maximum value? Let's say there's a cycle where a character 'a' appears once in each node of the cycle. Then each time we go around the cycle, the count for 'a' increases. So if the cycle is reachable and can be traversed infinitely, then the maximum value is unbounded, hence we return -1. But if the graph is a DAG, then all paths are finite, and we can compute the maximum using dynamic programming.
+
+So the steps are:
+
+1. Check if the graph contains any cycle. If yes, output -1.
+2. If it's a DAG, perform topological sorting and use dynamic programming to track the maximum count of each character along paths.
+
+But how do we check for cycles in a graph with up to 3e5 nodes and edges efficiently? Using Kahn's algorithm for topological sorting. If during Kahn's algorithm, we can't process all nodes (i.e., there's a cycle), then output -1. Otherwise, proceed.
+
+Once the graph is confirmed to be a DAG, the next step is to compute for each node and each character, the maximum count of that character in any path ending at that node. Then, the overall maximum is the maximum of all these values.
+
+Let's think about the DP approach. For each node u, and for each character c (from 'a' to 'z'), we need to track the maximum number of c's along any path ending at u. When processing nodes in topological order, for each incoming edge to u from v, the DP for u can be updated based on the DP values of v.
+
+But considering all 26 characters for each node might be manageable. Let's see: the number of nodes is up to 3e5, and 26 characters. So 3e5 * 26 = 7.8e6 operations. That's acceptable.
+
+The DP transition would be: for each node u in topological order, initialize each character's count to 1 if the node's character is c (since the path could start at u), but wait, no. Because the path could start at any node before u. Wait, no. The DP[u][c] represents the maximum count of c in any path ending at u. So when processing u, for each predecessor v (i.e., edges from v to u), we can take the maximum DP[v][c] for each c, and then add 1 if the current node's character is c. Then the maximum between all possible predecessors and the current node's own count (if there are no predecessors, then the count is 1 if the node's character is c).
+
+Wait, more precisely:
+
+For each node u in topological order:
+
+   For each character c in 'a' to 'z':
+
+       current_char_count = 1 if s[u] == c else 0
+
+       max_prev = 0
+
+       for each predecessor v (i.e., edges from v to u):
+
+           max_prev = max(max_prev, DP[v][c])
+
+       DP[u][c] = max_prev + current_char_count
+
+   The maximum value for this node is the maximum of DP[u][c] across all c.
+
+But how do we handle the predecessors? Because for each edge v->u, when processing u in topological order, all v's have already been processed. So for each u, we can look at all incoming edges (v, u) and take the maximum DP[v][c] for each c, then add 1 if the current node's character is c.
+
+Wait, but the path ending at u can be either the path consisting of u alone (so count is 1 if the character is c, etc.), or a path that comes through any of its predecessors. So for each character c, the maximum value for u's c is the maximum among all predecessors' c's plus the current node's contribution (if any). So yes, that approach makes sense.
+
+So the steps are:
+
+- Check for cycles using Kahn's algorithm. If there's a cycle, return -1.
+
+- Perform topological sort using Kahn's algorithm, which gives the processing order.
+
+- Initialize a DP table where for each node u, we have an array of 26 integers (for each character).
+
+- For each node in topological order:
+
+   a. For each character c, compute the maximum DP[v][c] among all predecessors v of u.
+
+   b. Add 1 if the current node's character is c.
+
+   c. Update DP[u][c] to be this value.
+
+   d. Keep track of the global maximum.
+
+Wait, but the current node's character contributes exactly 1 to its own character's count. So for example, if the current node is 'a', then for c='a', we add 1 to the maximum value from predecessors. For other characters, the current node's contribution is 0.
+
+But the path could be the node itself, right? So for a node with no incoming edges, the DP values would be 1 for its own character and 0 for others.
+
+So the DP[u][c] is the maximum count of c in any path ending at u. The maximum over all nodes and all c is the answer.
+
+Now, how to handle the edges? For each node u, we need to process all incoming edges (v, u) and find the maximum DP[v][c] for each c. But if a node has multiple incoming edges, for each c, we need the maximum value from any predecessor.
+
+But storing all incoming edges for each node could be memory-intensive if m is 3e5. So for each node u, we need to iterate through all its incoming edges. Wait, no. Because in the way we process the nodes topologically, for each u, we can collect all the predecessors (i.e., nodes v where there is an edge v->u) and then for each of these v's, their DP values have already been computed. So for each u, we can look at all edges v->u, and for each c, take the maximum DP[v][c], then add 1 if u's character is c.
+
+But how do we efficiently get the maximum DP[v][c] across all predecessors v of u?
+
+Each node u may have multiple predecessors. For each c, the maximum DP[v][c] across all predecessors v of u is needed.
+
+So for each u, and for each c, the maximum among all predecessors' DP[v][c] is needed. Then, we add 1 if the current node's character is c.
+
+So the algorithm would be:
+
+Initialize for each node u, a list of incoming edges (v to u). So, for each edge (v, u), add v to u's predecessors.
+
+Then, during topological processing:
+
+For each u in order:
+
+   for each c in 0..25:
+
+       max_c = 0
+
+       for each v in predecessors of u:
+
+           if DP[v][c] > max_c:
+
+               max_c = DP[v][c]
+
+       if s[u] == c:
+
+           current = max_c + 1
+
+       else:
+
+           current = max_c
+
+       DP[u][c] = current
+
+       if current > global_max:
+
+           global_max = current
+
+But for a node with a lot of predecessors (like 3e5), this could be O(k * 26) for each node u, where k is the number of predecessors. If a node has 3e5 predecessors, this would be 3e5 * 26 = 7.8e6 operations for that node. But with m up to 3e5, the sum over all nodes of their number of predecessors is m. So total time for this part would be O(m * 26), which is 7.8e6 * 3e5? Wait, no. Wait, m is 3e5. So each edge is a predecessor for some node. So for each edge, we have one predecessor. So the total number of predecessors across all nodes is m. So for all nodes, the sum of the number of predecessors is m. So for each edge (v, u), when we process u, we look at all predecessors, which is O(m) total. Then for each of those, for each of the 26 characters, we check the DP value. So the total time would be O(m * 26), which is 3e5 *26 = 7.8e6. That's manageable.
+
+So the steps are:
+
+1. Read the input: n, m, the string s, then m edges.
+
+2. Check if the graph has a cycle using Kahn's algorithm. If yes, output -1.
+
+3. Otherwise, perform a topological sort.
+
+4. For each node in topological order, process all predecessors, compute the maximum DP for each character, and update the DP for the current node.
+
+But wait, the topological order can be obtained via Kahn's algorithm, which gives the order as a list of nodes. However, the order is such that for each edge u->v, u comes before v. So when processing nodes in topological order, all predecessors have already been processed. So this is correct.
+
+Now, the problem is how to handle the predecessors for each node. So for each node u, we need to store all the nodes v that have edges pointing to u. So, for each edge (v, u), add v to the list of u's predecessors.
+
+So during preprocessing, we can build an adjacency list where for each u, we have a list of incoming edges (v, u). Or maybe for each u, a list of predecessors (v) such that there's an edge from v to u.
+
+So the code steps:
+
+Read n and m.
+
+Read the string s.
+
+Read m edges. For each edge x, y (directed from x to y), add x to the predecessors of y.
+
+Then perform Kahn's algorithm to check for cycles and get topological order.
+
+If there's a cycle, output -1.
+
+Else:
+
+   Initialize a DP table. For each node u, a list of 26 integers, all 0 initially.
+
+   Also, for each node u, set the current character's count to 1 (since the path can be u itself). Wait, no. Because when processing u, the DP[u][c] will be max of predecessors' DP[v][c] plus current character's contribution. So if u has no predecessors, the max is zero, and then current_char (c) would be 1 if s[u] == c. So in that case, the DP[u] for the current character is 1, others 0.
+
+So the code needs to process each node in topological order.
+
+Wait, but let's see. For each u in topological order:
+
+   For each c in 0..25:
+
+       max_prev = max( DP[v][c] for v in predecessors of u )
+
+       if s[u] == c:
+
+           DP[u][c] = max_prev + 1
+
+       else:
+
+           DP[u][c] = max_prev
+
+       then, update the global maximum with DP[u][c]
+
+But the initial step for a node with no predecessors would have max_prev as 0. So for its own character, the DP[u][c] becomes 1, which is correct.
+
+So this approach should work.
+
+Now, how to efficiently compute the max_prev for each c?
+
+For each u, for each c, we need to iterate through all predecessors v and find the maximum DP[v][c].
+
+But if a node u has many predecessors, this could take O(k) time per character, leading to O(k*26) per node.
+
+But with m up to 3e5, the sum over all nodes of k (number of predecessors per node) is m, so the total time is O(m*26), which is acceptable.
+
+But in practice, how do we handle this in code?
+
+For each u in topological order:
+
+   For each c in 0..25:
+
+       current_max = 0
+
+       for v in predecessors[u]:
+
+           current_max = max(current_max, dp[v][c])
+
+       if s[u] == c:
+
+           dp[u][c] = current_max + 1
+
+       else:
+
+           dp[u][c] = current_max
+
+       if dp[u][c] > global_max:
+
+           global_max = dp[u][c]
+
+Yes. So in code, for each node u, and each of its predecessors v, for each c, check the max.
+
+But this is O(m * 26) time, which is manageable.
+
+Now, the code outline.
+
+First, read n, m.
+
+Then read the string s.
+
+Then build the adjacency list for predecessors. For each edge x, y, add x to predecessors[y].
+
+Also, build the adjacency list for outgoing edges for Kahn's algorithm. Wait, Kahn's algorithm requires for each node, the list of outgoing edges (to track in-degree). So, in Kahn's algorithm, we need the in-degree for each node, and for each node u, the list of nodes that u points to (so that when u is processed, we can decrease the in-degree of its neighbors).
+
+So for Kahn's algorithm:
+
+- in_degree array: in_degree[y] is the number of edges coming into y.
+
+- adjacency list: for each u, a list of nodes v that u points to (outgoing edges).
+
+So during reading edges:
+
+for each edge x, y:
+
+   add y to adj[x] (since x points to y)
+
+   in_degree[y] += 1
+
+Then, Kahn's algorithm proceeds by initializing a queue with nodes of in_degree zero. Then, for each node in the queue, we process it, and for each neighbor, decrease their in_degree by 1. If any neighbor's in_degree becomes zero, add to queue.
+
+The topological order is the order in which nodes are processed.
+
+At the end, if the number of processed nodes is less than n, then there's a cycle.
+
+So the code for Kahn's algorithm would be:
+
+from collections import deque
+
+in_degree = [0] * (n+1)
+
+adj = [[] for _ in range(n+1)]
+
+for each edge x, y:
+
+   adj[x].append(y)
+
+   in_degree[y] +=1
+
+q = deque()
+
+for i in 1..n:
+
+   if in_degree[i] ==0:
+
+       q.append(i)
+
+top_order = []
+
+while q not empty:
+
+   u = q.popleft()
+
+   top_order.append(u)
+
+   for v in adj[u]:
+
+       in_degree[v] -=1
+
+       if in_degree[v] ==0:
+
+           q.append(v)
+
+if len(top_order) !=n:
+
+   print(-1)
+
+else:
+
+   proceed.
+
+Once that's done, the top_order is the processing order.
+
+Then, for each u in top_order, process all predecessors (v in predecessors[u]).
+
+But how are the predecessors stored? For each edge (v, u), u's predecessors include v.
+
+So during the edge processing, for each edge x, y, add x to predecessors[y].
+
+So code for predecessors:
+
+predecessors = [[] for _ in range(n+1)]
+
+for each edge x, y:
+
+   predecessors[y].append(x)
+
+Yes.
+
+Then, for each u in top_order:
+
+   for c in 0-25:
+
+       current_max = 0
+
+       for v in predecessors[u]:
+
+           current_max = max(current_max, dp[v][c])
+
+       if (s[u-1] == chr(ord('a') + c)):
+
+           dp_u_c = current_max +1
+
+       else:
+
+           dp_u_c = current_max
+
+       dp[u][c] = dp_u_c
+
+       if dp_u_c > global_max:
+
+           global_max = dp_u_c
+
+But how is the dp structured? Since n can be up to 3e5, using a list of lists for dp would be okay.
+
+So in code:
+
+n, m = map(int, input().split())
+
+s = input().strip()
+
+predecessors = [[] for _ in range(n+1)]
+
+adj = [[] for _ in range(n+1)]
+
+in_degree = [0]*(n+1)
+
+for _ in range(m):
+
+   x, y = map(int, input().split())
+
+   adj[x].append(y)
+
+   in_degree[y] +=1
+
+   predecessors[y].append(x)
+
+# Kahn's algorithm
+
+q = deque()
+
+for i in range(1, n+1):
+
+   if in_degree[i] ==0:
+
+       q.append(i)
+
+top_order = []
+
+while q:
+
+   u = q.popleft()
+
+   top_order.append(u)
+
+   for v in adj[u]:
+
+       in_degree[v] -=1
+
+       if in_degree[v] ==0:
+
+           q.append(v)
+
+if len(top_order) !=n:
+
+   print(-1)
+
+else:
+
+   # Proceed with DP
+
+   dp = [ [0]*26 for _ in range(n+1) ]
+
+   global_max = 0
+
+   for u in top_order:
+
+       current_char = s[u-1]  # since nodes are 1-based, string is 0-based
+
+       for c in range(26):
+
+           max_prev = 0
+
+           for v in predecessors[u]:
+
+               if dp[v][c] > max_prev:
+
+                   max_prev = dp[v][c]
+
+           if ord(current_char) - ord('a') == c:
+
+               current_val = max_prev +1
+
+           else:
+
+               current_val = max_prev
+
+           dp[u][c] = current_val
+
+           if current_val > global_max:
+
+               global_max = current_val
+
+   print(global_max)
+
+Wait, but this code has a problem. For each u, the predecessors are all the nodes that have edges pointing to u. So for each u in top_order, we loop through all its predecessors, and for each c, compute the max_prev. But for nodes with a lot of predecessors, this could be slow.
+
+For example, if a node u has 1e5 predecessors, then for each of the 26 c's, we loop through all 1e5 predecessors. So for each c, it's O(k) time where k is the number of predecessors. So for 26 c's, that's O(26k) per node. But since sum of k over all nodes is m (since each edge contributes to one predecessor), the total time is O(26m), which is 3e5 *26 = 7.8e6 operations, which is acceptable.
+
+But in Python, even 1e8 operations can be slow, but 7.8e6 is manageable.
+
+But let's test with the sample inputs.
+
+First sample:
+
+Input:
+
+5 4
+
+abaca
+
+1 2
+
+1 3
+
+3 4
+
+4 5
+
+The graph is:
+
+1 points to 2 and 3.
+
+3 points to 4.
+
+4 points to 5.
+
+So top_order could be 1,2,3,4,5.
+
+Processing u=1:
+
+predecessors are empty. So for each c, max_prev is 0.
+
+current_char is 'a' (s[0]).
+
+so for c=0 (a), current_val is 0+1=1. others 0.
+
+global_max becomes 1.
+
+u=2:
+
+predecessors are [1].
+
+current_char is 'b' (s[1]).
+
+for each c:
+
+c=0: max_prev is dp[1][0] =1. current_val is 1 (since char is 'b' !=0). So dp[2][0] =1.
+
+c=1 (b): max_prev is 0 (since predecessors is 1, dp[1][1] is 0. So current_val is 0+1=1. So dp[2][1]=1. global_max remains 1.
+
+u=3:
+
+predecessors are [1].
+
+current_char is 'a' (s[2]).
+
+for c=0: max_prev is 1 (from u=1's a). current_val 1+1=2. So dp[3][0] =2. global_max is now 2.
+
+others are 0.
+
+u=4: predecessors is [3].
+
+current_char is 'c' (s[3]).
+
+for c=0: max_prev is dp[3][0] =2. current_val 2 (since current_char is c). So dp[4][0] =2.
+
+for c=2 (c): current_val is 0 (max_prev is 0 from predecessors) +1=1. Wait, wait:
+
+predecessors of 4 is [3]. For c=2 (c), check dp[3][2], which is 0. So current_val is 0 +1=1.
+
+so dp[4][2] is 1. The other c's are 0.
+
+global_max is 2.
+
+u=5: predecessors are [4]. current_char is 'a' (s[4]).
+
+for c=0: max_prev is dp[4][0] =2. current_val 2+1=3. global_max becomes 3.
+
+So the code would output 3, which matches the first sample.
+
+So the code works for the first sample.
+
+Second sample input:
+
+6 6
+
+xzyabc
+
+1 2
+
+3 1
+
+2 3
+
+5 4
+
+4 3
+
+6 4
+
+Here, the graph has a cycle. For example, 1->2->3->1, which forms a cycle. So Kahn's algorithm would process nodes 5,6,4, etc., but since the cycle exists, the top_order length is less than 6, so output -1.
+
+Third sample:
+
+After cycle check, process DAG. The maximum is 4.
+
+So code seems correct.
+
+But in Python, with n up to 3e5, and for each node, a list of 26 integers, that's 3e5 *26 =7.8e6 entries. Which is acceptable in terms of memory.
+
+Now, the code as written may have some issues in Python.
+
+First, in the predecessors list, the nodes are stored as per edges. So for each edge (x,y), x is added to predecessors[y]. Then, for each u, predecessors[u] is a list of all x where there is an edge x->u.
+
+But when multiple edges are present between the same nodes, the predecessors list will have x added multiple times. For example, if there are two edges from x to y, then x is added twice to predecessors[y]. However, when processing, for each c, the code checks all x's in predecessors[y], but since the code is taking the maximum among all x's, adding x multiple times is redundant. So the code may process x multiple times, but it's unnecessary. But since the code uses the maximum, it's okay. So even if x is added multiple times, the code will check the same x multiple times, but it's redundant. So in this case, the code will take longer, but the result is correct.
+
+But how can we optimize this?
+
+We can make predecessors[y] a set, but then we have to store unique predecessors. However, even if there are multiple edges from x to y, the code only needs to consider x once, as the max is based on x's dp values, which are the same regardless of how many edges. So, to optimize, we can make predecessors[y] a list of unique x's.
+
+But the problem statement allows multiple edges between the same nodes, but in the code, if x is in predecessors[y] multiple times, the code will process x multiple times, but the max will not change. So the code is correct but may take longer. However, since the code's time complexity is O(m *26), and m can have multiple edges, but in the worst case, m is 3e5. So the code is acceptable.
+
+But perhaps we can deduplicate the predecessors[y] list. For each y, predecessors[y] can be stored as a set, then converted to a list. So for each edge, we add x to predecessors[y], but only once per x. However, in Python, list appends are O(1), but checking for existence in a list is O(n). So for 3e5 edges, this would be O(m) time.
+
+Alternatively, during building the predecessors list, for each edge (x,y), we can check if x is already in predecessors[y] before adding. But that would be O(m * k), which could be bad if k is large. So perhaps it's better to leave it as is, even if there are multiple edges. Because in Python, appending to a list is O(1), and for each x in predecessors[y], the code will process x multiple times, but that's redundant. However, this can lead to O(m) * 26 operations even with multiple edges, which may be acceptable.
+
+For example, if there are 1e5 edges from x to y, then predecessors[y] has 1e5 entries of x. For each c in 26, the code checks x 1e5 times. For each c, the code will take the same max_prev each time. So this is redundant. So the code's time complexity is O(m *26), even if m is increased due to multiple edges. But the problem allows m up to 3e5. So even if all edges are from x to y, the code will process 3e5 edges, and for each, process 26 times. So 3e5 *26 =7.8e6 operations, which is manageable.
+
+But perhaps, for code efficiency, we should deduplicate the predecessors. So for each y, predecessors[y] is a set. For each edge (x,y), we add x to the set, then convert to a list when needed. But in Python, appending to a list is O(1), but adding to a set may be O(1) on average. So for each edge, we can check if x is already in predecessors[y], and if not, add it. But this would require, for each edge, checking if x is in predecessors[y], which for a list is O(k), leading to O(m*k) time, which is not acceptable.
+
+So perhaps it's better to proceed without deduplication, even if some edges are redundant. The code will be correct, but may take longer. But given the problem constraints, this may be acceptable.
+
+So the code as written should work.
+
+Now, let's test the code.
+
+Sample 2:
+
+The code checks for cycles and finds one, so outputs -1.
+
+Sample 3:
+
+After processing, the code computes the maximum value correctly.
+
+So I think this code should handle all cases.
+
+Now, the code in Python.
+
+But there's one thing to note: the nodes are 1-based. The string s is 0-based, so for node u, the character is s[u-1].
+
+In the code, that's handled correctly.
+
+Also, the DP is initialized as a list of lists. For each node u (1-based), dp[u] is a list of 26 integers. Initially, all are 0.
+
+Yes.
+
+So the code seems correct.
+
+Now, let's write the code.
+
+The code reads from stdin, processes as per the steps, and outputs the answer.
+
+But the code needs to read m edges, each given as x and y. So in Python, for m up to 3e5, reading with input().split() can be slow. So using sys.stdin to read lines is better.
+
+But in Python, when you read using input() in a loop, it's manageable for 3e5 lines. However, sometimes it's better to read all lines at once.
+
+But given the time constraints, perhaps using sys.stdin is better.
+
+But here's the code:
+
+But the code may be optimized for speed. For example, in the part where we compute the max_prev for each c, we can precompute for each u, the maximum DP[v][c] across all predecessors.
+
+But in Python, nested loops are slow. So for each u, and each c, looping through all predecessors and checking their c's could be slow for large m.
+
+Wait, but in the code:
+
+for u in top_order:
+
+   current_char = s[u-1]
+
+   for c in range(26):
+
+       max_prev = 0
+
+       for v in predecessors[u]:
+
+           if dp[v][c] > max_prev:
+
+               max_prev = dp[v][c]
+
+       if ...:
+
+           ...
+
+But in Python, this could be slow for large m. For example, if m is 3e5, then 3e5 * 26 = 7.8e6 operations. But Python can handle that.
+
+Alternatively, for each u, precompute the maximum for each c across all predecessors, then use that to compute the DP.
+
+But how to do that?
+
+Another approach is for each u, for each c, find the maximum among all predecessors' c values.
+
+But the code as written is the straightforward approach.
+
+Now, in Python, for each u, for each c in 0..25, iterate through all predecessors and track the maximum. But for a node u with 1e5 predecessors, and 26 c's, that's 2.6e6 operations for that node. But with m up to 3e5, the sum is manageable.
+
+But perhaps we can optimize by precomputing for each u and each c the maximum DP[v][c] from all v in predecessors.
+
+But I don't see a way to do this in a more efficient manner than the current code.
+
+Thus, the code should work correctly, but may be slow for the largest test cases in Python. However, given the problem constraints, it's the correct approach.
+
+Therefore, the code is as follows.
+</think>
+To solve this problem, we need to determine the maximum value of any path in a directed graph where each node is assigned a lowercase letter. The value of a path is defined as the highest frequency of any single character along that path. If the graph contains a cycle, the value can be arbitrarily large, so we return -1 in such cases.
+
+### Approach
+1. **Cycle Detection**: Use Kahn's algorithm to check if the graph contains a cycle. If a cycle is detected, output -1.
+2. **Topological Sorting**: If the graph is a Directed Acyclic Graph (DAG), perform a topological sort using Kahn's algorithm.
+3. **Dynamic Programming (DP)**: For each node in topological order, compute the maximum frequency of each character in paths ending at that node using DP. Track the maximum value encountered during this process.
+
+### Solution Code
+```python
+import sys
+from collections import deque
+
+def main():
+    sys.setrecursionlimit(1 << 25)
+    n, m = map(int, sys.stdin.readline().split())
+    s = sys.stdin.readline().strip()
+    predecessors = [[] for _ in range(n + 1)]
+    adj = [[] for _ in range(n + 1)]
+    in_degree = [0] * (n + 1)
+    
+    for _ in range(m):
+        x, y = map(int, sys.stdin.readline().split())
+        adj[x].append(y)
+        in_degree[y] += 1
+        predecessors[y].append(x)
+    
+    # Kahn's algorithm for topological sort
+    q = deque()
+    for i in range(1, n + 1):
+        if in_degree[i] == 0:
+            q.append(i)
+    
+    top_order = []
+    while q:
+        u = q.popleft()
+        top_order.append(u)
+        for v in adj[u]:
+            in_degree[v] -= 1
+            if in_degree[v] == 0:
+                q.append(v)
+    
+    if len(top_order) != n:
+        print(-1)
+        return
+    
+    # Initialize DP table
+    dp = [[0] * 26 for _ in range(n + 1)]
+    global_max = 0
+    
+    for u in top_order:
+        current_char = s[u - 1]
+        for c in range(26):
+            max_prev = 0
+            for v in predecessors[u]:
+                if dp[v][c] > max_prev:
+                    max_prev = dp[v][c]
+            if ord(current_char) - ord('a') == c:
+                current_val = max_prev + 1
+            else:
+                current_val = max_prev
+            dp[u][c] = current_val
+            if current_val > global_max:
+                global_max = current_val
+    
+    print(global_max)
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Cycle Detection**: Using Kahn's algorithm, we check if the graph can be topologically sorted. If not, it contains a cycle, and we immediately return -1.
+2. **Topological Sorting**: Kahn's algorithm provides a topological order of nodes, ensuring that each node is processed only after all its predecessors have been processed.
+3. **Dynamic Programming**: For each node in topological order, we compute the maximum frequency of each character in paths ending at that node by considering all incoming edges. The DP array `dp[u][c]` stores the maximum count of character `c` in any path ending at node `u`. The result is the maximum value found across all nodes and characters.
+
+This approach efficiently handles the constraints and ensures we correctly determine the maximum path value or identify cycles in the graph.
+</bot>

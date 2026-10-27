@@ -1,0 +1,904 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.However, you are playing a game using sequences to do brain teaser. In this game, you will be given a random sequence of numbers from 1 to 9 at the beginning. However, you will erase a part of it from the sequence. The rules are as follows.
+
+* From the sequence, select the part where two or more of the same numbers are lined up. Including that part, erase all the same numbers that appear consecutively.
+* If there is a sequence left on the right side of the erased part, pack it to the left and combine the sequence into one.
+* If all the numbers disappear as a result of repeating the above two operations, the game is cleared.
+
+<image>
+
+
+
+For example, in the case of the sequence 1,2,3,3,2,2,1,2,2 as shown in the above figure,
+Counting from the left, if you erase the 3rd and 4th 3s, 1,2,2,2,1,2,2
+Counting from the left, if you erase the 2nd to 4th 2, 1,1,2,2
+Counting from the left, if you erase the 1st and 2nd 1s, 2,2
+Counting from the left, erasing the 1st and 2nd 2 will clear the game.
+
+However, there are some sequences that cannot be cleared no matter how you erase the numbers. For example, a sequence of numbers such as 1,2,3,3,1,2 or 1,2,3,1,2,3. If it's a short sequence, you can immediately see if you can clear it, and if you can't clear it, you can try a different sequence, but if it's a long sequence, it's not so easy.
+
+Create a program that determines if a given sequence can clear the game above.
+
+
+
+Input
+
+The input is given in the following format.
+
+
+N
+c1 c2 ... cN
+
+
+N (1 ≤ N ≤ 100) in the first row is an integer representing the length of the sequence. The second line is given N integers ci (1 ≤ ci ≤ 9) separated by one space. ci indicates the i-th number in the sequence.
+
+Output
+
+Outputs "yes" if the sequence can be erased by the rules shown above, and "no" if it cannot.
+
+Examples
+
+Input
+
+8
+1 2 3 3 2 1 2 2
+
+
+Output
+
+yes
+
+
+Input
+
+7
+1 2 2 1 1 3 3
+
+
+Output
+
+yes
+
+
+Input
+
+16
+9 8 8 7 7 6 5 4 4 5 1 1 2 2 3 3
+
+
+Output
+
+no
+
+
+Input
+
+5
+1 1 2 2 1
+
+
+Output
+
+yes
+</user>
+<bot>
+<think>
+Okay, I need to solve this problem where I have to determine if a given sequence of numbers can be completely erased by following the game's rules. Let's think about how to approach this.
+
+The problem says that in each step, you select a part where two or more same numbers are consecutive. Then, you erase all consecutive same numbers in that part. Then, the remaining parts are shifted to the left. This process repeats until either the sequence is empty (return "yes") or no more moves can be made (return "no").
+
+Hmm. So the challenge is to model all possible ways of choosing which consecutive sequences to erase and see if any path leads to the empty sequence. But since the sequence can be up to 100 elements long, a brute-force approach where we explore all possibilities might be computationally expensive. But 100 is manageable with memoization and BFS or DFS, perhaps?
+
+Wait, but even for 100 elements, the possible states after each operation can be huge. For example, each step reduces the length by at least 1 (since you erase at least two elements), but with branching factor depending on how many possible consecutive groups there are. However, maybe for N=100, even with some steps, the number of possible states is manageable if we use BFS and track visited states to avoid cycles.
+
+So the plan is: model the problem as a state transition where each state is the current sequence. From each state, generate all possible next states by applying all possible valid erasures. Then check if any path leads to an empty sequence.
+
+But how to represent the sequences efficiently? Since the order of elements matters and the same elements in different orders are different states, the sequence can be represented as a tuple or a string. For example, the sequence [1,2,3] can be a tuple (1,2,3). Then, each time we process a state, we generate all possible next states by erasing possible consecutive groups.
+
+But the key is to avoid revisiting the same state. So we need a visited set that tracks which sequences we've already checked.
+
+So the steps would be:
+
+1. Start with the initial sequence as the first state.
+2. For each state in the queue (BFS approach), check if it's empty. If yes, return "yes".
+3. Otherwise, generate all possible next states by finding all possible consecutive same number groups (length >=2), erase all consecutive occurrences in those groups, then shift left. Each such operation creates a new sequence.
+4. For each new sequence, if it hasn't been visited before, add it to the queue and mark as visited.
+5. If the queue is exhausted and no empty sequence is found, return "no".
+
+But how to efficiently generate all possible next states?
+
+The main challenge is step 3: generating all possible next states by applying the erasure rules. Let's break down how erasure works.
+
+When you erase a part that contains two or more same numbers consecutively, you erase all same numbers in consecutive runs that are part of that group. For example, in the first example: 1,2,3,3,2,2,1,2,2. When you erase the two 3s, you also erase any consecutive same numbers that are part of that group. Wait, the problem description says: "erase all the same numbers that appear consecutively. Including that part." Wait, maybe the wording is a bit ambiguous. Let's recheck the rule.
+
+Rule 1: select a part where two or more of the same numbers are lined up. Including that part, erase all the same numbers that appear consecutively.
+
+Wait, when you select a part (a contiguous subsequence) where at least two same numbers are consecutive, you erase all same numbers that are consecutive in that part, but also any consecutive same numbers adjacent to them. Wait, maybe the wording is that when you select a contiguous group of two or more same numbers, you erase all consecutive same numbers in that entire contiguous block. For example, if the sequence is 3,3,2,2,2, and you select the 3,3 part, then you erase those two 3s. Then the remaining is 2,2,2, which can be erased in the next step.
+
+Alternatively, perhaps if the selected part is part of a longer consecutive run, like if you have 3,3,3 and you select the first two 3s, do you erase all three? Because the problem states, "erase all the same numbers that appear consecutively" including the selected part. Wait, the wording is a bit confusing. Let's look at the example given.
+
+In the first example, after selecting the two 3s (positions 3 and 4), the sequence becomes 1,2,2,2,1,2,2. So erasing the two 3s and any consecutive same numbers in that part. Wait, perhaps the entire contiguous run of same numbers in the selected part is erased, but how is the selected part chosen?
+
+Wait, the problem says: select the part where two or more of the same numbers are lined up. So the selected part must be a contiguous block of two or more same numbers. So when you select that part, you erase all same numbers in that contiguous block. Then, after erasing, the remaining parts are shifted left.
+
+For example, in the sequence 3,3,3, selecting any two adjacent 3s would erase all three, because the entire contiguous run is part of the same. Wait, no. Suppose the selected part is two of the three 3s. Then the entire contiguous run is three 3s, but the selected part is a part of that run. The problem says: "erase all the same numbers that appear consecutively in that part". Wait, maybe the wording is that when you select a part (contiguous) with two or more same numbers, you erase all consecutive same numbers in that part. Wait, the part is a contiguous block. For example, if you have 3,3,2,3,3, and you select the first two 3s, you erase those two. But the other 3s are not part of the selected contiguous block, so they remain. But in the example given in the problem, when the user selects the two 3s (positions 3 and 4), the entire two are erased, leading to the new sequence. So perhaps when you select a contiguous part that has two or more same numbers, you erase exactly that part, not any adjacent same numbers. But then, why does the problem say "including that part, erase all the same numbers that appear consecutively." Hmm.
+
+Wait, let me re-read the rule:
+
+"From the sequence, select the part where two or more of the same numbers are lined up. Including that part, erase all the same numbers that appear consecutively."
+
+Ah, perhaps the entire contiguous run of same numbers that includes the selected part. For example, if the selected part is a part of a longer contiguous run, then the entire contiguous run is erased.
+
+For instance, if the sequence is 3,3,3, and you select any two of them, then you have to erase all three, because they are all consecutive same numbers. So the rule is that when you select a contiguous part (length >=2) of same numbers, you erase all consecutive same numbers in the entire contiguous block that contains the selected part. Wait, but the wording is unclear.
+
+Alternatively, maybe the selected part must be a contiguous block of same numbers (all same) of length >=2, and when you select that block, you erase all of them. Because the problem's example shows that selecting two 3s (positions 3 and 4) in the sequence 1,2,3,3,2,2,1,2,2 leads to erasing those two 3s, resulting in the new sequence. So the selected part is a contiguous block of same numbers (like the two 3s). So the rule is: you can choose any contiguous block of same numbers (length >=2) and erase the entire block. Then, after erasing, the remaining parts are concatenated.
+
+Wait, that makes sense. So for example, if the sequence is 1, 2, 2, 2, 3, then selecting the first two 2s would erase all three 2s? Or just the two? No, according to the example, when selecting a contiguous block of same numbers (like the two 3s), you erase exactly that block. Because in the first example, after erasing the two 3s, the sequence becomes 1,2, (then the 2,2,1, etc.). So the selected part is the two 3s, and they are erased, leaving the rest.
+
+Wait, so the selected part must be a contiguous block of same numbers (length >=2). So when you select that block, you erase exactly those elements. So in the example, the two 3s are selected and erased.
+
+Then, after erasing, the remaining parts are shifted left and merged. So any remaining elements to the right of the erased part are moved left.
+
+So the process is:
+
+Find all possible contiguous substrings of the current sequence where the substring consists of the same number and has length >=2. For each such possible substring, erase it, and then the left and right parts are concatenated. Then, this new sequence is a possible next state.
+
+So in each step, the possible moves are erasing any contiguous block of two or more same numbers.
+
+Ah! So this is different from what I thought earlier. For example, in a sequence like 2,2,2, the possible erasures are:
+
+- erase the first two 2s (positions 0-1) → remaining is [2]
+
+- erase the middle two 2s (positions 1-2) → remaining is [2, 2]
+
+- erase the last two 2s (positions 1-2) → same as first case.
+
+Wait, no. Wait, if the entire sequence is three 2s, then the possible erasures are:
+
+Any two consecutive 2s. But each of these choices would erase a contiguous block of two, leaving the remaining 2. But wait, the block is two elements. So for example, in 2,2,2, possible erasures are:
+
+positions 0-1 (two 2s) → erase them → remaining is [2]
+
+positions 1-2 (two 2s) → erase them → remaining is [2]
+
+But in both cases, the remaining is a single 2, which can't be erased further. So in that case, the sequence cannot be cleared.
+
+Alternatively, perhaps in the case of three 2s, you can choose to erase the entire three as a single contiguous block of three 2s (since it's length >=2). Because the rule says "two or more". So the entire block can be erased, which would leave an empty sequence. So in this case, the answer is "yes".
+
+Wait, that's a key point. The problem says: select a part (contiguous) where two or more same numbers are lined up. So any contiguous block of same numbers with length ≥2 can be erased. So in the case of three 2s, you can erase the entire block (all three) in one step, leaving nothing. So the answer would be "yes".
+
+So, in this scenario, the problem allows erasing a contiguous block of same numbers of length ≥2. So the entire block is erased.
+
+So the algorithm is: in each step, for the current sequence, find all possible contiguous blocks of same numbers with length ≥2. For each such block, erase it and create a new sequence. Then, check if any of these sequences can lead to an empty sequence.
+
+So the key is that each possible contiguous block of same numbers (length ≥2) can be erased, and each such choice leads to a new sequence. The problem reduces to checking if there's a sequence of such erasures that leads to the empty sequence.
+
+So the approach is to model this as a state space where each state is a sequence. We can perform BFS to explore all possible sequences reachable via these operations. If any of them is empty, return "yes". Otherwise, if all possibilities are exhausted and none reach empty, return "no".
+
+Now, the next step is to model this in code. The main challenge is efficiently representing the sequences and generating all possible next states.
+
+But for sequences up to length 100, even after several steps, the number of possible states could be very large, but perhaps manageable with BFS and memoization.
+
+But for example, in the worst case, each step could generate O(N) possible next states (each possible contiguous block). But N can be up to 100, and each step reduces the length by at least 1 (since erasing a block of two). So for a sequence of length 100, the maximum possible steps is 50. But the number of possible states could be O(N^2) per step, which for 50 steps would be O(50*100^2) = 500,000, which is manageable.
+
+But this is a rough estimate; the actual number could vary.
+
+So, the plan is:
+
+Implement BFS:
+
+- Start with the initial sequence as a tuple (since lists are not hashable for the visited set).
+
+- For each sequence in the queue, check if it's empty. If yes, return "yes".
+
+- Else, generate all possible next sequences by erasing each possible contiguous block of same numbers (length ≥2).
+
+- For each new sequence, if not already in the visited set, add it to the queue and mark as visited.
+
+- Continue until the queue is empty (return "no").
+
+So, in code, how to represent the sequence? As a tuple, which is hashable and can be added to a set.
+
+The steps for generating next sequences:
+
+Given the current sequence as a list (or tuple), iterate through all possible start indices, and for each start, find the longest possible contiguous block of the same number starting at that index. Then, for each possible end index of a contiguous block (length ≥2), erase that block and create a new sequence.
+
+Wait, but how to generate all possible contiguous blocks of same numbers with length ≥2.
+
+For example, in the sequence 1,2,2,3,3,3:
+
+The possible contiguous blocks are:
+
+- 2,2 (positions 1-2)
+
+- 3,3 (positions 3-4)
+
+- 3,3,3 (positions 3-5)
+
+So for each position, we can check the maximum possible contiguous block starting at that position. Then, for each possible starting position, we can generate all possible contiguous blocks of length ≥2.
+
+Wait, but for a starting position i, the maximum possible length is the number of consecutive same elements starting at i. So for example, if starting at i=3 in the above example (element 3), the consecutive elements are 3,3,3. So the possible blocks starting at i=3 are of lengths 2,3 (since length must be ≥2). So for each start position, we can generate all possible contiguous blocks of length from 2 to the maximum possible.
+
+But generating all possible lengths for each start position may be time-consuming. However, for sequences up to 100, this is manageable.
+
+So, the steps to generate all possible next sequences are:
+
+1. Iterate over each index i in the current sequence.
+
+2. For each i, check if the current element is the same as the next one. If yes, then there's a possible block starting at i.
+
+3. Find the maximum length of the contiguous block starting at i. For example, if i=0 and the sequence is 2,2,2, then the maximum length is 3.
+
+4. For each possible length l (from 2 to maximum possible length starting at i), generate a new sequence by removing the elements from i to i+l-1.
+
+Wait, but for a block starting at i, the possible lengths are 2, 3, ..., max_len. So for example, in a block of 3 same elements (positions i, i+1, i+2), the possible erasures are:
+
+- erase elements i and i+1 (length 2)
+
+- erase elements i, i+1, i+2 (length 3)
+
+So each possible contiguous block of same elements with length ≥2 can be erased, and each such erasure is a possible move.
+
+But in the example given in the problem, the first step erases two 3s. But in that case, the entire contiguous block is two elements, so there's only one possible erasure there.
+
+So the code needs to generate all possible contiguous blocks of same numbers with length ≥2, regardless of their position and length.
+
+So, the approach is:
+
+Loop through each possible starting index i in the current sequence.
+
+For each i, check how many consecutive same elements start at i. Let's call this count.
+
+If count >=2, then for each possible length l from 2 to count:
+
+- remove the elements from i to i + l - 1.
+
+- create a new sequence by concatenating the elements before i and the elements after i + l.
+
+- add this new sequence to the list of next possible states.
+
+Wait, but in the example of 3,3,3:
+
+At i=0, the count is 3.
+
+So possible l's are 2 and 3.
+
+So erasing 2 elements (positions 0-1) leaves the third 3, which can't be erased further. But erasing all 3 elements (l=3) leaves an empty sequence, which is a valid solution.
+
+So the code must generate all possible l's for each contiguous block.
+
+So the way to generate all possible erasures is:
+
+For each i in 0 to len(seq)-1:
+
+   if seq[i] is the same as the next elements, compute the maximum possible run length starting at i.
+
+   if the maximum run length is >=2:
+
+       for l in 2 to max_run_length:
+
+           create a new sequence by deleting i to i + l -1.
+
+           add to next states.
+
+But wait, for a run of k elements starting at i (k >=2), the possible erasures are any consecutive sub-run of 2 or more elements. Wait no. No, the run is a contiguous block of same elements. So when you select any contiguous sub-run of length >=2 within the same run, you can erase that.
+
+Wait no. Because the entire run is contiguous same elements. So any contiguous block of 2 or more elements within that run is a valid erasure. For example, in the run 3,3,3:
+
+Possible erasures are:
+
+- erase the first two 3s (l=2)
+
+- erase the first three 3s (l=3)
+
+- erase the middle two 3s (positions 1-2, l=2)
+
+- erase the last two 3s (positions 1-2, l=2) → but in this case, after erasing, the remaining is the first 3 (position 0).
+
+Wait, but in this case, the original run is 3,3,3. So the possible erasures are any contiguous block of 2 or 3 elements. For example:
+
+i=0:
+
+max_run_length is 3. So l can be 2 or 3. So erasing positions 0-1 (l=2) or 0-2 (l=3).
+
+i=1:
+
+seq[1] is 3, and the next element is 3. So the run starts at i=1, but the max_run_length here is 2 (elements 1 and 2). So l can be 2. Erase positions 1-2 (elements 3 and 3), leaving element 0 (3). But then the new sequence is [3], which can't be erased.
+
+i=2: the element is 3, but next is out of bounds. So no possible erasure here.
+
+So for the run 3,3,3, possible erasures are:
+
+erase 0-1 (l=2) → remaining [3]
+
+erase 0-2 (l=3) → remaining empty → which is a solution.
+
+erase 1-2 (l=2) → remaining [3].
+
+So in this case, the correct approach is to generate all possible contiguous blocks of same elements with length >=2, even if they are part of a longer run.
+
+So the code must iterate over all possible starting positions, and for each, check how long the run of same elements is. Then, for each possible starting position i, the possible erasures are of length 2, 3, ..., up to the maximum possible length of the run starting at i.
+
+Wait, but this approach would generate all possible contiguous blocks of same elements in the current sequence, regardless of whether they are part of a longer run. For example, the run 3,3,3 has starting positions 0, 1, 2.
+
+At starting position 0: run length 3 → possible l=2,3.
+
+At starting position 1: run length 2 (elements 1 and 2) → l=2.
+
+At starting position 2: run length 1 → no possible erasure.
+
+So in total, for this case, the possible erasures are:
+
+- (0, 2) → l=2.
+
+- (0,3) → l=3.
+
+- (1,2) → l=2.
+
+Each of these generates a new sequence.
+
+So the code must generate all possible starting positions, and for each, generate all possible lengths from 2 to the maximum possible run length starting at that position.
+
+But how to compute the run length starting at each position i?
+
+For each i in 0 to len(seq)-1:
+
+   current value is seq[i].
+
+   j = i+1.
+
+   while j < len(seq) and seq[j] == current value:
+
+       j +=1.
+
+   run_length = j - i.
+
+   if run_length >=2:
+
+       for l in 2 to run_length:
+
+           new_seq is seq[0:i] + seq[i+l : ]
+
+           add to next states.
+
+So for example, in the case of 3,3,3:
+
+At i=0:
+
+run_length is 3.
+
+so l can be 2 or 3.
+
+new sequences after erasing:
+
+for l=2: seq[0+2:] → seq[2:3] → [3]
+
+for l=3: seq becomes empty.
+
+At i=1:
+
+run_length is 2 (elements 1 and 2 are 3).
+
+so l=2:
+
+erase from i=1 to 1+2-1 = 2. So the new sequence is seq[0:1] + seq[3: ] → [3] + [] → [3].
+
+So the code would generate these possibilities.
+
+So the code needs to generate all possible (i, l) pairs where the run starting at i has length ≥2, and l ranges from 2 to the run length.
+
+But how to avoid overlapping runs? For example, if i=0 and run_length=3, then erasing l=2 would leave the third element, but erasing l=3 would leave nothing. So all possibilities must be considered.
+
+Thus, in code:
+
+def generate_next_states(current_seq):
+
+    next_states = []
+
+    n = len(current_seq)
+
+    i = 0
+
+    while i < n:
+
+        current_val = current_seq[i]
+
+        j = i
+
+        while j < n and current_seq[j] == current_val:
+
+            j +=1
+
+        run_length = j - i
+
+        if run_length >= 2:
+
+            # possible to erase lengths from 2 to run_length
+
+            for l in range(2, run_length + 1):
+
+                # erase from i to i + l -1 (inclusive)
+
+                new_seq = current_seq[:i] + current_seq[i+l:]
+
+                next_states.append(new_seq)
+
+        # move i to j to avoid overlapping runs
+
+        i = j
+
+    return next_states
+
+Wait, but this code skips over the run, which is correct. For example, for the run 3,3,3, when i=0, after processing, i is set to j=3 (the end of the run). So in the code, for each run, we process all possible l's for that run, and then move to the next run.
+
+This way, we avoid processing overlapping runs. Because the code processes runs as contiguous blocks. So for a run starting at i, after processing, i is set to j, the end of the run.
+
+But this approach may miss some possible erasures. For example, consider the sequence 3,3,3. The code would generate:
+
+At i=0, run_length=3. Possible l=2,3. So erase 0-1 and 0-2.
+
+But what about the possibility of erasing 1-2 (the middle two 3s)? In the code, when i=0, j becomes 3. Then, i is set to j=3, which is beyond the end. So the code would not process i=1.
+
+Ah, this is a problem. Because in the code above, when processing i=0, the entire run is processed, and i is set to j=3. So the code skips i=1 and i=2. But in the run 3,3,3, starting at i=1, the run is 3,3 (length 2). So the code's approach is wrong. It's only processing the starting positions of each run, not all possible starting positions within the run.
+
+Wait, the code's approach is to process runs as starting at i, and then move i to j (the end of the run). But in reality, a run can have multiple possible starting positions within it. For example, the run 3,3,3 starts at i=0, but also at i=1, but the code only processes i=0. Because when i=0, it processes the entire run, and then moves to j=3. So the code would miss the possibility of erasing the middle two elements.
+
+So this is a critical error in the approach. The code must consider all possible starting positions i, not just the start of each run.
+
+Wait, but how to handle that? Because in the run 3,3,3, the code would process i=0, then set i to 3, missing i=1 and i=2. But for i=1, the elements are 3 and 3, which is a run of two elements. So the code's current approach is incorrect.
+
+So the code's approach of grouping runs and processing only the start of each run is wrong. The correct way is to process every possible starting position i, not just the start of a run.
+
+But then, how to avoid processing overlapping runs?
+
+Alternatively, the code must iterate through all possible starting positions i, and for each, check the maximum possible run starting at i, regardless of whether it's part of a longer run.
+
+So for example, in the 3,3,3 case:
+
+For i=0: run_length=3 → possible l=2,3.
+
+For i=1: run_length=2 → possible l=2.
+
+For i=2: run_length=1 → no.
+
+So the code should process all i's.
+
+So the code's approach of incrementing i by 1 each time is incorrect. The previous approach of grouping runs and skipping to j is the problem.
+
+So to fix this, the code should not skip runs but instead check each i in sequence, even if it's part of a previous run.
+
+So the correct code would be:
+
+for i in range(len(current_seq)):
+
+   current_val = current_seq[i]
+
+   j = i
+
+   while j < len(current_seq) and current_seq[j] == current_val:
+
+       j +=1
+
+   run_length_from_i = j - i
+
+   # Now, for all possible starting positions within i to j-1:
+
+   # Wait, no. The code as written is checking for the maximum run starting at i.
+
+   # So the code for i=0 gives run_length 3. But for i=1, the code checks the run starting at i=1. Which would be 3,3 (run_length 2).
+
+   # So to process all possible i's, the code should loop i from 0 to len(current_seq)-1, and for each, check the run starting at i.
+
+So the code:
+
+def generate_next_states(current_seq):
+
+    next_states = []
+
+    n = len(current_seq)
+
+    for i in range(n):
+
+        current_val = current_seq[i]
+
+        j = i
+
+        while j < n and current_seq[j] == current_val:
+
+            j +=1
+
+        run_length = j - i
+
+        if run_length >= 2:
+
+            # possible to erase l from 2 to (run_length) but also, starting at i.
+
+            # but wait, the run_length is the maximum possible consecutive same numbers starting at i.
+
+            # So for example, in i=0, run_length is 3. So we can erase l=2 or 3.
+
+            # But if i=1, run_length is 2 (since j starts at 1, and j increments to 3 (for 3,3,3)).
+
+            # Wait, no. For i=1 in 3,3,3:
+
+            current_val is 3. j starts at 1, and checks j=1 (3), j=2 (3), j=3 (out of bounds). So run_length is 2.
+
+            So for i=1, run_length is 2.
+
+            So for l=2, the code would erase positions i=1 to 2 (elements 1 and 2), resulting in the sequence [3], but if the original sequence is 3,3,3, then after erasing 1-2, the new sequence is [3].
+
+            So the code would generate all possible erasures.
+
+So the code should loop through all possible i's (from 0 to n-1), and for each, compute the maximum possible run length starting at i. Then, for each l in 2 to run_length, generate the new sequence by erasing i to i+l-1.
+
+Yes, this approach would correctly generate all possible erasures.
+
+So the code should loop through each possible i, not grouped by runs. So the code would process i=0, i=1, i=2, etc., even if they are part of the same run.
+
+So the code would correctly handle all possible starting positions.
+
+So the code for generating next states is:
+
+def generate_next_states(current_seq):
+
+    next_states = []
+
+    n = len(current_seq)
+
+    for i in range(n):
+
+        current_val = current_seq[i]
+
+        j = i
+
+        while j < n and current_seq[j] == current_val:
+
+            j +=1
+
+        run_length = j - i
+
+        # Now, for each possible l in 2 to run_length:
+
+        for l in range(2, run_length + 1):
+
+            # erase i to i + l -1 (inclusive)
+
+            new_seq = current_seq[:i] + current_seq[i + l :]
+
+            next_states.append(new_seq)
+
+    return next_states
+
+But wait, this would generate duplicate sequences. For example, in the sequence 3,3,3, erasing i=0, l=2 gives [3]. Erasing i=1, l=2 gives [3]. So both generate the same new sequence. However, in the BFS approach, duplicates are handled by the visited set. So even if the code generates the same new_seq multiple times, once it's added to visited, it's not processed again.
+
+So the code can proceed as such.
+
+Now, for the BFS approach:
+
+We can use a queue to hold the current sequences to process. Each sequence is represented as a tuple (since lists are not hashable). The visited set will store tuples of sequences to track which have been processed.
+
+The steps are:
+
+Initialize the queue with the initial sequence as a tuple.
+
+Initialize the visited set with the initial sequence.
+
+While the queue is not empty:
+
+   Dequeue the first element.
+
+   If it's empty, return "yes".
+
+   Generate all next possible states (as tuples).
+
+   For each next_state in next_states:
+
+       if next_state not in visited:
+
+           add to visited and enqueue.
+
+If the queue is empty and no empty sequence was found, return "no".
+
+But for sequences with up to 100 elements, the tuples can be quite long, but the hashing should be manageable.
+
+Now, let's test this approach against the examples.
+
+Example 1:
+
+Input:
+
+8
+
+1 2 3 3 2 1 2 2
+
+The initial sequence is (1,2,3,3,2,1,2,2).
+
+Possible steps:
+
+First step: erase 3,3 → new sequence is (1,2,2,1,2,2).
+
+Then, erase the three 2's (positions 1-3) → (1,1,2,2).
+
+Then erase the two 1's → (2,2). Then erase them → empty.
+
+So BFS should find this path.
+
+Another possible path is the example's steps.
+
+But in code, the BFS would generate all possibilities, including this path.
+
+Another example:
+
+Input 5: 1 1 2 2 1 → output is yes.
+
+The initial sequence is (1,1,2,2,1).
+
+Possible steps:
+
+Erase the first two 1's → (2,2,1). Then erase the two 2's → (1). Can't erase. So this path is invalid.
+
+Alternatively, erase the two 2's → (1,1,1). Then erase all three (l=3) → empty. So this path is valid.
+
+So the code should generate that possibility.
+
+Now, in the code, when the initial sequence is (1,1,2,2,1), the possible erasures include:
+
+- erase 0-1 (the two 1's) → (2,2,1)
+
+- erase 2-3 (the two 2's) → (1,1,1)
+
+- any others?
+
+Yes. Also, erase 0-1 (the two 1's) → (2,2,1). Then in this new sequence, you can erase the two 2's → (1). Or, in the new sequence (1,1,1), you can erase l=3 → empty.
+
+So the code would find this path.
+
+So the code should correctly handle these cases.
+
+Now, considering the third example, input 16:
+
+9 8 8 7 7 6 5 4 4 5 1 1 2 2 3 3 → output is no.
+
+The code would explore all possibilities but none would lead to empty.
+
+Now, the code must handle this correctly.
+
+So the code seems correct.
+
+Now, implementing this in Python.
+
+But for large N, the BFS may take a while, but with the constraints of N=100, it's manageable.
+
+Now, the code:
+
+Read N, then the list of c_i.
+
+Convert the list into a tuple and start BFS.
+
+Implement BFS with a deque for efficiency.
+
+So the code outline:
+
+from collections import deque
+
+n = int(input())
+
+c = list(map(int, input().split()))
+
+def solve():
+
+    initial = tuple(c)
+
+    visited = set()
+
+    queue = deque()
+
+    queue.append(initial)
+
+    visited.add(initial)
+
+    while queue:
+
+        current = queue.popleft()
+
+        if len(current) == 0:
+
+            print("yes")
+
+            return
+
+        # generate all next states
+
+        next_states = generate_next_states(current)
+
+        for ns in next_states:
+
+            if ns not in visited:
+
+                visited.add(ns)
+
+                queue.append(ns)
+
+    print("no")
+
+def generate_next_states(current):
+
+    next_states = []
+
+    n = len(current)
+
+    for i in range(n):
+
+        val = current[i]
+
+        j = i
+
+        while j < n and current[j] == val:
+
+            j +=1
+
+        run_length = j - i
+
+        if run_length >=2:
+
+            for l in range(2, run_length +1):
+
+                new_seq = current[:i] + current[i+l:]
+
+                next_states.append(new_seq)
+
+    return next_states
+
+solve()
+
+Wait, but for the code in generate_next_states, when i is at the end, run_length could be 1. So no action.
+
+But the code seems correct.
+
+Testing example 1:
+
+Input 8
+
+1 2 3 3 2 1 2 2
+
+Initial sequence: (1,2,3,3,2,1,2,2)
+
+In generate_next_states, the possible erasures are:
+
+At i=0: run is 1. no.
+
+At i=1: run is 2. no.
+
+At i=2: current_val is 3. j starts at 2, j increments to 4 (since elements 2 and 3 are 3). run_length is 2. So l=2.
+
+So new_seq is current[:2] + current[4:] → (1,2) + (2,1,2,2) → (1,2,2,1,2,2).
+
+So this is added.
+
+Another possible erasure is when i=3: current_val is 3. j starts at 3, but next element is 2. run_length is 1. So no.
+
+Other positions:
+
+At i=4 (element 2), j increments to 5 (element 1). run_length 1. No.
+
+At i=5 (element 1): run_length 1.
+
+At i=6 (element 2): j increments to 8. run_length 2. So erase l=2. new_seq is current[:6] + current[8:] → (1,2,3,3,2,1) + () → (1,2,3,3,2,1).
+
+Wait, but this is part of the initial sequence. So in the BFS, the code would process this.
+
+But when the initial sequence is processed, the code would generate all possible next states, including this one. But since the initial sequence is already in visited, it's not added again.
+
+So the code proceeds.
+
+Thus, the code should correctly find the path leading to empty.
+
+Another example: input 5 1 1 2 2 1.
+
+The initial sequence is (1,1,2,2,1).
+
+generate_next_states:
+
+For i=0: run_length 2. l=2. new_seq is (2,2,1).
+
+For i=1: run_length is 1. no.
+
+For i=2: run_length 2. l=2. new_seq is (1,1,1).
+
+For i=3: run_length 1. no.
+
+For i=4: run_length 1. no.
+
+So next_states are [(2,2,1), (1,1,1)].
+
+Then, the BFS adds these to the queue.
+
+Processing (2,2,1):
+
+generate_next_states:
+
+At i=0: run_length 2. l=2. new_seq is (1).
+
+So next_states includes (1).
+
+Processing (1,1,1):
+
+generate_next_states:
+
+At i=0: run_length 3. l can be 2 or 3.
+
+Erasing l=3 → new_seq is empty. So this is added to the queue.
+
+Thus, when this state is processed, it will return "yes".
+
+Thus, the code will output "yes".
+
+So the code seems correct.
+
+Now, let's code this.
+</think>
+To solve this problem, we need to determine if a given sequence of numbers can be completely erased by repeatedly removing contiguous blocks of the same numbers (of length at least 2) until the sequence is empty. The solution involves exploring all possible sequences generated by such removals using a breadth-first search (BFS) approach.
+
+### Approach
+1. **Breadth-First Search (BFS)**: We use BFS to explore all possible sequences generated by removing valid contiguous blocks of numbers. This ensures that we explore all possible paths to determine if any sequence can be reduced to an empty sequence.
+2. **Generate Next States**: For each current sequence, generate all possible next sequences by removing every possible contiguous block of the same numbers of length 2 or more.
+3. **Visited Set**: To avoid processing the same sequence multiple times and to handle cycles efficiently, we maintain a set of visited sequences.
+
+### Solution Code
+```python
+from collections import deque
+
+def generate_next_states(current):
+    next_states = []
+    n = len(current)
+    for i in range(n):
+        val = current[i]
+        j = i
+        while j < n and current[j] == val:
+            j += 1
+        run_length = j - i
+        if run_length >= 2:
+            for l in range(2, run_length + 1):
+                new_seq = current[:i] + current[i + l:]
+                next_states.append(new_seq)
+    return next_states
+
+def solve():
+    import sys
+    input = sys.stdin.read().split()
+    n = int(input[0])
+    if n == 0:
+        print("yes")
+        return
+    c = list(map(int, input[1:n+1]))
+    initial = tuple(c)
+    visited = set()
+    queue = deque()
+    queue.append(initial)
+    visited.add(initial)
+    
+    while queue:
+        current = queue.popleft()
+        if len(current) == 0:
+            print("yes")
+            return
+        next_states = generate_next_states(current)
+        for ns in next_states:
+            ns_tuple = tuple(ns)
+            if ns_tuple not in visited:
+                visited.add(ns_tuple)
+                queue.append(ns_tuple)
+    print("no")
+
+solve()
+```
+
+### Explanation
+1. **Reading Input**: The input is read and parsed into a list of integers representing the initial sequence.
+2. **Initial Setup**: The initial sequence is added to a queue and a visited set to start the BFS.
+3. **BFS Loop**: The loop processes each sequence from the queue. If a sequence is empty, the answer is "yes". For each non-empty sequence, all possible next states are generated by removing valid contiguous blocks.
+4. **Generating Next States**: For each position in the current sequence, the length of the contiguous block starting at that position is determined. All valid removals (of length 2 or more) are used to generate new sequences.
+5. **Visited Check**: Each new sequence is checked against the visited set to avoid reprocessing, ensuring efficiency.
+
+This approach ensures that we explore all possible paths systematically and efficiently, leveraging BFS to find the shortest path to an empty sequence if it exists. The use of tuples and a visited set ensures that we handle sequences efficiently and avoid redundant checks.
+</bot>

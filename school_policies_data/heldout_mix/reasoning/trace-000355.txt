@@ -1,0 +1,524 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.You have a sequence A composed of N positive integers: A_{1}, A_{2}, \cdots, A_{N}.
+
+You will now successively do the following Q operations:
+
+* In the i-th operation, you replace every element whose value is B_{i} with C_{i}.
+
+
+
+For each i (1 \leq i \leq Q), find S_{i}: the sum of all elements in A just after the i-th operation.
+
+Constraints
+
+* All values in input are integers.
+* 1 \leq N, Q, A_{i}, B_{i}, C_{i} \leq 10^{5}
+* B_{i} \neq C_{i}
+
+Input
+
+Input is given from Standard Input in the following format:
+
+
+N
+A_{1} A_{2} \cdots A_{N}
+Q
+B_{1} C_{1}
+B_{2} C_{2}
+\vdots
+B_{Q} C_{Q}
+
+
+Output
+
+Print Q integers S_{i} to Standard Output in the following format:
+
+
+S_{1}
+S_{2}
+\vdots
+S_{Q}
+
+
+Note that S_{i} may not fit into a 32-bit integer.
+
+Examples
+
+Input
+
+4
+1 2 3 4
+3
+1 2
+3 4
+2 4
+
+
+Output
+
+11
+12
+16
+
+
+Input
+
+4
+1 1 1 1
+3
+1 2
+2 1
+3 5
+
+
+Output
+
+8
+4
+4
+
+
+Input
+
+2
+1 2
+3
+1 100
+2 100
+100 1000
+
+
+Output
+
+102
+200
+2000
+</user>
+<bot>
+<think>
+Okay, let's see. The problem is about processing a sequence of numbers through multiple replacement operations and calculating the sum after each operation. The straightforward approach would be to iterate through the array each time and replace elements, but with the constraints given (like N and Q up to 1e5), that's going to be way too slow. Because for each query, doing an O(N) scan would result in O(Q*N) time complexity, which would be 1e10 operations. That's definitely not going to work. So we need a smarter way.
+
+Hmm, right. The key here is to track the frequency of each number. Because every time we replace all occurrences of B_i with C_i, the sum changes by (C_i - B_i) multiplied by the count of B_i. So if we can track the count of each number, then each query can be processed in O(1) time, leading to O(Q) time overall, which is acceptable.
+
+So the plan is:
+
+1. Calculate the initial sum of the array.
+2. Use a frequency dictionary (like a hash map) to keep track of how many times each number appears in the array.
+3. For each query (B_i, C_i):
+   a. Check how many times B_i is present in the frequency map.
+   b. Subtract B_i * count from the sum.
+   c. Add C_i * count to the sum.
+   d. Update the frequency map: decrease the count of B_i by count (since they are removed) and increase the count of C_i by the same count.
+   e. However, if B_i and C_i are the same (but the problem says B_i != C_i, so no need to handle this case).
+   f. Then, append the new sum to the results.
+
+Wait, but how to handle the frequency map? Let's think. For example, if we have a count for B_i. We take that count, add it to C_i's count (or create it if it doesn't exist), and subtract from B_i's count. But if B_i's count becomes zero, we can remove it from the map to save space, but that's optional.
+
+Let me see with an example. Let's take the first sample input:
+
+Initial array: 1,2,3,4. Sum is 10.
+
+Frequency map: {1:1, 2:1, 3:1,4:1}
+
+First query: replace 1 with 2.
+
+Sum changes by (2-1)*1 = +1. New sum is 11. The frequency map becomes {2:2 (existing 1 and adding 1 more?), 3:1,4:1}. Wait no. Wait, the original count for B_i (1) is 1. So we remove all 1's (count 1) and replace them with 2's. So the new count for 1 becomes 0 (so we can remove it), and the count for 2 increases by 1. So frequency map after first query: {2:2, 3:1,4:1}.
+
+Then the next query is replacing 3 with 4. The count of 3 is 1. So sum increases by (4-3)*1 = 1. Sum becomes 12. Now frequency map: {2:2, 4:2 (original 1 from 4 and adding 1 from 3)}.
+
+Third query: replace 2 with 4. Count of 2 is 2. So sum increases by (4-2)*2 =4. Sum becomes 16. Frequency map now: {4:4} (since 2 was 2, replacing them adds 2 to 4's count).
+
+Yes, that matches the sample output.
+
+So the steps are:
+
+- For each query, check how many B_i's are present. Let count = freq.get(B_i, 0). If count is 0, then the sum doesn't change. Otherwise, we update the sum by (C_i - B_i) * count. Then, we decrease freq[B_i] by count (which would remove it if count becomes zero) and increase freq[C_i] by count.
+
+Wait, wait. Let's think about the steps for updating the frequency map.
+
+Original count for B_i is stored in the map. So when we replace all B_i with C_i, the count of B_i becomes zero (since they are all replaced). The count of C_i increases by the original count of B_i.
+
+So for example, if B_i is 2 with count 3, then after replacement, B_i's count is 0 (so we can delete it from the map), and C_i's count increases by 3.
+
+So the steps would be:
+
+sum += (C_i - B_i) * count
+
+then:
+
+decrement freq[B_i] by count (which will set it to zero, so we can delete it if we want)
+increment freq[C_i] by count.
+
+But how to handle this in code?
+
+In Python, we can use a defaultdict or a regular dictionary. Let's say we use a regular dictionary. For each query:
+
+B = B_i
+C = C_i
+
+count = freq.get(B, 0)
+if count ==0:
+    # do nothing
+else:
+    sum += (C - B) * count
+    # update the frequency map
+    del freq[B]  # since count is now zero
+    # or, we can do freq[B] -= count, but that would set it to zero. Maybe better to delete it to save space.
+    # then add count to C's frequency
+    freq[C] = freq.get(C, 0) + count
+
+Wait, but in Python, if we do freq[B] -= count, but if B was present with count, then subtracting count would set it to zero. So for example, if B's frequency is count, then subtracting count gives zero. So, we can then check if freq[B] is zero, and delete it from the dict. But perhaps it's easier to just delete it directly once we have the count. Because after the replacement, all B's are replaced, so the count for B is zero. So in the code:
+
+sum += (C - B) * count
+
+# remove B from the frequency map
+if B in freq:
+    del freq[B]
+
+# add to C's count
+if C in freq:
+    freq[C] += count
+else:
+    freq[C] = count
+
+Yes, that's correct. Because the count for B was exactly the number of elements equal to B. So after replacing them with C, those B elements are gone (count becomes zero) and the count of C increases by the count of B.
+
+So, this approach would work.
+
+Now, let's think about the initial steps.
+
+Initialize sum as the sum of all elements in the array.
+
+Then, create a frequency map: for each element in the array, count how many times it occurs.
+
+So for example, for array [1,1,1,1], the frequency map is {1:4}, sum is 4.
+
+Then for a query replacing 1 with 2, sum becomes 4 + (2-1)*4 = 8. The frequency map becomes {2:4}.
+
+Next query replacing 2 with 1: sum becomes 8 + (1-2)*4 = 8 -4 =4. Frequency map {1:4}.
+
+Third query replacing 3 with 5: since there are no 3's in the map, sum remains 4.
+
+Which matches the second sample input.
+
+So, the algorithm is:
+
+Initialize sum as the sum of the array.
+
+Create a frequency dictionary where keys are the elements and values are their counts.
+
+For each query (B_i, C_i):
+
+   count = freq.get(B_i, 0)
+
+   if count > 0:
+
+       sum += (C_i - B_i) * count
+
+       del freq[B_i]
+
+       freq[C_i] = freq.get(C_i, 0) + count
+
+   append sum to the result list.
+
+So in Python, the code would look like this.
+
+But how to read the input?
+
+The input is:
+
+N
+
+A_1 A_2 ... A_N
+
+Q
+
+B_1 C_1
+
+B_2 C_2
+
+...
+
+B_Q C_Q
+
+So, read N, then the list of A, then Q, then Q pairs.
+
+So the code outline is:
+
+Read N.
+
+Read the next line as a list of integers.
+
+Compute sum as the sum of the list.
+
+Create a frequency dictionary (using collections.defaultdict or a regular dict).
+
+For each number in the list, increment the count in the freq dict.
+
+Then read Q.
+
+For each of Q lines, read B and C.
+
+Process as per the algorithm, and append sum to the output.
+
+Then, after all queries, print each sum in order.
+
+But in Python, using a regular dictionary is straightforward.
+
+Now, the edge cases to consider:
+
+- When B_i is not present in the frequency map: do nothing.
+
+- When C_i is the same as B_i: but the problem states that B_i != C_i, so we don't have to handle that.
+
+Another case: when replacing a number with a new one that's already present. For example, if the frequency map has {2:3, 5:4}, and we replace 2 with 5. Then the count of 2 is 3. So sum increases by (5-2)*3=9. Then, the frequency map becomes {5:7}.
+
+Yes.
+
+Another example: when replacing a number that's not present. For instance, the array is [1,2,3], and query is (5, 10). Then sum remains the same.
+
+Now, code structure.
+
+We need to read from stdin. So in Python:
+
+Read N from stdin.
+
+Read the next line, split into integers.
+
+Compute sum.
+
+Create freq as a dictionary.
+
+Then read Q.
+
+Read Q lines, each with B_i and C_i.
+
+For each query:
+
+Process as per the algorithm.
+
+Collect the sum after each query and print each in order.
+
+So code:
+
+import sys
+from collections import defaultdict
+
+def main():
+    import sys
+    input = sys.stdin.read().split()
+    ptr = 0
+    N = int(input[ptr])
+    ptr +=1
+    A = list(map(int, input[ptr:ptr+N]))
+    ptr += N
+    Q = int(input[ptr])
+    ptr +=1
+    queries = []
+    for _ in range(Q):
+        B = int(input[ptr])
+        C = int(input[ptr+1])
+        queries.append( (B,C) )
+        ptr +=2
+    # compute initial sum and freq
+    current_sum = sum(A)
+    freq = defaultdict(int)
+    for num in A:
+        freq[num] +=1
+    # process queries
+    output = []
+    for B, C in queries:
+        count = freq.get(B, 0)
+        if count >0:
+            current_sum += (C - B)*count
+            # update freq
+            del freq[B]
+            freq[C] += count
+        output.append(current_sum)
+    # print each sum in output
+    print('\n'.join(map(str, output)))
+
+But wait, using a defaultdict might not be necessary. Because when you delete B from the freq dict, if it's a defaultdict, then accessing freq[B] again would give zero, but in our code, after deleting, we don't check it again. Let's see.
+
+But in the code, when we process each query:
+
+count = freq.get(B, 0) → this works even with a regular dict. So if B is not present, returns 0.
+
+Then, if count >0:
+
+del freq[B] → but if B is not present, del would throw KeyError. So wait, no. Because in the code, if count >0, then B must be present in freq. Because we get count as freq.get(B, 0), which returns 0 if B is not present. So in the case count>0, B is in the freq dict. So in that case, deleting it is safe.
+
+Yes. So using a regular dict is better here. Because when count>0, then B is in the dict. So when we do del freq[B], there's no KeyError.
+
+So maybe using a normal dict instead of defaultdict.
+
+So modifying the code:
+
+freq = {}
+for num in A:
+    if num in freq:
+        freq[num] +=1
+    else:
+        freq[num] =1
+
+But in Python, the get method works as expected. So the code can be written as:
+
+current_sum = sum(A)
+freq = {}
+for num in A:
+    if num in freq:
+        freq[num] +=1
+    else:
+        freq[num] =1
+
+Then, in the query processing:
+
+for B, C in queries:
+    count = freq.get(B, 0)
+    if count >0:
+        current_sum += (C - B)*count
+        del freq[B]
+        # add to C's count
+        if C in freq:
+            freq[C] += count
+        else:
+            freq[C] = count
+    output.append(current_sum)
+
+This should work.
+
+Testing with the sample inputs.
+
+First sample input:
+
+4
+
+1 2 3 4
+
+3
+
+1 2 → B=1, C=2.
+
+Initial sum is 10.
+
+count = 1.
+
+sum becomes 10 + (2-1)*1=11.
+
+del freq[1], which was 1. Then add 1 to C (2). So freq[2] was 1, now becomes 2.
+
+Next query: 3 4 → B=3, count is 1.
+
+sum becomes 11 + (4-3)*1 = 12. Delete 3 from freq. Add 4's count (previously 1) +1 → 2.
+
+Third query: 2 4 → B=2, count is 2.
+
+sum becomes 12 + (4-2)*2= 16. Delete 2, add 4. Now freq[4] is 2 +2=4. So output is 11,12,16 → correct.
+
+Second sample input:
+
+4
+
+1 1 1 1
+
+3
+
+1 2 → sum becomes 4 + (2-1)*4 = 8. Now all 1's are replaced with 2. So freq {2:4}.
+
+Next query: 2 1 → sum += (1-2)*4 → 8-4=4. freq {1:4}.
+
+Third query: 3 5 → count is 0, sum remains 4.
+
+Third sample input:
+
+2
+
+1 2 → sum 3.
+
+Queries:
+
+1 100 → count=1. sum 3 + (100-1)*1= 102. freq {100:1, 2:1}.
+
+Next query: 2 100 → count=1. sum 102 + (100-2)*1= 200. freq {100:2}.
+
+Third query: 100 1000 → count=2. sum 200 + (1000-100)*2 = 200 + 1800=2000. So output 102,200,2000 → correct.
+
+So this code should handle all the cases.
+
+Now, considering the data size.
+
+N can be up to 1e5. So building the initial frequency dict is O(N).
+
+Each query is O(1) because all operations (getting count, deleting, adding) are O(1) in average for a Python dict.
+
+So the code should run efficiently even for the upper constraints.
+
+Another possible optimization: when C_i is already present in the freq dict, we can just add the count. If not, create a new entry.
+
+But that's exactly what the code does.
+
+So this should work.
+
+Thus, the code is correct.
+</think>
+To solve this problem, we need to efficiently process a sequence of replacement operations on an array and compute the sum of the array after each operation. The challenge is to do this efficiently given the constraints, where a direct approach would be too slow.
+
+### Approach
+1. **Initial Sum Calculation**: Compute the initial sum of the array.
+2. **Frequency Dictionary**: Maintain a frequency dictionary to keep track of the count of each element in the array.
+3. **Processing Queries**: For each query, determine the count of the element to be replaced, update the sum based on the replacement, and adjust the frequency dictionary accordingly.
+
+### Solution Code
+```python
+import sys
+
+def main():
+    input = sys.stdin.read().split()
+    ptr = 0
+    N = int(input[ptr])
+    ptr += 1
+    A = list(map(int, input[ptr:ptr + N]))
+    ptr += N
+    Q = int(input[ptr])
+    ptr += 1
+    queries = []
+    for _ in range(Q):
+        B = int(input[ptr])
+        C = int(input[ptr + 1])
+        queries.append((B, C))
+        ptr += 2
+    
+    current_sum = sum(A)
+    freq = {}
+    for num in A:
+        if num in freq:
+            freq[num] += 1
+        else:
+            freq[num] = 1
+    
+    output = []
+    for B, C in queries:
+        count = freq.get(B, 0)
+        if count > 0:
+            current_sum += (C - B) * count
+            del freq[B]
+            freq[C] = freq.get(C, 0) + count
+        output.append(current_sum)
+    
+    print('\n'.join(map(str, output)))
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Reading Input**: The input is read in one go and split into a list for easier processing.
+2. **Initial Setup**: The initial sum of the array is computed, and a frequency dictionary is created to count occurrences of each element.
+3. **Processing Each Query**:
+   - For each query, check the count of the element to be replaced using the frequency dictionary.
+   - If the element exists, update the sum by considering the difference between the new and old values multiplied by the count of the element.
+   - Adjust the frequency dictionary to reflect the replacement: remove the old element and update the count of the new element.
+4. **Output**: After processing all queries, the results are printed line by line.
+
+This approach ensures that each query is processed in constant time on average, making the solution efficient even for large input sizes.
+</bot>

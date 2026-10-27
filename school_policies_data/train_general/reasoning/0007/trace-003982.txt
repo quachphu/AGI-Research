@@ -1,0 +1,1348 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Vasya has got a magic matrix a of size n × m. The rows of the matrix are numbered from 1 to n from top to bottom, the columns are numbered from 1 to m from left to right. Let a_{ij} be the element in the intersection of the i-th row and the j-th column.
+
+Vasya has also got a chip. Initially, the chip is in the intersection of the r-th row and the c-th column (that is, in the element a_{rc}). Vasya performs the following process as long as possible: among all elements of the matrix having their value less than the value of the element with the chip in it, Vasya randomly and equiprobably chooses one element and moves his chip to this element.
+
+After moving the chip, he adds to his score the square of the Euclidean distance between these elements (that is, between the element in which the chip is now and the element the chip was moved from). The process ends when there are no elements having their values less than the value of the element with the chip in it.
+
+Euclidean distance between matrix elements with coordinates (i_1, j_1) and (i_2, j_2) is equal to √{(i_1-i_2)^2 + (j_1-j_2)^2}.
+
+Calculate the expected value of the Vasya's final score.
+
+It can be shown that the answer can be represented as P/Q, where P and Q are coprime integer numbers, and Q not≡ 0~(mod ~ 998244353). Print the value P ⋅ Q^{-1} modulo 998244353.
+
+Input
+
+The first line of the input contains two integers n and m (1 ≤ n, m ≤ 1 000) — the number of rows and the number of columns in the matrix a.
+
+The following n lines contain description of the matrix a. The i-th line contains m integers a_{i1}, a_{i2}, ..., a_{im} ~ (0 ≤ a_{ij} ≤ 10^9).
+
+The following line contains two integers r and c (1 ≤ r ≤ n, 1 ≤ c ≤ m) — the index of row and the index of column where the chip is now.
+
+Output
+
+Print the expected value of Vasya's final score in the format described in the problem statement.
+
+Examples
+
+Input
+
+1 4
+1 1 2 1
+1 3
+
+
+Output
+
+2
+
+
+Input
+
+2 3
+1 5 7
+2 3 1
+1 2
+
+
+Output
+
+665496238
+
+Note
+
+In the first example, Vasya will move his chip exactly once. The expected value of the final score is equal to (1^2 + 2^2+ 1^2)/(3) = 2.
+</user>
+<bot>
+<think>
+Okay, let's tackle this problem. Hmm. So, the problem is about calculating the expected value of Vasya's score after he moves the chip as long as possible. The process stops when there are no smaller elements than the current one. Each move adds the square of the Euclidean distance between the current position and the next. The answer needs to be in the form of P/Q modulo 998244353, which involves modular inverses.
+
+First, I need to model the process. It looks like a Markov process where each state is the current cell of the chip. From each cell, the chip can transition to any of the cells with a strictly smaller value. The transitions are equiprobable among all possible smaller cells. For each transition, we accumulate the square of the distance. The expected value is the sum of all these distances multiplied by their probabilities along all possible paths.
+
+The challenge here is to compute the expected value efficiently. Since the matrix can be up to 1000x1000, which is a million cells, a naive approach that considers each cell and all possible transitions would be O(N^2 M^2), which is way too slow. So we need a smarter way.
+
+Let's think about dynamic programming. Let's denote E[i][j] as the expected total score starting from cell (i,j). Our goal is to compute E[r][c].
+
+The key observation is that the transitions only go to cells with strictly smaller values. So, the cells can be processed in order of increasing value. That way, when we process a cell (i,j), all cells that it can transition to have already been processed, and their E values are known.
+
+So, the steps would be:
+
+1. Sort all cells in increasing order of their value. For cells with the same value, the order might not matter since transitions are only allowed to strictly smaller values. However, if two cells have the same value, they cannot transition between each other. So, in the sorted list, any cells with the same value can be processed in any order relative to each other.
+
+2. For each cell (i,j) in the sorted order, compute E[i][j] based on the possible transitions. Since transitions are only allowed to cells with a smaller value, when processing (i,j), all possible transitions' E values have already been computed.
+
+For a cell (i,j), let S be the set of cells (k,l) where a[k][l] < a[i][j]. Let the size of S be K. The expected value E[i][j] is equal to the sum over all (k,l) in S of [ (distance squared between (i,j) and (k,l)) + E[k][l] ] multiplied by 1/K. If K is 0, then E[i][j] is 0, as the process ends immediately.
+
+Wait, right. So the formula would be:
+
+E[i][j] = (sum_{ (k,l) < (i,j) } [ ( (i -k)^2 + (j - l)^2 ) + E[k][l] ]) / K 
+
+if K > 0. Otherwise, 0.
+
+So the main idea is to process cells in order of increasing a[i][j], and for each cell, compute E[i][j] based on the sum of contributions from all smaller cells.
+
+But how do we compute this efficiently? Because for each cell (i,j), we need to find all cells (k,l) with a[k][l] < a[i][j], sum their (distance squared plus E[k][l]), multiply by the inverse of K, which is the count of such cells.
+
+But with n and m up to 1e3, the total number of cells is 1e6. For each cell, if we have to iterate all 1e6 cells to check if they are smaller, that's 1e12 operations, which is impossible. So we need a way to precompute for each cell (i,j) the sum of (i^2 + j^2) terms, and other aggregated values that can help compute the sum efficiently.
+
+Wait, let's expand the distance squared:
+
+distance squared between (i,j) and (k,l) is (i -k)^2 + (j - l)^2 = (i² - 2ik +k²) + (j² - 2jl + l²) = (i² + j²) + (k² + l²) - 2ik - 2jl.
+
+So the sum over all (k,l) < (i,j) of distance squared is sum( (i² + j²) ) for all (k,l) < (i,j) multiplied by K (since each term has i² + j² once per (k,l)), plus sum( k² + l² ) over (k,l) < (i,j) multiplied by 1 (since each term is added once for each (k,l)), minus 2i * sum(k) over (k,l) < (i,j), minus 2j * sum(l) over (k,l) < (i,j).
+
+Wait, no. Let's re-express the sum:
+
+sum_{k,l} [ (i -k)^2 + (j - l)^2 ] = sum_{k,l} (i² - 2ik +k² + j² - 2jl + l² )
+
+= K*(i² + j²) + sum_{k,l} (k² + l²) - 2i sum_{k,l} k - 2j sum_{k,l} l.
+
+So, for each cell (i,j), if we can precompute for all (k,l) with a[k][l] < a[i][j], the following four values:
+
+1. K: the count of such cells.
+
+2. sum_k: sum of k coordinates.
+
+3. sum_l: sum of l coordinates.
+
+4. sum_k2_plus_l2: sum of (k² + l²) for those cells.
+
+Additionally, sum_E: sum of E[k][l] for those cells.
+
+Then, the sum for E[i][j] would be:
+
+sum_distances_squared = K*(i² + j²) + sum_k2_plus_l2 - 2i*sum_k - 2j*sum_l.
+
+sum_total = sum_distances_squared + sum_E.
+
+Then, E[i][j] = sum_total / K, if K >0.
+
+So the problem reduces to, for each cell (i,j), quickly find K, sum_k, sum_l, sum_k2_plus_l2, sum_E, for all cells (k,l) with a[k][l] < a[i][j}.
+
+How to compute these sums efficiently?
+
+Since the cells are processed in increasing order of a[i][j], we can accumulate these sums as we process each cell. For example, for all cells with a value less than the current cell's value, all the necessary sums can be maintained incrementally.
+
+So, for each cell (i,j) when processed (sorted in increasing order of a[i][j}), we can:
+
+- collect all the cells that have a value strictly less than a[i][j} (since we process in order, these cells have already been processed and their sums are accumulated in some data structure).
+
+Then, we can compute E[i][j} as (sum_distances_squared + sum_E) / K, where K is the number of such cells.
+
+If K is zero, then E[i][j} is zero.
+
+So the approach is:
+
+1. Sort all cells in increasing order of a[i][j}.
+
+2. For each cell in this order, maintain cumulative variables:
+
+   - count: the total number of cells processed so far (which have a value <= current cell's value? Or strictly less than?)
+
+Wait, since the cells are processed in increasing order, for each cell (i,j) being processed, all cells with a smaller a value have already been processed. So when we process (i,j}, we can compute the current cumulative sums (count, sum_k, sum_l, sum_k2_plus_l2, sum_E) for all cells with a value < a[i][j}.
+
+So the cumulative variables should track the sum of all cells with a value less than the current cell's a[i][j}.
+
+So how to do this? For example, we can maintain a data structure that allows us to query for all cells with a value less than a certain value. But since the cells are sorted in increasing order, when processing a cell (i,j), all cells before it in the sorted list that have a smaller value can be considered.
+
+Wait, but in the sorted list, cells with the same value may be grouped. So, when processing a cell (i,j), all cells in the sorted list before it that have a strictly smaller value contribute to the K, sum_k, etc. But if there are cells with the same value as (i,j} appearing before it, they do not contribute (since a[k][l] must be < a[i][j}).
+
+Therefore, the sorted list should be such that cells are ordered by a[i][j}, and for cells with the same value, their order is such that all are grouped. So during processing, for each cell (i,j}, we need to find all cells in the sorted list that have a strictly lower a value.
+
+Therefore, perhaps we can process the sorted list in order, and for each cell, after processing, update the cumulative variables. But wait, since a cell's a value could be the same as previous ones, the cumulative variables would include all cells processed before it with strictly smaller a value. So, for example, if the sorted list is:
+
+a1, a2, a3, a3, a4, a4, a5,...
+
+When processing a3 (the first occurrence), the cumulative variables would include a1 and a2. Then, when processing the next a3, the cumulative variables would still include a1 and a2. Only when processing a4 would the cumulative variables include all a1, a2, a3's.
+
+So the key is that the cumulative variables (count, sum_k, sum_l, sum_k2_plus_l2, sum_E) are accumulated as we process each cell. But when a cell has the same a value as previous cells, the cumulative variables do not include them.
+
+So here's the plan:
+
+- Sort all cells in non-decreasing order of a[i][j}.
+
+- Initialize variables:
+
+   current_sum_k = 0
+
+   current_sum_l = 0
+
+   current_sum_k2_plus_l2 = 0
+
+   current_sum_E = 0
+
+   current_count = 0
+
+- As we iterate through the sorted list of cells:
+
+   For each cell (i,j) in the list:
+
+      Check if the current cell's a value is larger than the previous a value. Because the list is sorted in non-decreasing order, all cells before this one with a smaller a have already been processed and their data is in the cumulative variables.
+
+      However, if there are multiple cells with the same a value, when processing the first such cell, the cumulative variables have all the previous cells with smaller a. Then, when processing the next cell with the same a, the cumulative variables are the same. So, when the current cell's a is equal to the previous cell's a, the cumulative variables do not include the previous cells with the same a.
+
+      So, for example, if the list is [1, 2, 3, 3, 4], then when processing the first 3, the cumulative variables include 1 and 2. The second 3 will also have cumulative variables including 1 and 2. Then, when processing the next 3, same thing. Then, when processing 4, cumulative variables include all 1, 2, 3s.
+
+      So, during processing, when a cell's a is greater than the previous cell's a, then we can update the cumulative variables by adding all the previous cells with the same a as the previous one. Wait, no. Because the list is sorted, all cells up to the current one (before processing) that have a value less than current cell's a can be accounted for.
+
+      Hmm, perhaps another approach: whenever a new a value is encountered (higher than the previous ones), we can take all cells processed so far (from previous groups) and add their data to the cumulative variables. But this needs grouping cells by their a value.
+
+Alternatively, here's an approach:
+
+- Group the cells into groups where each group has the same a value. The groups are sorted in non-decreasing order.
+
+- For each group in order:
+
+   For each cell in the current group:
+
+      The cumulative variables (count, sum_k, sum_l, sum_k2_plus_l2, sum_E) are the sum of all cells from previous groups (with a value less than current group's a value).
+
+      So, when processing a group of cells with a value x, all cells in previous groups (with a < x) are accounted for in the cumulative variables.
+
+      Then, after processing all cells in the current group, add their data to some other variables (like a buffer) so that when the next group (with higher a) is processed, these cells are part of the cumulative variables.
+
+So, for example, let's have groups sorted as x1 < x2 < x3 ... etc.
+
+For each group in order:
+
+   For each cell in the group:
+
+      The K is the cumulative count (sum of counts from previous groups).
+
+      The sum_k is cumulative_sum_k.
+
+      sum_l is cumulative_sum_l.
+
+      sum_k2_plus_l2 is cumulative_sum_k2l2.
+
+      sum_E is cumulative_sum_E.
+
+      So, for each cell in this group, the variables needed to compute E[i][j} are based on the previous groups.
+
+   Then, after processing all cells in the group (computing their E values), we add their (k, l, k² + l², E) to the cumulative variables (so that future groups can use them).
+
+Wait, but cells in the same group have the same a value and thus cannot contribute to each other's E[i][j}, since a[k][l} must be less than a[i][j}.
+
+So, for cells in the same group, since their a values are equal, when they are processed, the cumulative variables (sum from previous groups) are the same. So, when processing a group, for each cell in the group, their E[i][j} can be computed using the cumulative variables up to the previous groups. Then, after processing all cells in the group, we add their data (k, l, k² + l², E) to the cumulative variables so that future groups can include them.
+
+So, the steps would be:
+
+1. Sort all cells into groups ordered by their a value in non-decreasing order.
+
+2. Initialize cumulative variables (count, sum_k, sum_l, sum_k2_plus_l2, sum_E) to 0.
+
+3. For each group in sorted order:
+
+   a. For each cell in this group:
+
+      i. Compute K = cumulative count (if K is 0, then E[i][j} is 0).
+
+      ii. Compute sum_distances_squared = K*(i² + j²) + cumulative_sum_k2l2 - 2*i*cumulative_sum_k - 2*j*cumulative_sum_l.
+
+      iii. sum_total = sum_distances_squared + cumulative_sum_E.
+
+      iv. If K ==0, E[i][j} =0. Otherwise, E[i][j} = sum_total / K. But division is modulo 998244353, so multiply by inverse of K mod MOD.
+
+   b. After processing all cells in the current group, collect the data from each cell (i,j) in the group:
+
+      For each cell in the group:
+
+         k = i, l =j.
+
+         add to cumulative_count: 1.
+
+         add to cumulative_sum_k: i.
+
+         add to cumulative_sum_l: j.
+
+         add to cumulative_sum_k2l2: i² + j².
+
+         add to cumulative_sum_E: E[i][j}.
+
+   So, the cumulative variables are updated only after processing all cells in the current group. This is because cells within the same group cannot contribute to each other's E[i][j} since their a values are equal.
+
+This approach ensures that when processing a group, all previous groups (with a < x) have been accounted for in the cumulative variables. Then, after processing all cells in the group, their data is added to the cumulative variables for future groups.
+
+This seems manageable. Now, the key is to group the cells by their a values, process the groups in order, and for each group, compute E[i][j} for all cells in the group using the cumulative variables, then add their data to the cumulative variables.
+
+But how to group the cells efficiently?
+
+We can first collect all cells into a list, sort them by their a value, then iterate through the list, grouping consecutive cells with the same a value.
+
+Wait, but even if the a values are the same, they might not be consecutive in the sorted list. But in a sorted list, all cells with the same a value will be consecutive. So when the list is sorted, cells with the same a are grouped.
+
+So, for example, the sorted list would be [ (x1, cells), (x2, cells), ... ] where x1 <= x2 <= ... and each x is the a value of the group.
+
+So, in code, we can first collect all cells into a list, each element is (a_val, i, j). Then sort this list by a_val. Then, iterate through the sorted list, grouping consecutive elements with the same a_val.
+
+Alternatively, during iteration, track the current a_val. When a new a_val is encountered, process all cells in the current group, then update the cumulative variables.
+
+But let's think in code terms.
+
+First, collect all cells into a list:
+
+cells = []
+for i in 0 to n-1:
+   for j in 0 to m-1:
+       cells.append( (a[i][j], i+1, j+1) )
+
+Then sort the list by a_val.
+
+Then, group the cells by a_val. For example, iterate through the sorted list, and whenever the a_val changes, create a new group.
+
+Once the groups are formed, process them in order.
+
+For each group:
+
+   For all cells in the group:
+
+       Compute E[i][j} using the cumulative variables (count, sum_k, sum_l, sum_k2l2, sum_E).
+
+   Then, for each cell in the group, add their i, j, i² + j², and E[i][j} to the cumulative variables.
+
+Wait, but adding them all at once. Since all cells in the group have the same a_val, their E[i][j} can be computed first (since they don't affect each other), and then their data is added to the cumulative variables.
+
+Yes.
+
+So, the code steps would be:
+
+MOD = 998244353
+
+n, m = read input.
+
+matrix = read the next n lines, each with m integers.
+
+r, c = read input (adjusted to 0-based or 1-based indices as per code).
+
+cells = list of (a_val, i, j) for all cells.
+
+sorted_cells = sorted(cells, key=lambda x: x[0])
+
+current_group = []
+prev_a = None
+
+cum_count = 0
+cum_sum_k = 0
+cum_sum_l = 0
+cum_sum_k2l2 = 0
+cum_sum_E = 0
+
+# Also need a dictionary or 2D array to store E[i][j}
+E = ... perhaps a 2D array initialized to 0.
+
+Then, iterate through the sorted_cells, grouping by a_val:
+
+for each (a_val, i, j) in sorted_cells:
+
+   if a_val != prev_a:
+
+       # process the previous group (if any)
+
+       if prev_a is not None:
+
+           # add all cells in the previous group to the cumulative variables
+
+           for (a_prev, i_prev, j_prev) in current_group:
+
+               ei_prev = E[i_prev-1][j_prev-1]
+
+               cum_count += 1
+
+               cum_sum_k += i_prev
+
+               cum_sum_l += j_prev
+
+               cum_sum_k2l2 += (i_prev**2 + j_prev**2)
+
+               cum_sum_E += ei_prev
+
+               # take modulo MOD for all these variables? Because they are summed over many steps, but since MOD is 998e5, which is a prime, and the sums can be large, but modulo is applied to the final result. However, the individual E values are computed modulo MOD, so when we sum them, we need to keep them mod MOD.
+
+               # So, all variables (cum_sum_k, etc) should be stored mod MOD?
+
+               # Wait, but i_prev and j_prev can be up to 1e3, so their squares are up to 1e6. sum_k is up to 1e3 * 1e6 = 1e9. So in Python, this is manageable, but when modded, it's better to keep them mod MOD to prevent overflow. So, perhaps we should apply mod after each addition.
+
+               # So, all cumulative variables should be kept mod MOD.
+
+               cum_sum_k = (cum_sum_k + i_prev) % MOD
+
+               cum_sum_l = (cum_sum_l + j_prev) % MOD
+
+               cum_sum_k2l2 = (cum_sum_k2l2 + (i_prev**2 + j_prev**2)) % MOD
+
+               cum_sum_E = (cum_sum_E + ei_prev) % MOD
+
+               cum_count += 1
+
+           current_group = []
+
+       prev_a = a_val
+
+       # Now process the current cell as part of the new group
+
+       # compute E for (i,j) using the current cumulative variables.
+
+       # K is cum_count.
+
+       K = cum_count
+
+       if K ==0:
+
+           e = 0
+
+       else:
+
+           # compute sum_distances_squared = K*(i² + j²) + cum_sum_k2l2 - 2i*cum_sum_k - 2j*cum_sum_l
+
+           i_sq_j_sq = (i**2 + j**2) % MOD
+
+           term1 = (K * i_sq_j_sq) % MOD
+
+           term2 = cum_sum_k2l2
+
+           term3 = (2 * i) % MOD
+
+           term3 = (term3 * cum_sum_k) % MOD
+
+           term3 = (MOD - term3) % MOD  # because it's subtracted
+
+           term4 = (2 * j) % MOD
+
+           term4 = (term4 * cum_sum_l) % MOD
+
+           term4 = (MOD - term4) % MOD
+
+           sum_dist_sq = (term1 + term2 + term3 + term4) % MOD
+
+           sum_total = (sum_dist_sq + cum_sum_E) % MOD
+
+           inv_K = pow(K, MOD-2, MOD)
+
+           e = (sum_total * inv_K) % MOD
+
+       E[i-1][j-1] = e
+
+       current_group.append( (a_val, i, j) )
+
+   else:
+
+       # same a_val as previous, add to current group.
+
+       # compute E for (i,j) using the same cumulative variables as previous cells in the group.
+
+       K = cum_count
+
+       if K ==0:
+
+           e =0
+
+       else:
+
+           # same calculation as above.
+
+           i_sq_j_sq = (i**2 + j**2) % MOD
+
+           term1 = (K * i_sq_j_sq) % MOD
+
+           term2 = cum_sum_k2l2
+
+           term3 = (2 * i) % MOD
+
+           term3 = (term3 * cum_sum_k) % MOD
+
+           term3 = (MOD - term3) % MOD  # because it's subtracted
+
+           term4 = (2 * j) % MOD
+
+           term4 = (term4 * cum_sum_l) % MOD
+
+           term4 = (MOD - term4) % MOD
+
+           sum_dist_sq = (term1 + term2 + term3 + term4) % MOD
+
+           sum_total = (sum_dist_sq + cum_sum_E) % MOD
+
+           inv_K = pow(K, MOD-2, MOD)
+
+           e = (sum_total * inv_K) % MOD
+
+       E[i-1][j-1] = e
+
+       current_group.append( (a_val, i, j) )
+
+After the loop ends, we need to process the last group (if any) and add their data to the cumulative variables.
+
+Wait, no. Because in the loop, whenever a_val changes, the previous group is processed (added to cumulative variables). So after the loop ends, the current_group is not added. So we need to handle that.
+
+So after the loop:
+
+if current_group is not empty:
+
+   for each cell in current_group:
+
+       add their data to the cumulative variables.
+
+But this is only necessary for cells that are processed but not added to the cumulative variables. However, in the code above, during the loop, when a new a_val is encountered, the previous group is processed (added to cumulative) and then current_group is reset. So the current_group is for the current a_val. But after the loop ends, current_group may contain cells that have been processed (their E computed) but not added to the cumulative variables. These are cells in the last group. However, since there are no groups after them, adding them to the cumulative variables is not needed. Because cumulative variables are only used for cells with a higher a_val. So the last group's cells will not be needed for any future groups, so we can ignore them.
+
+Therefore, the code structure seems correct.
+
+Now, the variables cum_count, cum_sum_k, etc., are being updated modulo MOD. But for the sums, since the modulo is applied, the terms in the sum_dist_sq may be incorrect. Wait, but the problem requires the answer to be computed modulo MOD, and all arithmetic must be done under modulo to prevent integer overflow.
+
+Wait, but the terms like K (cum_count) can be up to 1e6 (since there are 1e6 cells), which is manageable. However, when multiplied by terms like i² (up to (1e3)^2 = 1e6), the product could be up to 1e12, which in Python can handle, but when taking modulo, need to compute correctly.
+
+So, all operations should be done modulo MOD to prevent overflows and ensure correctness.
+
+So, the variables cum_sum_k, cum_sum_l, cum_sum_k2l2, cum_sum_E are all stored modulo MOD. Similarly, when computing terms like 2*i*cum_sum_k, this must be done modulo MOD.
+
+But wait, the sum of (k) is sum of the rows, which are up to 1e3 * 1e6 (number of cells) = 1e9. Which is manageable, but when modded by MOD (which is ~1e9), the modulo is necessary.
+
+So, the code must apply the modulo at every step.
+
+So, in code:
+
+Every time we add to the cumulative variables, we take modulo MOD.
+
+Now, the initial values of the cumulative variables are zero.
+
+When a cell (i,j) is processed (i.e., in a group), we compute E[i][j} based on the current cumulative variables (count, sum_k, etc.), then after all cells in the group are processed, their data is added to the cumulative variables.
+
+So, for example, the first group (with the smallest a_val) will have K=0 for all cells. Because their a_val is the smallest, there are no cells with a smaller a_val. So E[i][j} for these cells is 0.
+
+Then, when processing the next group (with a higher a_val), the cumulative variables will include all cells from the first group. So for cells in this group, K is the count of cells in the first group, and their sum_k, sum_l, etc., are computed based on the first group's cells.
+
+So this seems correct.
+
+Now, let's test the first example.
+
+Input:
+
+1 4
+
+1 1 2 1
+
+1 3 (i=1, j=3, which is the third element (0-based j=2?), but in the matrix, the cells are (1,1), (1,2), (1,3), (1,4). The initial position is (1,3), which is the third cell (a=2).
+
+So sorted_cells are grouped as follows:
+
+Cells with a=1: (1,1), (1,2), (1,4), and a=1.
+
+Then cells with a=2: (1,3).
+
+Processing the first group (a=1):
+
+Each cell in this group will have K=0, so E is 0.
+
+Then, after processing the group, cumulative variables are updated:
+
+count becomes 4 (since there are four cells with a=1).
+
+sum_k is 1*4 (all i=1 for these cells, but j varies from 1 to 4.
+
+Wait, no. The i and j for the cells are:
+
+(1,1): i=1, j=1.
+
+(1,2): i=1, j=2.
+
+(1,4): i=1, j=4.
+
+Wait, the original matrix is 1x4: the first line is [1,1,2,1], but the problem statement says that the rows are numbered 1 to n, columns 1 to m.
+
+So in the matrix, the cells are:
+
+row 1:
+
+columns 1:1, 2:1, 3:2,4:1.
+
+Wait, no. The input is 1 4, then the next line is 1 1 2 1. So the matrix is:
+
+a_11 =1, a_12=1, a_13=2, a_14=1.
+
+Wait, the sample input says that the initial position is (1,3). So in the matrix, cell (1,3) is 2.
+
+So the sorted cells are:
+
+the three cells with a=1: (1,1), (1,2), (1,4), and the cell (1,3) with a=2.
+
+So sorted_cells will have the a=1 cells first, then a=2.
+
+Processing the a=1 group:
+
+For each cell in this group, K=0, so E is 0.
+
+Then, the cumulative variables are updated by adding each cell's data. For each cell in a=1 group:
+
+i=1, j=1:
+
+sum_k +=1, sum_l +=1, sum_k2l2 += (1+1) =2, sum_E +=0.
+
+Same for (1,2): i=1, j=2. sum_k=2, sum_l=3, sum_k2l2= (1+1) + (1+4) = 6? Wait, each cell contributes i² + j². For (1,1): 1² +1²=2. (1,2): 1+4=5. (1,4): 1+16=17. So sum_k2l2 for a=1 group is 2+5+17=24? Or wait, the three cells are (1,1), (1,2), (1,4). So:
+
+sum_k = 1 +1 +1 =3.
+
+sum_l =1 +2 +4 =7.
+
+sum_k2l2 = (1^2 +1^2) + (1^2 +2^2) + (1^2 +4^2) = (2) + (5) + (17) =24.
+
+cum_count is 3.
+
+Then, when processing the a=2 group (cell (1,3)):
+
+cum_count is 3, sum_k=3, sum_l=7, sum_k2l2=24, sum_E=0.
+
+K=3.
+
+sum_dist_squared = 3*( (1^2 +3^2) ) + 24 - 2*1*3 - 2*3*7.
+
+Wait, the cell (1,3) is being processed.
+
+i=1, j=3.
+
+i² +j² =1 +9=10.
+
+sum_dist_squared = 3 *10 +24 - 2*1*3 -2*3*7 =30 +24 -6 -42 = 54-48=6.
+
+sum_total =6 +0=6.
+
+E =6 /3 =2.
+
+Which matches the sample output.
+
+So the code should handle this correctly.
+
+Another example is the second sample, but the code is harder to trace. But the logic seems correct.
+
+Now, let's code this.
+
+But wait, in the code, the sorted cells are in non-decreasing order, but when grouping, consecutive cells with the same a_val are in the same group. So during iteration, when a_val changes, the previous group is added to the cumulative variables. Then, for the current group, each cell's E is computed using the cumulative variables (which include all previous groups with smaller a_val).
+
+Thus, the code structure should handle all cases.
+
+So the steps in code:
+
+- Read n and m.
+
+- Read the matrix, storing a_ij (0-based or 1-based? Probably 1-based, since the problem uses 1-based indices).
+
+Wait, the code should read n lines, each with m integers. Then, r and c are given (1-based). So in code, the matrix is stored as a list of lists, with a[i][j] being the value in the i-th row and j-th column (0-based for Python lists, but in code, when reading, we can store them as 1-based if needed. But in code, the indices are stored as per their original 1-based notation.
+
+So for code:
+
+matrix = []
+
+for _ in range(n):
+
+    row = list(map(int, input().split()))
+
+    matrix.append(row)
+
+r, c = map(int, input().split())
+
+r -=1
+
+c -=1  # converting to 0-based.
+
+Then, collect all cells as (a_val, i, j), where i and j are 1-based (since the problem uses 1-based indices).
+
+cells = []
+
+for i in range(n):
+
+    for j in range(m):
+
+        a_val = matrix[i][j]
+
+        cells.append( (a_val, i+1, j+1) )
+
+sorted_cells = sorted(cells, key=lambda x: x[0])
+
+Initialize E as a 2D array of size n x m, initialized to 0.
+
+E = [[0]*m for _ in range(n)]
+
+Then, variables:
+
+cum_count =0
+
+cum_sum_k =0
+
+cum_sum_l =0
+
+cum_sum_k2l2=0
+
+cum_sum_E=0
+
+MOD = 998244353
+
+prev_a = None
+
+current_group = []
+
+Then, loop through each cell in sorted_cells:
+
+for cell in sorted_cells:
+
+    a_val, i, j = cell
+
+    if prev_a is None:
+
+        # first cell
+
+        prev_a = a_val
+
+        current_group.append( cell )
+
+    else:
+
+        if a_val == prev_a:
+
+            current_group.append( cell )
+
+        else:
+
+            # process the current_group (prev_a group)
+
+            # add their data to cumulative variables
+
+            for (a_prev, i_prev, j_prev) in current_group:
+
+                # get E[i_prev-1][j_prev-1] (0-based indices)
+
+                ei_prev = E[i_prev-1][j_prev-1]
+
+                cum_count = (cum_count +1) % MOD
+
+                cum_sum_k = (cum_sum_k + i_prev) % MOD
+
+                cum_sum_l = (cum_sum_l + j_prev) % MOD
+
+                cum_sum_k2l2 = (cum_sum_k2l2 + (i_prev**2 + j_prev**2)) % MOD
+
+                cum_sum_E = (cum_sum_E + ei_prev) % MOD
+
+            current_group = [cell]
+
+            prev_a = a_val
+
+    # Now compute E for this cell
+
+    # Compute K = cum_count
+
+    K = cum_count
+
+    if K ==0:
+
+        e =0
+
+    else:
+
+        i_sq_j_sq = (i**2 + j**2) % MOD
+
+        term1 = (K * i_sq_j_sq) % MOD
+
+        term2 = cum_sum_k2l2 % MOD
+
+        term3 = (2 * i) % MOD
+
+        term3 = (term3 * cum_sum_k) % MOD
+
+        term3 = (MOD - term3) % MOD
+
+        term4 = (2 * j) % MOD
+
+        term4 = (term4 * cum_sum_l) % MOD
+
+        term4 = (MOD - term4) % MOD
+
+        sum_dist_sq = (term1 + term2 + term3 + term4) % MOD
+
+        sum_total = (sum_dist_sq + cum_sum_E) % MOD
+
+        inv_K = pow(K, MOD-2, MOD)
+
+        e = (sum_total * inv_K) % MOD
+
+    E[i-1][j-1] = e
+
+# After the loop, process the current_group
+
+# add their data to cumulative variables
+
+for (a_prev, i_prev, j_prev) in current_group:
+
+    ei_prev = E[i_prev-1][j_prev-1]
+
+    cum_count = (cum_count +1) % MOD
+
+    cum_sum_k = (cum_sum_k + i_prev) % MOD
+
+    cum_sum_l = (cum_sum_l + j_prev) % MOD
+
+    cum_sum_k2l2 = (cum_sum_k2l2 + (i_prev**2 + j_prev**2)) % MOD
+
+    cum_sum_E = (cum_sum_E + ei_prev) % MOD
+
+Wait, no. Because in the loop above, the code processes each cell in the sorted_cells list. For each cell, it checks if a_val is equal to prev_a. If not, it processes the previous group (adding their data to cumulative variables) and then starts the new group. Then, regardless of whether the a_val changed, the code computes E for the current cell. However, this seems incorrect.
+
+Wait, no. Let's re-examine the code:
+
+The code loops through each cell in sorted_cells.
+
+For each cell:
+
+if prev_a is None (first cell):
+
+   add to current_group.
+
+else:
+
+   if a_val == prev_a:
+
+       add to current_group.
+
+   else:
+
+       process current_group (add to cumulative variables).
+
+       reset current_group to [cell], update prev_a.
+
+Then, compute E for the cell.
+
+Wait, but this is not correct. Because when a new group is started (a_val changes), the current_group is set to [cell], and prev_a is updated. But the code proceeds to compute E for the cell (which is the first cell in the new group). However, the code for computing E uses the cumulative variables before adding the previous group's data.
+
+Wait, no. Because when a new a_val is encountered, the previous group's data is added to the cumulative variables. For example, when processing cell x in a new group, the previous group is added to cumulative variables, then current_group is set to [cell x]. Then, the code computes E for cell x using the cumulative variables (which now include the previous group's data). That's correct.
+
+But what about the cells in the new group? For example, after the code adds the previous group to the cumulative variables, the current_group is [cell x]. Then, the code computes E for cell x using the current cumulative variables (which now include the previous group's data).
+
+Yes. So each cell in the new group is processed with the cumulative variables including all previous groups.
+
+But then, after processing cell x (the first cell in the new group), the code moves to the next cell. If the next cell has the same a_val, it is added to current_group, and E is computed for it using the same cumulative variables (since the previous group's data has already been added). But this is incorrect because cells in the same group have the same a_val and their data should not be added to the cumulative variables until the entire group is processed.
+
+Ah, here's a mistake in the code logic.
+
+In the current code structure, for each cell in sorted_cells:
+
+   check if a_val is new.
+
+   if yes, process the previous group (add to cumulative variables).
+
+   then, compute E for current cell (regardless of grouping).
+
+This approach is wrong because when a group has multiple cells (same a_val), the code will process each cell in the group one by one, and compute their E using the same cumulative variables (which include all previous groups, but not the current group's cells). However, between cells in the same group, the code does not add their data to the cumulative variables, because the code only adds the previous group's data when a new a_val is encountered.
+
+This is correct. Because for all cells in the same group, their E is computed based on the cumulative variables (which include all previous groups), and their data is added to the cumulative variables only after the entire group is processed. But in the current code, after processing each cell in the group, the code does not add their data to the cumulative variables. The code adds the previous group's data when a new a_val is encountered, but for the current group, their data is not added until the group is completed.
+
+Wait, in the code as written:
+
+After processing a new a_val's first cell (cell x), the code computes E for cell x, and then adds cell x to current_group. Then, for the next cell in the same a_val group, the code adds it to current_group and computes E for it. But the current_group is not added to the cumulative variables until the next new a_val is encountered.
+
+So, for example:
+
+sorted_cells is a list of cells with a_val x, x, y.
+
+When processing the first x cell:
+
+prev_a is None → add to current_group.
+
+compute E for x cell.
+
+Then, next cell is also x (a_val == prev_a → add to current_group.
+
+compute E for x cell.
+
+When processing the third cell (y):
+
+a_val != prev_a → process current_group (add all x cells to cumulative variables).
+
+then reset current_group to [y].
+
+compute E for y cell.
+
+So, the code computes E for x cells using cumulative variables that do not include other x cells (since they are in the same group). Which is correct, since x cells have the same a_val and cannot transition to each other.
+
+Thus, the code is correct.
+
+But in the code as written, after processing each cell, the code computes E for that cell, and then appends it to current_group. But the code only adds the current_group's cells to the cumulative variables when the next new a_val is encountered.
+
+Thus, when processing a group of cells with the same a_val, their data is not added to the cumulative variables until after the entire group is processed (i.e., when a new a_val is encountered).
+
+Thus, for all cells in the same group, their E is computed using the same cumulative variables (which include previous groups, but not the current group's cells). After processing all cells in the group, the entire group's data is added to the cumulative variables for future groups.
+
+This is correct.
+
+So, the code as written should work.
+
+But wait, in the code, after the loop ends, there is a part where the current_group is processed. But in the code as written inside the loop, after each cell is processed, the code appends to current_group and computes E. But after the loop, the code processes the current_group. For example, if all cells have the same a_val, the code adds them to current_group, and then after the loop, the code processes the current_group (adding them to the cumulative variables).
+
+But in the code above, after the loop, there is a for loop that processes the current_group and adds their data to the cumulative variables. Is this necessary?
+
+Yes. Because during the loop, whenever a new a_val is encountered, the previous group is processed (added to cumulative variables), but the current group (last group) is not processed. So after the loop, the code must process the current_group (which is the last group) and add their data to the cumulative variables. Otherwise, those cells are not added to the cumulative variables, but in reality, they are part of the same group and their data should be added to the cumulative variables for any future groups. However, since the loop has ended, there are no future groups. So adding them is not necessary. But the code is structured to process the current_group after the loop, which is unnecessary. However, this may lead to incorrect cumulative variables for cells in the same group, but since there are no more cells, it's irrelevant.
+
+But in reality, the code in the loop processes each cell and computes E correctly. The current_group after the loop has all the cells of the last a_val group. But these cells are not added to the cumulative variables, but since there are no more cells after them, it doesn't matter.
+
+So, the code inside the loop processes each cell correctly. The code after the loop is unnecessary. Therefore, the code is correct as written.
+
+Thus, the code should work.
+
+Now, after all cells are processed, the answer is E[r][c], where r and c are 0-based indices.
+
+So, the code prints E[r][c].
+
+But let's test the first example.
+
+After processing the three a=1 cells (in the first group), when processing the a=2 cell (1,3), the code computes E correctly as 2.
+
+So, the code's final answer is E[r][c} = E[0][2} (since the initial r=1, c=3 → 0-based indices are 0 and 2).
+
+Which is 2. So the output is 2.
+
+Yes.
+
+Now, coding this in Python.
+
+But for n and m up to 1e3, the code will have O(nm) time for sorting, and O(nm) time for processing each cell. So for 1e6 cells, it's manageable.
+
+But in Python, for 1e6 operations, it's acceptable.
+
+Now, the code:
+
+But there's a mistake in the loop. Let's see:
+
+The code inside the loop for each cell:
+
+When a new a_val is encountered (different from prev_a), the code processes the previous group (adding to cumulative variables), then creates a new group with the current cell. Then, compute E for the current cell.
+
+But for the first cell, prev_a is None. So, code appends to current_group, then computes E for this cell (which has a_val). Since cum_count is 0 (initialized to 0), K is 0, so E is 0.
+
+Yes.
+
+For the second cell, if a_val is same as prev_a, then added to current_group, and E is computed using the current cumulative variables (which may include previous groups).
+
+Yes.
+
+Thus, the code should work.
+
+So, the code is as follows:
+
+Read n, m.
+
+Read matrix.
+
+Read r, c, convert to 0-based.
+
+Collect all cells as (a_val, i+1, j+1), since the cells are 1-based.
+
+Sort the cells.
+
+Initialize variables.
+
+Loop through each cell in sorted_cells:
+
+   handle grouping.
+
+   compute E for current cell.
+
+Then, after loop, process current_group (add to cumulative variables).
+
+Wait, but in the code written earlier, during the loop, after processing a new a_val, the previous group is processed (added to cumulative variables), then the new cell is added to current_group. Then, E is computed for this cell.
+
+But during the loop, after processing each cell (whether in a new group or same group), E is computed.
+
+Wait, in the code I wrote earlier, the code is:
+
+for cell in sorted_cells:
+
+    a_val, i, j = cell
+
+    if prev_a is None:
+
+        # first cell
+
+        prev_a = a_val
+
+        current_group.append( cell )
+
+    else:
+
+        if a_val == prev_a:
+
+            current_group.append( cell )
+
+        else:
+
+            # process the current_group (prev_a group)
+
+            # add their data to cumulative variables
+
+            for (a_prev, i_prev, j_prev) in current_group:
+
+                # update cumulative variables
+
+            current_group = [cell]
+
+            prev_a = a_val
+
+    # compute E for this cell
+
+    K = cum_count
+
+    ... compute e ...
+
+    E[i-1][j-1] = e
+
+But this code is incorrect because after processing the previous group (when a_val changes), the current cell is added to current_group and then E is computed for it. But the code for adding the previous group's data to cumulative variables is done before processing the current cell.
+
+So, the code for the current cell's E computation uses the updated cumulative variables (after adding the previous group's data). Which is correct.
+
+But during the loop, after processing each cell (even those in the same group), the code computes E for that cell.
+
+For example, for a group of two cells with a_val x, the first cell is processed: added to current_group. Then E is computed using cumulative variables (which include previous groups). Then the next cell is added to current_group, E computed using same cumulative variables.
+
+Yes.
+
+Then, when the next cell has a different a_val, the current_group (with two cells) is processed (added to cumulative variables), then the new cell is added to current_group, and E computed.
+
+Yes.
+
+Thus, the code is correct.
+
+But in the code I wrote earlier, the E is computed for each cell in sorted_cells, which is correct.
+
+But in the code written inside the loop, after a new a_val is encountered and the previous group is processed, the new cell is added to current_group and E computed for it.
+
+But in the code, after processing the previous group, current_group is set to [cell], and then E is computed for cell.
+
+Yes.
+
+Thus, the code should be correct.
+
+So the final code should read:
+
+Read n and m.
+
+Read matrix.
+
+Read r and c (convert to 0-based).
+
+Collect all cells as (a_val, i+1, j+1).
+
+Sort them by a_val.
+
+Initialize cum_ variables.
+
+prev_a = None.
+
+current_group = []
+
+Process each cell in sorted_cells:
+
+   if prev_a is None or a_val == prev_a:
+
+       add to current_group.
+
+   else:
+
+       process current_group (add to cum_ variables).
+
+       reset current_group to [cell].
+
+   compute E for current cell.
+
+   store in E[i-1][j-1].
+
+At the end, process current_group (add to cum_ variables).
+
+But in the code written earlier, during the loop, after a new a_val is encountered and the previous group is processed, the current cell is added to current_group and then E computed for it. But in the code, after processing the previous group, current_group is set to [cell], and then E is computed.
+
+Thus, the code inside the loop is:
+
+for cell in sorted_cells:
+
+    a_val, i, j = cell
+
+    if prev_a is None:
+
+        prev_a = a_val
+
+        current_group = [cell]
+
+    else:
+
+        if a_val == prev_a:
+
+            current_group.append(cell)
+
+        else:
+
+            # process previous group
+
+            for (a_prev, i_prev, j_prev) in current_group:
+
+                ... add to cum_ variables ...
+
+            current_group = [cell]
+
+            prev_a = a_val
+
+    # compute E for cell
+
+    K = cum_count
+
+    ... compute e ...
+
+    E[i-1][j-1] = e
+
+So, in this case, after processing the previous group (when a_val changes), the current_group is set to [cell], and then the code computes E for cell. But the cell is part of the current_group, which hasn't been added to the cumulative variables yet. Which is correct, since the current_group's cells have a higher a_val than previous groups.
+
+Thus, the code is correct.
+
+But after the loop, the current_group (which may contain the last group) is processed by adding their data to the cumulative variables. This is necessary to ensure that any following groups would have included them, but since there are no following groups, it's unnecessary. However, the code's final step after the loop is to process the current_group and add their data to the cumulative variables.
+
+But in the code as written, this step is not included. Which means that the code is missing this step.
+
+Wait, in the code I wrote earlier, during the loop, after each cell is processed, the code appends to current_group and computes E. But the code after the loop (after the for loop) processes the current_group. So, after the loop, the code must process the current_group and add their data to the cumulative variables.
+
+But in the code written in the previous example, this is not done. Thus, the code is incorrect.
+
+This is a mistake. For example, consider the case where all cells have the same a_val. Then, during the loop, the code will collect all cells into current_group. But since no new a_val is encountered, the code does not process the current_group and add their data to the cumulative variables. However, after the loop, the code must process the current_group.
+
+But according to the code written earlier, after the loop, the code has:
+
+# After the loop, process the current_group
+
+for (a_prev, i_prev, j_prev) in current_group:
+
+    ... add to cum_ variables ...
+
+This code is needed to handle the last group.
+
+So the correct code must include this step.
+
+Thus, the code should have:
+
+After the for cell in sorted_cells loop:
+
+for (a_prev, i_prev, j_prev) in current_group:
+
+    ei_prev = E[i_prev-1][j_prev-1]
+
+    cum_count = (cum_count +1) % MOD
+
+    cum_sum_k = (cum_sum_k + i_prev) % MOD
+
+    cum_sum_l = (cum_sum_l + j_prev) % MOD
+
+    cum_sum_k2l2 = (cum_sum_k2l2 + (i_prev**2 + j_prev**2)) % MOD
+
+    cum_sum_E = (cum_sum_E + ei_prev) % MOD
+
+But why? Because during the loop, whenever a new a_val is encountered, the previous group is processed. But the last group (whatever it is) is not processed during the loop. So, after the loop, we need to process the last group.
+
+But during the loop, for each cell, after processing whether a new group is needed, the code computes E for the cell and appends to current_group. But after processing all cells, the last group is current_group. For example, if all cells have the same a_val, then during the loop, the current_group contains all cells, and after the loop, we process them.
+
+But processing them involves adding their data to the cumulative variables, which is necessary for any subsequent groups, but since there are none, it's not needed. However, the code must process them to ensure that the cumulative variables are updated, but since no other groups exist, it's irrelevant.
+
+But the code must process all groups. The only way to ensure that all groups are processed is to handle the last current_group after the loop.
+
+Thus, the code must include this step.
+
+But in the code written earlier, during the loop, when a new a_val is encountered, the previous group is processed. So during the loop, all groups except the last one are processed. The last group is added to current_group but not processed. So, after the loop, the code must process the current_group.
+
+Thus, the code needs to add this step.
+
+Thus, the correct code includes:
+
+after the for cell loop:
+
+for (a_prev, i_prev, j_prev) in current_group:
+
+    ei_prev = E[i_prev-1][j_prev-1]
+
+    cum_count +=1
+
+    cum_sum_k += i_prev
+
+    cum_sum_l += j_prev
+
+    cum_sum_k2l2 += (i_prev**2 + j_prev**2)
+
+    cum_sum_E += ei_prev
+
+But with modulo operations.
+
+But in the code written earlier, this step is missing. So this is a bug.
+
+Thus, the code must include this step.
+
+Therefore, the correct code is:
+
+After the for loop over sorted_cells:
+
+# process the remaining current_group
+
+for (a_prev, i_prev, j_prev) in current_group:
+
+    ei_prev = E[i_prev-1][j_prev-1]
+
+    cum_count = (cum_count + 1) % MOD
+
+    cum_sum_k = (cum_sum_k + i_prev) % MOD
+
+    cum_sum_l = (cum_sum_l + j_prev) % MOD
+
+    cum_sum_k2l2 = (cum_sum_k2l2 + (i_prev**2 + j_prev**2)) % MOD
+
+    cum_sum_E = (cum_sum_E + ei_prev) % MOD
+
+But why? Because during the loop, whenever a new a_val is encountered, the previous group is processed. But the current_group (the last group) is not processed during the loop. So after the loop, we must process it.
+
+But wait, no. The current_group is processed only when a new a_val is encountered. So, the last group is not processed during the loop. Thus, after the loop, we must process the current_group.
+
+But in the case where all cells have the same a_val, during the loop, the current_group is collected, but since no new a_val is encountered, the current_group is not processed. So, after the loop, we must process the current_group.
+
+But why? Because the current_group's data is needed for any future groups. But since there are no future groups, it's not necessary. However, the code must process the current_group after the loop to ensure that any data is added to the cumulative variables. But in reality, the data is not needed.
+
+Thus, the code is correct even without processing the current_group after the loop. Because the current_group's data is not needed for any future groups, and their E has already been computed.
+
+But wait, no. The processing of the current_group after the loop is only to update the cumulative variables, but since there are no more groups, it's not necessary.
+
+Thus, the code can safely omit this step. However, if the code includes this step, it's redundant but harmless.
+
+But why does the sample code work? Let's see.
+
+In the first sample:
+
+The current_group after processing the a=2 cell is [ (2, 1,3) ].
+
+After the loop, the code processes this group, adding their data to the cumulative variables. But since there are no more cells, this is unnecessary.
+
+But in the code, during the loop, when processing the a=2 cell (which is the last cell), after adding to current_group and computing E, the code does not process the current_group. So, after the loop, the code processes the current_group, adding their data to the cumulative variables.
+
+But this data is not used, so it's okay.
+
+But this step is necessary only for cases where there are multiple groups. For example, if there are three groups: a=1, a=2, a=3.
+
+During processing a=3 group:
+
+When the first cell of a=3 is encountered, the previous group (a=2) is processed and added to cumulative variables. Then, the a=3 group's current_group is processed (added to cumulative variables after the loop). But this is not needed because there are no more groups.
+
+Thus, the code can safely omit processing the current_group after the loop.
+
+But why does the sample code work then?
+
+In the first sample, the code would process the a=1 group (three cells), then process the a=2 cell (current_group = [cell] ), compute E for it. Then, after the loop, the code processes the current_group (adding it to cumulative variables), but this is not needed. But the answer is already stored in E[r][c} correctly.
+
+Thus, the code is correct even if the current_group is not processed after the loop. Because the current_group's data is only needed for future groups, which do not exist.
+
+Thus, the code can omit the processing of the current_group after the loop.
+
+But in the code written earlier, the code inside the loop for each cell:
+
+The code appends the current cell to current_group and computes E for it. The code adds the previous group's data to the cumulative variables when a new a_val is encountered. Thus, the current_group's data is not added to the cumulative variables until a new a_val is encountered.
+
+Thus, the code is correct without processing the current_group after the loop.
+
+Thus, the code is correct.
+
+Thus, the final code should be as follows.
+</think>
+To solve this problem, we need to calculate the expected value of Vasya's final score after moving a chip on a matrix according to specific rules. The solution involves dynamic programming and modular arithmetic to efficiently compute the expected value using properties of Markov chains and Euclidean distances.
+
+### Approach
+1. **Sorting Cells by Value**: We start by sorting all cells in the matrix based on their values. This allows us to process cells in increasing order of their values, ensuring that when we compute the expected value for a cell, all cells with smaller values have already been processed.
+
+2. **Dynamic Programming (DP) Setup**: We maintain a DP array `E` where `E[i][j]` represents the expected score starting from cell `(i, j)`. The value of `E[i][j]` is computed using the contributions from all cells with smaller values.
+
+3. **Cumulative Sums**: To efficiently compute the contributions from all smaller cells, we maintain cumulative sums of their coordinates, squared coordinates, and their expected values. These sums help in quickly calculating the required distances and expected values using precomputed values.
+
+4. **Modular Arithmetic**: Since the result needs to be modulo `998244353`, all operations, including divisions (using modular inverses), are performed under this modulus to prevent overflow and ensure correctness.
+
+### Solution Code
+```python
+MOD = 998244353
+
+n, m = map(int, input().split())
+matrix = []
+for _ in range(n):
+    row = list(map(int, input().split()))
+    matrix.append(row)
+r, c = map(int, input().split())
+r -= 1
+c -= 1  # Convert to 0-based indices
+
+cells = []
+for i in range(n):
+    for j in range(m):
+        cells.append((matrix[i][j], i + 1, j + 1))  # Store 1-based indices
+
+# Sort cells by their value
+cells.sort(key=lambda x: x[0])
+
+# Initialize E and cumulative variables
+E = [[0] * m for _ in range(n)]
+
+cum_count = 0
+cum_sum_k = 0
+cum_sum_l = 0
+cum_sum_k2l2 = 0
+cum_sum_E = 0
+
+prev_a = None
+current_group = []
+
+for cell in cells:
+    a_val, i, j = cell
+    if prev_a is None:
+        prev_a = a_val
+        current_group.append(cell)
+    else:
+        if a_val == prev_a:
+            current_group.append(cell)
+        else:
+            # Process the previous group
+            for (a_prev, i_prev, j_prev) in current_group:
+                ei_prev = E[i_prev - 1][j_prev - 1]
+                cum_count = (cum_count + 1) % MOD
+                cum_sum_k = (cum_sum_k + i_prev) % MOD
+                cum_sum_l = (cum_sum_l + j_prev) % MOD
+                cum_sum_k2l2 = (cum_sum_k2l2 + (i_prev ** 2 + j_prev ** 2)) % MOD
+                cum_sum_E = (cum_sum_E + ei_prev) % MOD
+            current_group = [cell]
+            prev_a = a_val
+    
+    # Compute E for current cell
+    K = cum_count
+    if K == 0:
+        e = 0
+    else:
+        i_sq_j_sq = (i ** 2 + j ** 2) % MOD
+        term1 = (K * i_sq_j_sq) % MOD
+        term2 = cum_sum_k2l2 % MOD
+        term3 = (2 * i) % MOD
+        term3 = (term3 * cum_sum_k) % MOD
+        term3 = (MOD - term3) % MOD  # Subtract
+        term4 = (2 * j) % MOD
+        term4 = (term4 * cum_sum_l) % MOD
+        term4 = (MOD - term4) % MOD  # Subtract
+        sum_dist_sq = (term1 + term2 + term3 + term4) % MOD
+        sum_total = (sum_dist_sq + cum_sum_E) % MOD
+        inv_K = pow(K, MOD-2, MOD)
+        e = (sum_total * inv_K) % MOD
+    E[i - 1][j - 1] = e
+
+# After processing all cells, no need to process the last current_group as it won't affect any further groups
+
+print(E[r][c])
+```
+
+### Explanation
+1. **Input Handling and Initialization**: The input is read and converted into a list of cells with their values and coordinates. The initial position of the chip is adjusted to 0-based indices for easier array access.
+
+2. **Sorting Cells**: Cells are sorted by their values to ensure we process them in increasing order, allowing us to use previously computed values for smaller cells.
+
+3. **Dynamic Programming and Cumulative Sums**: As we process each cell, we maintain cumulative sums of relevant values (coordinates, squared coordinates, and expected values) from all previously processed cells with smaller values. This allows efficient calculation of the expected value for the current cell using precomputed sums.
+
+4. **Modular Arithmetic**: All operations are performed modulo `998244353`, including the computation of the modular inverse for division. This ensures that all intermediate values remain within bounds and the final result is correct.
+
+This approach efficiently computes the expected value using dynamic programming and modular arithmetic, ensuring correctness and optimal performance for large input sizes.
+</bot>

@@ -1,0 +1,663 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.problem
+
+Given the formula $ S $ of length $ N $. The formula is in the format shown in BNF below.
+
+
+<expr> :: = <number> | <expr> <op> <expr>
+
+<op> :: = ‘^’ | ‘&’ | ‘|’
+
+
+
+<number> represents an integer greater than or equal to $ 0 $ and less than or equal to $ 2 ^ {31} -1 $.
+
+The operators ‘^’ ‘&’ ‘|’ represent exclusive OR, AND, and OR, respectively. The precedence of operators is as follows.
+
+High ‘^’> ‘&’> ‘|’ Low
+
+$ Q $ intervals $ [i, j] $ are given. Output the calculation result of $ S_i, \ dots, S_j $.
+
+It is guaranteed that the formulas $ S_i, \ dots, S_j $ are in the format shown by the above BNF. Also, the formula does not contain zero-padded values.
+
+
+
+output
+
+Output the calculation result of $ S_i, \ dots, S_j $. Also, output a line break at the end.
+
+Example
+
+Input
+
+7
+9^2&1|2
+4
+0 6
+0 2
+2 6
+4 4
+
+
+Output
+
+3
+11
+2
+1
+</user>
+<bot>
+<think>
+Okay, let's tackle this problem. Hmm, the task is to parse a string representing an arithmetic expression with operators ^, &, |, each with different precedences, and evaluate it correctly. Then, for multiple queries, each asking for the evaluation of a substring of the original formula, we need to compute the result efficiently.
+
+First, I need to understand the precedence rules. The highest is ^, then &, then |. So in an expression like a ^ b & c | d, the operations are done in the order ^, then &, then |. So the parsing needs to respect operator precedence.
+
+The main challenge is how to parse the substring efficiently for each query. Since each query can be on a different substring, we can't precompute all possible substrings as there are O(N^2) possibilities, which would be too much for N up to, say, 1e5. But the example input has N=7 and Q=4, so maybe the constraints are manageable with a certain approach. Wait, the problem statement doesn't specify N and Q's maximum, but given the example, perhaps the solution needs to process each query by parsing the substring each time. But if N is up to 1e4 and Q is 1e5, then O(Q*N) might not be feasible. However, in the problem statement's example, each query is processed by evaluating the substring directly. So perhaps the intended solution is to parse each substring for each query.
+
+But how to parse the expression with operator precedence correctly? Let's think about building a recursive descent parser for the expression. Since the operators have different precedence levels, we can structure the parser to handle them in order. For example:
+
+- parse the highest precedence operator (^) first, then combine with lower ones.
+
+Wait, no. The standard approach for operator precedence is to parse the expressions in reverse order of precedence. So first parse the lowest precedence operator (|), then &, then ^. Because when you have higher precedence operators, they are grouped together first.
+
+Wait, no. Let me think again. When you have an expression like a | b & c ^ d, the precedence is ^ first, then &, then |. So the expression is evaluated as a | (b & (c ^ d)). So when parsing, the higher precedence operators form deeper subtrees. So the parser should process the higher precedence operators first.
+
+So the correct approach is to parse the expression using a recursive descent parser that handles precedence correctly. For example, the way to handle operator precedence is to split the parsing into different levels. For example:
+
+- The highest precedence is ^. So when parsing an expression at the ^ level, we split the terms into parts separated by ^ and combine them with XOR. But wait, operator precedence is handled by how tightly they bind. So the operators with higher precedence are evaluated first.
+
+Wait, perhaps the correct way is to split the expression into levels. Let's see. For example, consider the expression a ^ b & c | d. The precedence is ^, then &, then |. So this would be evaluated as ((a ^ (b & c)) | d). So when parsing, the lowest precedence operator (|) is split first, then the next (&), then ^. So the parser would first split the expression into parts separated by |, each part is parsed as a & and ^ expression. Then each of those parts is split by &, and each part is parsed as ^ expressions, etc.
+
+So the structure of the parser would be:
+
+parse_expr() {
+    val = parse_or()
+    return val
+}
+
+parse_or() {
+    node = parse_and()
+    while next token is |:
+        consume |
+        node = node | parse_and()
+    return node
+}
+
+parse_and() {
+    node = parse_xor()
+    while next token is &:
+        consume &
+        node = node & parse_xor()
+    return node
+}
+
+parse_xor() {
+    node = parse_primary()
+    while next token is ^:
+        consume ^
+        node = node ^ parse_primary()
+    return node
+}
+
+parse_primary() {
+    if next token is number:
+        return number
+    else if next token is '(':
+        ...
+        but according to the BNF, the primary is a number or another expr. Wait, the BNF given is:
+
+<expr> ::= <number> | <expr> <op> <expr>
+
+So there's no parentheses. So the expressions are evaluated according to operator precedence, but without any parentheses. So the structure is flat, and the operators with higher precedence are grouped first.
+
+Wait, but the BNF allows for expressions like a ^ b & c, which would be a ^ (b & c), since & has lower precedence than ^. Wait no: in the problem statement, the precedence is high to low: ^, &, |. So in a ^ b & c, since ^ has higher precedence than &, it would be (a ^ b) & c. Wait, no. Wait, operator precedence determines which operator is evaluated first. So in the expression a OP1 b OP2 c, if OP1 has higher precedence than OP2, then OP1 is evaluated first. So a OP1 b OP2 c is (a OP1 b) OP2 c. So for example, in 9^2&1|2 as in the example input, the evaluation is ((9 ^ 2) & 1) | 2. Let's compute that step by step.
+
+9 ^ 2 is 11. Then 11 & 1 is 1. Then 1 | 2 is 3. Which matches the sample output's first answer.
+
+So the structure is that when an expression is a sequence of terms connected by operators of varying precedence, the higher precedence operators are grouped first.
+
+Therefore, the parser must correctly handle the precedence by processing the operators in order of precedence. So for the given problem, the parsing order should be:
+
+First, process all | operators (lowest precedence), which are split into terms connected by & and ^. Then process & operators, which split into terms connected by ^. Then process ^ operators, which split into numbers.
+
+Wait, no. Wait, when you have a mix of operators, you need to parse the higher precedence ones first. So the order is to parse the highest precedence operator (^) first, then &, then |.
+
+So for example, the expression a | b & c ^ d would be parsed as a | (b & (c ^ d)). So to parse this correctly, the parser would first split on |, then for each part, split on &, then split on ^.
+
+Alternatively, the approach is to parse the expression as follows:
+
+The expression is a sequence of terms separated by |. Each term is an & expression. Each & term is a sequence of terms separated by &. Each of those terms is a sequence of ^ terms. Each ^ term is a number.
+
+Wait, no. Because | has the lowest precedence, so the entire expression is a series of terms joined by |. Each of those terms is a series of terms joined by &. Each of those terms is a series of terms joined by ^.
+
+So, for example, the expression 9^2&1|2 can be broken down as:
+
+Top-level is |. So split into two parts: 9^2&1 and 2. Each of these is evaluated, then | between them.
+
+The first part, 9^2&1: split into & parts. So 9^2 and 1. Each is evaluated, then & between them.
+
+The 9^2 part: split into ^ parts. 9 and 2. 9 ^ 2 is 11.
+
+Then 11 & 1 is 1. Then 1 | 2 is 3.
+
+So the parser should be structured as:
+
+Parse the expression as an OR expression, which consists of AND expressions separated by |. Each AND expression consists of XOR expressions separated by &. Each XOR expression consists of numbers separated by ^.
+
+So the parse_or function would parse the left and right parts of |, which are AND expressions, and combine them with |. The parse_and function parses left and right parts of &, which are XOR expressions, combine with &. The parse_xor function parses left and right parts of ^, combine with ^.
+
+Wait, but how to handle the precedence? Because in the parse_or function, the left and right parts are AND expressions, which have higher precedence. So when parsing a | b, a and b are evaluated as AND expressions, which in turn can have & operators. So this way, the precedence is enforced.
+
+So the recursive descent parser would have functions for each precedence level:
+
+- parse_expr: parses the lowest precedence operator (|), then &, then ^.
+
+So the functions are:
+
+parse_or() -> handles | operators, left and right are parse_and()
+
+parse_and() -> handles & operators, left and right are parse_xor()
+
+parse_xor() -> handles ^ operators, left and right are parse_primary()
+
+parse_primary() -> parses a number.
+
+So the code structure could be something like:
+
+def parse(s):
+    tokens = tokenize(s)
+    return parse_or(tokens)
+
+def parse_or(tokens):
+    left = parse_and(tokens)
+    while tokens and tokens[0] == '|':
+        op = tokens.pop(0)
+        right = parse_and(tokens)
+        left = left | right
+    return left
+
+def parse_and(tokens):
+    left = parse_xor(tokens)
+    while tokens and tokens[0] == '&':
+        op = tokens.pop(0)
+        right = parse_xor(tokens)
+        left = left & right
+    return left
+
+def parse_xor(tokens):
+    left = parse_primary(tokens)
+    while tokens and tokens[0] == '^':
+        op = tokens.pop(0)
+        right = parse_primary(tokens)
+        left = left ^ right
+    return left
+
+def parse_primary(tokens):
+    num = tokens.pop(0)
+    return int(num)
+
+But wait, the tokenize function needs to split the input into numbers and operators. For example, the input "9^2&1|2" would be split into ['9', '^', '2', '&', '1', '|', '2'].
+
+So tokenizing is the first step. How to split the string into tokens. Since numbers can be multi-digit (like '123'), but there's no spaces. So the tokenizer needs to scan the string and split into numbers and operators.
+
+So, for example, in the string "123^45&6", the tokens are ['123', '^', '45', '&', '6'].
+
+So the tokenizer can iterate through the characters. Whenever a digit is encountered, collect all consecutive digits to form a number token. Whenever an operator (^, &, |) is encountered, add as a separate token.
+
+So the tokenizer function could be:
+
+def tokenize(s):
+    tokens = []
+    i = 0
+    while i < len(s):
+        if s[i] in '^&|':
+            tokens.append(s[i])
+            i += 1
+        else:
+            # collect digits
+            j = i
+            while j < len(s) and s[j].isdigit():
+                j += 1
+            tokens.append(s[i:j])
+            i = j
+    return tokens
+
+Yes, that would work.
+
+Once the tokens are generated, the parser can process them in the order of precedence.
+
+So, for the example input "9^2&1|2", the tokens are ['9','^','2','&','1','|','2'].
+
+parse_or is called, which calls parse_and.
+
+parse_and calls parse_xor, which parses the first part.
+
+parse_xor: left = parse_primary (9), then check if next token is ^. Yes. So parse_primary (2), combine with ^. So 9^2 = 11. Then next token is &, which is in parse_and. So after parse_xor returns 11, parse_and checks if next token is &. So yes, parse_xor again, which parses 1. Then combine 11 & 1 = 1. So parse_and returns 1. Then, parse_or checks if next token is |. Yes. Then parse_and on the remaining tokens, which is just 2. So parse_and parses 2, then 1 | 2 =3. Which is the correct result.
+
+So the parser works for the example.
+
+Now, the problem is that for each query, we need to evaluate a substring of S. So for example, the first query is [0,6], which is the entire string. The second is [0,2], which is '9^2'.
+
+So the first step is to process each query by extracting the substring S[i..j], then tokenizing and parsing it.
+
+But the problem is that the input is given as a formula string, and the queries are ranges [i,j]. So for each query, the substring S[i..j+1] (assuming 0-based and inclusive) is the formula to evaluate.
+
+Wait, the input in the sample is '9^2&1|2' which is of length 7. The first query is 0 to 6, which is the entire string.
+
+So, for each query, extract the substring from i to j (inclusive), then process it.
+
+So the approach would be:
+
+Read the formula string S.
+
+For each query [i,j], take S[i:j+1], tokenize it, parse it, compute the value.
+
+Now, the challenge is to parse each substring correctly. But each substring is a valid formula according to the BNF, as per the problem statement.
+
+So the code outline would be:
+
+Read N, S.
+
+Read Q queries.
+
+For each query [i,j], take the substring S[i..j], process it.
+
+But in Python, S is 0-based, and the slice S[i:j+1] gives the substring from i to j inclusive.
+
+For example, S = 'abcdef', i=0, j=2: S[0:3] is 'abc'.
+
+So, for each query, the formula is S[i : j+1].
+
+Once the substring is extracted, tokenize and parse.
+
+Now, the question is the efficiency. For each query, the time taken is O(L), where L is the length of the substring. If Q is large, say 1e5, and L is up to 1e5, this approach would be O(Q*L), which is 1e10 operations. But given that in practice, the constraints might be smaller, but perhaps the problem expects this approach.
+
+But the problem statement says that in the input, it's guaranteed that the substring is a valid formula. So no need to handle errors.
+
+So the code would be:
+
+Read N.
+
+Read S as a string.
+
+Read Q.
+
+For each query, read i and j. Then substring = S[i:j+1]. Then tokenize, parse, compute the value, print.
+
+So now, implement this in Python.
+
+But in Python, string slicing is O(k) where k is the length. So for each query, extracting the substring is O(L), then tokenizing is O(L), then parsing is O(L). So per query O(L) time. If Q is 1e4 and L is up to 1e4, this is 1e8 operations, which is manageable.
+
+But given that the example shows that even a single character (like the query 4 4 in the sample, which is '2') is parsed as a number.
+
+So the code needs to handle all these steps correctly.
+
+Now, putting it all together.
+
+First, write the tokenizer function.
+
+Then, the parser functions.
+
+But in Python, handling the tokens as a list and popping from the front is O(n) per pop, which would make the parser O(n^2). So for the token list, perhaps we can use an index to track the current position. So instead of popping from the front, we have an index variable that increments as we process tokens.
+
+So for example:
+
+def parse_or(tokens, pos):
+
+But that's more complex. Alternatively, convert the tokens list into a deque and pop from the left. Because popping from the front of a deque is O(1).
+
+Yes. So the tokenizer returns a deque. Then, in the parsing functions, each time we check the first element, and if it's the operator we're looking for, we pop it and process.
+
+So modifying the tokenizer:
+
+from collections import deque
+
+def tokenize(s):
+    tokens = deque()
+    i = 0
+    while i < len(s):
+        if s[i] in '^&|':
+            tokens.append(s[i])
+            i += 1
+        else:
+            j = i
+            while j < len(s) and s[j].isdigit():
+                j += 1
+            tokens.append(s[i:j])
+            i = j
+    return tokens
+
+Then, in the parsing functions, we process the deque:
+
+def parse_or(tokens):
+    left = parse_and(tokens)
+    while tokens and tokens[0] == '|':
+        op = tokens.popleft()
+        right = parse_and(tokens)
+        left = left | right
+    return left
+
+Similarly for parse_and and parse_xor.
+
+This way, each token is processed in order, and the deque is modified in O(1) per pop.
+
+This is more efficient.
+
+So the code for the parser would be:
+
+def evaluate(s):
+    tokens = tokenize(s)
+    return parse_or(tokens)
+
+def parse_or(tokens):
+    left = parse_and(tokens)
+    while tokens and tokens[0] == '|':
+        op = tokens.popleft()
+        right = parse_and(tokens)
+        left = left | right
+    return left
+
+def parse_and(tokens):
+    left = parse_xor(tokens)
+    while tokens and tokens[0] == '&':
+        op = tokens.popleft()
+        right = parse_xor(tokens)
+        left = left & right
+    return left
+
+def parse_xor(tokens):
+    left = parse_primary(tokens)
+    while tokens and tokens[0] == '^':
+        op = tokens.popleft()
+        right = parse_primary(tokens)
+        left = left ^ right
+    return left
+
+def parse_primary(tokens):
+    num_str = tokens.popleft()
+    return int(num_str)
+
+Testing this with the sample input:
+
+Sample input is '9^2&1|2'.
+
+Tokenizing gives deque(['9', '^', '2', '&', '1', '|', '2']).
+
+parse_or is called. It calls parse_and.
+
+parse_and calls parse_xor.
+
+parse_xor calls parse_primary, which returns 9. Then checks if next token is ^. Yes. Pop it, then parse_primary (2). 9^2 is 11. No more ^, so returns 11.
+
+parse_and then checks if next token is &. Yes. Pop it, then parse_xor (parse_primary returns 1). So 11 & 1 = 1. No more &, returns 1.
+
+parse_or checks if next token is |. Yes. Pop, then parse_and (which parses 2). So 1 | 2 =3. Correct.
+
+So this works.
+
+Another example: the query 0 to 2: substring is '9^2'. The tokens are ['9','^','2'].
+
+parse_or calls parse_and which calls parse_xor. parse_xor parses 9, then ^, then 2. 9^2=11. Then no more operators. So parse_and returns 11, parse_or returns 11. So output is 11. Which matches the sample's second output.
+
+Another query: 2 to 6. The substring is '2&1|2' (assuming S is 0-based). Let's see: original S is '9^2&1|2'. Positions 2-6: characters 2,3,4,5,6: '2&1|'. Wait, no. Wait the length of S is 7. The indices 0-6. So S[2:6+1] is from index 2 to 6 inclusive.
+
+Original S is '9^2&1|2' → indices 0:9, 1:^, 2:2, 3:&, 4:1, 5:|, 6:2. So substring 2-6 is S[2:7], which is '2&1|2'. Wait, no: 2 to 6 inclusive. So S[2:7], since in Python s[a:b] includes a up to but not including b. So for indices 2 to 6 (inclusive), the slice is S[2:7].
+
+So the substring is '2&1|2'.
+
+Processing this:
+
+tokens are ['2', '&', '1', '|', '2'].
+
+parse_or starts by parse_and.
+
+parse_and calls parse_xor (2), then sees &, so parse_xor (1). 2&1=2 & 1=0. Then parse_or sees |, so parse_and (2). 0 | 2 = 2. So output is 2. Which matches the sample's third output.
+
+Fourth query: 4-4. The substring is '1'. So token is ['1'], parsed as 1.
+
+So the code works for these cases.
+
+Now, the code needs to read the input, process each query, and output the result.
+
+In Python, reading from stdin can be done with input().split(), but for larger inputs, using sys.stdin is better.
+
+The input format is:
+
+First line: N.
+
+Second line: S (the formula string).
+
+Third line: Q.
+
+Next Q lines: each has two integers i and j.
+
+So, code steps:
+
+Read N.
+
+Read S. Note that S can have leading or trailing spaces? According to the example, no. The input is given as a single line. So read with input().strip()
+
+Read Q.
+
+For each of Q lines, read i and j.
+
+For each query, take the substring S[i ... j], inclusive. So S[i : j+1] in Python.
+
+Then evaluate the substring, print the result.
+
+But need to be careful with the indices.
+
+For example, in the sample input, the first query is 0 to 6. The length of S is 7, so the substring is S[0:7], which is the entire string.
+
+Another example: query 4-4. The substring is S[4:5], which is '1'.
+
+So code:
+
+import sys
+from collections import deque
+
+def tokenize(s):
+    tokens = deque()
+    i = 0
+    while i < len(s):
+        if s[i] in '^&|':
+            tokens.append(s[i])
+            i += 1
+        else:
+            j = i
+            while j < len(s) and s[j].isdigit():
+                j += 1
+            tokens.append(s[i:j])
+            i = j
+    return tokens
+
+def parse_or(tokens):
+    left = parse_and(tokens)
+    while tokens and tokens[0] == '|':
+        op = tokens.popleft()
+        right = parse_and(tokens)
+        left = left | right
+    return left
+
+def parse_and(tokens):
+    left = parse_xor(tokens)
+    while tokens and tokens[0] == '&':
+        op = tokens.popleft()
+        right = parse_xor(tokens)
+        left = left & right
+    return left
+
+def parse_xor(tokens):
+    left = parse_primary(tokens)
+    while tokens and tokens[0] == '^':
+        op = tokens.popleft()
+        right = parse_primary(tokens)
+        left = left ^ right
+    return left
+
+def parse_primary(tokens):
+    num_str = tokens.popleft()
+    return int(num_str)
+
+def evaluate(s):
+    tokens = tokenize(s)
+    return parse_or(tokens)
+
+def main():
+    import sys
+    input = sys.stdin.read().split()
+    ptr = 0
+    N = int(input[ptr])
+    ptr += 1
+    S = input[ptr]
+    ptr += 1
+    Q = int(input[ptr])
+    ptr += 1
+    for _ in range(Q):
+        i = int(input[ptr])
+        ptr += 1
+        j = int(input[ptr])
+        ptr += 1
+        substring = S[i:j+1]
+        result = evaluate(substring)
+        print(result)
+
+if __name__ == "__main__":
+    main()
+
+Wait, but in the sample input, the formula is "9^2&1|2", which is given as a single line. So when using input().split(), the second element (input[ptr] after N) is that entire string.
+
+But when we read via sys.stdin.read().split(), the input is split into whitespace-separated tokens. For example, in the sample input:
+
+7
+9^2&1|2
+4
+0 6
+0 2
+2 6
+4 4
+
+sys.stdin.read().split() would return a list: ['7', '9^2&1|2', '4', '0', '6', '0', '2', '2', '6', '4', '4'].
+
+So the code would correctly read N=7, S='9^2&1|2', Q=4, then the queries.
+
+Yes. Then, for each query, the code extracts the substring from S[i:j+1], evaluates it, and prints.
+
+Testing the sample input:
+
+Queries:
+
+0 6 → substring is '9^2&1|2' → evaluate to 3.
+
+0 2 → '9^2' → 9^2=11.
+
+2 6 → '2&1|2' → 2&1=2 &1=0, then 0 |2=2.
+
+4 4 → '1' → 1.
+
+Which matches the sample output.
+
+So the code should work.
+
+But wait, when the input is read using sys.stdin.read().split(), the S is stored as a string. So when S is '9^2&1|2', then S[i:j+1] is correct.
+
+But in the code, when i=0 and j=6, the substring is S[0:7] (since j+1=7), which is the entire string.
+
+Yes.
+
+Another possible test case: when the formula is a single number. For example, a query that selects a single digit. The parser will handle it correctly.
+
+Another test case: multiple operators. For example, '1^2^3' → (1^2)^3 = 0^3=3.
+
+So the code works.
+
+Therefore, this should be the correct solution.
+</think>
+To solve this problem, we need to evaluate arithmetic expressions given as substrings of a larger formula. The expressions use the operators XOR (^), AND (&), and OR (|) with specific precedence rules. Each query asks for the result of evaluating a specific substring of the formula.
+
+### Approach
+1. **Tokenization**: Convert the input string into a list of tokens (numbers and operators) for easier parsing.
+2. **Parsing with Precedence**: Use a recursive descent parser to evaluate the expressions according to operator precedence (^ has the highest precedence, followed by &, then |).
+3. **Handling Queries**: For each query, extract the relevant substring, tokenize it, and evaluate it using the parser.
+
+### Solution Code
+```python
+from collections import deque
+import sys
+
+def tokenize(s):
+    tokens = deque()
+    i = 0
+    while i < len(s):
+        if s[i] in '^&|':
+            tokens.append(s[i])
+            i += 1
+        else:
+            j = i
+            while j < len(s) and s[j].isdigit():
+                j += 1
+            tokens.append(s[i:j])
+            i = j
+    return tokens
+
+def parse_or(tokens):
+    left = parse_and(tokens)
+    while tokens and tokens[0] == '|':
+        op = tokens.popleft()
+        right = parse_and(tokens)
+        left = left | right
+    return left
+
+def parse_and(tokens):
+    left = parse_xor(tokens)
+    while tokens and tokens[0] == '&':
+        op = tokens.popleft()
+        right = parse_xor(tokens)
+        left = left & right
+    return left
+
+def parse_xor(tokens):
+    left = parse_primary(tokens)
+    while tokens and tokens[0] == '^':
+        op = tokens.popleft()
+        right = parse_primary(tokens)
+        left = left ^ right
+    return left
+
+def parse_primary(tokens):
+    num_str = tokens.popleft()
+    return int(num_str)
+
+def evaluate(s):
+    tokens = tokenize(s)
+    return parse_or(tokens)
+
+def main():
+    input = sys.stdin.read().split()
+    ptr = 0
+    N = int(input[ptr])
+    ptr += 1
+    S = input[ptr]
+    ptr += 1
+    Q = int(input[ptr])
+    ptr += 1
+    for _ in range(Q):
+        i = int(input[ptr])
+        ptr += 1
+        j = int(input[ptr])
+        ptr += 1
+        substring = S[i:j+1]
+        result = evaluate(substring)
+        print(result)
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Tokenization**: The `tokenize` function converts the input string into a deque of numbers and operators. This helps in efficiently processing each token sequentially.
+2. **Parsing**: The parsing functions (`parse_or`, `parse_and`, `parse_xor`, and `parse_primary`) handle the operators according to their precedence. The highest precedence operator (^) is processed first, followed by &, and then |.
+3. **Query Handling**: For each query, the relevant substring is extracted, tokenized, and evaluated. The result of each evaluation is printed immediately.
+
+This approach ensures that each query is processed efficiently by leveraging the recursive descent parser, which correctly handles operator precedence and evaluates the expression as per the given rules.
+</bot>

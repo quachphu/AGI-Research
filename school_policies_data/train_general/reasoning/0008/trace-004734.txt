@@ -1,0 +1,803 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Yaroslav thinks that two strings s and w, consisting of digits and having length n are non-comparable if there are two numbers, i and j (1 ≤ i, j ≤ n), such that si > wi and sj < wj. Here sign si represents the i-th digit of string s, similarly, wj represents the j-th digit of string w.
+
+A string's template is a string that consists of digits and question marks ("?").
+
+Yaroslav has two string templates, each of them has length n. Yaroslav wants to count the number of ways to replace all question marks by some integers in both templates, so as to make the resulting strings incomparable. Note that the obtained strings can contain leading zeroes and that distinct question marks can be replaced by distinct or the same integers.
+
+Help Yaroslav, calculate the remainder after dividing the described number of ways by 1000000007 (109 + 7).
+
+Input
+
+The first line contains integer n (1 ≤ n ≤ 105) — the length of both templates. The second line contains the first template — a string that consists of digits and characters "?". The string's length equals n. The third line contains the second template in the same format.
+
+Output
+
+In a single line print the remainder after dividing the answer to the problem by number 1000000007 (109 + 7).
+
+Examples
+
+Input
+
+2
+90
+09
+
+
+Output
+
+1
+
+
+Input
+
+2
+11
+55
+
+
+Output
+
+0
+
+
+Input
+
+5
+?????
+?????
+
+
+Output
+
+993531194
+
+Note
+
+The first test contains no question marks and both strings are incomparable, so the answer is 1.
+
+The second test has no question marks, but the given strings are comparable, so the answer is 0.
+</user>
+<bot>
+<think>
+Okay, let's tackle this problem. Hmm, the problem is about counting the number of ways to replace the question marks in two string templates so that the resulting strings are non-comparable. Oh right, non-comparable here means that there exists at least one position where s_i > w_i and another position where s_j < w_j. Wait, right, that's the definition from the problem statement. So the two strings can't be all >= or all <= in all positions. So, the total valid ways are the total possible pairs minus those that are comparable (i.e., all s >= w in all positions, or all s <= w in all positions, but not both unless all equal). Wait, but if all positions are equal, then they are both all s >= w and all s <= w, so those are considered comparable. So the non-comparable cases are the ones that are neither all s >= w nor all s <= w. So the approach would be to compute the total number of possible pairs, subtract the number of pairs where s is always >= w, subtract the number of pairs where s is always <= w, and then add back the cases where s is exactly equal to w, because those cases were subtracted twice. Because, if s equals w in all positions, then it's both all >= and all <=. So inclusion-exclusion here. So the formula is total = total_pairs - (all_ge + all_le - same). Because all_ge includes same, all_le includes same. So subtracting both would subtract same twice, so we add it back once. So the answer is total_pairs - all_ge - all_le + same. That makes sense.
+
+So the steps would be:
+
+1. Compute the total number of possible pairs after replacing all question marks. For each position, the number of possible (s_i, w_i) pairs depends on the possibilities of s and w's templates. For example, if s has a '?', then s_i can be 0-9, same for w. So for each position, the number of possible (s_i, w_i) pairs is (count_s) * (count_w), where count_s is the number of possible digits for s's template at that position (1 if fixed, 10 if '?'), and similarly for count_w. Then multiply all these per-position possibilities together. But since each position's choices are independent, the total_pairs is the product over all positions of (s_options[i] * w_options[i]).
+
+2. Compute all_ge: the number of pairs where for every position i, s_i >= w_i. For each position, compute the number of possible (s_i, w_i) pairs where s_i >= w_i. Then multiply these per-position counts. The product is all_ge.
+
+3. Similarly compute all_le: the product for each position of the number of (s_i, w_i) pairs where s_i <= w_i. Multiply all positions' counts.
+
+4. Compute same: the product for each position of the number of pairs where s_i == w_i. Multiply per-position counts.
+
+Then the answer is (total_pairs - all_ge - all_le + same) mod 1e9+7. Because modulo can give negative numbers, we add mod again and take mod to ensure it's positive.
+
+Now, the problem is how to compute these four values efficiently, especially considering that n can be up to 1e5, and we need O(n) time.
+
+So for each position, we need to compute:
+
+- s_options: the number of possible digits for s's template. For example, if the character is '5', then s_options is 1. If it's '?', then 10 options. Similarly for w_options.
+
+Then, for each position, compute the possible pairs (s_i, w_i) for the four cases:
+
+For all_ge: for each position, the count of (a, b) where a >= b, a is in s_options, b in w_options.
+
+Similarly for all_le: count where a <= b.
+
+For same: count where a == b.
+
+These per-position counts must be computed, then multiplied across all positions.
+
+So for each position i, we need to compute:
+
+- ge: number of (a, b) pairs with a >= b, given the possible a's and b's.
+- le: number of pairs with a <= b.
+- eq: number of pairs with a == b.
+
+But how to compute these for each position?
+
+Let's think about the possible digits for s and w.
+
+For a given position, s can be a set of possible digits (like 0-9 if '?', or a single digit). Similarly for w.
+
+So for example, if s is '5' and w is '3', then possible pairs are (5,3). So ge here is 1 (5 >=3), le is 0 (5 <=3?), no. Wait, 5 <=3 is false, so the pair (5,3) is in ge but not in le. So for this position, ge is 1, le is 0, eq is 0.
+
+But if the s is '?' and w is '3', then s can be 0-9. For each possible a (0-9), count how many a >=3. So a can be 3,4,...,9: 7 options. So ge is 7, le is 4 (a<=3: 0,1,2,3). eq is 1 (3). Hmm.
+
+Wait, but in this case, s has 10 options (since it's '?'), and w has 1 option (3). So the possible pairs are (a, 3) for a in 0-9. So ge is the number of a where a >=3: 7 (3-9 inclusive). Le is the number of a <=3: 4 (0-3). Eq is 1. So for each position, the counts can be computed as:
+
+ge = sum over a in s_digits, b in w_digits, where a >= b.
+
+Similarly for le and eq.
+
+But computing this for each position for large n would take O(1) per position, since the possible digits for s and w are up to 10 each. So for each position, we can precompute s_digits and w_digits, then compute the counts for ge, le, eq.
+
+So for each position i:
+
+s_possible = set of possible digits for s (based on the template)
+w_possible = set of possible digits for w (based on the template)
+
+Then:
+
+ge_i = sum_{a in s_possible, b in w_possible} (1 if a >=b else 0)
+le_i = sum_{a in s_possible, b in w_possible} (1 if a <=b else 0)
+eq_i = sum_{a in s_possible, b in w_possible} (1 if a ==b else 0)
+
+Then, the all_ge is the product of ge_i for all positions.
+
+Similarly for all_le (product of le_i), same (product of eq_i).
+
+So the main challenge is to compute these sums efficiently for each position.
+
+Now, how to represent s_possible and w_possible. Let's see: for each position, the possible digits for s are determined by the character in the first template. For example, if the character is '5', then s_possible is {5}. If it's '?', then it's all 10 digits.
+
+Same for w_possible.
+
+So first, for each position, we can generate the possible digits for s and w.
+
+Once we have s_possible and w_possible as lists (or ranges), we can compute the counts.
+
+But how to compute ge_i, le_i, eq_i quickly.
+
+Let's think of s_possible as a list of possible a's, and w_possible as possible b's.
+
+The sum for ge_i is the number of pairs (a, b) where a >=b.
+
+Similarly for the others.
+
+But since the possible digits are 0-9, even if s or w has '?', which gives 10 possibilities, this is manageable.
+
+We can precompute the possible a's and b's for each position, then compute the counts.
+
+For example, if s has a '?' and w has a '3', then a can be 0-9, b is 3. Then ge_i is the count of a >=3, which is 7 (digits 3-9).
+
+Similarly, if s is '?', w is '?', then for each a in 0-9, the number of b's <= a is (a +1) (since b can be 0 to a). So the total ge_i is sum_{a=0}^9 (number of b's in 0-9 where b <=a) → sum_{a=0}^9 (a+1) → sum from 1 to 10 is 55. So ge_i is 55 when both are '?'.
+
+But maybe there's a smarter way to compute these counts.
+
+Alternatively, for each possible a in s_possible, count the number of b in w_possible that are <=a. Then sum all these counts for all a in s_possible. That gives ge_i.
+
+Similarly, for le_i, it's the sum over a in s_possible of the number of b in w_possible that are >=a. Because a <= b is equivalent to b >=a.
+
+Wait, yes. So le_i is the same as the sum for b >=a for (a, b).
+
+Alternatively, le_i can be computed as sum_{b in w_possible} count of a in s_possible where a <=b.
+
+Which is same as sum_{b} (number of a <=b in s_possible) for each b in w_possible.
+
+Hmm. So depending on which is faster, perhaps precompute for each possible a and b.
+
+But for a given s_possible and w_possible, the number of pairs (a, b) where a >=b can be computed as follows:
+
+For each a in s_possible, count the number of b's in w_possible that are <=a. Sum these counts over all a in s_possible.
+
+But since s_possible and w_possible can be up to 10 elements each, this is manageable in O(10*10) per position, which is acceptable for n up to 1e5 (since 1e5 * 100 = 1e7 operations, which is manageable).
+
+Alternatively, if there are optimizations possible based on the possible ranges of digits, that can speed things up.
+
+Let's see some examples.
+
+Case 1: s is fixed to 'a', w is fixed to 'b'. Then:
+
+ge_i is 1 if a >=b, else 0.
+
+le_i is 1 if a <=b, else 0.
+
+eq_i is 1 if a ==b.
+
+Case 2: s is '?', w is fixed to '3'. Then s_possible is 0-9. For each a in 0-9, count if a >=3. So that's 7 (3-9). So ge_i is 7. Similarly, for le_i, count a <=3 → 4 (0-3). eq_i is 1 (a=3).
+
+Case3: s and w are both '?'. So possible a and b are 0-9.
+
+ge_i is the number of pairs (a, b) where a >=b. Which is sum_{a=0}^9 (number of b's <=a) = sum_{a=0}^9 (a+1) = 55.
+
+Similarly, le_i is same as ge_i (since for each pair (a, b), a <=b is same as b >=a). So sum_{b=0}^9 (number of a's <=b) which is same as sum_{b=0}^9 (b+1) → also 55. So le_i is 55.
+
+eq_i is 10 (each digit equals itself, so 10 pairs: (0,0), (1,1), etc.)
+
+So for this case, the same as in the third example, where both are '?????', the same would be 10^5, but multiplied across all positions. But let's not get ahead of ourselves.
+
+So the plan is:
+
+For each position:
+
+- Determine s_digits: possible digits for s (e.g., if the character is '5', s_digits is [5]; if it's '?', it's 0-9).
+
+- Determine w_digits: possible digits for w.
+
+Compute for this position:
+
+ge_i = number of (a, b) in s_digits × w_digits where a >= b.
+
+le_i = number of (a, b) where a <= b.
+
+eq_i = number of (a, b) where a == b.
+
+Then, the total_pairs is the product over all positions of (s_count[i] * w_count[i]), where s_count[i] is len(s_digits) and w_count[i] is len(w_digits).
+
+all_ge is the product of ge_i for all positions.
+
+all_le is the product of le_i for all positions.
+
+same is the product of eq_i for all positions.
+
+Then, the answer is (total_pairs - all_ge - all_le + same) mod MOD.
+
+But the problem is handling these products efficiently, especially since MOD is 1e9+7, and we need to compute these products modulo MOD.
+
+So, the steps for code:
+
+1. Read n, s_template, w_template.
+
+2. For each position i from 0 to n-1:
+
+   a. Process s_template[i] to get the possible digits (s_digits).
+
+   b. Process w_template[i] to get possible digits (w_digits).
+
+   c. Compute s_count = len(s_digits), w_count = len(w_digits).
+
+   d. Compute ge_i: for each a in s_digits, count the number of b in w_digits where b <= a. Sum all these counts.
+
+   e. Compute le_i: for each a in s_digits, count the number of b in w_digits where b >= a. Sum all these counts.
+
+   f. Compute eq_i: for each a in s_digits, count how many b in w_digits equal a. Sum all these counts.
+
+   g. Multiply these into the respective products (total_pairs, all_ge, all_le, same), each initialized as 1.
+
+But since n can be up to 1e5, and each step is O(10*10) per position, which is acceptable.
+
+Wait, but even 1e5 * 10*10 is 1e7 operations, which is manageable.
+
+So code steps:
+
+Implement a helper function to generate the possible digits for a character (s_char or w_char).
+
+For example:
+
+def get_digits(c):
+    if c == '?':
+        return list(range(10))
+    else:
+        return [int(c)]
+
+Then, for each position, get s_digits and w_digits.
+
+Then compute ge_i, le_i, eq_i.
+
+But how?
+
+Implement functions to compute these counts.
+
+Alternatively, for each position, loop through all a in s_digits and b in w_digits and count the conditions. But for small sizes (each up to 10 elements), this is acceptable.
+
+So code in Python:
+
+for each position i in 0..n-1:
+
+s_char = s_template[i]
+
+w_char = w_template[i]
+
+s_digits = get_digits(s_char)
+
+w_digits = get_digits(w_char)
+
+s_count = len(s_digits)
+
+w_count = len(w_digits)
+
+ge = 0
+
+for a in s_digits:
+
+    for b in w_digits:
+
+        if a >= b:
+
+            ge += 1
+
+Similarly for le and eq.
+
+But that's O(10 * 10) per position, which is manageable.
+
+Once we have ge, le, eq for this position, multiply them into all_ge, all_le, same.
+
+Similarly, multiply s_count * w_count into the total_pairs.
+
+But since n can be 1e5 and each step is O(1), this is acceptable.
+
+Now, handling modulo:
+
+All products should be computed modulo MOD (1e9+7), because numbers can be very large.
+
+But since the formula is (total_pairs - all_ge - all_le + same) mod MOD, we need to compute each product modulo MOD, and then apply the formula.
+
+So:
+
+Initialize variables:
+
+mod = 10**9 +7
+
+total_pairs = 1
+
+all_ge = 1
+
+all_le = 1
+
+same = 1
+
+for each position:
+
+    compute s_count and w_count, ge_i, le_i, eq_i.
+
+    total_pairs = (total_pairs * (s_count * w_count % mod)) % mod
+
+    all_ge = (all_ge * ge_i) % mod
+
+    all_le = (all_le * le_i) % mod
+
+    same = (same * eq_i) % mod
+
+Then answer = (total_pairs - all_ge - all_le + same) % mod
+
+But since subtraction can lead to negative numbers, we can adjust by adding mod and then mod again.
+
+So:
+
+answer = (total_pairs - all_ge - all_le + same) % mod
+
+if answer <0:
+
+    answer += mod
+
+But in Python, the modulus operator handles negative numbers, but to ensure correctness:
+
+answer = (total_pairs - all_ge - all_le + same) % mod
+
+But in the case where (total_pairs - all_ge - all_le + same) is negative, the % mod will return the correct positive value.
+
+Wait, in Python, (-1) % mod is mod-1, which is correct. So no need for additional steps.
+
+So the code can proceed.
+
+Now, let's test the examples.
+
+First example:
+
+Input:
+
+2
+
+90
+
+09
+
+The two templates are fixed. So for each position:
+
+Position 0:
+
+s is '9', w is '0'.
+
+ge_i is 1 (9 >=0).
+
+le_i is 0 (9 <=0 is false. So no pairs. Wait, but the pair is (9,0). So a=9, b=0.
+
+a <=b → 9 <=0? No. So le_i is 0.
+
+eq_i is 0.
+
+Position 1:
+
+s is '0', w is '9'.
+
+ge_i is 0 (0 >=9? No. So no pairs contribute. So sum is 0.
+
+le_i is 1 (0 <=9). So sum is 1.
+
+eq_i is 0.
+
+So all_ge is 1 * 0 = 0.
+
+all_le is 0 * 1 = 0.
+
+same is 0 *0=0.
+
+total_pairs is (1*1) * (1*1) = 1.
+
+So answer is 1 -0 -0 +0 =1. Which matches the first example.
+
+Second example:
+
+Input:
+
+2
+
+11
+
+55
+
+Each position:
+
+s is 1, w is5.
+
+ge_i: 1 >=5? No. So 0.
+
+le_i: 1 <=5? Yes. So 1.
+
+eq_i: 0.
+
+So all_ge is 0 *0 =0.
+
+all_le is 1*1=1.
+
+same is 0*0=0.
+
+total_pairs is 1*1 *1*1=1.
+
+So answer is 1 -0 -1 +0=0. Which matches the second example.
+
+Third example:
+
+n=5, both templates are all '?'.
+
+Each position, s and w are '?', so:
+
+s_count=10, w_count=10.
+
+ge_i is 55, le_i 55, eq_i 10.
+
+So for each position:
+
+total_pairs = (10*10)^5 mod 1e9+7 → 1e5 digits, but 10^5 is 100000, but in code, 1e5 is 10^5? Wait, n=5. So for 5 positions, (10*10)^5= (100)^5= 1e10. mod 1e9+7, which is 1000000007.
+
+Wait, 100^5 is 1e10. 1e10 mod 1e9+7 is 1e10 - 10*(1e9+7) → 1e10 - 10000000070 → which is 1e10 is 10000000000, subtract 10000000070 gives -70? No, wait, 1e10 is 10,000,000,000. 1e9+7 is 1,000,000,007. 10,000,000,000 divided by 1,000,000,007 is 9 times 1,000,000,007 (9,000,000,063) which is 9,000,000,063. Subtract that from 10,000,000,000 gives 999,999,937. Then subtract 1,000,000,007 once more, which brings us to 999,999,937 -1,000,000,007 = -70. But mod is positive. So 999,999,937 mod 1e9+7 is 999,999,937.
+
+But in code, for each position, the product is computed as (s_count * w_count) mod MOD. So for each of the 5 positions, multiply by 100 mod MOD. So for 5 positions:
+
+total_pairs = 100^5 mod MOD.
+
+But 100^5 mod MOD is (100^5) mod MOD.
+
+But let's compute 100^5 mod 1e9+7.
+
+100^5 = 10^10.
+
+Compute 10^10 mod 1e9+7.
+
+But 1e9+7 is 1000000007.
+
+So 10^10 divided by 1e9+7:
+
+10^10 = 10,000,000,000.
+
+We can compute 10,000,000,000 ÷ 1,000,000,007 = 9 times (9*1e9+7 = 9,000,000,063), subtract from 10,000,000,000 gives 999,999,937. So 10^10 mod MOD is 999,999,937.
+
+So total_pairs is 999,999,937.
+
+all_ge is 55^5 mod MOD.
+
+Compute 55^5:
+
+55^2 = 3025.
+
+55^3 = 55*3025=166375.
+
+55^4= 55*166375= 9,150,625.
+
+55^5=55*9,150,625=503,284,375.
+
+So 503284375 mod 1e9+7 is 503284375, which is less than 1e9+7.
+
+So all_ge is 503284375.
+
+Similarly all_le is same as all_ge, since each position's le_i is 55. So all_le is 503284375.
+
+same is 10^5 mod MOD. 10^5 is 100000, which is less than MOD.
+
+So same is 100000.
+
+So the answer is:
+
+total_pairs - all_ge - all_le + same → 999999937 -503284375 -503284375 +100000.
+
+Compute:
+
+999,999,937 -503,284,375 = 496,715,562.
+
+496,715,562 -503,284,375 = -6,568,813.
+
+-6,568,813 +100,000 = -6,468,813.
+
+Now mod MOD (1e9+7).
+
+Compute (-6,468,813) mod 1e9+7.
+
+Add 1e9+7 until it's positive.
+
+1e9+7 is 1,000,000,007.
+
+So 1,000,000,007 -6,468,813 = 993,531,194.
+
+Which matches the third example's output of 993531194.
+
+So the code should handle this correctly.
+
+Now, the code.
+
+But wait, in the third example, when s and w are all '?', the answer is (10^10)^5 - (55^5) *2 +10^5. But the code computes this correctly.
+
+So the code seems to be correct.
+
+Now, let's code this.
+
+We need to read n, s, w.
+
+Then loop through each character in s and w.
+
+For each position, compute s_digits and w_digits.
+
+Then compute ge_i, le_i, eq_i.
+
+Multiply these into the products.
+
+But in Python, for n up to 1e5, this is manageable.
+
+Now, code:
+
+MOD = 10**9 +7
+
+n = int(input())
+
+s = input().strip()
+
+w = input().strip()
+
+total = 1
+
+all_ge = 1
+
+all_le = 1
+
+same = 1
+
+for i in range(n):
+
+    sc = s[i]
+
+    wc = w[i]
+
+    # get possible digits for s and w
+    s_digits = []
+    if sc == '?':
+        s_digits = list(range(10))
+    else:
+        s_digits = [int(sc)]
+
+    w_digits = []
+    if wc == '?':
+        w_digits = list(range(10))
+    else:
+        w_digits = [int(wc)]
+
+    # compute ge_i, le_i, eq_i
+    ge = 0
+    le = 0
+    eq = 0
+
+    for a in s_digits:
+        for b in w_digits:
+            if a >= b:
+                ge +=1
+            if a <= b:
+                le +=1
+            if a == b:
+                eq +=1
+
+    # compute the counts for this position
+    s_count = len(s_digits)
+    w_count = len(w_digits)
+    total = (total * (s_count * w_count % MOD)) % MOD
+    all_ge = (all_ge * ge) % MOD
+    all_le = (all_le * le) % MOD
+    same = (same * eq) % MOD
+
+ans = (total - all_ge - all_le + same) % MOD
+
+print(ans)
+
+But wait, in the code above, when sc is '?', s_digits is 0-9, but in the problem statement, the digits are 0-9 (digits can have leading zeros). So this is correct.
+
+Testing this code with the examples.
+
+First example:
+
+n=2
+
+s = '90'
+
+w = '09'
+
+Processing first position (i=0):
+
+s_digits is [9], w_digits is [0].
+
+ge = 9 >=0 → 1.
+
+le = 9 <=0 → 0.
+
+eq = 0.
+
+s_count=1, w_count=1. total becomes 1 * 1*1 =1.
+
+all_ge is 1*1=1.
+
+all_le is 1*0=0.
+
+same is 1*0=0.
+
+Second position (i=1):
+
+s_digits is [0], w_digits [9].
+
+ge: 0 >=9 →0.
+
+le:0 <=9 →1.
+
+eq:0.
+
+total becomes 1 *1*1=1.
+
+all_ge is 1 *0=0.
+
+all_le is 0 *1=0.
+
+same is 0*0=0.
+
+ans = (1 -0 -0 +0) mod MOD →1.
+
+Which is correct.
+
+Second example:
+
+n=2
+
+s= '11'
+
+w='55'.
+
+Each position:
+
+s_digits [1], w_digits [5].
+
+ge: 1 >=5 →0.
+
+le:1 <=5 →1.
+
+eq:0.
+
+So for two positions:
+
+total is 1*1 *1*1 =1.
+
+all_ge: 0 *0 =0.
+
+all_le:1 *1 =1.
+
+same:0 *0=0.
+
+ans = 1-0-1+0=0.
+
+Third example:
+
+n=5, both '?????'.
+
+Each position:
+
+s_digits and w_digits are 0-9.
+
+ge_i is 55.
+
+le_i is 55.
+
+eq_i is10.
+
+So for each of the 5 positions:
+
+total is multiplied by 100 each time (10*10). So 100^5 mod MOD.
+
+But in code, 100^5 is computed as (100^5) mod MOD.
+
+But 100^5 mod MOD is 1e10 mod 1e9+7 = 999,999,937.
+
+all_ge is 55^5 mod MOD = 503284375.
+
+all_le same as all_ge.
+
+same is 10^5 mod MOD=100000.
+
+ans = (999999937 - 503284375 -503284375 +100000) mod MOD.
+
+Which is (999999937 -1006568750 +100000) = (999999937 -1006568750) is -6568,813. Then +100000 gives -6,468,813.
+
+Mod MOD: 1e9+7 -6,468,813 = 993,531,194.
+
+Which matches the third example.
+
+So the code should be correct.
+</think>
+To solve this problem, we need to count the number of ways to replace all question marks in two string templates such that the resulting strings are non-comparable. Two strings are non-comparable if there exist indices where one string has a greater digit and the other has a lesser digit. The solution involves calculating the total valid pairs and applying inclusion-exclusion principles to avoid counting comparable pairs.
+
+### Approach
+1. **Total Pairs Calculation**: Compute the total number of ways to replace question marks in both templates, considering each digit (0-9) for each question mark.
+2. **Comparable Pairs Calculation**:
+   - **All Greater or Equal (all_ge)**: Count pairs where every digit in the first string is greater than or equal to the corresponding digit in the second string.
+   - **All Lesser or Equal (all_le)**: Count pairs where every digit in the first string is lesser than or equal to the corresponding digit in the second string.
+   - **Exact Matches (same)**: Count pairs where both strings are exactly the same after replacements.
+3. **Inclusion-Exclusion Principle**: Subtract the counts of comparable pairs from the total pairs and adjust for over-counting using inclusion-exclusion.
+
+### Solution Code
+```python
+MOD = 10**9 + 7
+
+n = int(input())
+s = input().strip()
+w = input().strip()
+
+total = 1
+all_ge = 1
+all_le = 1
+same = 1
+
+for i in range(n):
+    sc = s[i]
+    wc = w[i]
+
+    # Determine possible digits for s and w at this position
+    if sc == '?':
+        s_digits = list(range(10))
+    else:
+        s_digits = [int(sc)]
+    
+    if wc == '?':
+        w_digits = list(range(10))
+    else:
+        w_digits = [int(wc)]
+    
+    # Calculate ge, le, eq for the current position
+    ge = 0
+    le = 0
+    eq = 0
+    for a in s_digits:
+        for b in w_digits:
+            if a >= b:
+                ge += 1
+            if a <= b:
+                le += 1
+            if a == b:
+                eq += 1
+    
+    # Update the products
+    s_count = len(s_digits)
+    w_count = len(w_digits)
+    total = (total * (s_count * w_count % MOD)) % MOD
+    all_ge = (all_ge * ge) % MOD
+    all_le = (all_le * le) % MOD
+    same = (same * eq) % MOD
+
+# Compute the final answer
+ans = (total - all_ge - all_le + same) % MOD
+print(ans)
+```
+
+### Explanation
+1. **Reading Input**: The input consists of the length of the strings and the two templates.
+2. **Digit Possibilities**: For each character in the templates, determine the possible digits (0-9 if it's a '?', otherwise the digit itself).
+3. **Counting Pairs**: For each position, count the valid pairs (greater, lesser, equal) by iterating over all possible digit combinations.
+4. **Modular Arithmetic**: Use modular arithmetic to handle large numbers and prevent overflow, ensuring results are within the bounds of the modulus \(10^9 + 7\).
+5. **Final Calculation**: Apply the inclusion-exclusion principle to subtract the counts of comparable pairs and adjust for over-counting exact matches, then output the result modulo \(10^9 + 7\).
+
+This approach efficiently computes the required counts using modular arithmetic and ensures correctness by leveraging the inclusion-exclusion principle.
+</bot>

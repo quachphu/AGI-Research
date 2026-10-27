@@ -1,0 +1,1099 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Today you are going to lead a group of elven archers to defend the castle that is attacked by an army of angry orcs. Three sides of the castle are protected by impassable mountains and the remaining side is occupied by a long wall that is split into n sections. At this moment there are exactly ai archers located at the i-th section of this wall. You know that archer who stands at section i can shoot orcs that attack section located at distance not exceeding r, that is all such sections j that |i - j| ≤ r. In particular, r = 0 means that archers are only capable of shooting at orcs who attack section i.
+
+Denote as defense level of section i the total number of archers who can shoot at the orcs attacking this section. Reliability of the defense plan is the minimum value of defense level of individual wall section.
+
+There is a little time left till the attack so you can't redistribute archers that are already located at the wall. However, there is a reserve of k archers that you can distribute among wall sections in arbitrary way. You would like to achieve maximum possible reliability of the defence plan.
+
+Input
+
+The first line of the input contains three integers n, r and k (1 ≤ n ≤ 500 000, 0 ≤ r ≤ n, 0 ≤ k ≤ 1018) — the number of sections of the wall, the maximum distance to other section archers can still shoot and the number of archers yet to be distributed along the wall. The second line contains n integers a1, a2, ..., an (0 ≤ ai ≤ 109) — the current number of archers at each section.
+
+Output
+
+Print one integer — the maximum possible value of defense plan reliability, i.e. the maximum possible value of minimum defense level if we distribute k additional archers optimally.
+
+Examples
+
+Input
+
+5 0 6
+5 4 3 4 9
+
+
+Output
+
+5
+
+
+Input
+
+4 2 0
+1 2 3 4
+
+
+Output
+
+6
+
+
+Input
+
+5 1 1
+2 1 2 1 2
+
+
+Output
+
+3
+</user>
+<bot>
+<think>
+Okay, let's see. I need to solve this programming problem. Let's read the problem statement carefully.
+
+So, the problem is about distributing additional archers on a wall to maximize the minimum defense level. The defense level of a section is the total number of archers that can shoot at it. Each archer at position i can cover sections from i-r to i+r. The initial archers are given, and we can add up to k archers. The goal is to distribute these k archers such that the minimum defense level across all sections is as high as possible.
+
+Hmm. The key here is to maximize the minimum defense. This sounds like a problem that can be approached with binary search. Because binary search can be used when we want to find the maximum value that satisfies a certain condition. In this case, the condition is whether it's possible to distribute the k archers such that all sections have at least a certain defense level, say 'mid'.
+
+So the plan would be:
+
+1. Binary search on the possible minimum defense level. The low can be the current minimum defense level (without any added archers) and the high can be the current maximum possible (current max plus k, considering overlapping ranges).
+
+2. For each candidate value 'mid' during the binary search, check if it's possible to add archers such that all sections have at least 'mid' defense level. If possible, we try to find a higher value; if not, we lower our search.
+
+The main challenge is efficiently checking the feasibility for a given 'mid' value. Since n can be up to 5e5, we need an O(n) or O(n log n) approach.
+
+Let's think about the feasibility check. For each section i, the current defense level is the sum of archers in the range [i-r, i+r]. Let's call this sum S_i. To reach at least 'mid' for each S_i, we need to add archers in such a way that the deficit (mid - S_i) is covered. But adding archers to a position affects a range of sections (from j-r to j+r). So, when we add x archers to position j, it increases the defense level of all sections in [j-r, j+r] by x.
+
+The problem is similar to the classic "painting the fence" problem where you want to cover ranges efficiently. The optimal way to place archers is to place them as far to the right as possible within their effective range. This way, each added archer covers as many subsequent sections as possible.
+
+So, here's an approach for the feasibility check:
+
+- For each position i from left to right, calculate the current defense (original sum plus any added archers' contributions from previous placements). If this is already >= mid, do nothing. Otherwise, compute the deficit (mid - current_defense). Then, determine where to place the archers to cover this deficit. The best place is as far right as possible so that their coverage includes the current position i. The farthest position to place is min(i + r, n-1) (assuming 0-based indices). Then, the coverage of this placement would extend from (j - r) to (j + r). So adding x archers here will cover all positions from (j - r) to (j + r). Since we are processing from left to right, once we place x archers here, we can track the added coverage using a sliding window or a difference array.
+
+Wait, but how to track the added archers' contributions efficiently? Because adding x archers at position j will affect a range of positions. So, using a difference array (like in the line sweep algorithm) might be efficient here.
+
+Let me outline the steps for the feasibility check:
+
+1. Precompute the original defense levels for each section. The original defense level for section i is the sum of a[j] for j in [i - r, i + r], but we need to consider the actual window. However, computing this for each i directly would be O(n * (2r+1)), which is O(5e5 * 1e6) if r is 5e5, which is way too slow.
+
+Wait, no. Wait, n is up to 5e5, and r can be up to n. So for example, when r is 5e5, each window spans the entire array. But summing that for each i would be O(n^2), which is 2.5e11 operations. That's impossible.
+
+So we need a way to compute the original defense levels for all i efficiently. The original defense for i is the sum of a[j] for j from max(0, i - r) to min(n-1, i + r). To compute this for all i, we can use a prefix sum array. Let's compute the prefix sums first, then for each i, compute the sum over the range [max(0, i - r), min(n-1, i + r)]. Then the original defense level for i is this sum.
+
+Yes. Let's call this original_defense[i]. Then, when adding archers, we need to compute how much each position's defense is increased by the added archers. So the total defense for i is original_defense[i] + added_defense[i].
+
+The added_defense[i] is the sum of all archers added in positions j where j - r <= i <= j + r. So for a position j where we added x archers, all positions i in [j - r, j + r] get x added. So the problem of determining how many archers to add to cover the deficits is similar to interval covering with minimal cost.
+
+So, for the feasibility check, given a target 'mid', we need to compute how many archers are needed to ensure that for each i, original_defense[i] + added_defense[i] >= mid.
+
+The idea is to process each section in order and greedily add archers as far to the right as possible. Here's how:
+
+Initialize a variable to track the current added archers' effect. Let's use a difference array approach. We can track the added archers using a sliding window. For example, when we add x archers at position j, the effect starts at j - r and ends at j + r. But maintaining the exact ranges can be done with a difference array. Let's create an array 'delta' which is 0-initialized. When we add x archers at position j, we do delta[j - r] += x and delta[j + r + 1] -= x. Then, when we compute the prefix sum, it will accumulate the added x for the ranges. However, since we process from left to right, perhaps we can use a sliding window approach with a current window sum.
+
+Alternatively, we can track the current added archers' contributions using a sliding window. Let's think:
+
+As we iterate through each position i from left to right, we need to track how much additional defense is currently active at i. This is because any archers added at positions j where j - r <= i <= j + r. So, when we add x archers at position j, their effect starts at j - r and ends at j + r. So for the current position i, any archers added in positions j where j >= i - r (since j - r <= i => j >= i - r + 1?) Wait, maybe not. Let's clarify:
+
+If j is the position where we add archers, then the coverage is from j - r to j + r. So for a current i, the positions j that cover i are those where j - r <= i <= j + r. So j can be from i - r to i + r. But when processing i from left to right, the optimal is to place archers as far to the right as possible (to cover as many future positions as possible). So when processing i, if the current defense (original_defense[i] + added_defense[i]) is less than mid, we need to add some archers. The best position to place them is as far right as possible, which is i + r (but not exceeding n-1). Then, adding archers there will cover from (i + r) - r = i to (i + r) + r = i + 2r. Wait, but the added archers at position j = i + r would cover from j - r = i to j + r = i + 2r. But the current i is being processed, and the next positions would be covered by this placement.
+
+So here's the approach:
+
+We'll keep track of the additional archers added using a queue or a sliding window. The current added archers that are active up to a certain point.
+
+Let's proceed step by step:
+
+1. Precompute the original_defense array using prefix sums. This is O(n) time.
+
+2. For a given 'mid', we need to check if we can add archers such that original_defense[i] + added_defense[i] >= mid for all i.
+
+3. The added_defense[i] is the sum of all archers added in positions j where j - r <= i <= j + r. So when we add x archers at j, they contribute x to each i in [j - r, j + r].
+
+4. To compute the added_defense[i] efficiently, we can use a sliding window approach. For each i, we need to account for all the archers added in positions j where j >= i - r (since j - r <= i) and j <= i + r (since j + r >= i). Wait, but since we're processing i in order, perhaps we can track the archers added so far that affect i.
+
+Alternatively, as we process i from left to right, any archers added in positions j where j + r >= i (i.e., their coverage includes i) would have been added during the processing of previous positions. But I'm not sure.
+
+Alternatively, here's the idea: when processing position i, the added defense up to this point (from previous placements) can be tracked using a variable that accumulates the total added archers in the current window. For example, when we place archers at position j, their effect starts at j - r and ends at j + r. So, as we process i from left to right, we can keep track of the active added archers by maintaining a queue of the positions where we added archers, and the current contribution is the sum of all x's where j - r <= i <= j + r. But this might be tricky.
+
+Wait, perhaps the difference array approach is better. Let's think: when we add x archers at position j, the effect on the defense levels is a range [j - r, j + r] increased by x. We can represent this using a difference array. For example, delta[j - r] += x, and delta[j + r + 1] -= x. Then, when we compute the prefix sum of delta up to i, that gives the added defense at i.
+
+But how to compute the added_defense[i] as we process i from left to right? Because when processing i, the added_defense[i] is the sum of all x's added in ranges that include i. But if we manage the delta array and compute a running sum, that would give the added_defense[i].
+
+So here's the plan for the feasibility check:
+
+Initialize a difference array delta of size n+2 (to handle j + r + 1 up to n). Also, a variable current_add which is the sum of the delta up to current i (the added defense from the delta array).
+
+Wait, maybe the following approach:
+
+- For each i from 0 to n-1:
+
+   a. Compute the current_add as the prefix sum up to i. But how?
+
+Alternatively, since the delta array is modified when adding archers, and the current_add is the sum of all deltas up to i. To track this, we can maintain a variable 'current_add' which is the sum of the delta[0..i], which is equivalent to the added_defense[i] from all previous archer additions.
+
+But this is not correct. Because delta array is a difference array. The prefix sum up to i gives the added_defense[i]. So when we process i, the added_defense[i] is the sum of delta[0..i]. But maintaining this sum in O(1) per step would require a prefix sum array. Hmm, perhaps we can track the cumulative sum as we go.
+
+Alternatively, when using a sliding window approach, we can track the total added archers that are active at position i. Let's think: when you add x archers at position j, their effect is active from (j - r) to (j + r). So, as we process each i, the active added archers are those that were added in positions j where j - r <= i <= j + r. So for each i, the current added defense is the sum of all x's added in j where j's range covers i.
+
+But to compute this sum efficiently, perhaps we can track the events where the archers' effect starts and ends. For example, when we add x archers at position j, we can note that this x is added to all positions from (j - r) to (j + r). So, using a queue to track the end positions of these ranges. As we process i, any archers added before whose ranges have passed (i.e., j + r < i) can be removed from the current sum.
+
+Wait, here's an alternative approach inspired by the sliding window technique used in some greedy algorithms:
+
+Initialize a variable 'additional' which tracks the total archers added so far that affect the current position. Also, a variable 'window_end' to track the end of the current active window.
+
+As we process each position i:
+
+1. The added_defense[i] is the sum of all archers added in positions j where j's coverage includes i. But how to track this?
+
+Wait, when we add x archers at position j, they cover positions from (j - r) to (j + r). So, if i is in that interval, then x contributes to i's added_defense.
+
+But during processing, as we move from left to right, for each i, the earliest j where j - r <= i is j >= i - r. But j can be up to i + r. However, when adding archers to cover deficits, we want to place them as far right as possible.
+
+So here's the idea for the feasibility check:
+
+We'll process each position i in order. For each i, we first account for the current added archers (from previous placements) that affect i. Then, compute the current defense (original_defense[i] + added_defense[i]). If this is already >= mid, continue. If not, calculate how many archers we need to add to reach mid. Then, determine the best position to place these archers (as far right as possible, which is min(i + r, n-1)), since placing them here covers the maximum possible future positions. Then, calculate how many archers are needed here, and add that to the total used. Also, track the effect of these archers on future positions.
+
+But how to track the added_defense[i] efficiently as we process each i?
+
+Let me think of it this way:
+
+We can use a difference array (like a line sweep) to track the added archers. The difference array allows us to apply range updates and compute the current added_defense[i] as we process each i.
+
+But in practice, as we process each i, we can compute the added_defense[i] by keeping track of the current sum from the difference array up to i.
+
+Wait, let's model this. Suppose we have a difference array 'delta', and a variable 'current_add' which is the sum of delta[0..i] (i.e., the added_defense up to i). But that's not accurate. The difference array is such that when we apply delta, the added_defense is the prefix sum of the delta array. For example:
+
+delta is initialized to all 0s. When we add x archers at position j, which covers [a, b], we do delta[a] += x and delta[b+1] -= x. Then, the prefix sum of delta up to i is the added_defense[i].
+
+So, during processing, for each i from 0 to n-1:
+
+- Compute the prefix sum up to i, which is the added_defense[i].
+
+But calculating the prefix sum on the fly for each i is O(1) if we track the cumulative sum. Let's call this 'current_add'. So, as we iterate i from 0 to n-1, current_add is the sum of delta[0..i]. Each time we process i, current_add is added_defense[i].
+
+So, here's how to track current_add:
+
+Initially, current_add is 0. For each i from 0 to n-1:
+
+1. current_add += delta[i]
+
+2. Now, compute the total defense: original_defense[i] + current_add.
+
+3. If this is >= mid, proceed to the next i.
+
+4. Else, compute the deficit: needed = mid - (original_defense[i] + current_add). We need to add 'needed' archers somewhere. The best place is as far to the right as possible. The farthest position to place them is j = min(i + r, n-1). The coverage of this placement is [j - r, j + r]. The start of the coverage is a = j - r, but since we're processing i, which is in this coverage (since j is i + r, so a = i + r - r = i). So placing x archers here will cover from i to j + r = i + 2r. But since j is min(i + r, n-1), the end could be up to n-1.
+
+But when we add x archers here, their coverage is [j - r, j + r]. So in the delta array, we need to add x to a = j - r and subtract x from b+1 where b is j + r. But a could be before i. Wait, j is i + r, so j - r = i. So the coverage starts at i. So when we add x archers here, their effect starts at i and ends at j + r = i + 2r. However, j can't exceed n-1, so if i + r exceeds n-1, j is n-1, and the coverage ends at j + r = n-1 + r, but that can't exceed n-1 (since j is n-1). So the end is min(j + r, n-1). Wait, no: j is min(i + r, n-1). So j can be up to n-1. Then, j + r can be up to n-1 + r. But since the wall has n sections (0-based up to n-1), any coverage beyond n-1 is invalid. So the effective end is min(j + r, n-1). Wait, no. Because the sections are from 0 to n-1. So the coverage is [j - r, j + r], but all positions must be within 0 to n-1. So the actual coverage is from max(0, j - r) to min(n-1, j + r).
+
+But when placing archers at j, we need to compute a = max(0, j - r), b = min(n-1, j + r). Then, the delta array is updated at a and b+1 (if b+1 < n).
+
+So, the steps when adding x archers at j:
+
+a = max(0, j - r)
+b = min(n-1, j + r)
+delta[a] += x
+if (b + 1) < n:
+    delta[b + 1] -= x
+
+Then, when we process positions i from 0 to n-1, the current_add (sum of delta[0..i]) is the added_defense[i].
+
+So, in the feasibility check:
+
+For each i in 0 to n-1:
+
+1. current_defense = original_defense[i] + current_add.
+
+2. if current_defense >= mid, proceed.
+
+3. else:
+
+   a. deficit = mid - current_defense
+
+   b. the best j is min(i + r, n-1) (so that coverage starts at j - r = (i + r) - r = i). But wait, j is the position where we add the archers. So the coverage starts at j - r. To cover i, j must be >= i - r. But placing at j = i + r gives coverage starting at i.
+
+   c. the maximum possible coverage end is j + r = (i + r) + r = i + 2r. But if j is n-1, then j + r could be n-1 + r, but since the wall has n sections, the end is min(n-1, j + r).
+
+   d. but since we need to cover i, placing archers at j = i + r is the optimal position to cover i and as many positions to the right as possible.
+
+   e. compute a and b for this j.
+
+   f. the number of archers needed is deficit. So x = deficit.
+
+   g. add x to the delta array at a and subtract at b+1.
+
+   h. current_add += x (since when i is processed, delta[i] is added. But when we add x to a, and a <= i (since a = j - r = i), then when processing i, the delta[i] would have already been added. Wait, no. Because when we process i, current_add is the sum of delta[0..i]. So if a <= i, then adding x to delta[a] would affect all positions >= a, including i. So when we update delta[a], and if a <= i, then current_add (which is the sum up to i) would include this x. But since we are processing i now, the delta[a] is part of the delta array and we need to process it as part of the sum up to i. But since we are in the process of adding x, perhaps we need to account for the x in the current_add.
+
+Wait, this is getting a bit complicated. Let's think again.
+
+When processing i, we compute current_add (sum of delta[0..i]). Then, the current_defense is original_defense[i] + current_add. If we need to add x archers now, we place them at j = min(i + r, n-1). The coverage is a = max(0, j - r) and b = min(n-1, j + r). Then, the delta[a] += x and delta[b+1] -=x (if b+1 <n).
+
+But when we add x to delta[a], the sum up to i (current_add) does not include this x, because we are processing i now. Because the current_add is the sum of delta[0..i], but delta[a] is part of the delta array. So after this update, for i, the current_add may not have included the x.
+
+Wait, no. The current_add is computed as the sum up to i. For example, during the iteration for i, we first add delta[i] to current_add. Then, check if current_defense is sufficient. If not, we add x, which modifies delta[a]. But a could be <= i, which would mean that delta[a] is already part of current_add. Because when processing i, the loop is for i in 0 to n-1, and for each i, we do:
+
+current_add += delta[i]
+
+So delta[i] is added to current_add when processing i. If a <= i, then delta[a] has already been processed in previous steps. So when we add x to delta[a], this will affect the current_add for future i's.
+
+Wait, no. Let's think of a specific example. Suppose i is 5. We process i=5:
+
+current_add += delta[5] (initially zero). Then, we find that we need to add x archers. We place them at j = min(5 + r, n-1). Let's say r is 2, and j is 7. Then a = 7-2=5, which is i=5. So delta[5] +=x. But since we already processed delta[5] in current_add (since we are processing i=5), this change to delta[5] will not affect current_add for i=5. It will affect future i's, but not the current i=5.
+
+But in this case, the deficit for i=5 is based on the current_add which did not include the x. So adding x archers here would affect positions from a=5 to b=7+2=9 (if possible). But since the current i is 5, the added x would not be reflected in current_add for i=5. So how to handle this?
+
+Ah, right. Because when we add the x archers at position j (i + r), the coverage starts at a = j - r = i. So the current i is exactly a. So when we add x to delta[a], which is delta[i], but we have already added delta[i] to current_add in this step. So the x added to delta[i] will not affect current_add for i. The current_add for i was computed before the addition of x. Therefore, the x will only affect future i's (i+1, i+2, etc.).
+
+But wait, the current_defense for i is original_defense[i] + current_add. current_add is the sum of delta[0..i], which includes delta[i] added during this step. But when we add x to delta[i], the current_add for i has already been computed. So the x added to delta[i] will not be part of current_add for i. Thus, the deficit calculation for i is correct, but when we add x to delta[i], it will affect the next positions.
+
+But this is a problem because the current i's deficit is mid - (original_defense[i] + current_add). Adding x archers at j (i + r) would increase the defense for i by x, but since the delta[i] is part of the same position, we need to account for this in the current i's defense.
+
+Wait, but the way the current_add is calculated is by adding delta[0] to delta[i] as we process each i. So for i=5, current_add starts as the sum up to delta[4], and then we add delta[5], which is initial zero. So current_add after processing delta[5] is sum up to delta[5]. Then, we check if original_defense[i] + current_add is >= mid. If not, we need to add x archers. Then, we update delta[a] (which is i, in this case) by x. But since we are processing i=5, the current_add for i=5 has already included delta[5] (which was zero before the addition). Therefore, the added x in delta[5] will be part of the current_add for i=6, i=7, etc., but not for i=5.
+
+But this leaves the current_defense[i] as original_defense[i] + current_add (which doesn't include the x added now). But the x is needed to cover the deficit at i=5.
+
+Ah, here's the problem. The x added at delta[a] (where a=i) is needed to cover the deficit at i=5, but the current_add for i=5 does not include this x. So this approach would not account for the x in the current i's defense. Thus, the check would be wrong.
+
+So what's wrong with the approach?
+
+The problem is that when placing x archers at j = i + r, their coverage starts at a = j - r = i. So the current position i is the first position covered by this addition. However, when processing i, we have already added delta[i] to current_add. So the x added now would not affect current_defense[i], leading us to miscalculate.
+
+But that's a problem. Because we need the x archers to contribute to the defense at i.
+
+So this approach will not work. We need to find a way to account for the x archers added during the processing of i in the current_defense[i].
+
+Hmm. So perhaps the problem is that the way we model the added_defense is through the delta array, which is processed as a prefix sum. But when we add x archers at position j, their effect starts at a = j - r. So, during the processing of i, if a <= i, then delta[a] is part of the prefix sum up to i. But when we add x archers at j during the processing of i, which is at j = i + r, the a is i, which is the current i. So delta[i] is added to the current_add for i. But when we add x to delta[i], since current_add is already computed for i (after adding delta[i]), the x is not part of the current_defense[i]. So, how to fix this?
+
+Alternative approach:
+
+Instead of using the delta array, track the current added defense using a sliding window of events. For example, when adding x archers at position j, which covers [a, b], we can note that these x archers will contribute to the defense of positions a to b. So, during processing, as we move from left to right, we can track the active contributions using a variable that accumulates the sum of x's that are active for the current i.
+
+This can be done with a queue that keeps track of the x's and their end positions. For example, when we add x archers that affect from a to b, we add an entry (b, x) to the queue. As we process each i, we first remove all entries from the queue where their end position is less than i (since they no longer affect i). Then, the sum of the remaining x's is the added_defense[i]. Then, when we add a new x, we add it to the queue and accumulate it.
+
+But maintaining this sum can be done with a running total. Let's call this 'current_add'.
+
+So here's the revised approach for feasibility check:
+
+Initialize current_add = 0, and a queue (like a deque) that keeps track of (end_position, x). Also, a variable total_used = 0 (the total archers used so far).
+
+For each i from 0 to n-1:
+
+1. Remove all entries from the queue where end_position < i. For each removed entry, subtract x from current_add.
+
+2. The current_defense is original_defense[i] + current_add.
+
+3. If current_defense >= mid, continue.
+
+4. Else:
+
+   a. deficit = mid - current_defense
+
+   b. the best position to place archers is j = min(i + r, n-1). The coverage is from a = j - r to b = j + r. But since j can't exceed n-1, a = max(0, j - r) and b = min(n-1, j + r).
+
+   c. the deficit is 'deficit', so we need to add x = deficit archers here.
+
+   d. the coverage starts at a = max(0, j - r) and ends at b = min(n-1, j + r). But since j = i + r, a = max(0, (i + r) - r) = i. So the coverage starts at i, and ends at (i + r) + r = i + 2r, but capped at n-1.
+
+   e. the effect of adding x archers here is that they contribute x to all positions from a to b. So the end position for this addition is b. So we add (b, x) to the queue.
+
+   f. current_add += x
+
+   g. total_used += x
+
+   h. if total_used exceeds k, return False.
+
+So, in this approach, the queue keeps track of the active added archers' contributions. For each i, we first remove the contributions that have ended (end_position < i), then compute current_defense. If it's insufficient, add x archers, update current_add and total_used, and check if the total_used exceeds k.
+
+This approach avoids the delta array and uses a sliding window (queue) to track the active added archers. Each time we process an i, any added archers that have expired (their coverage ends before i) are removed from current_add. Then, if needed, new archers are added as far to the right as possible, and their contribution is added to current_add and tracked in the queue until their coverage ends.
+
+This seems efficient. Since each archer addition is added once to the queue and removed once, the total operations are O(n) per feasibility check.
+
+Yes. This seems like a viable approach.
+
+So, the steps for the feasibility check are:
+
+Compute the original_defense array using prefix sums.
+
+For a given mid:
+
+Initialize current_add = 0, queue = deque(), total_used = 0.
+
+For each i in 0..n-1:
+
+   While queue is not empty and queue[0][0] < i:
+
+       removed = queue.popleft()
+
+       current_add -= removed[1]
+
+   current_defense = original_defense[i] + current_add
+
+   if current_defense >= mid:
+
+       continue
+
+   needed = mid - current_defense
+
+   j = min(i + r, n-1)
+
+   a = max(0, j - r)
+
+   b = min(n-1, j + r)
+
+   x = needed
+
+   if x <0:
+
+       continue
+
+   end_position = b
+
+   queue.append( (end_position, x) )
+
+   current_add += x
+
+   total_used += x
+
+   if total_used > k:
+
+       return False
+
+After processing all i, return total_used <=k.
+
+Wait, yes. Because even if total_used is exactly k, it's allowed. So the feasibility check returns True if total_used <=k.
+
+So this is the feasibility check function.
+
+Now, let's think about the binary search boundaries.
+
+The initial minimum possible mid is the minimum original_defense. The maximum possible mid is the maximum possible after adding all k archers. For example, adding all k archers to a single position that covers as many sections as possible (like the middle) would increase the defense of those sections by k. So the maximum possible mid is (max_defense + k * coverage), but perhaps more accurately, it's the maximum original_defense[i] + k, but this depends on how much overlapping there is.
+
+But to find the upper bound, we can compute the initial maximum original_defense, then add k multiplied by the maximum possible coverage per archer. Since each archer can cover up to (2r+1) sections, but overlapping.
+
+But to be safe, the upper bound can be the initial maximum_defense + k + ... but perhaps the upper bound can be the initial maximum_defense + k. But that's not correct. Because if we place k archers at position j, each archer contributes 1 to j's coverage area, which is (2r+1) sections. But adding k archers there would increase the defense of each of those sections by k. So the maximum possible mid is (max_defense + k). But this is possible only if the initial maximum_defense section is covered by all k archers.
+
+Alternatively, the upper bound can be the initial maximum_defense plus (k * (2r+1)) divided by (number of sections covered). But this is getting complicated.
+
+Alternatively, since the binary search is over possible mid values, and the feasibility check will efficiently handle it, we can set the lower bound as the current minimum original_defense, and the upper bound as the current maximum original_defense plus k multiplied by (2r+1) divided by 1 (but perhaps even just initial_max + k is enough, but in practice, the upper bound can be initial_max + k * (2r+1) since each archer added can contribute to up to (2r+1) sections. But wait, adding x archers to position j increases each of the (2r+1) sections by x. So, each archer added contributes 1 to (2r+1) sections. Therefore, the maximum possible defense for a section is initial_defense[i] + k * (number of times it can be covered by added archers). But this could be very high, but the binary search can handle large numbers.
+
+But in practice, for binary search, the lower bound can be the minimum original_defense, and the upper bound can be (current_max_defense + k). However, this might not be sufficient. For example, if a section is covered by multiple added archers. For example, adding x archers at j, j+1, etc., which all cover a certain section i. So i's defense can be increased by x1 + x2 + ... where each x is added at positions whose coverage includes i.
+
+But in the worst case, the maximum possible mid is the initial_defense[i] + sum of all added archers in positions j where j's coverage includes i. But since each added archer can be placed in a position that covers a section i, the maximum possible defense for i is initial_defense[i] + k. Because each of the k archers can be placed in a position that covers i. For example, if r is large enough, say r >= n, then each archer added anywhere can cover all sections, so adding k archers to any position would increase all sections' defense by k. So the upper bound for mid would be initial_defense[i] (the max) + k. So for binary search, the upper bound can be (max_initial_defense + k). That's safe.
+
+So the binary search steps:
+
+Compute the original_defense for all sections.
+
+low = min(original_defense)
+
+high = max(original_defense) + k
+
+Then, perform binary search. For each mid, check feasibility. If feasible, set low = mid. Else, set high = mid - 1.
+
+But since k can be up to 1e18, the high can be up to 1e18 + 1e9 (since a_i can be up to 1e9). So using 64-bit integers is important.
+
+Now, the problem is to compute the original_defense array efficiently. For that, we can use a prefix sum array.
+
+Compute prefix_sum[0] = 0, prefix_sum[i] = a[0] + ... + a[i-1]. Then, for section i (0-based), the original_defense[i] is the sum of a[j] for j in [max(0, i - r), min(n-1, i + r)]. This can be computed as prefix_sum[min(n, i + r + 1)] - prefix_sum[max(0, i - r)].
+
+Wait, let's see:
+
+If the sections are 0-based, then prefix_sum[i] is sum of a[0..i-1]. So for a range [L, R], the sum is prefix_sum[R+1] - prefix_sum[L].
+
+So for i-th section (0-based), the original_defense[i] is sum of a[j] where j is in [i - r, i + r], but clamped to [0, n-1].
+
+So, L = max(0, i - r)
+
+R = min(n-1, i + r)
+
+sum = prefix_sum[R + 1] - prefix_sum[L]
+
+Yes.
+
+So, for example, if i=0 and r=0, then L=R=0. sum = a[0].
+
+Once the original_defense is computed for all sections, the binary search proceeds.
+
+Putting it all together:
+
+First, read n, r, k, and a array.
+
+Compute prefix_sum.
+
+Compute original_defense array.
+
+Compute the initial low and high.
+
+Perform binary search.
+
+Now, the code.
+
+But handling the prefix sum correctly is important.
+
+Now, let's test the examples.
+
+First example:
+
+Input:
+
+5 0 6
+
+5 4 3 4 9
+
+Original_defense is sum of a[i] since r=0. So original_defense is [5,4,3,4,9]. The initial min is 3. We can add 6 archers. To maximize the minimum, each section needs at least 3, but we can add to the sections to make their defense as high as possible. Since r=0, each added archer to section i increases only that section's defense by 1.
+
+The minimum is 3. Adding 6 archers: distribute them to the sections with the lowest defense.
+
+Sections 0:5, 1:4, 2:3, 3:4, 4:9. The lowest is 3 (section 2). Adding 3 to section 2 (now 6), then 3 left. Then the next lowest are sections 0 (5), 1 (4), 3 (4). Adding 3 archers to section 1 and 3, perhaps. Wait, but to maximize the minimum, we need to distribute the 6 archers to the sections with the lowest defense.
+
+Original defenses: [5,4,3,4,9]. Adding 6 archers:
+
+Add 3 to section 2 (defense 3 →6). Then remaining 3. Now the defenses are 5,4,6,4,9. The minimum is 4 (sections 1 and 3). Add 2 to section 1 (4 →6), 2 left. Then add 2 to section 3 (4 →6). Now all sections are at least 5 (5,6,6,6,9). Wait, no. After adding 3 to section 2, 1 and 3 are at 4. Then adding 3 to section 1 and 3. Now, section 1 is 4 +3=7, section 3 is 4 +3=7. Now all sections have defense 5,7,6,7,9. The minimum is 5, which is the output.
+
+So the binary search would find that mid=5 is possible.
+
+The feasibility check:
+
+For each i, original_defense[i] is as above. mid=5.
+
+Processing i from 0 to 4:
+
+For each i, check if current_defense (original + added) is >=5. Since r=0, any added archers at j can only cover j.
+
+So the queue approach works as follows:
+
+current_add starts at 0. Queue is empty.
+
+i=0:
+
+original_defense=5 >=5. Continue.
+
+i=1: original_defense=4. current_add is 0. So 4 <5. Deficit is 1. j=1 (i +0). Place 1 archer here. added to j=1. Coverage is [1-0, 1+0] →1. end_position=1.
+
+current_add +=1 →1. total_used=1.
+
+i=2: original_defense=3. current_add=1. total_defense=4 <5. Deficit 1. j=2. Add 1 archer. current_add=2. total_used=2.
+
+i=3: original_defense=4. current_add=2. total_defense=6 >=5. Proceed.
+
+i=4: original_defense=9 >=5. Proceed.
+
+So after processing all i, total_used=2. Which is <=6. So mid=5 is possible. But wait, what about other sections?
+
+Wait, the code's approach for i=1:
+
+original_defense is 4. current_add is 0. Deficit 1. Place 1 archer at j=1. coverage is 1. So when processing i=1, current_defense becomes 4 +0 (current_add) →4. So deficit is 1. Add 1 archer. Then, current_add becomes 1. The queue now has (1, 1). For i=2, when processing i=2, before checking, the queue's first element is (1,1). Since end_position=1 <2, we remove it. current_add becomes 0. Then, current_defense=3+0=3 <5. Deficit 2. Add 2 archers at j=2. Now current_add=2. total_used=3.
+
+Wait, this example is perhaps more complicated. Let me re-calculate the first example with the code's approach.
+
+Wait, the first example's r=0. So for each i, adding archers at j=i (since j = min(i+0,4) =i). The coverage is i, since r=0.
+
+Let's go through the code step by step.
+
+original_defense = [5,4,3,4,9].
+
+mid=5.
+
+current_add=0, queue is empty.
+
+Processing i=0:
+
+- queue is empty. current_defense=5+0=5 ≥5. No action.
+
+Processing i=1:
+
+- queue is empty. current_defense=4+0=4 <5. Deficit 1.
+
+j = min(1+0,4) =1. a= max(0,1-0)=1. b= min(4,1+0)=1. end_position=1.
+
+Add (1,1) to queue. current_add=1. total_used=1.
+
+Processing i=2:
+
+- Check queue. The first element is (1,1). Since end_position=1 <2, remove it. current_add=1-1=0.
+
+current_defense=3+0=3 <5. Deficit 2.
+
+j=2. a=2-0=2. b=2+0=2. end_position=2.
+
+Add (2,2). current_add=0+2=2. total_used=1+2=3.
+
+Processing i=3:
+
+- Check queue. The first element is (2,2). end_position=2 <3. Remove it. current_add=2-2=0.
+
+current_defense=4+0=4 <5. Deficit 1.
+
+j=3. add (3,1). current_add=1. total_used=4.
+
+Processing i=4:
+
+- Check queue. (3,1) has end_position=3 <4. Remove it. current_add=1-1=0.
+
+current_defense=9+0=9 ≥5. No action.
+
+Total_used=4 ≤6. So mid=5 is feasible.
+
+But wait, but the sample output is 5. So the code would allow mid=5. But what about higher mid?
+
+Like mid=6. Let's check.
+
+mid=6.
+
+Processing i=0:
+
+original_defense=5. current_add=0. 5 <6. deficit=1. add 1 at j=0. current_add=1. total_used=1.
+
+i=1:
+
+current_defense=4 +1=5 <6. deficit=1. add 1 at j=1. current_add=2. total_used=2.
+
+i=2:
+
+current_defense=3 +2=5 <6. deficit=1. add 1 at j=2. current_add=3. total_used=3.
+
+i=3:
+
+current_defense=4 +3=7 >=6.
+
+i=4:
+
+current_defense=9 +3=12 >=6.
+
+Total_used=3 <=6. So mid=6 is possible.
+
+Wait, but the sample output is 5. That's a contradiction. What's wrong here?
+
+Wait, sample input 1:
+
+n=5, r=0, k=6.
+
+a = [5,4,3,4,9]
+
+The initial original_defense is [5,4,3,4,9]. The minimum is 3. We need to distribute 6 archers.
+
+But according to the code's feasibility check for mid=6, the total_used is 3. How?
+
+Wait, the code's approach for mid=6:
+
+i=0: deficit 1. Add 1 archer at j=0. current_add becomes 1. queue has (0,1).
+
+i=1: original_defense is4. current_add is1. 4+1=5 <6. deficit=1. Add 1 archer at j=1. queue now has (0,1), (1,1). current_add=2. total_used=2.
+
+i=2: original_defense=3. current_add=2. 3+2=5 <6. deficit=1. Add 1 archer at j=2. current_add=3. total_used=3.
+
+i=3: original_defense=4. current_add=3. 4+3=7 >=6.
+
+i=4: original_defense=9. current_add=3. 9+3=12 >=6.
+
+So total_used=3, which is <=6. So mid=6 is feasible. But the sample output is 5. So this suggests that the code's feasibility check is wrong.
+
+But according to the sample input, the correct answer is 5, but according to the code, mid=6 is feasible. What's wrong here?
+
+Ah, no. Because when r=0, adding an archer at j=0 covers only section 0. Similarly for j=1, etc. So in the code's approach, adding 1 at j=0 increases the defense of section 0 by 1. But for mid=6:
+
+For section 0: original_defense is5. added_defense is1. total 6 >=6.
+
+For section 1: added_defense is1. total 4+1=5 <6. So in this case, the code would add 1 archer at j=1, making total 5+1=6.
+
+Wait, but in the code's processing:
+
+For i=0, the code adds 1 archer at j=0. current_add is1. queue has (0,1). For i=0, after processing, the current_defense is5+1=6 >=6.
+
+Then, i=1:
+
+current_add is1 (from the queue entry (0,1) which is end_position=0 <1, so it's removed. current_add is 0. Then, original_defense is4 +0=4 <6. deficit=2. So add 2 archers at j=1. current_add=2. total_used=2.
+
+Wait, I think I made a mistake in the earlier calculation. Let's re-calculate for mid=6.
+
+Let's re-calculate step by step.
+
+Processing mid=6.
+
+original_defense: [5,4,3,4,9]
+
+current_add=0, queue is empty. total_used=0.
+
+i=0:
+
+current_defense=5+0=5 <6.
+
+deficit=1. j=0. add 1 archer here. coverage is [0,0]. end_position=0.
+
+queue now has (0, 1). current_add=1. total_used=1.
+
+i=1:
+
+First, remove any entries in queue with end_position <1. The entry (0,1) has end_position 0 <1. So remove it. current_add=1-1=0.
+
+current_defense=4+0=4 <6. deficit=2. j=1. add 2 archers. coverage [1,1]. end_position=1. queue has (1,2). current_add=0+2=2. total_used=3.
+
+i=2:
+
+Check queue. end_position=1 <2. remove it. current_add=2-2=0.
+
+current_defense=3+0=3 <6. deficit=3. add 3 archers at j=2. coverage [2,2]. current_add=3. total_used=6.
+
+i=3:
+
+Check queue. entry (2,3) has end_position=2 <3. remove it. current_add=3-3=0.
+
+current_defense=4+0=4 <6. deficit=2. add 2 archers at j=3. current_add=2. total_used=8.
+
+But k=6. 8>6 → not feasible. So returns False.
+
+Ah, right. So when mid=6, the total_used exceeds k=6. So the feasibility check returns False.
+
+So my earlier calculation was wrong. Let's correct.
+
+At i=2:
+
+current_defense=3+0=3 <6. deficit=3. Adding 3 archers here. total_used=1+2=3+3=6. Which is equal to k=6.
+
+But then, i=3:
+
+current_add is 3 (from the entry (2,3). But when processing i=3, we check if the queue's entries have end_position <3. The entry (2,3) has end_position=2 <3. So we remove it. current_add becomes 3-3=0. Now, current_defense=4+0=4 <6. Deficit=2. Adding 2 archers. total_used=6+2=8>6. So returns False.
+
+Thus, mid=6 is not feasible. So the correct answer is 5.
+
+So the code's approach works correctly.
+
+So the code's feasibility check works.
+
+Thus, the approach is correct.
+
+Now, the code.
+
+First, read n, r, k.
+
+Read a as a list.
+
+Compute prefix_sum.
+
+Compute original_defense.
+
+Compute low and high.
+
+Binary search.
+
+Implementing the feasibility check as described.
+
+But for n up to 5e5 and binary search up to 60 steps, this should be efficient.
+
+Now, code in Python.
+
+But for n=5e5, the original_defense array can be computed in O(n) time.
+
+The binary search is O(log (max_defense +k)), which is manageable.
+
+So here's the code:
+
+Read input:
+
+n, r, k = map(int, input().split())
+
+a = list(map(int, input().split()))
+
+Compute prefix_sum:
+
+prefix = [0] * (n+1)
+
+for i in range(n):
+
+    prefix[i+1] = prefix[i] + a[i]
+
+Compute original_defense:
+
+original = [0] * n
+
+for i in range(n):
+
+    left = max(0, i - r)
+
+    right = min(n-1, i + r)
+
+    original[i] = prefix[right+1] - prefix[left]
+
+Compute low and high:
+
+low = min(original)
+
+high = max(original) + k
+
+But since k can be up to 1e18, high can be very large, but binary search can handle it.
+
+Then, perform binary search.
+
+def is_possible(mid):
+
+    current_add = 0
+
+    total_used = 0
+
+    q = deque()
+
+    for i in range(n):
+
+        # Remove elements from queue that are no longer affecting i
+
+        while q and q[0][0] < i:
+
+            removed = q.popleft()
+
+            current_add -= removed[1]
+
+        current_defense = original[i] + current_add
+
+        if current_defense >= mid:
+
+            continue
+
+        needed = mid - current_defense
+
+        j = min(i + r, n-1)
+
+        a = max(0, j - r)
+
+        b = min(n-1, j + r)
+
+        end = b
+
+        # need to add 'needed' archers at j
+
+        q.append( (end, needed) )
+
+        current_add += needed
+
+        total_used += needed
+
+        if total_used > k:
+
+            return False
+
+    return total_used <=k
+
+Then, binary search:
+
+ans = low
+
+while low <= high:
+
+    mid = (low + high) //2
+
+    if is_possible(mid):
+
+        ans = mid
+
+        low = mid +1
+
+    else:
+
+        high = mid -1
+
+print(ans)
+
+But wait, the function is_possible(mid) needs to compute the required archers to reach mid. But when mid is very large, the needed could be negative, but in code, original_defense[i] + current_add can't be less than mid, but perhaps due to previous additions. But the code checks if current_defense is >= mid. If not, needed is computed as mid - current_defense, which is positive.
+
+So this code should work.
+
+Testing sample input 1:
+
+Sample 1:
+
+n=5, r=0, k=6.
+
+original_defense = [5,4,3,4,9].
+
+max_defense is9. high=9+6=15.
+
+binary search between 3 and15.
+
+The code will find that mid=5 is possible, mid=6 is not.
+
+Sample 2:
+
+4 2 0
+
+1 2 3 4
+
+original_defense:
+
+for each i from 0 to3:
+
+i=0: j from 0-2=0 (since 0-2 is negative) to 0+2=2. So sum a[0..2] =1+2+3=6.
+
+i=1: from max(0,1-2)=0 to 1+2=3. sum 1+2+3+4=10.
+
+i=2: from 0 to3. sum 10.
+
+i=3: from 1 to3. sum 3+4=7.
+
+Wait no.
+
+Wait, for i=0, r=2:
+
+left = max(0,0-2)=0.
+
+right = min(3, 0+2)=2.
+
+sum a[0..2] =1+2+3=6.
+
+i=1:
+
+left= max(0,1-2)=0.
+
+right= min(3,1+2)=3.
+
+sum a[0..3] =1+2+3+4=10.
+
+i=2:
+
+left= max(0,2-2)=0.
+
+right=3.
+
+sum 1+2+3+4=10.
+
+i=3:
+
+left= max(0,3-2)=1.
+
+right=3.
+
+sum a[1..3] =2+3+4=9.
+
+original_defense = [6,10,10,9].
+
+The initial min is6. But since k=0, the answer is6.
+
+Sample 2's output is6. So the code should return6.
+
+Sample 3:
+
+5 1 1
+
+2 1 2 1 2
+
+original_defense:
+
+for each i from0 to4:
+
+r=1.
+
+i=0: left 0, right 1. sum 2+1=3.
+
+i=1: left 0, right 2. sum 2+1+2=5.
+
+i=2: left 1, right3. sum 1+2+1=4.
+
+i=3: left2, right4. sum 2+1+2=5.
+
+i=4: left3, right4. sum1+2=3.
+
+original_defense is [3,5,4,5,3]. min is3.
+
+k=1. Need to add 1 archer.
+
+To maximize the minimum.
+
+The optimal is to add to section4. Which covers sections3,4. Or section0.
+
+Wait, adding 1 archer to section4. The coverage is 3,4. So:
+
+original_defense for sections3 and4 would increase by1.
+
+So the new defense levels would be:
+
+i=0:3
+
+i=1:5
+
+i=2:4
+
+i=3:5+1=6
+
+i=4:3+1=4.
+
+Minimum is3 (still).
+
+Alternatively, add to section2. Which covers 1-3.
+
+ original_defense for sections1,2,3 would increase by1. So:
+
+i=0:3
+
+i=1:5+1=6
+
+i=2:4+1=5
+
+i=3:5+1=6
+
+i=4:3.
+
+Minimum is3.
+
+Alternatively, add to section0. Coverage -0 and1. Increase their defense by1.
+
+i=0:3+1=4.
+
+i=1:5+1=6.
+
+others:4,5,3.
+
+Minimum is3.
+
+Alternatively, add to section4, which covers3 and4.
+
+i=3:5+1=6.
+
+i=4:3+1=4.
+
+The new minimum is3 (i=0:3, i=4:4, i=2:4).
+
+But wait, original_defense for i=0 is3, i=4 is3. Adding to i=4 would make i=4's defense 4, and i=3's defense 6. But the minimum is3 (i=0).
+
+So the optimal is to add to i=0. Which covers i=0 and i=1. So adding1 archer to i=0.
+
+Then, defense levels:
+
+i=0:3+1=4.
+
+i=1:5+1=6.
+
+i=2:4.
+
+i=3:5.
+
+i=4:3+0=3.
+
+The new minimum is3 (i=4).
+
+Wait, no. Adding 1 archer to i=0, coverage is0-1=0, 0+1=1. So the added defense for i=0 and i=1 is1. So original_defense for i=0 was3, now 4. For i=1:5 →6. i=4's original_defense is3, added defense is0. So minimum is3.
+
+Alternatively, adding to i=2. Coverage is1,2,3.
+
+original_defense for i=2 is4. Adding 1 archer there increases defense for1,2,3 by1.
+
+So defense for i=0:3, i=1:5+1=6, i=2:4+1=5, i=3:5+1=6, i=4:3. The minimum is3.
+
+Alternatively, add to i=4: coverage3,4. So i=4's defense becomes4, i=3's becomes6. The minimum is3 (i=0).
+
+So in all cases, the minimum is3. But the sample output is3. So the code's binary search would find mid=3.
+
+But according to the sample input3's output, the answer is3.
+
+But how? Let's see.
+
+ original_defense is [3,5,4,5,3]. k=1.
+
+The code's feasibility check for mid=3:
+
+Yes, since the original_defense is all >=3. So no archers needed. So mid=3 is possible.
+
+But perhaps the code can find a higher mid.
+
+Wait, can we get mid=3.
+
+Yes. But can we get higher?
+
+Wait, let's check mid=4.
+
+Is it possible to distribute 1 archer to make all sections >=4?
+
+Original defenses:
+
+3,5,4,5,3.
+
+After adding 1 archer.
+
+Possible positions:
+
+Add to i=0: coverage0 and1. This increases their defense by1. So sections0 becomes4,1 becomes6. Others remain 4,5,3. The new minimum is3 (section4).
+
+Add to i=4: coverage3,4. section3 becomes6,4 becomes4. The new defenses are3,5,4,6,4. Minimum is3 (section0).
+
+Add to i=2: coverage1,2,3. Those sections' defense increase by1: 5+1=6,4+1=5,5+1=6. So new defenses:3,6,5,6,3. Minimum is3.
+
+So adding 1 archer can't get the minimum to4.
+
+Thus, the maximum possible is3.
+
+But sample output is3. So code returns3.
+
+Thus, the code works.
+
+Hence, the code should be correct.
+</think>
+To solve this problem, we need to maximize the minimum defense level of the castle's wall sections by optimally distributing a reserve of archers. The defense level of each section is determined by the number of archers that can cover it, considering their shooting range.
+
+### Approach
+1. **Binary Search**: We use binary search to determine the maximum possible minimum defense level. The search range is between the minimum initial defense level and the maximum possible defense level after adding all reserve archers.
+2. **Feasibility Check**: For each candidate minimum defense level (mid) during the binary search, we check if it's possible to distribute the reserve archers such that every section's defense level is at least mid. This is done using a greedy approach combined with a sliding window technique to efficiently track the effect of added archers.
+
+### Solution Code
+```python
+import sys
+from collections import deque
+
+def main():
+    n, r, k = map(int, sys.stdin.readline().split())
+    a = list(map(int, sys.stdin.readline().split()))
+    
+    prefix = [0] * (n + 1)
+    for i in range(n):
+        prefix[i+1] = prefix[i] + a[i]
+    
+    original = []
+    for i in range(n):
+        left = max(0, i - r)
+        right = min(n-1, i + r)
+        total = prefix[right + 1] - prefix[left]
+        original.append(total)
+    
+    low = min(original)
+    high = max(original) + k
+    
+    def is_possible(mid):
+        current_add = 0
+        total_used = 0
+        q = deque()
+        for i in range(n):
+            while q and q[0][0] < i:
+                removed = q.popleft()
+                current_add -= removed[1]
+            current_defense = original[i] + current_add
+            if current_defense >= mid:
+                continue
+            needed = mid - current_defense
+            j = min(i + r, n - 1)
+            a_pos = max(0, j - r)
+            b_pos = min(n - 1, j + r)
+            end = b_pos
+            q.append((end, needed))
+            current_add += needed
+            total_used += needed
+            if total_used > k:
+                return False
+        return total_used <= k
+    
+    ans = low
+    while low <= high:
+        mid = (low + high) // 2
+        if is_possible(mid):
+            ans = mid
+            low = mid + 1
+        else:
+            high = mid - 1
+    print(ans)
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Prefix Sum Calculation**: We compute the prefix sums of the archer positions to efficiently calculate the initial defense levels for each section using a sliding window approach.
+2. **Binary Search Setup**: The search range for the minimum defense level is initialized between the minimum initial defense level and the maximum possible value after adding all reserve archers.
+3. **Greedy Feasibility Check**: For each candidate defense level (mid), we use a deque to track the effect of added archers. We ensure that each section meets the defense requirement by placing archers as far to the right as possible, which maximizes their coverage and minimizes the number of archers needed.
+4. **Sliding Window Technique**: This technique helps efficiently manage the range updates from adding archers, ensuring that the solution runs in linear time relative to the number of sections, making it suitable for large input sizes.
+
+This approach ensures that we efficiently determine the optimal distribution of archers to achieve the highest possible minimum defense level using binary search and greedy strategies.
+</bot>

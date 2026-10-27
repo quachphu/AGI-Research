@@ -1,0 +1,561 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Roman is a young mathematician, very famous in Uzhland. Unfortunately, Sereja doesn't think so. To make Sereja change his mind, Roman is ready to solve any mathematical problem. After some thought, Sereja asked Roma to find, how many numbers are close to number n, modulo m.
+
+Number x is considered close to number n modulo m, if:
+
+  * it can be obtained by rearranging the digits of number n, 
+  * it doesn't have any leading zeroes, 
+  * the remainder after dividing number x by m equals 0. 
+
+
+
+Roman is a good mathematician, but the number of such numbers is too huge for him. So he asks you to help him.
+
+Input
+
+The first line contains two integers: n (1 ≤ n < 1018) and m (1 ≤ m ≤ 100).
+
+Output
+
+In a single line print a single integer — the number of numbers close to number n modulo m.
+
+Examples
+
+Input
+
+104 2
+
+
+Output
+
+3
+
+
+Input
+
+223 4
+
+
+Output
+
+1
+
+
+Input
+
+7067678 8
+
+
+Output
+
+47
+
+Note
+
+In the first sample the required numbers are: 104, 140, 410.
+
+In the second sample the required number is 232.
+</user>
+<bot>
+<think>
+Okay, let's tackle this problem. So the task is to find the number of permutations of the digits of n that are divisible by m, without leading zeros. Hmm. Oh right, and n can be up to 1e18, which means it's a string to handle the digits properly. And m is up to 100. 
+
+First, I need to generate all unique permutations of the digits of n, but avoiding leading zeros. Then check each of those permutations if they are divisible by m. But wait, the problem is that for large n (like 1e18 digits?), the permutations would be way too many. So a brute-force approach is impossible. So I need a smarter way.
+
+So the key is that the number of digits can be up to 18, but 18! is a huge number (like 6e15), which is way too big. So generating all permutations is not feasible. Therefore, I need a dynamic programming approach that tracks the remainder modulo m and the digits used so far, along with their counts.
+
+Let me think. The digits can have duplicates, so permutations might have duplicates. So first, count the frequency of each digit. Then, use a DP approach that keeps track of the current remainder modulo m and the digits used so far. The state would be (mask) or (count of each digit used) and remainder. But even that might be manageable given that m is up to 100.
+
+Wait, but the digits can be up to 10 different digits (0-9), but for counts, maybe we can represent the state as a tuple of counts for each digit (like how many of each are left) plus the current remainder. Then, for each step, we choose a next digit that hasn't been used up, and update the remainder and counts.
+
+But how to represent the counts? For example, if the original number has digits like 'aabc', then the counts would be for each digit. So for each digit d (0-9), we track how many times it's remaining. The DP state can be the counts (as a tuple) and the current remainder mod m. The transitions would be choosing a digit from the remaining ones, subtracting one from its count, and updating the remainder as (current_remainder * 10 + digit) mod m.
+
+But the problem is that the counts for each digit could be up to 18, but with 10 digits, the state space is (count_0 + 1) * (count_1 + 1) * ... * (count_9 +1) ) * m. For example, if each digit is unique, then it's 10! * m, which for m=100 would be 3.6e8 * 100 = 3.6e10, which is way too big. So that's not feasible.
+
+Wait, but maybe the counts can be represented more efficiently. Alternatively, since the digits can be up to 18, but with possible duplicates, perhaps memoizing the DP states using the counts and remainder would be manageable. But even for 18 digits, if they are all unique, the state space would be (10 digits, but the counts are 1 for each digit used). Wait, maybe the digits can be up to 18 digits, but each digit is in 0-9. So the counts for each digit can vary. For example, if there are 3 1's, 2 0's, etc.
+
+So the state in DP is a tuple of counts for each digit (from 0 to 9) that are remaining, plus the current remainder mod m. The DP transition would be: for each possible digit d that has a remaining count, and for each possible state (counts, rem), we can choose to use d next. Then, the new remainder is (rem * 10 + d) mod m. Also, the new counts are the same as the old counts, except the count for d is decreased by 1.
+
+But even with this approach, the state space could be very large. Let's see. Suppose the original number has digits with counts c_0, c_1, ..., c_9. Then the possible state counts for each digit are from 0 up to their original counts. So the total number of possible states is product_{d=0..9} (c_d +1) multiplied by m. For example, if the original number is 10 digits long with all unique digits (so each c_d is 0 or 1), then product is 2^10 = 1024, multiplied by m=100, gives 102400 states. That's manageable. But if there are digits with higher counts, like if a digit is repeated multiple times, the product can get larger. For example, if a digit has 3 copies, then that contributes a factor of 4 (0,1,2,3) to the product. So for a number with, say, 18 digits all the same, the product would be 19 (since count starts from 0 to 18) multiplied by 1 for others, so 19 * 100 = 1900 states. So that's manageable. But for a number with varied counts, say, two digits each with 9 copies (total 18 digits), then product would be (9+1)^2 * 100 = 100*100 = 10,000. So overall, the state space is manageable for m up to 100.
+
+Therefore, this approach is feasible.
+
+So the plan is:
+
+1. Count the frequency of each digit in n. Let's call this freq = [count_0, count_1, ..., count_9].
+
+2. Use DP with memoization where the state is (current remainder mod m, the current digit frequencies).
+
+3. The transitions are: for each possible digit d that can be used (i.e., freq[d] > 0), and for each possible state, if we choose to use d next, then:
+
+   a. If it's the first digit (i.e., the current length is 0), then d cannot be 0 (since leading zeros are not allowed). So in the first step, we can only pick digits d != 0 where freq[d] > 0.
+
+   b. Else, any digit can be used as long as freq[d] > 0.
+
+   For each valid d:
+
+   - Compute the new remainder: (current_remainder * 10 + d) % m.
+
+   - Decrease the count of d by 1.
+
+   Then, add the number of ways from the new state to the current state.
+
+   The base case is when all digits are used (all freq[d] = 0). Then, if the remainder is 0, it's 1, else 0.
+
+Wait, but the DP function should compute the number of valid permutations starting with a certain remainder and certain remaining digits. So the initial state is when no digits have been used (all freq as original, and remainder 0). Wait, no. Wait, the DP state is (remainder, remaining_freq). For each step, the remainder is the current remainder of the number formed so far modulo m, and the remaining_freq is the counts of digits left to use.
+
+Wait, the way the number is built is digit by digit. So when you add a digit d to the current number, the new remainder is (current_remainder * 10 + d) mod m. So for example, if the current remainder is r, and you add digit d, the new remainder is (r * 10 + d) % m.
+
+So the DP state is (remaining_freq, current_remainder). And we need to find the number of ways to arrange the remaining digits such that when added to the current number (with remainder r), the final number is divisible by m.
+
+Wait, maybe the DP state should track the remainder after building the number up to that point, and the remaining digits. So, for a state (r, remaining_counts), the value is the number of permutations of the remaining digits that, when prepended to the current number (which has remainder r), result in a number that is divisible by m. Wait, no. Because when you add a digit to the left (i.e., the current digits are being built step by step), the remainder is being updated as (current_remainder * 10 + new_digit) mod m. So each step adds a digit to the right of the current number.
+
+So the DP function can be defined as follows:
+
+For a given state (remaining_freq, rem), the number of valid permutations that can be formed with the remaining_freq digits, such that when they are added (in any order) to form a number, the total number mod m is (rem * 10^{k} + ... + digits) mod m. Wait, this is getting complicated.
+
+Alternatively, perhaps the state is the remainder after considering the digits chosen so far, and the remaining digits. So, when you choose a digit d next, the new remainder is (rem * 10 + d) mod m. The DP transitions accumulate the number of ways to reach that state.
+
+The base case is when all digits are used (remaining_freq is all zeros), and the remainder is 0. Then, that's one valid permutation. Otherwise, if digits are all used but remainder is not zero, then zero.
+
+So the DP[memo] returns the number of permutations for the given state (remaining_freq, rem).
+
+So for the initial state, when no digits have been chosen, rem is 0, but the remaining_freq is the original counts. Then, the first digit chosen cannot be zero. So, for the first step, when building the first digit, we have to handle leading zeros.
+
+Therefore, the approach would be:
+
+- Preprocess the frequency counts.
+
+- Use memoization (like a dictionary or a memo table) to store the number of valid permutations for a state (remaining_freq, rem).
+
+The transitions would loop over each possible digit d that has a remaining count. For each d:
+
+   If it's the first digit (i.e., the current length is 0), then d must not be zero.
+
+   Then, subtract one from the count of d, compute the new remainder (current_rem *10 +d) mod m, and add the DP result of the new state.
+
+But how to track if it's the first digit? Because the initial state has all digits remaining, and rem is zero, but when we choose the first digit, we can check whether the current_rem is zero and the current length is zero (i.e., the previous state was initial). Hmm. Alternatively, the state doesn't track the length, but the remaining_freq can be used to determine the length. Wait, the sum of the remaining_freq is the number of digits left to place. So if the sum is equal to the original length, then it's the first step.
+
+Wait, the original length is the total number of digits in n. Let's call it len_n. So len_n = sum(freq). Then, when in a state, the sum of the remaining counts is len_remaining. So the first step is when len_remaining is len_n. Then, choosing the first digit: d cannot be zero.
+
+But how to track that in the state? Because the state only has remaining_freq and rem. So, in the initial state, remaining_freq is the original counts, and rem is 0. The sum of remaining_freq is len_n. So when sum(remaining_freq) == len_n, that's the first step.
+
+Therefore, when processing a state (remaining_freq, rem), for each possible digit d:
+
+   if sum(remaining_freq) == len_n:
+
+      if d == 0: skip (since leading zero is not allowed)
+
+   else:
+
+      allowed to choose any d with remaining_freq[d] >0.
+
+So, in code, for each possible d in 0-9:
+
+   if remaining_freq[d] ==0: continue
+
+   if it's the first digit (sum(remaining_freq) == len_n) and d ==0: continue
+
+   new_rem = (rem *10 +d) % m
+
+   new_freq = remaining_freq.copy()
+
+   new_freq[d] -=1
+
+   add to the current state's count the DP result of (new_freq, new_rem)
+
+Thus, the DP function would be:
+
+def dp(remaining_freq, rem):
+
+   if all counts in remaining_freq are zero:
+
+      return 1 if rem ==0 else 0
+
+   if (remaining_freq, rem) in memo:
+
+      return memo[(remaining_freq, rem)]
+
+   total =0
+
+   for d in 0..9:
+
+      if remaining_freq[d] ==0:
+
+         continue
+
+      if sum(remaining_freq) == len_n and d ==0:
+
+         continue
+
+      new_freq = remaining_freq.copy()
+
+      new_freq[d] -=1
+
+      new_rem = (rem *10 +d) %m
+
+      total += dp(tuple(new_freq), new_rem)
+
+   memo[(remaining_freq, rem)] = total
+
+   return total
+
+But how to represent the remaining_freq as a hashable type for memoization? For example, as a tuple of counts for each digit. So the initial remaining_freq is a tuple (count_0, count_1, ..., count_9).
+
+So the steps:
+
+1. Read the input n as a string, and m.
+
+2. Compute the frequency counts for each digit.
+
+3. Compute the length len_n.
+
+4. Initialize the memoization (probably using lru_cache, but since the counts are tuples, and m is up to 100, perhaps it's manageable.
+
+But wait, in Python, tuples are hashable, so we can use memoization with a dictionary. However, for the frequency tuple, which is a tuple of 10 integers, and the rem (an integer), the key can be (freq_tuple, rem).
+
+But for Python's functools.lru_cache, if the parameters are tuples, it can handle them. So perhaps using memoization via lru_cache would be feasible. However, for large state spaces, the lru_cache might have memory issues. So perhaps using a memoization dictionary with tuples as keys would be better, but in code, using lru_cache is easier.
+
+But in Python, the recursion depth could be a problem. Because the maximum possible sum of remaining_freq is len_n (up to 18). So the recursion depth is up to 18, which is manageable.
+
+So the plan is:
+
+Implement a recursive DP function with memoization. The state is (remaining_freq, rem).
+
+But how to represent the remaining_freq as a tuple. Let's see.
+
+For example, if the input is '104', the frequency counts would be:
+
+count_0: 1, count_1:1, count_4:1, others 0.
+
+So the tuple would be (1, 1, 0, 0, 1, 0, 0, 0, 0, 0).
+
+So the code steps:
+
+Parse the input n into a string, count each digit's frequency.
+
+Compute len_n = len(n).
+
+Then, the initial state is (freq_tuple, 0).
+
+The base case is when all elements in freq_tuple are zero. Then, return 1 if rem is 0, else 0.
+
+So, code outline:
+
+from functools import lru_cache
+
+n, m = input().split()
+m = int(m)
+digits = list(n)
+freq = [0]*10
+for d in digits:
+    freq[int(d)] +=1
+len_n = len(digits)
+
+# Convert freq to a tuple for memoization
+freq_tuple = tuple(freq)
+
+@lru_cache(maxsize=None)
+def dp(remaining, current_rem):
+    # remaining is a tuple of 10 integers (counts for 0-9)
+    # Check if all counts are zero
+    if all(c ==0 for c in remaining):
+        return 1 if (current_rem %m) ==0 else 0
+    total =0
+    current_len = sum(remaining)
+    for d in range(10):
+        if remaining[d] ==0:
+            continue
+        if current_len == len_n and d ==0:
+            continue  # leading zero not allowed
+        # Create new remaining tuple
+        new_remaining = list(remaining)
+        new_remaining[d] -=1
+        new_remaining = tuple(new_remaining)
+        new_rem = (current_rem *10 +d) % m
+        total += dp(new_remaining, new_rem)
+    return total
+
+print(dp(freq_tuple, 0))
+
+Wait, but in Python, tuples are immutable, so creating a new_remaining tuple each time is possible. But the lru_cache may not handle large tuples efficiently, but given that m is small and the state space is manageable, perhaps this works.
+
+Testing the first example:
+
+Input 104 2.
+
+digits are '1','0','4'
+
+freq is [1,1,0,0,1,0,0,0,0,0]
+
+len_n is 3.
+
+Initial state is (1,1,0,0,1,0,0,0,0,0), current_rem 0.
+
+In the first step, current_len is 3 (sum(remaining) is 3). So d can't be 0.
+
+So possible digits are 1,4.
+
+Wait, no. The remaining digits are [1,1,0,0,1,0,...]. So digits with count>0 are 0 (count 1), 1 (count 1), 4 (count1). But in the first step, since current_len is 3 (sum is 3), leading zeros are not allowed. So d can be 1 or 4.
+
+For each of these, compute new_remaining and new_rem.
+
+For d=1:
+
+new_remaining: count 0 is 1, count1 is 0, count4 is1. So (1,0,0,0,1, ...).
+
+new_rem = (0 *10 +1) mod 2 =1 mod2=1.
+
+Then, the next steps.
+
+But after all digits are used, the new_rem must be 0. So the total permutations would be the sum of all possible paths that end up with rem 0.
+
+But in the first example, the valid permutations are 104, 140, 410. Let's see if the code counts them.
+
+But perhaps the code works. However, let's check the transitions.
+
+Another way to think is that the code explores all possible permutations, avoiding leading zeros, and counts those whose remainder mod m is 0.
+
+But considering that for the first example, the code should return 3.
+
+Another possible issue is that if the digits have duplicates, the code may count permutations multiple times. For example, if the input is '111', then all permutations are the same, and the code should count 1 if 111 is divisible by m.
+
+But since the code uses the remaining digits (counts), it will naturally avoid generating duplicate permutations. Because when the digits are the same, choosing them in any order is considered the same permutation, but the code uses counts, so each selection of a digit reduces the count, and since the same digits are indistinct, the code counts them only once. For example, if the digits are '111', then the code would generate a count of 1, as all permutations are the same.
+
+So the code should handle leading zeros and duplicate digits correctly.
+
+But how efficient is this code?
+
+The state space is (product of (counts+1) for all digits) multiplied by m. For a number with all distinct digits (18 digits), the product is 2^10 (assuming some digits not present, but perhaps not). Wait, no. For example, if all 18 digits are unique (but digits can't have more than 10 unique digits). Wait, no. For example, 18 digits can be 0-9, but each digit can appear once. But that's only possible if there are 10 unique digits, but 18 digits is longer than that. So perhaps in such cases, the code would handle it.
+
+But in practice, for the code to handle the sample inputs correctly.
+
+Testing the first sample:
+
+Input 104 2. Output is 3.
+
+The code should return 3.
+
+Let's see:
+
+The initial state is (1,1,0,0,1, ...) and rem 0.
+
+Possible first digits: 1,4,0? No, leading zeros are not allowed. So first digits are 1,4.
+
+Case 1: first digit is 1.
+
+new_remaining: 0's count is 1, 1's count is 0, 4's count 1. Others zero.
+
+current_rem is (0 *10 +1) mod2=1.
+
+sum(remaining) is 2.
+
+Now, next digits can be 0 or 4.
+
+Subcase 1a: next digit is 0.
+
+new_remaining: 0's count 0, 1's 0, 4's 1. rem is (1*10 +0)=10 mod2=0.
+
+sum remaining is 1.
+
+Next digit must be 4. rem becomes (0*10 +4) mod2=0. sum remaining 0. All digits used. rem is 0. So this permutation is 104. Which is valid.
+
+So this contributes 1.
+
+Subcase 1b: next digit is4.
+
+new_remaining: 0's 1, 4's 0. rem is (1*10 +4)=14 mod2=0.
+
+sum remaining 1.
+
+Next digit is 0. rem (0*10 +0) mod2=0. Valid. Permutation is 140.
+
+So this contributes 1.
+
+So total for case 1 is 2.
+
+Case 2: first digit is4.
+
+rem becomes (0*10+4)=4 mod2=0.
+
+sum remaining is2.
+
+Next digits can be 0 or1.
+
+Subcase 2a: next digit is0. rem (0*10 +0) mod2=0. sum 1. Next digit is1. rem (0*10 +1) mod2=1. Not valid.
+
+Wait, no. Wait after first digit 4, rem is0. Then next digit is0: new_rem is (0 *10 +0) mod2=0. Next digit is1: rem (0 *10 +1) mod2=1. So when all digits are used, rem is 1, which is not 0. So this permutation (401) is invalid.
+
+Wait, but in the first sample, 410 is a valid permutation. So perhaps in case 2, when first digit is4, the possible next digits are 0 and1, but in a different order.
+
+Wait let's re-examine.
+
+Case2: first digit4.
+
+rem is4 mod2=0.
+
+sum remaining is2.
+
+Next possible digits:0 and1.
+
+Subcase 2a: next digit0.
+
+new_rem: (0*10 +0)=0 mod2=0.
+
+remaining digits: 1.
+
+Next digit must be1.
+
+new_rem: (0 *10 +1) mod2=1. So when all digits are used, rem is1: not valid. So this permutation (401) is invalid.
+
+Subcase 2b: next digit1.
+
+new_rem: (0*10 +1)=1 mod2=1.
+
+remaining digits:0.
+
+Next digit is0. new_rem: (1 *10 +0) mod2=0. All digits used. So rem is0. Valid. So permutation is410.
+
+So case2 contributes 1.
+
+Case3: first digit0. Not allowed, so skipped.
+
+So total is case1 (2) + case2 (1) =3. Which matches the sample.
+
+So the code would return 3. So the code works for the first sample.
+
+The second sample input is 223 4. Output is1.
+
+The valid permutation is 232.
+
+Let's see how the code handles it.
+
+Digits are '2','2','3'.
+
+freq is [0,0,2,1,0,0,0,0,0,0].
+
+Initial state: (0,0,2,1, ...) rem0.
+
+sum remaining is3, so first digit cannot be 0 (which is already zero in freq). So possible first digits are 2 or 3.
+
+Case1: first digit is2.
+
+new_remaining: 2's count is1, 3's count1. rem=2 mod4=2.
+
+sum remaining 2.
+
+Next possible digits:2 or3.
+
+Subcase1a: next digit2.
+
+new_remaining: 2's count0, 3's count1. rem= (2 *10 +2)=22 mod4=2.
+
+sum remaining 1.
+
+Next digit3. rem= (2*10 +3)=23 mod4= 23-4*5= 23-20=3 mod4=3. So rem is3. Not valid. So this permutation is 223: 223 mod4= 223/4=55*4=220, 223-220=3. So not divisible by4.
+
+Subcase1b: next digit3.
+
+new_remaining: 2's count1, 3's count0. rem= (2 *10 +3)=23 mod4=3. sum remaining1.
+
+Next digit2. rem=3*10 +2=32 mod4=0. So this permutation is 232, which is valid. So this contributes1.
+
+So case1's subcase1b contributes1.
+
+Case2: first digit is3.
+
+new_remaining: 2's count2, 3's count0. rem=3 mod4=3.
+
+sum remaining2.
+
+Next possible digits are 2 and2.
+
+Subcase2a: next digit2. rem= (3*10 +2)=32 mod4=0. sum remaining1.
+
+Next digit2. rem=0*10 +2=2 mod4=2. Not valid. So permutation is322. 322 mod4= 320/4=80*4=320, 322 mod4=2. Not valid.
+
+Subcase2b: same as subcase2a. Because digits are 2 and2. So both choices are same. So no contribution.
+
+So case2 contributes0.
+
+So total is 1.
+
+So the code would return1.
+
+Therefore, the code works for the second sample.
+
+So the code seems correct.
+
+Now, what about leading zeros? For example, input '000' and m=1. Output should be 1 (permutation 000 is allowed only if leading zeros are allowed, but according to the problem statement, the numbers should not have leading zeros. So input '000' would have 0 permutations, but m=1. But according to the problem statement, the number x must not have leading zeros. So '000' is invalid, but in this case, the code would count 0 permutations.
+
+Wait, let's see. If the input is '000' and m=1.
+
+The code's first step: sum remaining is3, and current_rem 0. So first digit can't be0. But remaining digits are all 0. So no valid permutations. So code returns0.
+
+Yes.
+
+Another test case: input '00', m=1. Then the code returns0, since leading zero is not allowed.
+
+So code handles leading zeros correctly.
+
+Another example: input '7067678 8', output47. But how to verify that? Well, the code should compute it correctly.
+
+So the code seems correct. Therefore, the generated function should be as described.
+</think>
+To solve this problem, we need to determine how many permutations of the digits of a given number \( n \) are divisible by a given number \( m \) without leading zeros. This requires a dynamic programming approach to efficiently explore all possible permutations while keeping track of the remainder modulo \( m \).
+
+### Approach
+1. **Digit Frequency Count**: First, we count the frequency of each digit in the given number \( n \).
+2. **Dynamic Programming (DP) with Memoization**: We use a DP approach where the state is defined by the current remainder modulo \( m \) and the remaining digit counts. This allows us to efficiently explore all valid permutations without generating them explicitly.
+3. **State Transitions**: For each digit that can be used next (considering remaining counts and avoiding leading zeros), we compute the new remainder and update the remaining digit counts, recursively solving the problem for the new state.
+4. **Base Case**: When all digits are used, we check if the remainder is zero, indicating a valid permutation.
+
+### Solution Code
+```python
+import sys
+from functools import lru_cache
+
+def main():
+    n, m = sys.stdin.read().split()
+    m = int(m)
+    digits = list(n)
+    freq = [0] * 10
+    for d in digits:
+        freq[int(d)] += 1
+    len_n = len(digits)
+    freq_tuple = tuple(freq)
+
+    @lru_cache(maxsize=None)
+    def dp(remaining, current_rem):
+        if all(c == 0 for c in remaining):
+            return 1 if current_rem % m == 0 else 0
+        total = 0
+        current_len = sum(remaining)
+        for d in range(10):
+            if remaining[d] == 0:
+                continue
+            if current_len == len_n and d == 0:
+                continue  # Skip leading zero
+            new_remaining = list(remaining)
+            new_remaining[d] -= 1
+            new_remaining = tuple(new_remaining)
+            new_rem = (current_rem * 10 + d) % m
+            total += dp(new_remaining, new_rem)
+        return total
+
+    print(dp(freq_tuple, 0))
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Reading Input**: The input consists of the number \( n \) (as a string to handle large values) and the modulus \( m \).
+2. **Frequency Count**: We count the occurrences of each digit (0-9) in \( n \).
+3. **Memoized DP Function**: The `dp` function uses memoization to store results of subproblems. The state is defined by the remaining digit counts and the current remainder modulo \( m \).
+4. **Handling Leading Zeros**: When building the first digit, we skip zero to avoid leading zeros.
+5. **State Transitions**: For each possible digit, we update the remaining counts and compute the new remainder, recursively solving the problem for the new state.
+6. **Base Case**: When all digits are used, we check if the remainder is zero, indicating a valid permutation.
+
+This approach efficiently explores all valid permutations using dynamic programming and memoization, ensuring we do not recompute states and handle large input sizes effectively.
+</bot>

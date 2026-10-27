@@ -1,0 +1,848 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.As you know, the game of "Nim" is played with n piles of stones, where the i-th pile initially contains ai stones. Two players alternate the turns. During a turn a player picks any non-empty pile and removes any positive number of stones from it. The one who is not able to make a move loses the game.
+
+Petya and Vasya are tired of playing Nim, so they invented their own version of the game and named it the "Gambling Nim". They have n two-sided cards, one side of the i-th card has number ai written on it, while the other side has number bi. At the beginning of the game the players put all the cards on the table, each card only one of its sides up, and this side is chosen independently and uniformly. Thus they obtain a sequence c1, c2, ..., cn, where ci is equal to ai or bi. Then they take n piles of stones, with i-th pile containing exactly ci stones and play Nim. Petya takes the first turn.
+
+Given that both players play optimally, find the probability of Petya's victory. Output the answer as an irreducible fraction.
+
+Input
+
+The first line of the input contains a single integer n (1 ≤ n ≤ 500 000) — the number of cards in the deck.
+
+Each of the following n lines contains the description of one card, consisting of two integers ai and bi (0 ≤ ai, bi ≤ 1018).
+
+Output
+
+Output the answer as an irreducible fraction p / q. If the probability of Petya's victory is 0, print 0/1.
+
+Examples
+
+Input
+
+2
+1 1
+1 1
+
+
+Output
+
+0/1
+
+
+Input
+
+2
+1 2
+1 2
+
+
+Output
+
+1/2
+
+
+Input
+
+3
+0 4
+1 5
+2 3
+
+
+Output
+
+1/1
+</user>
+<bot>
+<think>
+Okay, let's tackle this problem. Hmm, the problem is about calculating the probability that Petya wins the Gambling Nim game. Both players play optimally, so the outcome depends on the initial XOR sum of the chosen ci values. Because in Nim, the first player wins if the XOR of all piles is non-zero and loses otherwise. Wait, no, wait. Wait, in standard Nim, the player who cannot make a move loses. The first player can win if the XOR of the piles is not zero. Because if it's zero, then whatever move the first player makes, the second can respond to bring it back to zero. So, the key here is: the initial configuration's XOR determines the outcome. If the XOR is non-zero, Petya wins; else, he loses.
+
+So, the problem reduces to finding the probability that the XOR of all the chosen ci's (each being ai or bi) is non-zero. Then, the answer is (number of such configurations) divided by (total possible configurations) 2^n. But wait, n can be up to 500,000, so we can't iterate all possibilities. So we need a clever way to compute this.
+
+But how to compute the number of subsets (choices) where the XOR of ci is non-zero? Alternatively, compute the number of subsets where the XOR is zero and subtract from total. Then the probability is (2^n - count_zero)/2^n. Then, simplify that fraction.
+
+The main challenge is calculating count_zero, the number of ways to choose each ci as ai or bi such that their XOR is zero.
+
+So, the problem is now: find the number of possible choices of c1, c2, ..., cn (each ci is ai or bi) such that the XOR of all ci is zero. Then the answer is (2^n - count_zero) / (2^n). Then, we have to output this as a reduced fraction.
+
+But how to compute count_zero efficiently?
+
+Hmm. Let's think about linear algebra over GF(2). The XOR operation is addition in GF(2), so we can model the problem as finding the number of vectors (x1, x2, ..., xn) where xi is 0 or 1 (representing choosing ai or bi), such that the sum (XOR) of (ci) is zero. But each ci is either ai or bi. So, for each i, the possible contribution is either ai or bi. Let me think: when you choose between ai and bi for each card, the XOR sum is the XOR of all selected values. We need that total to be zero.
+
+This seems like a problem that can be approached with Gaussian elimination over GF(2). But with n up to 5e5, standard Gaussian elimination is impossible. So there's a need for a smarter approach.
+
+Wait, but perhaps the problem has some structure we can exploit. Let's think: for each i, the possible choices contribute either ai or bi. The difference between ai and bi is (ai XOR bi), right? Because when you choose one or the other, the effect on the total XOR is to toggle the XOR with (ai XOR bi). Because if the current total is X, then choosing bi instead of ai adds (ai XOR bi) to the total (since X XOR ai XOR bi = X XOR (ai XOR bi) if we switch from ai to bi).
+
+Wait, let's think again. Let's say for a particular card i, when we choose ai, the contribution is ai, and when we choose bi, it's bi. The total XOR is the XOR of all chosen ci. So, when considering all possible choices, each card contributes either ai or bi to the XOR sum. The problem is to find how many such combinations result in a total XOR of zero.
+
+Let me model this as follows: Let x_i be a binary variable where x_i=0 means choosing ai, and x_i=1 means choosing bi. Then, the total XOR is (a1 XOR (x_1 * (a1 XOR b1))) ) XOR (a2 XOR (x_2 * (a2 XOR b2))) ) XOR ... XOR (an XOR (x_n * (an XOR bn))) ). Wait, no. Because choosing bi is equivalent to a_i XOR (a_i XOR b_i) = b_i. So the total XOR can be written as the XOR of a_i XOR (x_i * (a_i XOR b_i)) for each i. Because if x_i is 0, then it's a_i, else it's a_i XOR (a_i XOR b_i) = b_i. So the total XOR is the XOR of (a_i XOR (x_i * d_i)), where d_i is (a_i XOR b_i) for each i.
+
+The total XOR is then (a_1 XOR (x_1*d_1)) XOR (a_2 XOR (x_2*d_2)) XOR ... XOR (a_n XOR (x_n*d_n)). We want this to be equal to zero.
+
+But XOR is associative and commutative, so we can rearrange. Let's compute the XOR of all a_i first. Let S = a_1 XOR a_2 XOR ... XOR a_n. Then, each x_i*d_i term is XORed with S, but we have to consider that XORing each term in turn.
+
+Wait, no. Let's see: the total XOR is S XOR (x_1*d_1) XOR (x_2*d_2) XOR ... XOR (x_n*d_n). Because (a_i XOR x_i*d_i) XOR (a_j XOR x_j*d_j) = a_i XOR a_j XOR x_i*d_i XOR x_j*d_j. So the total is S XOR (XOR of x_i*d_i for all i). So the total XOR is S ^ (XOR of x_i*d_i) = 0. So the equation to solve is S ^ (XOR of x_i*d_i) = 0 → XOR of x_i*d_i = S.
+
+So, the problem reduces to finding the number of x_i (each 0 or 1) such that the XOR of x_i*d_i equals S. Then, the count_zero is this number, and the answer is (2^n - count_zero)/2^n.
+
+So now the problem is: given vectors d_1, d_2, ..., d_n (each d_i = a_i XOR b_i), and a target S (the XOR of all a_i), find the number of subsets of the vectors (each can be chosen 0 or 1 times) such that their XOR sum equals S.
+
+This is a classic linear algebra problem over GF(2). The number of solutions is either zero or 2^k, where k is the number of free variables in the system. However, the system here is built by the XOR of the selected d_i's. So, the problem is to find the number of subsets of the d_i's that XOR to S.
+
+The standard approach for this is to compute the rank of the basis formed by the d_i's, and check if S is in the row space. If not, then there are zero solutions. If yes, then the number of solutions is 2^(n - r), where r is the rank of the basis.
+
+But how do we compute this efficiently for large n (up to 5e5)?
+
+Yes, the steps would be:
+
+1. Compute S as the XOR of all a_i.
+
+2. For each i, compute d_i = a_i XOR b_i.
+
+3. Now, find the number of subsets of the d_i's (each can be included 0 or 1 times) such that their XOR is S. Wait, but in our transformed problem, the required XOR is S. Because the equation is (XOR of x_i*d_i) = S.
+
+So the problem is: how many x_i (each 0 or 1) variables are there such that the XOR sum of x_i*d_i equals S.
+
+The standard approach for this is to build a basis for the vector space generated by the d_i's, then check if S can be represented as a combination of the basis vectors. If not, there are zero solutions. If yes, then the number of solutions is 2^(n - r), where r is the rank of the basis.
+
+So, the steps are:
+
+- Build a basis for the linear space of the d_i's using Gaussian elimination over GF(2). But since the d_i's can be up to 1e18, but each is a 64-bit number (or up to 60 bits), we can represent each as a binary vector of up to 60 bits. For Gaussian elimination, we process each number by checking each bit from highest to lowest, trying to find a pivot.
+
+- Once the basis is built, check if S can be represented as a linear combination of the basis vectors. If not, the count is zero.
+
+- If yes, then the number of solutions is 2^(n - rank), where rank is the number of vectors in the basis.
+
+Wait, but the standard formula is that the number of solutions is either zero or 2^(n - r), where r is the rank of the system. Because once the system has a solution, there are 2^(n - r) possible solutions. So in this case, since each x_i is 0 or 1, and the equations are linear over GF(2), this holds.
+
+So the steps for the problem are:
+
+1. Compute S = a_1 XOR a_2 XOR ... XOR a_n.
+
+2. Compute all d_i = a_i XOR b_i.
+
+3. Compute the basis for the linear space generated by d_i's.
+
+4. Check if S is in the span of the basis. If not, then the number of solutions is zero. Otherwise, the number of solutions is 2^(n - r), where r is the size of the basis.
+
+5. The count_zero is the number of solutions. Then, the answer is (2^n - count_zero) / 2^n, which simplifies to (2^n - 2^{n - r} ) / 2^n = (2^r - 1)/2^r, but only if S is in the span and the basis has rank r. Wait, no: wait, count_zero is the number of solutions (which is 2^{n - r} if possible), so the answer is (total - count_zero)/total = (2^n - 2^{n - r}) / 2^n = (2^r -1)/2^r if S is in the span. But wait, no: if S is in the span, then the number of solutions is 2^{n - r}, so count_zero is 2^{n - r}, so the answer becomes (2^n - 2^{n - r}) / 2^n = (2^r -1) / 2^r. But that's only when S is in the span and the count is 2^{n - r}. If S is not in the span, count_zero is zero, so the answer is (2^n -0)/2^n = 1. So Petya wins in all cases except when the XOR is zero, which occurs in count_zero cases.
+
+Wait, but in this problem, when the XOR sum is zero, Petya loses. So the probability that Petya wins is (total - count_zero) / 2^n.
+
+So putting it all together:
+
+Compute S = XOR of all a_i.
+
+Compute d_i = a_i XOR b_i.
+
+Build the basis for the d_i's.
+
+Check if S can be expressed as an XOR of some subset of the basis vectors.
+
+If not, then count_zero is zero. So the answer is (2^n - 0) / 2^n = 1 (i.e., Petya always wins, because the XOR sum is never zero). But wait, no. If S is not in the span, then there are no solutions where the XOR of x_i*d_i equals S. So the count_zero is zero. So the initial XOR of the a_i's is S. The XOR of x_i*d_i is trying to reach S. If that's impossible, then the only possible way the total XOR (S XOR (x_i*d_i's XOR)) can be zero is if x_i*d_i's XOR is S. So if that's impossible, then there are zero ways. So count_zero is zero. So the answer is (2^n - 0)/2^n = 1. So Petya wins with probability 1. That's possible.
+
+But in the example 1:
+
+Input:
+
+2
+
+1 1
+
+1 1
+
+Here, all a_i are 1, and all b_i are 1. So d_i is 0 for each i. So the basis is empty. The S is 1 XOR 1 = 0. So the target is S = 0. Since the basis is empty (all d_i are zero), the only possible subset XOR is zero. So the equation is 0 = S (0). So the number of solutions is 2^(2 - 0) = 4, since all possible x_i can be chosen (but since d_i is zero, x_i has no effect). So the XOR sum is zero regardless of x_i's. So count_zero is 4. So the answer is (4 -4)/4 = 0. Which matches the first example.
+
+So, the approach seems correct.
+
+So, to implement this:
+
+First, compute S as the XOR of all a_i.
+
+Then, for each i, compute d_i = a_i XOR b_i.
+
+Now, build the basis for the vectors d_i. For Gaussian elimination over GF(2), the basis is built by processing each number and inserting it into the basis if it can add a new pivot.
+
+Once the basis is built, then we check if S can be represented as a combination of the basis vectors.
+
+If not, then count_zero is zero.
+
+If yes, then the number of solutions is 2^(n - r), where r is the rank of the basis (the number of vectors in the basis).
+
+So, the code steps:
+
+1. Read n.
+
+2. Read each a_i and b_i.
+
+3. Compute S as XOR of all a_i.
+
+4. Compute d_i for each i as a_i XOR b_i.
+
+5. Build the basis for the d_i's.
+
+6. Check if S is in the span of the basis.
+
+   To do this, we can attempt to reduce S using the basis. If after processing all basis vectors, S becomes zero, then it's in the span. Otherwise, not.
+
+7. If S is not in the span, then count_zero is zero.
+
+8. Else, count_zero is 2^(n - r), where r is the size of the basis.
+
+Then, the answer is (2^n - count_zero) / 2^n.
+
+But 2^n can be very large, but since the answer is to be expressed as a fraction in reduced form, we need to compute numerator and denominator modulo 1e9+7 or similar? Wait, but no: the output requires the answer as a reduced fraction. For example, in the second sample input, the output is 1/2. So, the problem is to compute the fraction in reduced form.
+
+But for large n, 2^n is a huge number, but we need to compute the numerator and denominator modulo something and then reduce the fraction. However, since 2^n can be up to 2^5e5, which is way too big to compute directly, we need to compute the numerator and denominator in terms of exponents and then compute the fraction.
+
+But how to compute the fraction?
+
+Let's think. Let's denote the numerator as (2^n - count_zero) and denominator as 2^n. We need to compute this as a reduced fraction.
+
+If count_zero is 2^(n - r) (when S is in the basis), then the numerator is 2^n - 2^{n - r} = 2^{n - r} (2^r -1).
+
+Denominator is 2^n.
+
+So the fraction is (2^{n - r} (2^r -1 )) / 2^n = (2^r -1) / 2^r.
+
+But wait, 2^{n - r} / 2^n = 1/(2^r). So the fraction becomes (2^r -1)/2^r. So regardless of n, if S is in the basis and the basis has rank r, then the answer is (2^r -1)/2^r.
+
+But how?
+
+Wait, let's see:
+
+If count_zero = 2^{n - r}, then:
+
+numerator = 2^n - 2^{n - r} = 2^{n - r} (2^r - 1).
+
+Denominator = 2^n = 2^{n - r} * 2^r.
+
+So the fraction is [2^{n - r} (2^r -1)] / [2^{n - r} * 2^r ] = (2^r -1)/2^r.
+
+So the 2^{n -r} factors cancel out. Therefore, the answer can be written as (2^r -1)/2^r, where r is the rank of the basis, provided that S is in the basis.
+
+If S is not in the basis, then count_zero is zero. So numerator is 2^n, denominator 2^n → 1/1. So the answer is 1/1.
+
+But wait, when S is not in the basis, there are no solutions, so the initial XOR S is fixed (the required XOR sum is S). So the XOR of the x_i*d_i must equal S for the total XOR to be zero. If that's impossible, then there are zero configurations where the total is zero. So in this case, count_zero is zero, so the answer is (2^n - 0)/2^n = 1. So the answer is 1/1.
+
+So putting it all together:
+
+The answer is:
+
+If S is not in the span of the basis → (1/1).
+
+Else, (2^r -1)/2^r, where r is the rank of the basis.
+
+So the steps to compute the answer are:
+
+Compute r (the rank of the basis).
+
+Check if S is in the span.
+
+If not → answer is 1/1.
+
+Else → (2^r -1) / 2^r.
+
+Wait, but what about the case where S is in the span, but the count is 2^{n - r} → which would make the answer (2^n - 2^{n - r}) / 2^n = (2^r -1)/2^r.
+
+Yes, that's correct.
+
+So the code can proceed as follows:
+
+- Compute S and the basis.
+
+- Check if S is in the basis's span.
+
+   To do this, we can perform Gaussian elimination on S. Let's make a copy of S, and for each bit from high to low, if the current bit is set, and there's a basis vector with that pivot, XOR the copy with that basis vector. If after processing all bits, the copy is zero → S is in the span. Else → not.
+
+- Then, compute the answer based on that.
+
+Now, the problem reduces to:
+
+Compute the rank r of the basis of the d_i's.
+
+Check if S is in the span.
+
+If not: output 1/1.
+
+Else: output (2^r -1)/2^r, reduced to simplest form.
+
+But (2^r -1) and 2^r are coprime, since 2^r and 2^r -1 are consecutive integers, hence coprime.
+
+So the reduced fraction is (2^r -1)/2^r.
+
+So, in code:
+
+Once we have the rank r and whether S is in the span:
+
+if S not in span:
+
+   if the initial S is zero → because the total XOR is S ^ (XOR of x_i*d_i) → if x_i's XOR sum is S, then the total is zero. But if S is not in the span, then there's no such x_i's → count_zero is zero. So the answer is (2^n - 0)/2^n = 1/1.
+
+Wait, but in this case, if S is not in the span, then there are zero ways to choose x_i's such that their XOR sum is S. So the count_zero is zero → the answer is 1/1.
+
+So the code can proceed:
+
+After building the basis, check if S is in the span.
+
+If not: count_zero = 0.
+
+Else: count_zero = 2^(n - r).
+
+Then, answer is (2^n - count_zero) / 2^n → which simplifies to 1 if count_zero is zero, or (2^r -1)/2^r if count_zero is 2^{n - r}.
+
+But when count_zero is zero, (2^n -0)/2^n = 1 → 1/1.
+
+So the code can compute the answer as follows:
+
+If S is not in the span:
+
+   answer = (2^n) / 2^n = 1 → 1/1.
+
+Else:
+
+   numerator = 2^r -1
+
+   denominator = 2^r
+
+But how to compute these exponents modulo something? Wait, the problem requires the output as an irreducible fraction, which doesn't require modulo, but exact values. But for large r (up to 60?), 2^r can be up to 2^60, which is a very big number. But the problem says that the output can be written as a fraction p/q where p and q are coprime, and we need to output them as such.
+
+But how to compute 2^r when r can be up to 60 (since each d_i is up to 1e18, which is 60 bits). So the maximum possible rank is 60, since each vector is 60 bits. So 2^r is manageable as a 64-bit integer.
+
+So the code can proceed as follows:
+
+Compute the basis and check if S is in the span.
+
+If not in span: output 1/1.
+
+Else:
+
+   compute pow(2, r), then numerator is pow(2, r) -1, denominator is pow(2, r).
+
+   Then, output numerator / denominator in reduced form.
+
+But since 2^r and 2^r -1 are coprime, the fraction is already reduced.
+
+But wait, let's check for r=1: 1 and 2 are coprime.
+
+r=2: 3 and 4 are coprime.
+
+Yes, since consecutive integers are coprime.
+
+So yes, the fraction (2^r -1)/2^r is already in simplest terms.
+
+So the code can proceed as:
+
+if S is in the span:
+
+   compute r as the number of vectors in the basis.
+
+   numerator = 2^r -1
+
+   denominator = 2^r
+
+   output as numerator/denominator.
+
+else:
+
+   output 1/1.
+
+So the main steps are:
+
+1. Compute S as XOR of all a_i.
+
+2. Compute all d_i = a_i XOR b_i.
+
+3. Build the basis.
+
+4. Check if S is in the basis's span.
+
+5. Compute r as the basis size.
+
+6. Output the appropriate fraction.
+
+Now, the code.
+
+Implementing the basis:
+
+We can represent the basis as an array of up to 60 elements (for 64-bit numbers). For each number d in d_i's, we process it as follows:
+
+for bit in reversed(range(60)):
+
+   if the current d has this bit set:
+
+      if there is no basis vector for this bit, add d to the basis.
+
+      else, XOR d with the basis vector for this bit.
+
+Repeat until d becomes zero or all bits processed.
+
+Wait, but standard Gaussian elimination steps for binary vectors.
+
+The code for building the basis:
+
+Initialize basis as a list of size 60 (for each possible bit from 59 down to 0).
+
+For each d in d_i's:
+
+   if d is zero: continue (since it doesn't contribute to the basis).
+
+   current = d
+
+   for i in reversed(range(60)):
+
+       if (current >> i) & 1:
+
+           if basis[i] == 0:
+
+               basis[i] = current
+
+               break
+
+           else:
+
+               current ^= basis[i]
+
+   # after processing, if current is zero, it's already represented by the basis.
+
+So, after processing all d_i's, the basis contains all the pivot elements.
+
+The rank r is the number of non-zero elements in the basis.
+
+Then, to check if S is in the span:
+
+copy = S
+
+for i in reversed(range(60)):
+
+   if (copy >> i) & 1:
+
+       if basis[i] is zero:
+
+           continue
+
+       copy ^= basis[i]
+
+if copy == 0: S is in the span.
+
+Else: not.
+
+So, the code can be written as follows.
+
+Now, let's test this logic against the examples.
+
+First example:
+
+Input:
+
+2
+
+1 1
+
+1 1
+
+So, a_i's are 1 and 1. S is 1 XOR 1 = 0.
+
+d_i's are 0 and 0.
+
+All d_i's are zero. So the basis is empty. So r = 0.
+
+Check if S (0) is in the span: yes (since XOR of zero elements is zero).
+
+So count_zero is 2^{2 - 0} =4.
+
+So answer is (4 -4)/4 = 0/1.
+
+But according to the code logic:
+
+S is in the span → r is 0. numerator = 2^0 -1 = 0. denominator = 1. So output 0/1. Which matches.
+
+Second example:
+
+Input:
+
+2
+
+1 2
+
+1 2
+
+Each a_i is 1 and 1. S is 1 XOR 1 = 0.
+
+d_i's are (1 XOR 2) = 3, and (1 XOR 2)=3.
+
+So, processing the d_i's:
+
+First d is 3 (binary 11).
+
+Basis starts empty.
+
+Highest bit is 1 (bit 1 in binary 3). So basis[1] is set to 3.
+
+Next d is 3. Processing it: highest bit is 1. basis[1] is 3. XOR with 3 → 0. So no new elements added. So basis has size 1.
+
+So r=1.
+
+Check if S (0) is in the span. To check:
+
+copy = 0.
+
+For each bit from high to low:
+
+No bits set in copy. So copy remains zero. So yes, S is in the span.
+
+So answer is (2^1 -1)/2^1 = 1/2. Which matches the example.
+
+Third example:
+
+Input:
+
+3
+
+0 4 → d_i = 0 XOR4 =4.
+
+1 5 → d_i=1^5=4.
+
+2 3 → d_i=2^3=1.
+
+S is 0 XOR1 XOR2 = 3.
+
+Wait, let's compute:
+
+a1=0, a2=1, a3=2.
+
+S = 0 XOR 1 XOR 2 = 3.
+
+d1 = 4, d2=4, d3=1.
+
+Basis building:
+
+Process d1=4 (100). Highest bit is 2 (value 4). So basis[2] =4.
+
+d2=4: process, highest bit 2. basis[2] exists. XOR with basis[2] → 4^4=0. So no new elements.
+
+d3=1 (001). Highest bit 0. So basis[0] =1.
+
+So basis has two elements: 4 and 1. r=2.
+
+Check if S=3 is in the span.
+
+copy =3 (11).
+
+Process bits from high to low:
+
+bit 2: 3 has 0 in bit 2. Skip.
+
+bit 1: 3 has 1 in bit 1. But basis[1] is zero. So no action.
+
+bit 0: copy has 1. basis[0] is 1. XOR copy with 1 → copy becomes 2 (10).
+
+Now, process bits again for the new copy (2):
+
+bit 1: set. basis[1] is zero. So no action.
+
+bit 0: not set.
+
+Now copy is 2. Not zero. So S is not in the span.
+
+Wait, but wait:
+
+Wait the initial S is 3. The basis is 4 (100) and 1 (001).
+
+Wait, can 3 be represented as a combination of 4 and 1? Let's see:
+
+We can represent any linear combination (XOR) of the basis vectors.
+
+So possible combinations:
+
+0: 0
+
+4: 4
+
+1:1
+
+4^1=5.
+
+So no combination gives 3. So S=3 is not in the span. So count_zero is zero → answer is 1/1.
+
+Which matches the third example's output.
+
+So the code logic works.
+
+Thus, the code can proceed as follows.
+
+Now, code steps:
+
+Read n.
+
+Compute S as the XOR of all a_i.
+
+Compute d_i as a_i XOR b_i for each card.
+
+Build the basis.
+
+Check if S can be represented by the basis.
+
+If not → output 1/1.
+
+Else → compute (2^r -1)/2^r.
+
+Now, code in Python:
+
+But how to handle the basis? Since in Python, we can represent the basis as a list of 60 elements (for bits 0-59), initialized to zero.
+
+For each d in d_i:
+
+   current = d
+
+   for i in reversed(range(60)):
+
+       if (current >> i) & 1:
+
+           if basis[i] == 0:
+
+               basis[i] = current
+
+               break
+
+           else:
+
+               current ^= basis[i]
+
+   # if current becomes zero, do nothing.
+
+Once all d are processed, the basis is built.
+
+Then, to check S:
+
+copy = S
+
+for i in reversed(range(60)):
+
+   if (copy >> i) & 1:
+
+       if basis[i] == 0:
+
+           continue
+
+       copy ^= basis[i]
+
+if copy ==0 → in span.
+
+Else → not.
+
+Now, code:
+
+But for numbers up to 1e18, which is manageable in Python.
+
+Now, code:
+
+Read n.
+
+s = 0
+
+basis = [0] * 60
+
+for _ in range(n):
+
+    a, b = map(int, input().split())
+
+    s ^= a
+
+    d = a ^ b
+
+    if d ==0:
+
+        continue
+
+    current = d
+
+    for i in reversed(range(60)):
+
+        if (current >> i) & 1:
+
+            if basis[i] ==0:
+
+                basis[i] = current
+
+                break
+
+            else:
+
+                current ^= basis[i]
+
+    # after processing, current is now zero or stored in basis.
+
+# Now check if s is in the basis's span.
+
+copy = s
+
+for i in reversed(range(60)):
+
+    if (copy >> i) &1:
+
+        if basis[i] ==0:
+
+            continue
+
+        copy ^= basis[i]
+
+if copy !=0:
+
+    # s is not in span.
+
+    print("1/1")
+
+else:
+
+    r = sum(1 for x in basis if x !=0)
+
+    numerator = (1 << r) -1
+
+    denominator = (1 << r)
+
+    # simplify the fraction.
+
+    # since gcd(numerator, denominator) is 1.
+
+    print(f"{numerator}/{denominator}")
+
+But wait, what if all d_i are zero? Then, the basis is empty (all zero). Then, when checking S, if S is zero, then copy becomes zero. So the code proceeds to compute r=0. numerator is 0, denominator is 1. So output 0/1, which matches the first example.
+
+Yes.
+
+Another test case: second example.
+
+The basis after processing is [3 (binary 11) at bit 1? Or wait, let's see:
+
+d_i for first card is 3 (11). So highest bit is 1 (since 3 is 11, which is 2^1 +1). So in code, reversed(range(60)) starts from 59 down. So for 3 (binary ...00011), the highest set bit is 1 (2^1 =2). So in reversed range, i=1 is the highest bit.
+
+So basis[1] is set to 3.
+
+The next d_i is 3 again. When processing:
+
+current =3.
+
+Check i=1: (3>>1)&1 is 1. basis[1] is 3. So current ^= basis[1] → 3 ^3=0. Loop breaks. So nothing added. So basis is [3 at bit 1].
+
+r is 1.
+
+S is 0. Checking:
+
+copy =0.
+
+For all i in reversed order:
+
+i=1: (0>>1)&1 is 0. No action.
+
+i=0: (0>>0)&1 is 0. No action.
+
+copy remains 0. So yes, in span.
+
+So numerator=1, denominator=2. Output 1/2.
+
+Which matches the second example.
+
+So code works.
+
+Third example:
+
+S=3 (0^1^2=3).
+
+d_i's are 4,4,1.
+
+Processing first d=4 (100). Highest bit is 2 (since 4 is 100). So basis[2] =4.
+
+Second d=4. Processed: highest bit 2. basis[2] exists. current becomes 4^4=0. So no addition.
+
+Third d=1 (0001). Highest bit is 0. basis[0] is 0 → set to 1.
+
+So basis[2] =4, basis[0]=1. So r=2.
+
+Check S=3 (binary 11).
+
+copy=3.
+
+For i from 59 down to 0:
+
+i=59 to 3: no bits set.
+
+i=2: copy is 3, bits 0 and 1. So (copy >>2)&1 is 0.
+
+i=1: (3 >>1)&1 is 1. But basis[1] is zero. So no action.
+
+i=0: (3>>0)&1 is 1. basis[0] is 1. So copy ^=1 → 2.
+
+So copy becomes 2 (10).
+
+Now, process again:
+
+i=1: (2>>1) is 1 → check basis[1] (zero). So no action.
+
+i=0: (2>>0) is 0. So copy is 2. Not zero. So not in span.
+
+Thus, output is 1/1.
+
+Which matches the third example.
+
+Thus, the code works.
+
+So the code is correct.
+</think>
+To solve this problem, we need to determine the probability that Petya wins the Gambling Nim game when both players play optimally. The solution involves calculating the probability based on the XOR sum of the chosen values from each card, considering each card can be placed either face up or down.
+
+### Approach
+1. **Problem Analysis**: The game of Nim is won by the first player if the XOR of all pile sizes is non-zero. In Gambling Nim, each card can be either of two values, leading to different possible configurations. We need to compute the probability that the initial configuration's XOR sum is non-zero.
+
+2. **Key Insight**: The problem reduces to determining the number of configurations where the XOR sum of the chosen values (each card's face-up or face-down value) is zero. This can be efficiently solved using linear algebra over the binary field (GF(2)).
+
+3. **Gaussian Elimination over GF(2)**: We construct a basis for the vector space formed by the XOR differences of the card values. The rank of this basis helps determine the number of configurations leading to a zero XOR sum.
+
+4. **Probability Calculation**: If the target XOR sum (initial XOR of face-up values) cannot be represented using the basis, the probability of Petya winning is 1. Otherwise, it is determined by the rank of the basis.
+
+### Solution Code
+```python
+n = int(input())
+s = 0
+basis = [0] * 60  # For bits 0 to 59
+
+for _ in range(n):
+    a, b = map(int, input().split())
+    s ^= a
+    d = a ^ b
+    if d == 0:
+        continue
+    current = d
+    for i in reversed(range(60)):
+        if (current >> i) & 1:
+            if basis[i] == 0:
+                basis[i] = current
+                break
+            else:
+                current ^= basis[i]
+
+# Check if s can be represented by the basis
+copy_s = s
+for i in reversed(range(60)):
+    if (copy_s >> i) & 1:
+        if basis[i] != 0:
+            copy_s ^= basis[i]
+
+if copy_s != 0:
+    print("1/1")
+else:
+    r = sum(1 for x in basis if x != 0)
+    numerator = (1 << r) - 1
+    denominator = 1 << r
+    print(f"{numerator}/{denominator}")
+```
+
+### Explanation
+1. **Reading Input**: The input consists of the number of cards and their respective values on both sides.
+2. **Compute Initial XOR Sum**: Calculate the initial XOR sum `s` of all face-up values (ai).
+3. **Construct Basis**: For each card, compute the XOR difference between its two sides and use Gaussian elimination to build a basis for these values.
+4. **Check Span**: Determine if the initial XOR sum `s` can be represented as a combination of the basis vectors.
+5. **Calculate Probability**: If `s` is not in the span of the basis vectors, Petya always wins (probability 1). Otherwise, the probability is derived from the rank of the basis, leading to the fraction (2^r - 1)/2^r, where `r` is the rank.
+
+This approach efficiently handles up to 500,000 cards using linear algebra techniques over GF(2), ensuring optimal performance and correctness.
+</bot>

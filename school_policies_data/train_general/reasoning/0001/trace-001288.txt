@@ -1,0 +1,1236 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Barney was hanging out with Nora for a while and now he thinks he may have feelings for her. Barney wants to send her a cheesy text message and wants to make her as happy as possible.
+
+<image>
+
+Initially, happiness level of Nora is 0. Nora loves some pickup lines like "I'm falling for you" and stuff. Totally, she knows n pickup lines, each consisting only of lowercase English letters, also some of them may be equal (in writing, but different in pronouncing or meaning though). Every time Nora sees i-th pickup line as a consecutive subsequence of Barney's text message her happiness level increases by ai. These substrings may overlap, for example, Nora will see the pickup line aa twice and the pickup line ab once in text message aaab.
+
+Due to texting app limits, Barney's text may have up to l characters.
+
+Barney asked you to help him make Nora as much happy as possible, it's gonna be legen...
+
+Input
+
+The first line of input contains two integers n and l (1 ≤ n ≤ 200, 1 ≤ l ≤ 1014) — the number of pickup lines and the maximum length of Barney's text.
+
+The second line contains n integers a1, a2, ..., an (1 ≤ ai ≤ 100), meaning that Nora's happiness level increases by ai after every time seeing i-th pickup line.
+
+The next n lines contain the pickup lines. i-th of them contains a single string si consisting of only English lowercase letter. Summary length of all pickup lines does not exceed 200.
+
+All strings are not empty.
+
+Output
+
+Print the only integer — the maximum possible value of Nora's happiness level after reading Barney's text.
+
+Examples
+
+Input
+
+3 6
+3 2 1
+heart
+earth
+art
+
+
+Output
+
+6
+
+
+Input
+
+3 6
+3 2 8
+heart
+earth
+art
+
+
+Output
+
+16
+
+Note
+
+An optimal answer for the first sample case is hearth containing each pickup line exactly once.
+
+An optimal answer for the second sample case is artart.
+</user>
+<bot>
+<think>
+Okay, let's try to figure out how to solve this problem. The problem is about maximizing Nora's happiness by creating a text message of up to length L. Each time a pickup line appears as a consecutive substring, it adds to her happiness. So the goal is to choose a string S of length at most L that maximizes the sum of a_i for each occurrence of the i-th pickup line in S.
+
+Hmm. So the first thing I need to think about is how to model the transitions between different states as we build the string. Because each time a character is added, the current state (which is the suffix of the string so far) determines which pickup lines are matched. For example, if the current suffix is 'art', adding 'h' would make it 'arth', but maybe 'art' is a pickup line and contributes some a_i. So, the state needs to track the current suffix that could be a prefix of any pickup line. That makes me think of the Aho-Corasick automaton, where each state represents the longest possible suffix that matches a prefix of any pattern (here, the pickup lines).
+
+Wait, right. The idea is to build a trie or automaton that can track the current possible matches. Then, each time we add a character, we transition to the next state based on the current state and the character. Each state can also collect all the pickup lines that end at that state, which would contribute their a_i values each time we reach that state.
+
+So, the plan is to model this as a state machine where each state represents the maximum possible current suffix. Then, for each state and each possible next character, we can transition to the next state. The transitions would be determined by the automaton's failure links, similar to the Aho-Corasick algorithm.
+
+Once we have the automaton, the problem becomes finding the maximum sum over a path of length up to L steps in this automaton, where each transition adds the sum of a_i's for all pickup lines ending in the new state. But since L can be up to 1e14, we can't compute this with dynamic programming step by step for each character. So we need a way to model this as a matrix exponentiation problem, where the transitions can be represented in a way that allows us to exponentiate the transition matrix to the power of L, giving us the maximum sum after L steps.
+
+Yes, that makes sense. So the steps I need to take are:
+
+1. Build the automaton for the pickup lines, which includes the failure links (like in Aho-Corasick).
+2. For each state in the automaton, precompute the transitions for each possible character (a-z), and the total a_i added when transitioning to that state (including all possible matches that end at that state).
+3. Model the transitions as a graph where each node is a state, and edges are transitions with a certain weight (sum of a_i's). Then, the maximum happiness is the maximum path weight over exactly L steps, starting from the initial state (empty string).
+4. Since L is very large, use matrix exponentiation optimized for this kind of problem. But since the states can be up to, say, the sum of the lengths of all pickup lines (maybe up to 200?), the number of states is manageable. Let's call the number of states m. Then, the matrix would be m x m, which is feasible for exponentiation even if m is 200 or so.
+
+But wait, the transitions and the weight added when moving to a state can be modeled using a transition matrix where each entry (i,j) is the maximum weight achievable by moving from state i to state j in a single step. But this is similar to the problem of finding the longest path in a graph with edge weights, and since we need to take exactly L steps, this can be represented using matrix exponentiation where each "multiplication" is taking the maximum over possible intermediate sums, and each "addition" is the sum of the edge weight and the current value.
+
+Yes. So the approach is similar to solving the problem using dynamic programming where dp[k][u] is the maximum happiness after k steps ending at state u. Then, the transitions are:
+
+dp[k][v] = max( dp[k-1][u] + transition_value(u, v) ) for all u that can transition to v in one step.
+
+But since k can be up to 1e14, we need to find a way to compute this efficiently. This is where matrix exponentiation comes into play. However, the standard matrix exponentiation uses multiplication and addition, but here we need to use max and addition. So the exponentiation would involve creating a transition matrix where each element represents the maximum value achievable when moving from state i to state j in a certain number of steps.
+
+Wait, but matrix exponentiation here would need to model the transitions over steps. For example, the initial state is the empty string (state 0), and for each step (each character added), we transition to a new state and accumulate the sum of a_i's for the new matches.
+
+So the key is to model the transitions as a state machine, and then represent the transitions in a way that allows exponentiation to compute the maximum sum over L steps.
+
+So first, building the automaton:
+
+Each pickup line is a string. The automaton needs to track the current longest prefix that is a suffix of the current string. So when building the automaton, each node (state) represents the current maximum possible suffix. The transitions for each character are determined by the automaton's trie structure and failure links.
+
+For example, if the current state is 'ar', and the next character is 't', then if there is a transition from 'ar' to 'art', that's the next state. Otherwise, we follow the failure link (like in Aho-Corasick) to see if a shorter suffix (like 'rt', 't', etc.) can form a valid prefix of a pickup line.
+
+But for our problem, when adding a character, we need to compute all possible pickup lines that end at the new position. So, for each state, when we add a character c, the next state is determined by the trie transitions (with failure links), and the sum added is the sum of a_i's for all pickup lines that are suffixes of the current path (i.e., the ones that end at the new state).
+
+Therefore, when building the automaton, each state will have a 'value' which is the sum of a_i's for all pickup lines that end at that state. Then, when transitioning to a new state, the value added is the sum of the new state's value.
+
+So the first step is to build the trie with failure links and compute for each state the sum of a_i's of all pickup lines that end at that state (possibly more than one if multiple pickup lines end there).
+
+Once the automaton is built, we can model the transitions as a graph where each edge from state u to v has a weight equal to the sum of a_i's of state v. Then, the problem becomes finding the maximum sum path of exactly length L steps, starting from the initial state (0).
+
+But L is up to 1e14, so we need to compute this using matrix exponentiation. Let's think of the state transitions as a matrix where each entry (u, v) is the maximum possible value when moving from u to v in one step, but in our case, each step (adding a character) allows us to transition from u to v via any possible character, and the value added is the sum of the a_i's of v. However, since each transition depends on the character chosen, for each state u, we can choose the best possible character (the one that leads to a state v with the highest possible value) and use that to model the transitions.
+
+Wait, but no, because each character choice leads to a different transition. So for each state u and each possible next character c (a-z), there's a transition to state v, and the value added is the sum of a_i's of v. So to model this, for each state u, the maximum possible value achievable in a single step is the maximum over all possible characters c of (current value + sum of a_i's of v). But when building the transition matrix for exponentiation, each step is a transition that can be represented as a matrix where each entry (u, v) is the maximum value attainable by moving from u to v in one step (with any possible character).
+
+Wait, maybe it's better to model this as a state transition graph where each edge is labeled with the maximum possible gain for that transition. But since each transition from u to v can be made through different characters (each of which may have different gains), perhaps the maximum gain when transitioning from u to v is the maximum possible value of (gain) that can be achieved by choosing a character c that leads from u to v.
+
+But then, the problem is to find the maximum sum over L steps, where each step is a transition from u to v with a gain of the maximum possible for that transition. But this approach would require that for each possible pair (u, v), we compute the maximum possible gain when moving from u to v in one step. However, since each step can choose any character, the transitions would be all possible (u, v) pairs where there's a character c that can take u to v, and the gain is the value of v's sum. So for each u and v, the maximum possible gain when moving from u to v is the maximum value of (sum_v) for any c that transitions u to v.
+
+Wait, perhaps not. Let's think again. Suppose from state u, adding character c takes you to state v. The gain for this transition is the sum of a_i's for the state v. So for each step, when choosing a character, you can pick any character, and that choice affects which state you transition to and the gain you get. The goal is to choose a sequence of characters (of length up to L) that maximizes the sum of the gains.
+
+But since L can be up to 1e14, we need to model this as a transition matrix and perform exponentiation. So the approach is similar to the problem of finding the maximum path in a graph with edge weights, allowing up to L steps.
+
+This is a standard problem that can be solved using matrix exponentiation with (max, +) semiring. The (max, +) semiring replaces addition with max and multiplication with addition. So the transition matrices are multiplied using these operations. Each entry in the matrix represents the maximum value achievable when moving from state i to state j in a certain number of steps.
+
+So the steps would be:
+
+1. Precompute for each state u, for each possible next character c, the next state v and the gain (sum of a_i's for state v). Then, for each u, collect all possible (v, gain) pairs for each c. For each u and v, find the maximum gain possible when transitioning from u to v via any character. This would form the transition matrix for one step.
+
+Wait, but that's not quite right. Because when transitioning from u to v via character c, the gain is the sum of the a_i's of v. So for each u, and each c, there's exactly one v that you transition to (since the automaton is deterministic once the failure links are computed). So for each u and c, there's a unique v, and the gain is sum_v.
+
+So for each u, the possible transitions are for each c in a-z, you can go to v_c, and the gain is sum_vc. Then, when building the transition matrix, for each u, and for each possible c, we can consider the transition from u to v_c with gain sum_vc. Then, the matrix for one step would be such that for each u and v, the entry is the maximum gain over all characters c that transition u to v. However, this approach might not capture all possibilities because different characters could lead to the same v from u but with the same or different gains.
+
+Alternatively, maybe the transition matrix should model for each possible state u, the possible transitions to v and the gain sum_v for that particular transition. Then, the matrix would be such that the entry (u, v) is the maximum gain possible when transitioning from u to v in a single step. But how do we compute this?
+
+Wait, for each u, and each possible character c, there is exactly one transition to some v. For each such v, the gain is sum_v. So for each u, the possible transitions are (v, sum_v) for each c. The maximum possible gain when moving from u to v in one step is the maximum sum_v over all characters c that lead from u to v.
+
+But this might not be correct because maybe multiple characters lead to the same v, and we need to choose the one that gives the maximum sum_v. So for each u and v, the maximum gain possible when moving from u to v in one step is the maximum sum_v among all characters c that transition u to v.
+
+So, the transition matrix for one step would have entries M[u][v] = max( sum_v for all c where transition from u via c leads to v )
+
+If there are no characters c that lead from u to v, then M[u][v] is -infinity (or some minimal value).
+
+Then, the total maximum happiness after L steps is the maximum value over all possible paths of exactly L steps (since the text can have exactly l characters, not up to l), starting from the initial state (0). But wait, the problem says the text may have up to l characters. Wait, the input says that the text may have up to l characters. Oh, the problem statement says: "Barney's text may have up to l characters." So the text can have any length from 1 to l. So we need to find the maximum sum for any length up to l. Hmm, but that complicates things. Because the optimal solution could be a string of length l, but perhaps a shorter string could have higher sum. But given that each step adds a character, and each step adds some value (possibly zero, but since a_i are positive, probably each step adds something), then the maximum sum would be achieved with a string of length l. Because adding more characters gives more opportunities to add more a_i's. But wait, no. Suppose that after a certain length, adding more characters doesn't add any value. For example, if the best state is a state that doesn't allow any transitions that add value. But the problem states that all a_i are at least 1, so each time a pickup line is added, the happiness increases. So even if the current state's sum is zero (which can't happen because each a_i is at least 1, so any transition must contribute at least the sum of all pickup lines that end in the new state). Wait, the sum for each state is the sum of a_i's of all pickup lines ending at that state. So if a state has no pickup lines ending there, the sum is zero. But in that case, adding a character that transitions to a state with sum zero would contribute nothing. So in that case, it's possible that adding more characters doesn't increase the sum. So the optimal solution might require stopping before l steps. So the problem is to find the maximum sum over any number of steps from 1 to l.
+
+Hmm, this complicates things. How can we handle this? Because the maximum could be achieved in any number of steps up to l.
+
+But if the transitions can have steps that add zero, then the optimal path might have l steps, but maybe not. However, since a_i are positive, any time a pickup line is added, the sum increases. So in any step where adding a character leads to a state that has at least one pickup line ending in it, the sum increases. So perhaps the optimal path is to take as many steps as possible (i.e., l steps), but maybe there are some cases where after some steps, the sum can't increase anymore, so adding more steps doesn't help. But since l can be up to 1e14, but the sum could plateau, we need to account for that.
+
+So, how do we model this?
+
+The approach is to compute the maximum sum for exactly k steps for each k from 1 to l. But since l is up to 1e14, this is impossible directly.
+
+An alternative is to model the problem as follows: find the maximum sum over exactly l steps, but also check if there's a cycle in the state transitions that allows us to accumulate some value per step. If there's a cycle with a positive gain per step, then taking as many steps as possible (i.e., l steps) would be optimal. If all cycles have zero gain, then the optimal is to take as many steps as possible until entering a cycle with zero gain. But how to model this?
+
+Alternatively, the problem can be transformed into finding the maximum sum for a path of exactly l steps. Because even if after some steps, the sum stops increasing, the maximum sum would be achieved at l steps (since the sum can't decrease). Wait, no. If after k steps, the sum is S, and for the next steps, the sum doesn't increase (each step adds zero), then the maximum sum would be S even if l is larger than k. So in that case, the optimal sum is S, but l can be up to 1e14. So how can we find the maximum between all possible steps up to l?
+
+This complicates things. But perhaps there's a way to model this with the transition matrix. Let me think.
+
+Let's consider that the initial state is the empty string (state 0). Then, the problem is to find the maximum sum of gains over a path of exactly k steps (k ≤ l), and then take the maximum over all k from 1 to l. But since l is up to 1e14, we can't compute this for each k.
+
+An alternative approach is to model the problem as follows:
+
+- The maximum sum up to l steps is the maximum of all possible sums for 1 step, 2 steps, ..., l steps.
+
+But how can we compute this efficiently? One way is to model the transitions in a way that allows us to accumulate the maximum sum for any number of steps. This can be done using a dynamic programming approach where the state tracks the maximum sum achievable after exactly m steps for each state. Then, the transition can be represented using matrix exponentiation, and after exponentiation, we can take the maximum over all steps up to l.
+
+But again, how?
+
+Alternatively, note that if there's a cycle in the state transitions that has a positive average gain per step, then taking as many steps as possible (i.e., l steps) would be optimal. Otherwise, the optimal is to take as many steps as possible until the cycle starts, and then stay in the cycle (but if the cycle's gain is zero, then we can stop at any point in the cycle). So the approach is:
+
+1. Find the maximum sum for exactly m steps, where m is up to the number of states (since after that, cycles must occur).
+
+2. Check if there's a cycle in the transitions that provides a positive gain per step. If so, then after reaching that cycle, the maximum sum can be increased indefinitely, so the optimal is to take l steps.
+
+3. If there's no such cycle, then the optimal sum is the maximum among the sums for m steps up to l steps, but since after some point, the sum stops increasing, the maximum is either the sum for l steps or some earlier maximum.
+
+But this seems complicated. However, given that l can be up to 1e14, but the number of states m is up to 200, perhaps we can model the problem as follows:
+
+- Compute for each state u, the maximum possible sum that can be achieved after any number of steps starting from u, and then find the cycle that allows the maximum average gain per step. Then, once you find such a cycle, you can calculate how much gain you can get by looping in that cycle as much as possible.
+
+But this might require solving for each state the maximum average gain cycle.
+
+Alternatively, the problem can be modeled using matrix exponentiation with the (max, +) semiring, but allowing for the maximum over all steps up to l. However, I'm not sure how to model that directly.
+
+Wait, perhaps the following approach can work:
+
+The maximum sum for up to l steps is the maximum sum over exactly l steps, but also considering the possibility that in some steps, the transitions may have higher gains. However, perhaps in the case where after some steps, the maximum sum per step is higher than before, then taking more steps would be better.
+
+Alternatively, since all a_i are positive, perhaps the optimal solution is to take exactly l steps. Because each step adds at least zero (if the new state's sum is zero) or more. But since a pickup line's a_i is added every time it appears, even overlapping. So longer strings can have more occurrences.
+
+But in the first example, the optimal is 6 with a string of length 6. But maybe there's a longer string with higher sum. But the problem states that l is up to 1e14, so we need to handle that.
+
+Alternatively, perhaps the optimal path is always to take exactly l steps, so we can model the problem as finding the maximum sum after exactly l steps.
+
+But the first example's input is l=6, and the optimal is 6. If l were 7, would adding another character allow a higher sum? For example, if the optimal string is hearthh, but perhaps not.
+
+Hmm, but perhaps the problem requires that the text is exactly of length l. So the solution must be a string of length l. Because the problem says "Barney's text may have up to l characters." So the maximum is taken over all possible texts with length at most l. But the maximum could be achieved with a text of any length from 1 to l.
+
+But how to model that? Because considering all possible lengths up to l is computationally infeasible.
+
+Alternatively, perhaps the maximum sum is non-decreasing as the text length increases. For example, adding a character to the end of the text can only add more pickup line occurrences. However, this isn't necessarily true. For example, if the next character is a 'z', and none of the pickup lines contain 'z', then adding it would not contribute to the sum. But if the new state's sum is zero, then the total sum remains the same. So in this case, the sum for l+1 steps would be equal to the sum for l steps. So the maximum sum is non-decreasing as l increases. Thus, the maximum sum for up to l steps is achieved exactly by the maximum sum for l steps.
+
+But why is that? Because adding steps can't decrease the sum, since each step's gain is non-negative. Because even if a step's gain is zero, the sum remains the same. So the maximum sum for l steps is greater than or equal to the maximum sum for l-1 steps.
+
+If this is true, then the problem reduces to finding the maximum sum after exactly l steps. So we can model the problem as requiring exactly l steps.
+
+But wait, the problem statement says that the text can have up to l characters. So the maximum could be achieved for any length up to l, but if the sum is non-decreasing, then the maximum for l steps would be the answer.
+
+So the key question is: is the maximum sum after exactly l steps >= the maximum sum after k steps for any k <= l?
+
+If that's the case, then the answer is simply the maximum sum after l steps.
+
+But why would that be the case?
+
+Each step adds a character and transitions to a new state. The gain for each step is the sum of a_i's for the new state. Since a_i's are >=1, but the sum for the new state could be zero (if the state has no pickup lines ending there). So the gain for a step can be zero.
+
+Thus, the sum after l steps could be the same as after l-1 steps, but it can't be less. So the sum is non-decreasing. Therefore, the maximum sum up to l steps is the sum after exactly l steps.
+
+So we can model the problem as requiring exactly l steps.
+
+Therefore, the solution is to compute the maximum sum after exactly l steps, starting from the initial state.
+
+So now, the problem is to model this as a dynamic programming problem and compute it using matrix exponentiation.
+
+The steps are:
+
+1. Build the Aho-Corasick automaton for all pickup lines.
+
+   a. Create the trie nodes, each representing a state (current suffix).
+
+   b. For each node, compute the failure link (suffix link) which points to the longest proper suffix of the current prefix that is also a prefix of some pattern.
+
+   c. For each node, compute the sum of a_i's for all pickup lines that end at this node. This is the value added each time we transition into this node.
+
+2. For each state (node), precompute the transitions for each possible character (a-z). The transition function is as follows: for a given state u and character c, the next state is determined by following the trie edges if possible, and using the failure links if not. This is similar to the Aho-Corasick algorithm's transition function.
+
+3. Once the automaton is built, model the transitions as a state graph where each edge from u to v has a weight equal to the sum of the a_i's of v. Then, the problem reduces to finding the maximum sum path of exactly l steps starting from the initial state (0).
+
+4. Since l can be up to 1e14, use matrix exponentiation with the (max, +) semiring to compute this.
+
+Now, the next step is to implement this.
+
+First, building the automaton.
+
+To build the automaton:
+
+- We need to create a trie structure where each node (state) represents a prefix of some pickup line.
+
+- For each node, we have a transition map for each possible character.
+
+- Each node has a failure link (like in Aho-Corasick).
+
+- Each node also has a 'output' which is the sum of a_i's for all pickup lines that end at this node. Also, since the failure links can lead to nodes with outputs, the sum for a node is the sum of a_i's of its own outputs plus the sum of the outputs of all nodes reachable via failure links. Wait, no. Because in Aho-Corasick, when a node is visited, it contributes all the patterns that end at that node, including those from the failure chain. But for our problem, the sum for a state should include all the pickup lines that end at the current state. Because when we add a character and transition to state v, any pickup lines ending in v are added once. But how does the failure link affect this?
+
+Wait, no. The automaton's nodes are built such that each node represents the longest possible suffix of the current string. For example, when we have a node u, and a character c, the next state is determined by following the trie transitions, and if that's not possible, follow the failure links until a node with a transition for c is found. Then, for the new state, all pickup lines that end in that state are added. So the sum for the new state is the sum of a_i's for all pickup lines that end in that state, regardless of their position in the string. So, during the automaton construction, each node's output is the sum of a_i's of all pickup lines that are exactly represented by the path from the root to that node (i.e., the full pattern of the pickup line). Additionally, nodes that are prefixes of other patterns (but are themselves pickup lines) would have their own a_i's added.
+
+Therefore, during the construction of the automaton, for each pickup line, we insert it into the trie, and for the node where the pickup line ends, we add its a_i to the node's output. Then, when the automaton is built, each node's output is the sum of a_i's for all pickup lines that end at that node. However, the failure links may point to nodes that have their own outputs. But in the automaton's construction, when a node is visited (like in the Aho-Corasick search phase), we also check the failure links to collect all possible matches. But in our problem, the sum for a state is only the sum of the node's own outputs (not including failure links), because each time a state is visited, the pickup lines that are suffixes of the current string up to that state are exactly those that end at the current state. Because the automaton's failure links are used to find the longest proper suffix that is a prefix of some pickup line, but the current state represents the longest possible suffix. Therefore, when transitioning to a new state via a character, the new state's output is the sum of a_i's for the pickup lines that end exactly at that state. However, the failure links are used during the transition to find the correct next state, but the output is only for that state.
+
+Wait, perhaps I'm confusing the Aho-Corasick's processing. Let's think again. For our problem, each transition to a state v means that the current suffix of the string is exactly the path from the root to v. So any pickup line that is a suffix of the current string must end at this state v. Therefore, the sum for this state is exactly the sum of a_i's for all pickup lines that end at v. So during the automaton construction, each node's output is the sum of a_i's for pickup lines that end exactly at that node.
+
+So, when building the automaton, for each pickup line s_i, insert it into the trie, and at the end node, add a_i to the output sum.
+
+Then, for the transitions, when moving from a state u with character c, we find the next state v as follows:
+
+- If u has a child node v with edge c, then the next state is v.
+
+- Otherwise, follow the failure link of u until a node with a child c is found. The next state is that child.
+
+But during the building of the automaton, the failure links are computed such that the next state is the longest possible suffix.
+
+Therefore, the transitions are built correctly, and the output of each state is the sum of a_i's of the pickup lines that end exactly at that state.
+
+Once the automaton is built, the next step is to model the transitions between states and compute the maximum sum after l steps.
+
+Now, the problem is to model the transitions as a graph where each edge u -> v has a weight equal to the output of v. Then, the maximum sum path of exactly l steps starting from state 0 is the answer.
+
+But since l can be up to 1e14, we need to compute this using matrix exponentiation.
+
+The matrix exponentiation approach for (max, +) semiring is as follows:
+
+The state transition can be represented as a matrix M where M[i][j] is the maximum weight achievable when moving from state i to state j in one step. For each step, the transitions are as follows: for each state i, for each possible character c, compute the next state j, and the weight is the output of j. Then, for M[i][j], we take the maximum over all possible c's for the transition from i to j with their respective weights.
+
+But wait, in one step, you can choose any character c. So for each state i, and each possible c, you can transition to j = transition(i, c), and the weight is output[j]. Therefore, for the transition from i to j via c, the weight is output[j]. So for each i and j, M[i][j] is the maximum output[j] over all c that lead i to j.
+
+Wait, no. Because for each i and c, you transition to exactly one j. The maximum weight from i to j is the maximum of output[j] across all c that cause a transition from i to j.
+
+So for example, if there are two characters c1 and c2 that, when taken from i, lead to j, then M[i][j] would be the maximum between output[j] for c1 and output[j] for c2 (but output[j] is fixed for j, so it's the same value). So in this case, M[i][j] is output[j], because regardless of which c is chosen, the weight is output[j]. So for each i and j, if there exists at least one c that leads from i to j, then M[i][j] is output[j]. Otherwise, it's -infinity (indicating that the transition is not possible).
+
+But wait, the output[j] is a fixed value for j. So any transition to j via any c will add output[j]. So the maximum weight between i and j is output[j], if such a transition exists, else -infinity.
+
+So the matrix M is such that M[i][j] is output[j] if there exists a character c that transitions from i to j, else -infinity.
+
+But how do we determine if there exists a character c that transitions from i to j?
+
+We can precompute for each state i and each character c, the next state j. Then, for each i, we can collect all j's that are reachable via any c. For each such j, M[i][j] = output[j], but if multiple c's lead to the same j, then M[i][j] is output[j] (since all transitions to j via c will give the same value).
+
+So the matrix M is built as follows:
+
+Initialize all entries to -infinity.
+
+For each state i:
+
+   for each character c in 'a' to 'z':
+
+       compute j = transition(i, c)
+
+       M[i][j] = max(M[i][j], output[j])
+
+But since for a given i and j, output[j] is fixed, once we find that j is reachable from i via any c, M[i][j] is set to output[j].
+
+So the matrix M is built where M[i][j] is output[j] if there exists a c that transitions i to j, else -infinity.
+
+Once M is built, the problem becomes finding the maximum sum path of length l steps, starting from state 0, using the (max, +) matrix exponentiation.
+
+The maximum sum after l steps is the maximum value in the initial vector (which is 0 for state 0, and -infinity for others) multiplied by M^l.
+
+But how is matrix exponentiation done for (max, +) semiring?
+
+The standard way to compute M^l is through exponentiation by squaring, where each matrix multiplication is defined as:
+
+For matrices A and B, the product C is such that C[i][j] = max_k (A[i][k] + B[k][j]).
+
+But in our case, each step's transition is additive. So the initial state is state 0 with a value of 0, and each step adds the value of the next state's output.
+
+Wait, let's model this as follows:
+
+The value after 1 step is the maximum output[j] where j is reachable from state 0 in one step.
+
+The value after 2 steps is the maximum of (value after 1 step from 0 to j) plus (output[k] reachable from j in one step), for all j.
+
+So this is similar to matrix multiplication where the entries are combined with addition and the max is taken over all possible paths.
+
+So, the matrices will represent the maximum value achievable between two states in a certain number of steps. The initial matrix M is for one step. Then, M^2 represents the maximum value for two steps, and so on.
+
+The exponentiation process will compute M^l, and the result will be a matrix where entry (0, j) is the maximum value achievable after l steps starting from state 0 and ending at state j. The maximum among all j is the answer.
+
+So, the steps to compute this are:
+
+1. Precompute the transition matrix M as described.
+
+2. Compute M^l using exponentiation by squaring, with the (max, +) semiring.
+
+3. The answer is the maximum value in the row corresponding to state 0 in the resulting matrix.
+
+Now, the code steps:
+
+Implement the Aho-Corasick automaton:
+
+- Create a trie node structure with transitions, failure links, and output.
+
+Implement the transition function for each node and character.
+
+Compute the output for each node.
+
+Once the automaton is built, construct the transition matrix M.
+
+Then, perform matrix exponentiation to compute M^l.
+
+Now, let's think about the code.
+
+First, the automaton.
+
+Each node can be represented as a class with:
+
+- a dictionary of transitions (children for each character)
+
+- a failure link
+
+- output value (sum of a_i's)
+
+But for code purposes, perhaps using a list of dictionaries for transitions.
+
+But for Python, perhaps a list of nodes, where each node is a dictionary with:
+
+children: a dictionary mapping characters to node indexes.
+
+failure: the index of the failure node.
+
+output: the sum of a_i's for this node.
+
+So the code would start by building the trie:
+
+Initialize the root node (index 0), with empty children, failure 0, output 0.
+
+For each pickup line:
+
+Insert the characters into the trie, creating new nodes as needed.
+
+At the end of the insertion, add the a_i to the node's output.
+
+Once all pickup lines are inserted, build the failure links using a BFS approach.
+
+Then, for each node, after building the failure links, the transitions for characters not present in the node's children can be found by following the failure links until a node with the character is found.
+
+But for efficiency, during the transition process, we can precompute for each node and character, the next node. This is called the 'go' function.
+
+So, for a node u and character c:
+
+if u has a child with c, then the next node is that child.
+
+else:
+
+   if u is the root, then the next node is the root.
+
+   else:
+
+      next node is go(failure[u], c)
+
+This can be memoized, but for our code, we can precompute for each node and each character c, the next node.
+
+But how?
+
+Alternatively, during the BFS for building the failure links, we can precompute the 'go' function.
+
+But in practice, for each node u and character c:
+
+def go(u, c):
+
+   if c in trie[u].children:
+
+       return trie[u].children[c]
+
+   else:
+
+       if u == 0:
+
+           return 0
+
+       else:
+
+           return go(trie[u].failure, c)
+
+But this function is called recursively. However, for performance, we can precompute a transition table for all nodes and characters.
+
+So during the automaton construction, for each node u and character c in 'a' to 'z', we precompute the next node v.
+
+This can be done as follows:
+
+After building the failure links, for each node u and each character c:
+
+   if c is in u's children, then v is u's child.
+
+   else:
+
+       v = go(failure[u], c)
+
+But we can compute this using a BFS approach.
+
+Alternatively, during the BFS for failure links, compute the transitions.
+
+But this requires for each node, to fill in the transitions for all characters not present in the node's children.
+
+Alternatively, during the automaton construction, precompute for each node and each character, the next state.
+
+Let's proceed.
+
+First, insert all the pickup lines into the trie.
+
+For each pickup line s_i:
+
+   current = root (0)
+
+   for char in s_i:
+
+       if char not in current's children:
+
+           create a new node, add to trie, add to current's children
+
+       current = current's child for char
+
+   add a_i to current's output.
+
+Once all pickup lines are inserted, build the failure links.
+
+Initialize a queue.
+
+For the root node, its failure link is itself (0). For each of the root's children, their failure link is the root. Add these children to the queue.
+
+Then, while the queue is not empty:
+
+   u = queue.pop()
+
+   for each char c in u's children:
+
+       v = u's child for c.
+
+       failure_v = failure[u]'s transition for c.
+
+       v's failure = failure_v.
+
+       v's output += failure_v's output.
+
+       add v to the queue.
+
+Wait, this is the standard BFS approach for building failure links in Aho-Corasick. But during this process, each node's failure link is determined, and the output is updated to include the outputs of the failure nodes. Because in Aho-Corasick, when processing a node v, you also need to collect all patterns that end at the failure links. However, in our problem, the output for a node should be the sum of a_i's of the pickup lines that end exactly at that node. But in the standard Aho-Corasick, the failure links allow nodes to inherit outputs from their failures. Wait, this is a key point.
+
+In the standard Aho-Corasick algorithm, the output of a node includes all patterns that end in that node or any of its ancestors via failure links. But in our problem, the sum for a node is the sum of the a_i's of the pickup lines that end exactly at that node, not those inherited via failure links. Because when the automaton is in state v, it means that the current suffix of the string is exactly the path from the root to v. So any pickup line that ends at v is a suffix of the current string, and those that end in the failure nodes are not suffixes of the current string (since v is the longest possible).
+
+Wait, no. For example, suppose we have a pickup line 'a', and another 'aa'. Then, the node for 'a' has a failure link to the root. When the string is 'aa', the first 'a' is node 1. The second 'a' transitions from node 1 to node 2 (assuming 'aa' is a pickup line). Then, the failure link for node 2 is the node for 'a' (node 1). So the output of node 2 is the a_i for 'aa', and the output of node 1 is the a_i for 'a'. So when processing 'aa', the automaton would be in node 2, and during processing, would collect the output of node 2 (the 'aa' pickup line) and also check the failure link of node 2 (node 1), which has output 'a'. But wait, this is how the Aho-Corasick algorithm works to find all matches. But in our case, we need to count each occurrence of a pickup line as a substring. So, when the automaton transitions to node v, it should count all pickup lines that end at v, and also any that end at the failure links of v, but this depends on how the automaton is processed.
+
+But in our problem, the pickup line occurrences are all possible substrings. For example, in the string 'aaab', the pickup line 'aa' appears twice. So when the automaton is in the state for 'aa', it contributes the a_i for 'aa'. But during processing, the automaton may also be in states that are shorter suffixes, leading to multiple matches.
+
+But how do we model this in our automaton? Because the problem requires counting all occurrences of pickup lines as substrings, overlapping or not.
+
+But the way to model this is that whenever a pickup line is a substring ending at position i in the text, it should be counted. To capture this with the automaton, each time a character is added, the current state is updated, and all pickup lines that end at the current state (including those via failure links) are counted.
+
+But in this case, the sum for the state v should be the sum of a_i's for all pickup lines that are suffixes of the current path (i.e., the current state v and all failure links of v, failure links of failure links, etc.). Because each of those pickup lines is a substring ending at the current position.
+
+Wait, yes. For example, consider the pickup lines 'a' and 'aa'. The text 'aa' has two occurrences of 'a' (positions 1 and 2) and one occurrence of 'aa' (positions 1-2). The automaton's state after each character is:
+
+After first 'a': state 1 (which has output a_i for 'a').
+
+After second 'a': state 2 (which has output a_i for 'aa'), and the failure link of state 2 is state 1. But in the standard Aho-Corasick processing, when you reach state 2, you also check the failure links of state 2 (state 1) and its failure links (state 0). So the outputs collected would be 'aa' and 'a' (from state 1). But in our problem, each occurrence of a pickup line as a substring contributes to the sum. So when the automaton is in state 2, the current character's addition has caused the text to have the substring ending at position 2. So all pickup lines that end at position 2 (i.e., have their full pattern as a suffix of the current text) are counted. These are 'aa' and 'a' (if 'a' is a pickup line). But according to the automaton's failure links, when you are in state 2 (for 'aa'), the failure link is state 1 (for 'a'), which is a proper suffix. So the sum for the state 2 would be the output of state 2 plus the output of state 1.
+
+Thus, the sum for the state v should include all the outputs along the failure chain. Therefore, during the automaton construction, for each node, we need to compute the sum of the outputs of all nodes along the failure chain starting from v. So the sum for state v is the sum of a_i's of all pickup lines that are suffixes of the current string (i.e., the pickup lines that end at v, v's failure node, v's failure's failure node, etc.).
+
+But how is this computed?
+
+In the standard Aho-Corasick algorithm, during the BFS for building failure links, each node's output is augmented with the output of its failure node. So when processing a node, its output is the sum of its own output and the output of its failure node. This way, when you reach a node, you automatically have the sum of all outputs along the failure chain.
+
+But in our case, we need to compute for each state the sum of all outputs along the failure chain. This can be done during the BFS phase.
+
+So during the construction of the automaton:
+
+- Each node's output is initialized to the sum of a_i's of pickup lines that end at that node.
+
+- Then, during the BFS phase, for each node u, after setting its failure link, we add the output of the failure node to the output of u. This way, the output of u includes the outputs of all nodes along the failure chain.
+
+Wait, no. Because adding the failure node's output to u's output would cause u's output to include the sum of all pickup lines that end at u's failure node. But in the BFS step:
+
+For each node u in the queue:
+
+   for each child v of u:
+
+       determine failure link of v (which is the failure node of u's failure link's child for the same character)
+
+       v's failure is determined.
+
+       v's output += v.failure's output
+
+       add v to the queue.
+
+But this way, each node's output is the sum of its own initial output plus the output of its failure node. However, this is not sufficient to collect all outputs along the failure chain. For example, if the failure node's output also includes its own failure node's output, then adding the failure node's output would include the entire chain.
+
+So by setting v's output to its initial value plus the failure node's output, which itself includes the failure chain of the failure node, we get the sum of all outputs along the failure chain.
+
+Therefore, during the BFS phase, each node's output is computed as the sum of its own initial a_i's plus the outputs of all nodes along the failure chain.
+
+Thus, for our problem, the sum of a_i's for the state v is the output of v computed in this way.
+
+Therefore, during the automaton construction, the output of each node is the sum of a_i's of all pickup lines that end in that node or any of its failure chain nodes.
+
+This is crucial because each time the automaton is in state v, it means that the current suffix of the string matches the path to v, and all shorter suffixes that are prefixes of pickup lines are captured via the failure links.
+
+Thus, the output for state v is the sum of all pickup lines that are suffixes of the current string.
+
+Once this is done, the transition matrix M can be built such that each entry M[u][v] is output[v] if there's a character c that transitions u to v, else -infinity.
+
+Now, the code steps:
+
+Implement the automaton with failure links and output sums.
+
+Once the automaton is built, precompute the transition matrix M.
+
+Then, compute M^l using matrix exponentiation with (max, +) semiring.
+
+Finally, the answer is the maximum value in the row corresponding to state 0 in M^l.
+
+Now, let's proceed to write the code.
+
+First, read the input.
+
+n, l = map(int, input().split())
+
+a = list(map(int, input().split()))
+
+pickup_lines = [input().strip() for _ in range(n)]
+
+Build the automaton.
+
+The code will proceed as follows:
+
+class Node:
+
+    def __init__(self):
+
+        self.children = {}
+
+        self.failure = 0
+
+        self.output = 0
+
+But in Python, we can represent the nodes as a list of dictionaries.
+
+But perhaps using a list of dictionaries for each node's children, failure link, and output.
+
+But let's proceed.
+
+Initialize the root node.
+
+nodes = [ {'children': {}, 'failure': 0, 'output': 0} ]
+
+current = 0
+
+Insert each pickup line into the trie.
+
+for i in range(n):
+
+    s = pickup_lines[i]
+
+    current_node = 0
+
+    for char in s:
+
+        if char not in nodes[current_node]['children']:
+
+            new_node = {'children': {}, 'failure': 0, 'output': 0}
+
+            nodes.append(new_node)
+
+            nodes[current_node]['children'][char] = len(nodes) - 1
+
+        current_node = nodes[current_node]['children'][char]
+
+    # Add a_i to the output of current_node
+
+    nodes[current_node]['output'] += a[i]
+
+Then, build the failure links using BFS.
+
+from collections import deque
+
+queue = deque()
+
+# Initialize failure links for the root's children.
+
+for c in nodes[0]['children']:
+
+    child_idx = nodes[0]['children'][c]
+
+    nodes[child_idx]['failure'] = 0
+
+    queue.append(child_idx)
+
+# BFS to set failure links.
+
+while queue:
+
+    current_idx = queue.popleft()
+
+    current_node = nodes[current_idx]
+
+    # For each child in current node's children.
+
+    for c, child_idx in current_node['children'].items():
+
+        # Find the failure for this child.
+
+        # The failure of current_idx is current_node['failure']
+
+        fail = current_node['failure']
+
+        # While fail is not root and doesn't have child c.
+
+        while fail != 0 and c not in nodes[fail]['children']:
+
+            fail = nodes[fail]['failure']
+
+        # Now, fail is either root or has child c.
+
+        # The failure of the child is nodes[fail]['children'].get(c, 0)
+
+        child_failure = nodes[fail]['children'].get(c, 0)
+
+        nodes[child_idx]['failure'] = child_failure
+
+        # Add the output of the failure to the child's output.
+
+        nodes[child_idx]['output'] += nodes[child_failure]['output']
+
+        queue.append(child_idx)
+
+Now, precompute the transitions for each node and character.
+
+This can be done with a helper function.
+
+def get_next_state(current_idx, c):
+
+    while True:
+
+        if c in nodes[current_idx]['children']:
+
+            return nodes[current_idx]['children'][c]
+
+        elif current_idx == 0:
+
+            return 0
+
+        current_idx = nodes[current_idx]['failure']
+
+But for efficiency, we can precompute all possible transitions for each node and character.
+
+We can create a transition table (a list of dictionaries) for each node and character.
+
+transitions = [{} for _ in range(len(nodes))]
+
+for i in range(len(nodes)):
+
+    for c in 'abcdefghijklmnopqrstuvwxyz':
+
+        current = i
+
+        while True:
+
+            if c in nodes[current]['children']:
+
+                transitions[i][c] = nodes[current]['children'][c]
+
+                break
+
+            elif current == 0:
+
+                transitions[i][c] = 0
+
+                break
+
+            current = nodes[current]['failure']
+
+But this is O(len(nodes) * 26 * len(nodes)) in the worst case, which may be acceptable since len(nodes) is up to 200.
+
+Alternatively, we can compute the transitions for each node and character once, and cache them.
+
+But for code brevity, perhaps implement the get_next_state function and use it to compute transitions on the fly.
+
+But for performance, precomputing the transitions for all nodes and characters is better.
+
+But given the constraints (sum of pickup line lengths up to 200, and 26 characters), it's manageable.
+
+But in Python, for the code, we can precompute the transitions as follows:
+
+for u in range(len(nodes)):
+
+    for c in 'abcdefghijklmnopqrstuvwxyz':
+
+        v = u
+
+        while True:
+
+            if c in nodes[v]['children']:
+
+                transitions[u][c] = nodes[v]['children'][c]
+
+                break
+
+            elif v == 0:
+
+                transitions[u][c] = 0
+
+                break
+
+            v = nodes[v]['failure']
+
+So for each node u and character c, transitions[u][c] is the next state.
+
+Once this is done, the transition matrix M can be built.
+
+The matrix M is of size m x m, where m is the number of nodes.
+
+Each entry M[i][j] is the maximum output[j] among all characters c that transition i to j.
+
+But since for each i and c, we have a unique j, and the output[j] is fixed, M[i][j] is output[j] if there exists a c that transitions i to j.
+
+But since for a given i and j, there may be multiple c's that transition i to j, but output[j] is fixed, M[i][j] is simply output[j].
+
+So, the matrix M can be built as follows:
+
+m = len(nodes)
+
+M = [[-1 for _ in range(m)] for _ in range(m)]
+
+for u in range(m):
+
+    for c in 'abcdefghijklmnopqrstuvwxyz':
+
+        v = transitions[u][c]
+
+        if M[u][v] < nodes[v]['output']:
+
+            M[u][v] = nodes[v]['output']
+
+But wait, for each u and c, v is the next state, and the value is nodes[v]['output']. So for each u and c, we can have a transition from u to v with value nodes[v]['output']. But since different c's may lead to the same v, M[u][v] should be the maximum possible nodes[v]['output'] among those c's. But nodes[v]['output'] is fixed for v. So regardless of which c is used to transition to v, the value is the same. Therefore, M[u][v] is nodes[v]['output'] if there exists at least one c that transitions u to v. Otherwise, it's -infinity.
+
+Therefore, the code can build M as follows:
+
+M = [[-1 for _ in range(m)] for _ in range(m)]
+
+for u in range(m):
+
+    for c in 'abcdefghijklmnopqrstuvwxyz':
+
+        v = transitions[u][c]
+
+        current_output = nodes[v]['output']
+
+        if M[u][v] < current_output:
+
+            M[u][v] = current_output
+
+But since for all c that transition u to v, the output is current_output, this is redundant. So M[u][v] is set to current_output if at least one c transitions u to v.
+
+Alternatively, for each u and v, M[u][v] = nodes[v]['output'] if there exists a c such that transitions[u][c] == v, else -infinity.
+
+But how to compute this efficiently?
+
+In code:
+
+for u in range(m):
+
+    vs = set()
+
+    for c in 'abcdefghijklmnopqrstuvwxyz':
+
+        v = transitions[u][c]
+
+        vs.add(v)
+
+    for v in vs:
+
+        M[u][v] = nodes[v]['output']
+
+    for v in range(m):
+
+        if M[u][v] == -1:
+
+            M[u][v] = -float('inf')
+
+But this is not correct. Because for each u and v, M[u][v] should be nodes[v]['output'] if there's any c that transitions u to v. So for each u, iterate over all c and collect all possible v's, then set M[u][v] to nodes[v]['output'].
+
+But in code, for each u:
+
+for c in 'abcdefghijklmnopqrstuvwxyz':
+
+    v = transitions[u][c]
+
+    M[u][v] = max(M[u][v], nodes[v]['output'])
+
+Initially, M is filled with -infinity.
+
+Yes.
+
+So the code for building M would be:
+
+import sys
+
+import sys
+
+sys.setrecursionlimit(1 << 25)
+
+n, l = map(int, sys.stdin.readline().split())
+
+a = list(map(int, sys.stdin.readline().split()))
+
+pickup_lines = [sys.stdin.readline().strip() for _ in range(n)]
+
+# Build the automaton.
+
+nodes = [{'children': {}, 'failure': 0, 'output': 0}]
+
+for i in range(n):
+
+    s = pickup_lines[i]
+
+    current = 0
+
+    for c in s:
+
+        if c not in nodes[current]['children']:
+
+            nodes.append({'children': {}, 'failure': 0, 'output': 0})
+
+            nodes[current]['children'][c] = len(nodes)-1
+
+        current = nodes[current]['children'][c]
+
+    nodes[current]['output'] += a[i]
+
+# Build failure links.
+
+queue = deque()
+
+for c in nodes[0]['children']:
+
+    child = nodes[0]['children'][c]
+
+    nodes[child]['failure'] = 0
+
+    queue.append(child)
+
+while queue:
+
+    current_idx = queue.popleft()
+
+    current_node = nodes[current_idx]
+
+    for c, child_idx in current_node['children'].items():
+
+        # Compute failure for child_idx
+
+        fail = current_node['failure']
+
+        while fail != 0 and c not in nodes[fail]['children']:
+
+            fail = nodes[fail]['failure']
+
+        if c in nodes[fail]['children']:
+
+            child_failure = nodes[fail]['children'][c]
+
+        else:
+
+            child_failure = 0
+
+        nodes[child_idx]['failure'] = child_failure
+
+        nodes[child_idx]['output'] += nodes[child_failure]['output']
+
+        queue.append(child_idx)
+
+# Precompute transitions for all nodes and characters.
+
+transitions = [{} for _ in range(len(nodes))]
+
+for u in range(len(nodes)):
+
+    for c in 'abcdefghijklmnopqrstuvwxyz':
+
+        v = u
+
+        while True:
+
+            if c in nodes[v]['children']:
+
+                transitions[u][c] = nodes[v]['children'][c]
+
+                break
+
+            elif v == 0:
+
+                transitions[u][c] = 0
+
+                break
+
+            else:
+
+                v = nodes[v]['failure']
+
+# Build transition matrix M.
+
+m = len(nodes)
+
+M = [[-float('inf') for _ in range(m)] for _ in range(m)]
+
+for u in range(m):
+
+    for c in 'abcdefghijklmnopqrstuvwxyz':
+
+        v = transitions[u][c]
+
+        M[u][v] = max(M[u][v], nodes[v]['output'])
+
+Now, we need to perform matrix exponentiation on M.
+
+But how to represent the matrix and perform the exponentiation.
+
+The standard way to perform matrix exponentiation for (max, +) is to define the multiplication of two matrices A and B as a new matrix C where:
+
+C[i][j] = max_k (A[i][k] + B[k][j])
+
+In Python, this can be implemented as follows:
+
+def multiply(A, B):
+
+    m = len(A)
+
+    result = [[-float('inf') for _ in range(m)] for _ in range(m)]
+
+    for i in range(m):
+
+        for k in range(m):
+
+            if A[i][k] == -float('inf'):
+
+                continue
+
+            for j in range(m):
+
+                if B[k][j] == -float('inf'):
+
+                    continue
+
+                result[i][j] = max(result[i][j], A[i][k] + B[k][j])
+
+    return result
+
+But for large m, this is O(m^3), which for m=200 is 200^3 = 8 million operations per multiplication. Since we need to perform log2(1e14) ≈ 47 multiplications, this is manageable.
+
+Then, the exponentiation function can be implemented using binary exponentiation.
+
+def matrix_pow(mat, power):
+
+    # Initialize result as identity matrix for (max, +) semiring.
+
+    m = len(mat)
+
+    result = [[-float('inf') for _ in range(m)] for _ in range(m)]
+
+    for i in range(m):
+
+        result[i][i] = 0
+
+    while power > 0:
+
+        if power % 2 == 1:
+
+            result = multiply(result, mat)
+
+        mat = multiply(mat, mat)
+
+        power = power // 2
+
+    return result
+
+However, the identity matrix for (max, +) semiring is a matrix with 0 on the diagonal and -inf elsewhere, since multiplying by it leaves the matrix unchanged.
+
+Once we have the matrix exponentiation, the initial state is 0, and the maximum value after l steps is the maximum value in the row 0 of the matrix M^l.
+
+So:
+
+mat = M
+
+mat_l = matrix_pow(mat, l)
+
+max_happiness = max(mat_l[0])
+
+print(max_happiness)
+
+But there's a problem. The initial state is 0, and the sum starts at 0. But after the first step, the sum is the output of the state reached. So the matrix exponentiation approach correctly models this.
+
+But when l is 0, the sum is 0. But the problem requires the text to have at least 1 character. So l is at least 1.
+
+But according to the problem statement, l can be 1.
+
+So the code is correct.
+
+Now, let's test this approach with the first example.
+
+Example 1:
+
+Input:
+
+3 6
+
+3 2 1
+
+heart
+
+earth
+
+art
+
+The pickup lines are 'heart' (a=3), 'earth' (a=2), 'art' (a=1).
+
+The optimal text is 'hearth' (length 6) which contains each pickup line once.
+
+The sum is 3+2+1=6.
+
+Let's see how the automaton would handle this.
+
+The nodes:
+
+After inserting 'heart', 'earth', and 'art'.
+
+The failure links would ensure that each state's output includes the sum of a_i's for all pickup lines that are suffixes.
+
+For example, the state 'art' (from 'heart' ending at 'art') would have output 1. But when building the failure links, perhaps other nodes contribute to their outputs.
+
+But perhaps in the automaton, the state 'art' has output 1, but when the failure links are processed, maybe other nodes contribute.
+
+But in any case, the transitions would be such that when the text is 'hearth', the automaton would transition through states that capture all three pickup lines.
+
+But how the matrix exponentiation would compute this.
+
+But the code should correctly compute the maximum sum.
+
+Example 2:
+
+Input:
+
+3 6
+
+3 2 8
+
+heart
+
+earth
+
+art
+
+The optimal text is 'artart', which contains 'art' twice (each contributing 8, so 16).
+
+So the code should output 16.
+
+Now, the code needs to correctly model these cases.
+
+The code's matrix exponentiation should find that the maximum sum after 6 steps is 16.
+
+But how?
+
+The transitions would allow for the state representing 'art' to be revisited, and each time, it's added 8. So the code's matrix exponentiation would find that there's a cycle of length 3 (for 'art') that allows adding 8 each time.
+
+But since l=6, the code would compute 6 steps, allowing two cycles of 3 steps each, adding 8*2=16.
+
+Thus, the code should correctly output 16.
+
+In conclusion, the code should handle these cases correctly.
+
+Thus, the final code is as above.
+</think>
+To solve this problem, we need to maximize Nora's happiness by constructing the most effective text message using pickup lines. Each pickup line contributes to her happiness every time it appears as a consecutive substring in the message. The challenge is to determine the optimal message of up to length L that maximizes this happiness.
+
+### Approach
+1. **Automaton Construction**: Build an Aho-Corasick automaton to efficiently track occurrences of pickup lines. This automaton will help us transition between states as we construct the message.
+2. **Failure Links**: Compute failure links for each node in the automaton to handle cases where a substring does not match any pickup line directly but might match a shorter suffix.
+3. **Transition Matrix**: Create a transition matrix where each entry represents the maximum happiness gain from moving between states using any character.
+4. **Matrix Exponentiation**: Use matrix exponentiation on the transition matrix to handle the large possible value of L efficiently. This allows us to compute the maximum happiness over L steps using properties of the (max, +) semiring.
+
+### Solution Code
+```python
+import sys
+from collections import deque
+
+sys.setrecursionlimit(1 << 25)
+
+def main():
+    n, l = map(int, sys.stdin.readline().split())
+    a = list(map(int, sys.stdin.readline().split()))
+    pickup_lines = [sys.stdin.readline().strip() for _ in range(n)]
+    
+    # Build the Aho-Corasick automaton
+    nodes = [{'children': {}, 'failure': 0, 'output': 0}]
+    for i in range(n):
+        s = pickup_lines[i]
+        current = 0
+        for c in s:
+            if c not in nodes[current]['children']:
+                nodes.append({'children': {}, 'failure': 0, 'output': 0})
+                nodes[current]['children'][c] = len(nodes) - 1
+            current = nodes[current]['children'][c]
+        nodes[current]['output'] += a[i]
+    
+    # Build failure links using BFS
+    queue = deque()
+    for c in nodes[0]['children']:
+        child = nodes[0]['children'][c]
+        nodes[child]['failure'] = 0
+        queue.append(child)
+    
+    while queue:
+        current_idx = queue.popleft()
+        current_node = nodes[current_idx]
+        for c, child_idx in current_node['children'].items():
+            fail = current_node['failure']
+            while fail != 0 and c not in nodes[fail]['children']:
+                fail = nodes[fail]['failure']
+            child_failure = nodes[fail]['children'].get(c, 0)
+            nodes[child_idx]['failure'] = child_failure
+            nodes[child_idx]['output'] += nodes[child_failure]['output']
+            queue.append(child_idx)
+    
+    # Precompute transitions for all nodes and characters
+    transitions = [{} for _ in range(len(nodes))]
+    for u in range(len(nodes)):
+        for c in 'abcdefghijklmnopqrstuvwxyz':
+            v = u
+            while True:
+                if c in nodes[v]['children']:
+                    transitions[u][c] = nodes[v]['children'][c]
+                    break
+                elif v == 0:
+                    transitions[u][c] = 0
+                    break
+                else:
+                    v = nodes[v]['failure']
+    
+    # Build transition matrix M
+    m = len(nodes)
+    M = [[-float('inf')] * m for _ in range(m)]
+    for u in range(m):
+        for c in 'abcdefghijklmnopqrstuvwxyz':
+            v = transitions[u][c]
+            M[u][v] = max(M[u][v], nodes[v]['output'])
+    
+    # Matrix exponentiation functions
+    def multiply(A, B):
+        res = [[-float('inf')] * m for _ in range(m)]
+        for i in range(m):
+            for k in range(m):
+                if A[i][k] == -float('inf'):
+                    continue
+                for j in range(m):
+                    if B[k][j] == -float('inf'):
+                        continue
+                    res[i][j] = max(res[i][j], A[i][k] + B[k][j])
+        return res
+    
+    def matrix_pow(mat, power):
+        result = [[-float('inf')] * m for _ in range(m)]
+        for i in range(m):
+            result[i][i] = 0  # Identity for max operation
+        while power > 0:
+            if power % 2 == 1:
+                result = multiply(result, mat)
+            mat = multiply(mat, mat)
+            power //= 2
+        return result
+    
+    # Compute M^l and find the maximum value in the initial state's row
+    mat_l = matrix_pow(M, l)
+    max_happiness = max(mat_l[0])
+    print(max_happiness)
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Automaton Construction**: We build a trie where each node represents a state corresponding to a prefix of a pickup line. Each node tracks transitions to other nodes, failure links, and the accumulated happiness from pickup lines ending at that node.
+2. **Failure Links**: These links help the automaton efficiently backtrack to the longest valid suffix when a character mismatch occurs, ensuring all possible pickup lines are considered.
+3. **Transition Matrix**: This matrix captures the maximum happiness gain achievable by transitioning between states using any character.
+4. **Matrix Exponentiation**: By exponentiating the transition matrix, we efficiently compute the maximum happiness over L steps using properties of the (max, +) semiring, which is crucial given the large possible value of L. This approach ensures we handle up to \(10^{14}\) steps efficiently.
+</bot>

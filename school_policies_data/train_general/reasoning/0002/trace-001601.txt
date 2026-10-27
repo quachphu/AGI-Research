@@ -1,0 +1,668 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Vladik often travels by trains. He remembered some of his trips especially well and I would like to tell you about one of these trips:
+
+Vladik is at initial train station, and now n people (including Vladik) want to get on the train. They are already lined up in some order, and for each of them the city code ai is known (the code of the city in which they are going to).
+
+Train chief selects some number of disjoint segments of the original sequence of people (covering entire sequence by segments is not necessary). People who are in the same segment will be in the same train carriage. The segments are selected in such way that if at least one person travels to the city x, then all people who are going to city x should be in the same railway carriage. This means that they can’t belong to different segments. Note, that all people who travel to the city x, either go to it and in the same railway carriage, or do not go anywhere at all.
+
+Comfort of a train trip with people on segment from position l to position r is equal to XOR of all distinct codes of cities for people on the segment from position l to position r. XOR operation also known as exclusive OR.
+
+Total comfort of a train trip is equal to sum of comfort for each segment.
+
+Help Vladik to know maximal possible total comfort.
+
+Input
+
+First line contains single integer n (1 ≤ n ≤ 5000) — number of people.
+
+Second line contains n space-separated integers a1, a2, ..., an (0 ≤ ai ≤ 5000), where ai denotes code of the city to which i-th person is going.
+
+Output
+
+The output should contain a single integer — maximal possible total comfort.
+
+Examples
+
+Input
+
+6
+4 4 2 5 2 3
+
+
+Output
+
+14
+
+
+Input
+
+9
+5 1 3 1 5 2 4 2 5
+
+
+Output
+
+9
+
+Note
+
+In the first test case best partition into segments is: [4, 4] [2, 5, 2] [3], answer is calculated as follows: 4 + (2 xor 5) + 3 = 4 + 7 + 3 = 14
+
+In the second test case best partition into segments is: 5 1 [3] 1 5 [2, 4, 2] 5, answer calculated as follows: 3 + (2 xor 4) = 3 + 6 = 9.
+</user>
+<bot>
+<think>
+Okay, let's try to figure out how to solve this problem. So the problem is about partitioning a sequence of people into some segments such that all occurrences of a city code are in the same segment or none. Then, for each segment, compute the XOR of all distinct city codes in that segment and sum them all. We need to find the maximum possible sum.
+
+Hmm. Let's start by understanding the constraints. The key point is that if a city code appears in any segment, all its occurrences must be in the same segment. So for any city x, all the positions where x appears must be in exactly one segment or none. So the segments have to respect the intervals where x occurs. For example, if x appears at positions 2, 5, 7, then the segment that includes x must cover from position 2 to 7, because otherwise, if x is included in two different segments, that's invalid.
+
+So the first step is to determine for each city x the leftmost and rightmost occurrence. Because any segment containing x must cover all its occurrences. So the leftmost and rightmost positions of x define the minimal interval that must be fully included in any segment that contains x.
+
+Wait, but how do the segments interact here? Suppose we have two cities x and y. Their intervals could be overlapping. Then the segments have to include the union of their intervals if both are chosen. Or maybe not. Hmm. Let me think. For example, if x's interval is from lx to rx, and y's interval is from ly to ry, and they overlap. Then, if we include both x and y in segments, their combined interval must be covered by a single segment. So the segments have to be such that any included city's intervals are merged into larger intervals.
+
+Alternatively, the problem can be transformed into grouping the cities into some sets where for each set, all the cities in the set have overlapping intervals, and their combined interval is covered. Then each such group forms a single segment. But how do we model this to compute the maximum sum?
+
+Alternatively, maybe we can model this problem as selecting a set of non-overlapping intervals (since segments are disjoint), each of which represents a group of cities that are included. But each interval must cover all occurrences of any city it contains. So for example, if a segment includes a city x, then the segment must start at the first occurrence of x and end at the last occurrence of x, and include all those in between. But other cities in that segment must have their intervals contained within this segment.
+
+Wait, perhaps the optimal way is to model this as intervals that are merged. So each segment in the solution is a maximal interval that covers the first and last occurrence of all the cities included in that segment.
+
+So the problem reduces to selecting a set of non-overlapping intervals where each interval is the minimal interval covering all cities in it, and the intervals don't overlap. Then for each such interval, we compute the XOR of all distinct cities in it and sum them up, aiming for the maximum sum.
+
+Hmm, this seems like a dynamic programming problem. Let's think about dynamic programming approaches. For instance, let dp[i] be the maximum total comfort achievable for the first i elements. Then, for each position i, we can consider all possible j < i where the interval j+1 to i is a valid segment (i.e., all cities in this interval have their first and last occurrences within this interval). Then, dp[i] = max(dp[j] + value of the interval (j+1, i)) for all valid j.
+
+But how to check if the interval j+1 to i is valid? Because for any city x that appears in this interval, all their occurrences must be within the interval. So for the interval [j+1, i], we need to check that for every x present in this interval, the first occurrence of x is >= j+1 and the last occurrence of x is <= i. If this is true, then this interval can be considered as a segment.
+
+So the plan is:
+
+1. Precompute for each city x its first and last occurrence in the array.
+
+2. For each possible interval [l, r], determine if it's valid. That is, all x in a[l..r] have first[x] >= l and last[x] <= r.
+
+3. Then, model this as a dynamic programming problem where dp[r] is the maximum sum up to position r. For each r, we can look back to l-1, and if [l, r] is a valid segment, then dp[r] = max(dp[r], dp[l-1] + value of [l, r]).
+
+But the problem is that n can be up to 5000, so checking all possible intervals O(n^2) would be 25 million, which might be manageable but perhaps tight. But if we can find a way to compute the valid intervals efficiently, then maybe it's feasible.
+
+So first, let's precompute first and last occurrence for each x.
+
+Then, for each possible r, we can compute the earliest l such that [l, r] is a valid interval. Because for the interval [l, r] to be valid, all x in the subarray must have first[x] >= l and last[x] <= r.
+
+Wait, but how do we find the minimal l for each r such that [l, r] is a valid interval? Because as l decreases, we include more elements, which might introduce new cities that have their first occurrence before l or last after r. So perhaps for each r, the minimal possible l is the maximum between (the first occurrence of any x in the subarray [current l, r], and the l determined by the last occurrence of any x in the subarray). Hmm, this might be complicated.
+
+Alternatively, for each position r, we can track the required l that must be the maximum of the first occurrence of all x in [l..r], and the minimal possible l. Wait, perhaps for each r, the minimal l is determined by:
+
+For the interval [l, r], all elements in this interval must have first >= l and last <= r. So for all x present in [l..r], their first[x] >= l and last[x] <= r.
+
+But how to find for each r the possible l's such that this holds. Maybe for each r, we can track the earliest possible l such that all elements in [l..r] have last[x] <= r. Then, for that l, check if their first[x] >= l.
+
+Alternatively, perhaps we can iterate r from 1 to n. For each r, find the minimal l where the interval [l, r] is valid. Then, for each r, the valid intervals are those where l is between this minimal l and r. Then, for each possible l in this range, compute the XOR of the distinct elements in [l..r], and update the DP accordingly.
+
+But the problem is that even for a given r, the number of possible l's could be O(r) which for n=5000 would be O(n^2) steps. That's 25 million steps, which might be manageable, but each step involves checking the validity of the interval and computing the XOR.
+
+But checking the validity for each interval [l, r] is O(1) with pre-processing?
+
+Wait, perhaps another approach. For a given interval [l, r], it's valid if for all x in the array between l and r, the first occurrence of x is >= l and the last occurrence is <= r. So we can precompute for each x, the earliest and latest positions. Then, for a given interval [l, r], we need to check that for all x in the array in positions l to r, first[x] >= l and last[x] <= r.
+
+But checking this for each interval [l, r] would take O(r - l + 1) time, which is O(n) per interval. That would be O(n^3) time, which is not feasible for n=5000.
+
+Hmm. So this approach is not efficient enough. We need a way to determine the validity of [l, r] in O(1) time.
+
+Alternative idea: For each position l, when considering extending to r, we can track the maximum first occurrence of any x in [l..r], and the minimum last occurrence. Wait, no. Wait, for the interval [l..r] to be valid, the minimal first occurrence of x in [l..r] must be >= l, and the maximal last occurrence must be <= r. Wait, no. Because for all x in [l..r], first[x] >= l and last[x] <= r. So for all x in [l..r], their first occurrence is >= l. So the minimal first[x] in the interval must be >= l. Similarly, the maximal last[x] of any x in the interval must be <= r.
+
+Wait, no. For example, if in the interval [l..r], there's an x whose first occurrence is at l-1. Then, even if that x is in the interval [l..r], the interval is invalid. But the x's first occurrence is not in the interval. Wait, no. Because the x's first occurrence is before l. So if x is present in [l..r], then first[x] < l. So the interval is invalid. So to have the interval [l..r] valid, for any x present in [l..r], first[x] >= l and last[x] <= r.
+
+So, to compute for a given interval [l..r], the necessary conditions are:
+
+- All x in a[l..r] have first[x] >= l and last[x] <= r.
+
+But how can we check this efficiently?
+
+An alternative approach is to precompute for each x, the positions where x appears. Then, for any interval [l, r], if there exists an x in a[l..r] such that first[x] < l or last[x] > r, then the interval is invalid.
+
+But checking this for every x in the interval is O(k), where k is the number of distinct elements in the interval. Which can be up to O(n) per interval.
+
+Hmm. So this seems challenging.
+
+Alternative idea: For each possible interval [l, r], precompute the maximum first occurrence (of any x in [l..r]) and the minimum last occurrence. Wait, no. Wait, for [l, r] to be valid, for every x in [l..r], first[x] >= l and last[x] <= r. So the maximum first occurrence among all x in [l..r] must be >= l (no, that's not correct). Wait, no. For example, if all x in [l..r] have first[x] >= l, then the maximum first[x] can be anywhere in [l..r], but as long as all are >= l, then this condition is satisfied. Wait, but the maximum of the first[x] in the interval could be as high as r. But that's okay. So the condition is that the minimum first[x] of all x in [l..r] is >= l. Wait, no. Because if any x in the interval has first[x] < l, then the interval is invalid. So the minimum first[x] in the interval must be >= l. Similarly, the maximum last[x] of all x in the interval must be <= r.
+
+Wait, no. The minimum first[x] is the earliest first occurrence among all x in the interval. If that's >= l, then all x's first occurrences are >= l. Similarly, the maximum last[x] is the latest last occurrence among all x in the interval. If that's <= r, then all x's last occurrences are <= r. So, for the interval [l, r] to be valid, it's necessary that min_first >= l and max_last <= r, where min_first is the minimum first occurrence of any x in [l..r], and max_last is the maximum last occurrence of any x in [l..r].
+
+Wait, no. Wait, min_first is the minimum of first[x] for x present in [l..r]. If that minimum is >= l, then all first[x] in the interval are >= l. Similarly, max_last is the maximum of last[x] for x present in [l..r]. If that maximum is <= r, then all last[x] are <= r. So yes, these two conditions are sufficient and necessary.
+
+So, if we can compute for each interval [l, r] the min_first and max_last, then we can check validity in O(1) per interval.
+
+But how to compute min_first and max_last for all intervals efficiently?
+
+Hmm. Let's think of min_first for interval [l..r]. For each x in the array, when we include a new element a[r], we can track the first occurrence of a[r], which is fixed. So as we expand the interval from l to r, perhaps we can track the minimal first[x] and the maximal last[x].
+
+Let me think for each r, and for each possible l (from r down to 1?), track min_first and max_last as l decreases. Because for a fixed r, as l decreases from r to 1, the interval [l, r] includes more elements. So for each r, we can start with l=r and then expand to the left.
+
+At l=r, the interval is just [r], min_first is first[a[r]], max_last is last[a[r]]. Then, as we decrement l by 1 (so the interval becomes [l-1, r]), we include a[l-1]. We need to compute the new min_first as the minimum of the previous min_first and first[a[l-1]], and similarly for max_last.
+
+Wait, that's possible. So for each r, we can process l from r down to 1, and track the current min_first and max_last. Then, for each [l, r], min_first is the minimum of first[x] for all x in a[l..r], and max_last is the maximum of last[x] for all x in a[l..r]. So for each r, we can precompute for all l <= r the min_first and max_last by iterating l from r down to 1.
+
+This way, for each r, we can compute for all possible l (from 1 to r) the min_first and max_last in O(n) time per r, leading to O(n^2) total time.
+
+Once we have these values, we can check for each interval [l, r] whether min_first >= l and max_last <= r. If so, then the interval is valid.
+
+So here's the plan:
+
+1. Precompute first[x] and last[x] for all cities x.
+
+2. For each r from 1 to n:
+
+   a. Initialize current_min_first and current_max_last to first[a[r]] and last[a[r]], respectively.
+
+   b. For l starting at r and moving left to 1:
+
+      i. current_min_first = min(current_min_first, first[a[l]])
+
+      ii. current_max_last = max(current_max_last, last[a[l]])
+
+      iii. Check if current_min_first >= l and current_max_last <= r. If yes, then the interval [l, r] is valid.
+
+      iv. For the valid intervals, compute the XOR of the distinct cities in [l..r], then update the DP.
+
+But how to compute the XOR of the distinct cities in [l..r] efficiently?
+
+Hmm. For each interval [l, r], we need the XOR of the distinct a[i] in that interval. So for example, in the first sample input, [4,4,2,5,2,3], the interval [3,5] (indices 3,4,5, which are 2,5,2) has distinct elements 2 and 5. Their XOR is 2^5=7.
+
+Calculating this for every interval is O(n^2 * k), where k is the number of distinct elements in the interval. For n=5000, this is 25 million * up to 5000, which is way too much.
+
+So we need a way to compute the XOR of distinct elements in a sliding window as l decreases from r to 1 for each r.
+
+An alternative approach is to track the distinct elements in the interval [l, r] as l decreases. For each r, we can maintain a set or a frequency array. Then, when moving l from r to 1, for each step, we add a[l] to the set. If the element is new (frequency was zero), we add it to the XOR. If it's already present, we don't. So the XOR is maintained as the sum (XOR) of distinct elements.
+
+Wait, but XOR is not additive. So adding elements in a way that tracks the XOR of the distinct elements can be done by keeping a set and whenever a new element is added (i.e., not previously present in the current interval), we XOR it into the current value.
+
+So here's the plan for tracking the XOR:
+
+For each r, as we process l from r down to 1:
+
+- We maintain a set of elements in the current interval [l, r].
+
+- For each step (decrementing l by 1), we add a[l] to the set. If it's not in the set, we XOR it into the current_xor. Otherwise, we do nothing.
+
+But maintaining a set for each [l, r] as l changes is O(1) for each step (since we are adding a[l] to the set for the interval [l-1, r], which is the same as [l, r] plus a[l-1]). Wait, no. When we decrease l by 1, we are adding a new element (a[l-1]) to the interval. So for each r, starting from l=r, the interval is [r], which includes a[r]. Then l decreases to r-1, so the interval is [r-1, r], then [r-2, r], etc. So for each step, we are adding a[l] (since l is moving left).
+
+So for each r, we can initialize a frequency array (since a[i] can be up to 5000) and a current_xor value. Then, as l decreases from r to 1:
+
+- Check if a[l] is already present (frequency[a[l]] is zero). If not, add it to the current_xor and increment frequency. Otherwise, just increment the frequency.
+
+So for each [l, r], the current_xor is the XOR of all distinct elements in the interval [l, r].
+
+This way, for each r, processing l from r downto 1, we can track the current_xor in O(1) time per step, leading to O(n^2) time for all intervals.
+
+So combining all these steps:
+
+The algorithm would be:
+
+- Precompute first and last for each x.
+
+- Precompute for each r, for each l from 1 to r, the min_first and max_last (as described before).
+
+- For each r, for each l from r downto 1, track current_min_first and current_max_last.
+
+- For each [l, r], check if current_min_first >= l and current_max_last <= r.
+
+- For valid intervals, compute the XOR of distinct elements in [l, r].
+
+- Use dynamic programming to track the maximum sum.
+
+The dynamic programming part would be:
+
+We have a dp array where dp[r] is the maximum total comfort up to position r. For each position r, we can look back to all possible l's where [l, r] is a valid interval, and take dp[l-1] + current_xor, then take the maximum over all these possibilities and the previous dp[r] value.
+
+The base case is dp[0] = 0.
+
+So the steps for the code would be:
+
+Initialize first and last for each x.
+
+Compute first[x] and last[x] for all x in the array.
+
+Initialize the dp array of size n+1, with dp[0] = 0 and others set to -infinity or some minimal value.
+
+Then for each r from 1 to n:
+
+   Initialize current_min_first = first[a[r]], current_max_last = last[a[r]]
+
+   current_xor = a[r]
+
+   Create a frequency array, freq, initialized to 0, and set freq[a[r]] = 1.
+
+   For l from r downto 1:
+
+      if l < r:
+
+          x = a[l]
+
+          if freq[x] == 0:
+
+              current_xor ^= x
+
+              freq[x] = 1
+
+          else:
+
+              freq[x] += 1
+
+          current_min_first = min(current_min_first, first[x])
+
+          current_max_last = max(current_max_last, last[x])
+
+      # Now check if [l, r] is valid
+
+      if current_min_first >= l and current_max_last <= r:
+
+          # The interval [l, r] is valid
+
+          candidate = dp[l-1] + current_xor
+
+          if candidate > dp[r]:
+
+              dp[r] = candidate
+
+   # Also, compare with dp[r-1] (in case we don't take the current segment)
+
+   if dp[r] < dp[r-1]:
+
+       dp[r] = dp[r-1]
+
+But wait, in the code above, when l is r, we process the interval [r, r], which is valid only if first[a[r]] == r and last[a[r]] == r. Then, for l from r down to 1, the code handles adding a[l], but wait, for l starting at r, then in the loop for l from r downto 1, the first iteration is l=r. Then, if l < r, the code adds a[l], which is a[r], but that's already processed. Hmm, perhaps there's a mistake here.
+
+Wait, the loop for l starts from r downto 1. For l=r, the code checks if l < r (no), so the code doesn't process the x. But for l=r, the code needs to check the interval [r, r], which is a single element. So for l=r, the current_min_first is first[a[r]], current_max_last is last[a[r]]. The code then checks if current_min_first >= l (i.e., r) and current_max_last <= r. Which would be true if first[a[r]] >= r and last[a[r]] <= r, which implies that a[r] occurs only once at position r.
+
+But how to handle this in the code?
+
+Ah, perhaps the loop starts with l=r, and then for each l from r downto 1:
+
+   For l = r:
+
+      current_min_first is first[a[r]]
+
+      current_max_last is last[a[r]]
+
+      current_xor is a[r]
+
+   For l < r:
+
+      we add a[l] to the interval, update current_min_first, current_max_last, and current_xor.
+
+But in the code above, when l=r, the code inside the 'if l < r' is not executed, so the current_xor is a[r], and the current_min_first and current_max_last are first[a[r]] and last[a[r]].
+
+Then, the code checks if current_min_first >= l (r) and current_max_last <= r. Which would be true only if first[a[r]] >= r and last[a[r]] <= r, i.e., the first and last occurrence of a[r] is exactly at r. So for example, if a[r] appears only once, then first and last are r. So for l=r, the interval [r] is valid.
+
+So this part is handled correctly.
+
+Now, after processing all l from r downto 1, for each valid interval [l, r], the code computes candidate = dp[l-1] + current_xor. Then, the maximum of these candidates and the current dp[r] (initially set to -infinity) is taken. Then, after all l's, the code also compares dp[r] with dp[r-1], in case not taking the current segment is better.
+
+Wait, why do we need to compare with dp[r-1]? Because the problem allows us to not cover the entire array with segments. So, for example, if we don't include position r in any segment, then the maximum total up to r is the same as up to r-1. So, dp[r] should be the maximum between the previous candidates and dp[r-1].
+
+So after considering all possible segments ending at r, the code updates dp[r] to the maximum between its current value and dp[r-1].
+
+This is correct.
+
+So the code will correctly handle all possibilities.
+
+Now, let's test this approach against the sample input.
+
+First sample:
+
+Input:
+
+6
+
+4 4 2 5 2 3
+
+First and last occurrences:
+
+4: first=0 (assuming 1-based indices?), or first=1? Wait, the problem says the input is 1-based or 0-based? The problem statement says "the i-th person". So the input is 1-based, but in the code, the array is 0-based if using Python. So need to clarify.
+
+Wait, in the code, when we read the array, the indexes are 0-based. So first[x] is the minimal index where x occurs, and last[x] is the maximal index where x occurs.
+
+For the first sample:
+
+Indices (0-based):
+
+0:4, 1:4, 2:2, 3:5,4:2,5:3.
+
+So for x=4, first=0, last=1.
+
+x=2: first=2, last=4.
+
+x=5: first=3, last=3.
+
+x=3: first=5, last=5.
+
+Processing r=0 (i=0):
+
+current_min_first = 0 (first[4] is 0)
+
+current_max_last = 1 (last[4] is 1)
+
+For l=0, the interval is [0,0]. Check if 0 >=0 (yes) and 1 <=0 (no). So invalid. So the interval is not valid. So dp[0] remains 0, and when r=0, the code would compare with dp[-1], which is not possible. Wait, but the code probably uses 1-based for the array. So maybe in the code, the indices are 1-based to avoid confusion.
+
+Alternatively, perhaps the code uses 0-based for the array. So the first element is a[0], which is index 0. Then, first[x] is the minimal index where x occurs, and last[x] is the maximal index.
+
+In that case, for the first sample, when r=0 (processing the first element, index 0), then l starts at 0, and the interval [0,0] is checked. current_min_first is first[4] = 0, current_max_last is last[4] = 1. So current_min_first >= l (0 >=0: yes), but current_max_last <=0 (1 <=0: no). So interval is invalid. So dp[0] is set to dp[-1] (assuming dp is 0-based). But dp is 0-based, and dp[0] is for 0 elements. So perhaps in the code, the dp array is (n+1) elements, with dp[i] representing the first i elements (0 to i-1). So for r in 1..n, the code processes the r-th element.
+
+Alternatively, maybe the code uses 1-based indices for the array.
+
+This could be a bit confusing, but the code must be handled carefully.
+
+But let's proceed with the code structure.
+
+Now, for each r (1-based) from 1 to n, the code processes the intervals ending at r.
+
+In the first sample, when r=2 (index 1-based), which is the second 4. The first occurrence of 4 is 1 (1-based?), no, in 1-based, the first occurrence is 1, last is 2.
+
+But perhaps in the code, the array is 0-based, but the dp is 1-based. So for example, the first element is a[0], and dp[1] represents the first 1 elements.
+
+In any case, let's assume that the code is written with 0-based array indices.
+
+Now, for the first sample, when processing r=1 (the second 4):
+
+The current_min_first is first[4] = 0, current_max_last is last[4] =1.
+
+So the interval [l=1, r=1] (0-based) is [1,1]. Check current_min_first >= l (0 >=1: no), so invalid. So no update. Then, when l decreases to 0:
+
+current_min_first remains 0 (since a[0] is 4, first[4] is 0). current_max_last is 1 (last[4] is 1). Check if 0 >=0 (yes) and 1 <=1 (yes). So the interval [0,1] is valid. The XOR is 4 (since there's only one distinct element). So dp[1] is max(dp[-1] +4, previous value). dp[-1] is dp[0], which is 0. So dp[1] becomes 4.
+
+But in the first sample, the optimal solution includes the first two 4s as a segment. So this step would correctly compute that.
+
+But perhaps the code will proceed correctly.
+
+In any case, this seems like a correct approach.
+
+Now, the code steps:
+
+We need to read n, then the list a. Then compute first and last occurrences.
+
+In Python:
+
+n = int(input())
+a = list(map(int, input().split()))
+first = {}
+last = {}
+for i in range(n):
+    x = a[i]
+    if x not in first:
+        first[x] = i
+    last[x] = i
+
+Then, the dp array. Since in Python we can use a list of size n+1, where dp[i] represents the maximum total comfort up to the i-th index (exclusive, i.e., first i elements).
+
+dp = [-inf] * (n+1)
+dp[0] = 0
+
+Then, for each r in 0 to n-1 (0-based):
+
+for r in range(n):
+    current_min_first = first.get(a[r], r)
+    current_max_last = last.get(a[r], r)
+    current_xor = a[r]
+    freq = defaultdict(int)
+    freq[a[r]] = 1
+    for l in range(r, -1, -1):
+        if l < r:
+            x = a[l]
+            if freq[x] == 0:
+                current_xor ^= x
+            freq[x] += 1
+            current_min_first = min(current_min_first, first.get(x, l))
+            current_max_last = max(current_max_last, last.get(x, l))
+        # Check if [l, r] is valid
+        if current_min_first >= l and current_max_last <= r:
+            if dp[l] + current_xor > dp[r+1]:
+                dp[r+1] = dp[l] + current_xor
+    # Compare with previous
+    if dp[r+1] < dp[r]:
+        dp[r+1] = dp[r]
+
+Wait, but the code uses 0-based indices. For each r in 0..n-1, the current position is r. Then, in the inner loop, l runs from r downto 0. For each interval [l, r], which is the slice a[l..r], inclusive.
+
+The dp array is 1-based, so dp[r+1] represents the maximum up to the (r+1)-th element (i.e., after processing the first r+1 elements, which is 0..r in 0-based).
+
+So for example, when r=1 (0-based), the code processes intervals [1,1], then [0,1].
+
+For each such interval, it checks if current_min_first >= l and current_max_last <= r.
+
+If yes, then the candidate value is dp[l] (since l is the start index, and the previous elements are up to l-1, which is l in the 1-based dp array). Wait, no. Because the segments are [l, r], which covers elements l to r (0-based). The previous elements are 0 to l-1. So the dp for l-1 is dp[l] (since dp is 1-based). For example, if the interval is [l, r], then the maximum is dp[l] (dp array's index is l) plus the current_xor. Because dp[l] is the maximum sum up to the l-th element (0-based l is the (l)th element in the dp array).
+
+Wait, perhaps the dp array is defined as follows: dp[i] is the maximum total comfort for the first i elements (a[0] to a[i-1]). So for interval [l, r] (0-based), the length is (r - l + 1), and the next element after the interval is r+1. So the previous state is dp[l], and after processing the interval [l, r], the state is updated to dp[r+1].
+
+Yes. So the code would compute for each [l, r], if valid, then dp[r+1] = max(dp[r+1], dp[l] + current_xor).
+
+So in the code, the loop for r in 0 to n-1:
+
+current_r = r (0-based)
+
+Then, for each l in range(r, -1, -1):
+
+compute if [l, current_r] is valid.
+
+If yes, then dp[current_r +1] can be updated with dp[l] (since the previous elements are up to l-1, which is the first l elements, stored in dp[l]).
+
+So the code's logic is correct.
+
+Now, for the XOR computation, we have to track the distinct elements in the interval [l, current_r]. For this, as l decreases from current_r downto 0, the code adds a[l] to the current_xor if it's not already present. This is done using a frequency dictionary. For each a[l], if its frequency is 0, then it's added to the current_xor. Otherwise, it's not. This correctly tracks the XOR of distinct elements.
+
+Testing this with the first sample:
+
+For the interval [0,1] (the two 4s), the XOR is 4. The code would compute this correctly. Then, since the interval is valid (current_min_first is 0 >=0, current_max_last is 1 <=1). So dp[2] is max(dp[0] +4, ...) which is 0+4=4.
+
+Then, in the next steps.
+
+So the code seems correct.
+
+Now, for the second sample:
+
+Input:
+
+9
+
+5 1 3 1 5 2 4 2 5
+
+The best partition is [3], which is index 2 (0-based) and [5,6,7] (values 2,4,2). Their XOR is 3 and 6, sum 9.
+
+The code should find these intervals and compute the maximum sum.
+
+But handling all cases would be time-consuming, but the code should handle it.
+
+Now, about the time complexity. For each r (n steps), and each l (r+1 steps), and per l, O(1) time for updating the current_min_first, current_max_last, and XOR. So the total time is O(n^2), which for n=5000 is 25 million steps. Python should handle this, but with possible optimizations needed.
+
+But considering that for each l, the code has to loop from r downto 0, and for each step, there are a few operations. But with n=5000, 25 million steps could be tight.
+
+But given the problem constraints, this seems acceptable.
+
+Now, the code must read from stdin, compute the answer, and print it.
+
+So the Python code would be structured as follows:
+
+Read n.
+
+Read the list a.
+
+Compute first and last.
+
+Initialize dp.
+
+Loop over r in 0 to n-1:
+
+   current_min_first = first[a[r]]
+
+   current_max_last = last[a[r]]
+
+   current_xor = a[r]
+
+   freq = {a[r]:1}
+
+   for l in range(r, -1, -1):
+
+      if l < r:
+
+          x = a[l]
+
+          if freq.get(x, 0) == 0:
+
+              current_xor ^= x
+
+              freq[x] = 1
+
+          else:
+
+              freq[x] += 1
+
+          current_min_first = min(current_min_first, first[x])
+
+          current_max_last = max(current_max_last, last[x])
+
+      # check validity
+
+      if current_min_first >= l and current_max_last <= r:
+
+          if dp[l] + current_xor > dp[r+1]:
+
+              dp[r+1] = dp[l] + current_xor
+
+   # compare with previous
+
+   if dp[r+1] < dp[r]:
+
+       dp[r+1] = dp[r]
+
+Finally, print(dp[n])
+
+But wait, in Python, the default dict can be used for freq. However, for speed, using a list for freq (since the city codes can be up to 5000) might be faster. But given the constraints, a dictionary is manageable.
+
+Alternatively, in the code, for each iteration of r, we can initialize a freq dictionary. For each l, as we process it, we add a[l] to the freq, and update the current_xor accordingly.
+
+But in the code above, when l < r, we process a[l], add it to the current_xor if not present. However, when l == r, the code has already added a[r] to the freq, and current_xor is a[r].
+
+So the code is correct.
+
+Testing this code with the first sample:
+
+Sample input 1:
+
+6
+
+4 4 2 5 2 3
+
+The first occurrence for 4 is 0, last is 1.
+
+For 2, first is 2, last is 4.
+
+For 5: first and last are 3.
+
+For 3: first and last are 5.
+
+Let's walk through r=5 (0-based) which is the 3.
+
+Processing r=5:
+
+current_min_first = first[3] =5
+
+current_max_last =5.
+
+current_xor =3.
+
+freq={3:1}
+
+Then l runs from 5 downto 0.
+
+l=5:
+
+check if 5 >=5 and 5 <=5: yes.
+
+So candidate is dp[5] +3. dp[5] is the value up to index 5 (exclusive), which is the first 5 elements. Wait, no. The dp array is 1-based. dp[r+1] is dp[6], which is the maximum up to the 6th element (index 5 in 0-based).
+
+But perhaps it's easier to think in terms of code.
+
+But in any case, the code should correctly handle all cases.
+
+Now, after processing all l, the code for r=5 would find that the interval [5,5] is valid. So dp[6] would be max(dp[5] +3, ...). But perhaps the previous steps have already computed a higher value.
+
+The sample answer is 14. Let's see.
+
+The optimal partition is [0-1], [2-4], [5-5]. The XORs are 4, 2^5=7, 3. Sum is 14.
+
+So for r=1 (0-based), the code would process the interval [0-1], valid, and set dp[2] =4.
+
+For r=4 (0-based) (the last 2), the code would process the interval [2-4]. current_min_first is 2, current_max_last is4. So l=2, current_min_first >=2, current_max_last <=4. So valid. The XOR is 2^5=7. So dp[5] = dp[2] +7 =4+7=11.
+
+Then, for r=5, the interval [5-5] is valid, XOR is3. dp[6] becomes max(11+3=14, previous values).
+
+So the code would correctly compute 14.
+
+Thus, the code seems correct.
+
+Now, the code should be written accordingly.
+</think>
+To solve this problem, we need to partition a sequence of people into disjoint segments such that all occurrences of a city code are within the same segment. The goal is to maximize the sum of the XOR of distinct city codes in each segment.
+
+### Approach
+1. **Precompute First and Last Occurrences**: For each city code, determine the first and last occurrence in the sequence. This helps in checking if a segment is valid.
+2. **Dynamic Programming (DP) Setup**: Use a DP array where `dp[i]` represents the maximum total comfort achievable for the first `i` elements.
+3. **Iterate Over Possible Segments**: For each possible end position `r`, consider all possible start positions `l` from `r` down to `1`. Track the minimum first occurrence and maximum last occurrence of city codes in the current segment to check validity.
+4. **Compute XOR for Valid Segments**: For valid segments, compute the XOR of distinct city codes and update the DP array accordingly.
+
+### Solution Code
+```python
+import sys
+from collections import defaultdict
+
+def main():
+    n = int(sys.stdin.readline())
+    a = list(map(int, sys.stdin.readline().split()))
+    
+    first = dict()
+    last = dict()
+    for i in range(n):
+        x = a[i]
+        if x not in first:
+            first[x] = i
+        last[x] = i
+    
+    dp = [-float('inf')] * (n + 1)
+    dp[0] = 0  # dp[i] is the max comfort for first i elements (0..i-1)
+    
+    for r in range(n):
+        current_min_first = first[a[r]]
+        current_max_last = last[a[r]]
+        current_xor = a[r]
+        freq = defaultdict(int)
+        freq[a[r]] = 1
+        
+        for l in range(r, -1, -1):
+            if l < r:
+                x = a[l]
+                if freq[x] == 0:
+                    current_xor ^= x
+                freq[x] += 1
+                current_min_first = min(current_min_first, first.get(x, l))  # first[x] defaults to l if not found (though should be present)
+                current_max_last = max(current_max_last, last.get(x, l))
+            
+            # Check if [l, r] is valid
+            if current_min_first >= l and current_max_last <= r:
+                if dp[l] + current_xor > dp[r + 1]:
+                    dp[r + 1] = dp[l] + current_xor
+        
+        # Compare with previous
+        if dp[r + 1] < dp[r]:
+            dp[r + 1] = dp[r]
+    
+    print(dp[n])
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Precompute First and Last Occurrences**: This helps in quickly determining the validity of a segment. A segment is valid if all occurrences of any city code within it are entirely contained within the segment.
+2. **Dynamic Programming Array**: The DP array `dp` is used to store the maximum comfort value achievable up to each position. This allows us to efficiently build up the solution by considering each segment ending at each position.
+3. **Check Validity of Segments**: For each segment ending at position `r`, we check all possible starting positions `l` to determine if the segment is valid. This is done by ensuring the minimum first occurrence and maximum last occurrence of city codes within the segment are within the bounds of the segment.
+4. **Compute XOR for Valid Segments**: For valid segments, the XOR of distinct city codes is computed and used to update the DP array, ensuring we always keep the maximum possible comfort value.
+
+This approach efficiently checks all possible segments and uses dynamic programming to keep track of the maximum comfort, resulting in an optimal solution.
+</bot>

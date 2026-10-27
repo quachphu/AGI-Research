@@ -1,0 +1,725 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.Vasya is developing his own programming language VPL (Vasya Programming Language). Right now he is busy making the system of exceptions. He thinks that the system of exceptions must function like that.
+
+The exceptions are processed by try-catch-blocks. There are two operators that work with the blocks:
+
+  1. The try operator. It opens a new try-catch-block. 
+  2. The catch(<exception_type>, <message>) operator. It closes the try-catch-block that was started last and haven't yet been closed. This block can be activated only via exception of type <exception_type>. When we activate this block, the screen displays the <message>. If at the given moment there is no open try-catch-block, then we can't use the catch operator.
+
+
+
+The exceptions can occur in the program in only one case: when we use the throw operator. The throw(<exception_type>) operator creates the exception of the given type.
+
+Let's suggest that as a result of using some throw operator the program created an exception of type a. In this case a try-catch-block is activated, such that this block's try operator was described in the program earlier than the used throw operator. Also, this block's catch operator was given an exception type a as a parameter and this block's catch operator is described later that the used throw operator. If there are several such try-catch-blocks, then the system activates the block whose catch operator occurs earlier than others. If no try-catch-block was activated, then the screen displays message "Unhandled Exception".
+
+To test the system, Vasya wrote a program that contains only try, catch and throw operators, one line contains no more than one operator, the whole program contains exactly one throw operator.
+
+Your task is: given a program in VPL, determine, what message will be displayed on the screen.
+
+Input
+
+The first line contains a single integer: n (1 ≤ n ≤ 105) the number of lines in the program. Next n lines contain the program in language VPL. Each line contains no more than one operator. It means that input file can contain empty lines and lines, consisting only of spaces.
+
+The program contains only operators try, catch and throw. It is guaranteed that the program is correct. It means that each started try-catch-block was closed, the catch operators aren't used unless there is an open try-catch-block. The program has exactly one throw operator. The program may have spaces at the beginning of a line, at the end of a line, before and after a bracket, a comma or a quote mark.
+
+The exception type is a nonempty string, that consists only of upper and lower case english letters. The length of the string does not exceed 20 symbols. Message is a nonempty string, that consists only of upper and lower case english letters, digits and spaces. Message is surrounded with quote marks. Quote marks shouldn't be printed. The length of the string does not exceed 20 symbols.
+
+Length of any line in the input file does not exceed 50 symbols. 
+
+Output
+
+Print the message the screen will show after the given program is executed.
+
+Examples
+
+Input
+
+8
+try
+    try
+        throw ( AE ) 
+    catch ( BE, "BE in line 3")
+
+    try
+    catch(AE, "AE in line 5") 
+catch(AE,"AE somewhere")
+
+
+Output
+
+AE somewhere
+
+
+Input
+
+8
+try
+    try
+        throw ( AE ) 
+    catch ( AE, "AE in line 3")
+
+    try
+    catch(BE, "BE in line 5") 
+catch(AE,"AE somewhere")
+
+
+Output
+
+AE in line 3
+
+
+Input
+
+8
+try
+    try
+        throw ( CE ) 
+    catch ( BE, "BE in line 3")
+
+    try
+    catch(AE, "AE in line 5") 
+catch(AE,"AE somewhere")
+
+
+Output
+
+Unhandled Exception
+
+Note
+
+In the first sample there are 2 try-catch-blocks such that try operator is described earlier than throw operator and catch operator is described later than throw operator: try-catch(BE,"BE in line 3") and try-catch(AE,"AE somewhere"). Exception type is AE, so the second block will be activated, because operator catch(AE,"AE somewhere") has exception type AE as parameter and operator catch(BE,"BE in line 3") has exception type BE.
+
+In the second sample there are 2 try-catch-blocks such that try operator is described earlier than throw operator and catch operator is described later than throw operator: try-catch(AE,"AE in line 3") and try-catch(AE,"AE somewhere"). Exception type is AE, so both blocks can be activated, but only the first one will be activated, because operator catch(AE,"AE in line 3") is described earlier than catch(AE,"AE somewhere")
+
+In the third sample there is no blocks that can be activated by an exception of type CE.
+</user>
+<bot>
+<think>
+Okay, let's try to figure out how to solve this problem. So the problem is about simulating the exception handling in this Vasya Programming Language. The task is to determine which message gets printed when a throw occurs. 
+
+Hmm. Let's start by understanding the problem statement carefully. 
+
+The key points here are:
+
+- The program consists of try, catch, and throw operators. Exactly one throw exists in the program.
+- When a throw occurs with exception type 'a', we need to find the try-catch block that:
+  1. The try was declared before the throw.
+  2. The catch is declared after the throw.
+  3. The catch's exception type matches 'a'.
+  4. Among all such blocks, choose the one whose catch appears earliest (since if there are multiple, the earliest one in the code is chosen).
+
+Wait, wait. Let me recheck. The problem says: "the system activates the block whose catch operator occurs earlier than others." So if there are multiple possible blocks (all with matching exception type), we pick the one with the earliest catch. Because when you have multiple try-catch blocks that are open, the latest try is the innermost. But when a throw happens, the exception bubbles up from the innermost try-catch blocks outward. Wait, no, perhaps not. Because the problem's activation logic is: among the try-catch blocks where the try was before the throw, and the catch is after the throw, and the exception type matches, the earliest catch (in code order) is selected. 
+
+Wait, the problem says:
+
+"the system activates the block whose catch operator occurs earlier than others."
+
+No, wait the exact wording: "If there are several such try-catch-blocks, then the system activates the block whose catch operator occurs earlier than others." So when you have multiple blocks that could handle the exception (their try is before throw, catch is after throw, and their type matches), then the one whose catch operator is earliest in the code is chosen. Wait, that's counterintuitive. Because in typical exception handling, the innermost (most recently opened) catch blocks are checked first. But here, according to the problem's rules, it's the earliest catch in the code order. So for example, if there are two try-catch blocks A and B, where A's try is before B's try, and B's catch is before A's catch. If both can handle the exception, then which one is chosen depends on which catch comes first in the code.
+
+Wait, maybe the logic here is that the order of the catch in the code determines priority. So for example, if two blocks are possible, the one whose catch is written earlier in the code (i.e., appears first when you read the code) is chosen, regardless of nesting. That's a bit different from traditional exception handling, so we need to model it correctly.
+
+So the steps are:
+
+1. Find the position of the throw statement in the code.
+2. The exception type is the type specified in that throw.
+3. Collect all try-catch blocks where:
+   a. The try is before the throw's line.
+   b. The catch is after the throw's line.
+   c. The exception type matches.
+4. Among those, select the one with the earliest catch line. If none, output "Unhandled Exception".
+
+So the problem reduces to:
+
+- Parse the code, identify all try-catch blocks.
+- Find the throw line and its exception type.
+- For each try-catch block, check if the try is before throw line, catch after throw line, and the exception type matches.
+- Among all such blocks, pick the one with the earliest catch line (i.e., the smallest line number for the catch statement). Then output the message of that catch.
+
+So the first thing to do is parse the code, track the try and catch statements, and build a structure that represents each try-catch block.
+
+But how do we pair the try and catch statements? Because try must be properly nested. For example, each try opens a new block, and each catch closes the last opened try. So the structure is a stack. Each time a try is encountered, push it onto the stack. When a catch is encountered, pop the last try (since the program is correct as per input), and record the try-catch block as a pair (try_line, catch_line, exception_type, message).
+
+So, the plan is:
+
+1. Process each line, determine if it's a try, catch, or throw.
+2. For try lines, push onto a stack.
+3. For catch lines, pop the stack and create a block with the corresponding try and catch line, along with the exception type and message.
+4. For the throw line, note its line number (let's call it throw_line) and the exception type (throw_type).
+
+Once all blocks are parsed and the throw info is known, we need to process all try-catch blocks and check:
+
+- try_line < throw_line (since the try must be before the throw)
+- catch_line > throw_line (since the catch must be after the throw)
+- exception_type of the block matches throw_type
+
+For all blocks that satisfy these conditions, collect them, and then select the one with the smallest catch_line. The earliest catch in code order.
+
+Once we have that block, output its message. If no such blocks, output "Unhandled Exception".
+
+So the steps in code would be:
+
+- Parse each line into an operation (try, catch, throw).
+- Track the stack for try-catch blocks.
+- Find the throw line and its type.
+- For all try-catch blocks, check the conditions, collect the eligible ones.
+- Among eligible, pick the one with earliest catch line.
+
+Now, let's think about how to parse each line.
+
+Each line can have leading and trailing spaces. So first, we need to trim whitespace from each line.
+
+Then, check what the line is:
+
+For a try line: the line (after trimming) starts with 'try'.
+
+For a catch line: starts with 'catch'. Then parse the exception type and message.
+
+For a throw line: starts with 'throw'. Then parse the exception type.
+
+But the lines can have spaces anywhere except in the strings. For example, 'catch ( BE , "BE in line 3" )' is allowed. So, the parsing must ignore spaces except within the strings.
+
+So, for a catch line, the structure is:
+
+catch ( exception_type , "message" )
+
+But with possible spaces around commas, inside the parentheses, etc.
+
+So, for a catch line, after trimming, we can split the parameters.
+
+Similarly for throw lines.
+
+So, let's outline the parsing steps.
+
+For each line:
+
+- Trim all whitespace from the line. Or, perhaps, first process the line to remove all whitespace except within the quotes.
+
+Wait, but the problem statement says: "The program may have spaces at the beginning of a line, at the end of a line, before and after a bracket, a comma or a quote mark."
+
+So, for example, the line could be:
+
+catch ( BE , "BE in line 3" )
+
+But after trimming spaces, perhaps the line is 'catch(BE,"BE in line 3")' or something like that. Wait no, trimming is not enough. Because inside the line, there are spaces. For example, 'catch   (   BE   ,   "BE in line 3"   )' — after removing all leading and trailing spaces, but the inner parts could have spaces.
+
+So, how to parse the exception type and message from the catch line.
+
+Approach:
+
+For a catch line, the line after trimming is of the form 'catch(...)'.
+
+We can split the line into parts, ignoring spaces. But how?
+
+Alternative approach: process the line by removing all spaces except those within the message (which is inside quotes).
+
+For example:
+
+Original line: 'catch ( BE , "BE in line 3")'
+
+We can split this into parts. The structure is:
+
+catch(exception_type, "message")
+
+So, first, we can process the line as follows:
+
+1. Remove all spaces except inside the quotes.
+
+But how to do that. Maybe first split into tokens, but considering quotes.
+
+Alternatively, split the line into parts, ignoring spaces except between the quotes.
+
+Alternatively, use regular expressions.
+
+For the catch line:
+
+The syntax is 'catch' followed by parameters in parentheses. The parameters are two parts: exception_type and message.
+
+So, a regular expression for catch could be:
+
+catch\s*\(\s*([a-zA-Z]+)\s*,\s*"([^"]+)"\s*\)
+
+But this may not account for all possible cases, but according to the problem statement, the exception type is a non-empty string of letters, and the message is surrounded by quotes (and the quotes are not part of the message).
+
+So, the regex for catch:
+
+match = re.match(r'catch\s*\(\s*([A-Za-z]+)\s*,\s*"([^"]+)"\s*\)', trimmed_line)
+
+Similarly for throw:
+
+throw\s*\(\s*([A-Za-z]+)\s*\)
+
+So, for each line:
+
+Trim leading and trailing spaces. Then check if it starts with 'try', 'catch', or 'throw'.
+
+So:
+
+trimmed_line = line.strip()
+
+if not trimmed_line:
+    continue  # empty line
+
+if trimmed_line.startswith('try'):
+    process as try.
+
+elif trimmed_line.startswith('catch'):
+    extract exception_type and message.
+
+elif trimmed_line.startswith('throw'):
+    extract exception_type.
+
+So, the regex approach seems feasible.
+
+Now, code steps:
+
+Read n lines. For each line, process as follows.
+
+We can loop through each line, keep track of the line number (starting from 0 or 1?), but the line numbers in the input are 1-based? Because the examples have lines like "BE in line 3", which refers to line 3 (assuming 1-based). So the code's line numbers are 1-based.
+
+So in code, we can process lines in 1-based numbering.
+
+We need to:
+
+- For each line, record whether it's a try, catch, throw, or other (but input is guaranteed to have exactly one throw, and correct try/catch pairs).
+
+Then, for try lines, push onto a stack. For catch lines, pop from the stack and create a try-catch block.
+
+Additionally, for each line, note if it's a throw line. There's exactly one, so once found, we can note its line number and exception_type.
+
+Once all lines are processed, we have:
+
+- A list of all try-catch blocks (each with try_line, catch_line, exception_type, message)
+- The throw_line and throw_type.
+
+Now, for each try-catch block, check if:
+
+try_line < throw_line < catch_line.
+
+Also, the block's exception_type must equal throw_type.
+
+If all these are true, then the block is a candidate.
+
+Among all candidates, select the one with the smallest catch_line (earliest in code order).
+
+If no candidates, output "Unhandled Exception".
+
+So the code steps are:
+
+Read all lines, process each line to build:
+
+- try_stack: when a try is found, push its line number onto the stack.
+
+- When a catch is found, pop the stack (the corresponding try line), and add to a list of blocks.
+
+- When a throw is found, save its line number and exception type.
+
+Once all lines are processed, collect all blocks, and check which ones satisfy:
+
+block.try_line < throw_line < block.catch_line
+
+and block.exception_type == throw_type.
+
+Among these, the one with the earliest catch_line (smallest line number) is the one to select. Its message is the output.
+
+If none, output "Unhandled Exception".
+
+Now, the edge cases to consider:
+
+- Throw occurs before any try. Then no blocks can be considered, output "Unhandled".
+
+- All try-catch blocks are either: try after throw, or catch before throw, or exception type not matching.
+
+So the code needs to handle these.
+
+Now, let's think about the data structures.
+
+Each block will be a tuple or a class with attributes:
+
+try_line, catch_line, exception_type, message.
+
+The code can represent this as a list of dictionaries or a list of tuples.
+
+In Python:
+
+blocks = []
+
+When a try is encountered, push (try_line) to stack.
+
+When a catch is encountered, pop the stack's last try_line, create a block with try_line, current line (catch_line), exception_type, message.
+
+So in code:
+
+stack = []
+blocks = []
+
+for line_num, line in enumerate(lines, 1):
+    line = line.strip()
+    if not line:
+        continue
+    if line.startswith('try'):
+        # It's a try statement
+        stack.append(line_num)
+    elif line.startswith('catch'):
+        # parse exception_type and message
+        # using regex
+        # example line: catch ( BE , "BE in line 3")
+        # regex to match catch parameters
+        import re
+        match = re.match(r'catch\s*\(\s*([A-Za-z]+)\s*,\s*"([^"]+)"\s*\)', line)
+        if not match:
+            # according to input constraints, the program is correct, so this should not happen
+            pass
+        exception_type = match.group(1)
+        message = match.group(2)
+        # get the corresponding try
+        try_line = stack.pop()
+        blocks.append({
+            'try_line': try_line,
+            'catch_line': line_num,
+            'exception_type': exception_type,
+            'message': message
+        })
+    elif line.startswith('throw'):
+        # parse the exception type
+        match = re.match(r'throw\s*\(\s*([A-Za-z]+)\s*\)', line)
+        throw_type = match.group(1)
+        throw_line = line_num
+
+Once all lines are processed, blocks is the list of all try-catch blocks, and throw_line and throw_type are known.
+
+Then, filter the blocks:
+
+candidates = []
+
+for block in blocks:
+    if block['try_line'] < throw_line and block['catch_line'] > throw_line and block['exception_type'] == throw_type:
+        candidates.append(block)
+
+If candidates is not empty, select the one with the smallest catch_line (since earliest in code order).
+
+Then output the message of that block.
+
+Else, output "Unhandled Exception".
+
+So the code structure would be something like that.
+
+Now, handling the input:
+
+Read n lines. But note that lines can have leading and trailing spaces, and may be empty. So, for each line, we read the entire line (without stripping yet), but then when processing, we first strip leading/trailing whitespace. However, in the problem statement, it's mentioned that the input lines may have spaces at the start and end, but each line contains at most one operator. So, even if a line is empty (all whitespace), it's considered as not containing any operator. So, in code:
+
+n = int(input())
+lines = []
+for _ in range(n):
+    lines.append(input().strip())  # but wait, input().strip() removes leading and trailing spaces. Wait no: the problem says that a line can have leading and trailing spaces, but the operator is present. For example, a line with '  try   ' would be considered as a try operator. So, to capture this, perhaps we need to process the line by stripping leading and trailing whitespace, but then check if the line is non-empty.
+
+But in the problem statement, the input lines may be empty or contain only spaces, but each line has at most one operator. So, lines that are empty (after stripping) are skipped.
+
+Wait, no. The problem says: "each line contains no more than one operator. It means that input file can contain empty lines and lines, consisting only of spaces."
+
+So, the lines can be empty (after stripping) or have one operator.
+
+So, for example, a line with '  try  ' becomes 'try' when stripped. So, in code, for each line, we process it by stripping leading and trailing whitespace, and if the resulting string is not empty, then it's an operator.
+
+But in the code, when reading the lines, we need to process each line as follows:
+
+For each of the n lines:
+
+s = input().strip()
+
+if s is not empty, then it's an operator.
+
+But in the code, the lines list may have elements that are empty strings (if the original line was empty after stripping). But according to the problem statement, each line can have at most one operator. So, the code should process all lines, even empty ones. Wait, the line numbers are based on the original input. For example, in the first example input:
+
+8 lines, some of which are empty or have spaces. The line numbers for the throw is line 3 (assuming 1-based). But if in the code, when we process the lines, some lines are empty after stripping, then their line numbers would be skipped. But the problem statement's line numbers refer to the original input lines.
+
+Ah, this is a critical point. Because when the throw is in the third line (original input), even if some lines before are empty, the line number in the code is 3. So, the line numbers are 1-based in the original input.
+
+But when processing the code, if we strip each line and check if it's empty, then the code's line numbering (as per the original input) must be tracked correctly. For example, in the first example input:
+
+Line 3 (original line number) is the throw line. Even if line 4 is empty or has a catch, etc.
+
+So, when processing the code, we need to track the original line numbers. So, in code:
+
+lines = [input() for _ in range(n)]
+
+Then, for each line in lines, process as follows:
+
+for line_num in 1..n:
+
+    original_line = lines[line_num - 1]
+
+    stripped_line = original_line.strip()
+
+    if stripped_line starts with 'try', etc.
+
+Because the line numbers in the input are 1-based. So, when we parse each original line (including empty ones), the line number is determined by their position in the input, not after stripping.
+
+So, the code must process all lines (including empty ones) because even if a line is empty, the next lines have line numbers based on their position. For example, if line 3 is empty, the next line (original line 4) is considered line 4 in the code.
+
+Therefore, in the code, the line numbers are 1-based, and each line (even if empty) is considered part of the input. So, in code:
+
+for line_num in range(1, n+1):
+
+    original_line = lines[line_num - 1]
+
+    stripped_line = original_line.strip()
+
+    if stripped_line == '':
+
+        continue  # empty line, no operator.
+
+    else:
+
+        process as try, catch, throw.
+
+But the problem statement says that each line can contain at most one operator. So, if a line (after stripping) is not empty, it must be either try, catch, or throw.
+
+Thus, in code, for each line in the input:
+
+We process the line's stripped version. If it's empty, skip. Else, check what operator it is.
+
+So, the code can process each line (original line number 1 to n) and for each line, check if it's a try, catch, or throw.
+
+Now, in code:
+
+import re
+
+n = int(input())
+lines = [input() for _ in range(n)]
+
+stack = []
+blocks = []
+throw_line = None
+throw_type = None
+
+for line_num in range(1, n+1):
+    original_line = lines[line_num - 1]
+    stripped_line = original_line.strip()
+    if not stripped_line:
+        continue  # empty line, no operator
+    if stripped_line.startswith('try'):
+        # push the line number of the try
+        stack.append(line_num)
+    elif stripped_line.startswith('catch'):
+        # parse exception_type and message
+        # regex pattern: catch (type, "message")
+        # match the pattern, ignoring spaces except in the message
+        # example: catch ( BE , "BE in line 3" )
+        # after stripping, it's 'catch(BE,"BE in line 3")' ?
+
+        # using regex: catch\s*\(\s*([A-Za-z]+)\s*,\s*"([^"]*)"\s*\)
+        match = re.match(r'catch\s*\(\s*([A-Za-z]+)\s*,\s*"([^"]*)"\s*\)', stripped_line)
+        if not match:
+            # according to the problem statement, input is correct, so this should not happen
+            pass
+        exception_type = match.group(1)
+        message = match.group(2)
+        # get the corresponding try
+        if not stack:
+            # input is correct, so this won't happen
+            pass
+        try_line = stack.pop()
+        blocks.append({
+            'try_line': try_line,
+            'catch_line': line_num,
+            'exception_type': exception_type,
+            'message': message
+        })
+    elif stripped_line.startswith('throw'):
+        # parse the exception type
+        # regex pattern: throw (type)
+        match = re.match(r'throw\s*\(\s*([A-Za-z]+)\s*\)', stripped_line)
+        if not match:
+            pass  # input is correct
+        throw_type = match.group(1)
+        throw_line = line_num
+
+# Now process the blocks
+candidates = []
+for block in blocks:
+    if (block['try_line'] < throw_line and
+        block['catch_line'] > throw_line and
+        block['exception_type'] == throw_type):
+        candidates.append(block)
+
+if candidates:
+    # select the candidate with the smallest catch_line
+    # because we want the earliest catch in code order
+    selected = min(candidates, key=lambda x: x['catch_line'])
+    print(selected['message'])
+else:
+    print("Unhandled Exception")
+
+Wait, but why the earliest catch_line? Because when there are multiple blocks that have the same exception type, and their try is before throw, catch after throw, the problem says to choose the block whose catch occurs earliest in the code. So the earliest catch_line (smallest line number) is selected.
+
+Yes. So in the example 2, the first catch (line 3) is earlier than the second (line 7), so it's selected.
+
+So this code should work.
+
+Testing the first example:
+
+Input:
+
+8
+try
+    try
+        throw ( AE ) 
+    catch ( BE, "BE in line 3")
+
+    try
+    catch(AE, "AE in line 5") 
+catch(AE,"AE somewhere")
+
+The lines:
+
+Line 1: try → stripped_line is 'try' → try_line 1 added to stack.
+
+Line 2: try → stripped_line 'try' → try_line 2 added.
+
+Line 3: throw ( AE ) → stripped_line is 'throw(AE)'? Or 'throw ( AE )' becomes 'throw (AE)'. The regex would match group 1 as 'AE'.
+
+So throw_line is 3, throw_type is AE.
+
+Line 4: catch ( BE, "BE in line 3") → stripped_line is 'catch ( BE, "BE in line 3")' → match gives exception_type 'BE', message 'BE in line 3'. The corresponding try is popped from stack (line 2). So a block is added with try_line 2, catch_line 4, type BE.
+
+Line 5: empty line (after stripping, assuming the original line is all spaces) → skipped.
+
+Line 6: try → stripped_line 'try' → pushed to stack (line 6).
+
+Line 7: catch(AE, "AE in line 5") → exception_type AE, message 'AE in line 5'. The corresponding try is line 6, popped. Block added: try_line 6, catch_line 7, type AE.
+
+Line 8: catch(AE, "AE somewhere") → exception_type AE, message 'AE somewhere'. The corresponding try is line 1 (since stack had line 1 left after previous pops). So block added: try_line 1, catch_line 8, type AE.
+
+The throw_line is 3.
+
+Now, for each block in blocks:
+
+Check if try_line < 3 and catch_line > 3, and type is AE.
+
+Block 1: try_line 2 <3, catch_line 4>3. Type is BE → no.
+
+Block 2: try_line 6 <3? No. So not considered.
+
+Block 3: try_line 1 <3, catch_line 8>3. Type AE → yes. So this is a candidate.
+
+So candidates list has this block.
+
+Thus, output is 'AE somewhere'.
+
+Which matches the first example.
+
+Second example:
+
+The throw is in line 3. The block in line 4 (catch_line 3) has exception_type AE.
+
+Another block in line 8 (AE). So for the throw line 3:
+
+Block 1: try_line 2 <3, catch_line 4 (line 4) → catch_line is 4>3. Type AE → yes.
+
+Block 3: try_line 1 <3, catch_line 8>3. Type AE → yes.
+
+Between these two, the one with the smaller catch_line is 4. So output the message of line 4: 'AE in line 3'.
+
+Third example: throw_type is CE. None of the blocks have CE as exception_type, so candidates is empty. Output is 'Unhandled Exception'.
+
+So the code should work.
+
+Now, let's code this into a Python function that reads stdin and prints the output.
+
+But wait, in Python, when you read input lines using input(), it reads each line including the newline character. But when you do .strip(), it removes leading/trailing whitespace, including newlines. So the code is correct as written.
+
+But in the code, when you do lines = [input() for _ in range(n)], each element is the original line, including leading and trailing spaces. Then, for each line_num, the original_line is lines[line_num -1], then stripped_line is original_line.strip(). If that's empty, skip. Else process.
+
+Yes, that's correct.
+
+Now, the code as written should work. So the function is:
+
+Read n lines, process each, track try, catch, throw, build blocks, then find the candidates.
+
+Now, the code is as written.
+
+But note that in Python, for large n (up to 1e5), this code may be efficient. Because all operations are O(n), which should be acceptable.
+
+But regex can be a problem for 1e5 lines. But since each line is processed once, and regex is O(1) per line, it's manageable.
+
+So the code should pass all test cases.
+</think>
+To solve this problem, we need to simulate the exception handling mechanism of the Vasya Programming Language (VPL) and determine which message will be displayed when a throw operation is executed. The solution involves parsing the program, tracking try-catch blocks, and identifying the appropriate catch block that handles the exception based on specific criteria.
+
+### Approach
+1. **Parse the Input:** Read each line of the program and identify try, catch, and throw operations. Track line numbers for each operation.
+2. **Track Try-Catch Blocks:** Use a stack to manage nested try blocks. When a catch block is encountered, pop the corresponding try block from the stack and record the try-catch block details.
+3. **Identify Throw Operation:** Determine the line number and exception type of the throw operation.
+4. **Determine Handling Catch Block:** Check all try-catch blocks to find those that could handle the exception based on the criteria:
+   - The try block is before the throw operation.
+   - The catch block is after the throw operation.
+   - The exception type matches.
+   Among the valid blocks, select the one whose catch block appears earliest in the code.
+
+### Solution Code
+```python
+import re
+
+def main():
+    import sys
+    input = sys.stdin.read().splitlines()
+    n = int(input[0])
+    lines = input[1:n+1]
+
+    stack = []
+    blocks = []
+    throw_line = None
+    throw_type = None
+
+    for line_num in range(1, n+1):
+        original_line = lines[line_num - 1]
+        stripped_line = original_line.strip()
+        if not stripped_line:
+            continue
+        if stripped_line.startswith('try'):
+            stack.append(line_num)
+        elif stripped_line.startswith('catch'):
+            match = re.match(r'catch\s*\(\s*([A-Za-z]+)\s*,\s*"([^"]*)"\s*\)', stripped_line)
+            if match:
+                exception_type = match.group(1)
+                message = match.group(2)
+                if stack:
+                    try_line = stack.pop()
+                    blocks.append({
+                        'try_line': try_line,
+                        'catch_line': line_num,
+                        'exception_type': exception_type,
+                        'message': message
+                    })
+        elif stripped_line.startswith('throw'):
+            match = re.match(r'throw\s*\(\s*([A-Za-z]+)\s*\)', stripped_line)
+            if match:
+                throw_type = match.group(1)
+                throw_line = line_num
+
+    candidates = []
+    for block in blocks:
+        if (block['try_line'] < throw_line and
+            block['catch_line'] > throw_line and
+            block['exception_type'] == throw_type):
+            candidates.append(block)
+
+    if candidates:
+        selected = min(candidates, key=lambda x: x['catch_line'])
+        print(selected['message'])
+    else:
+        print("Unhandled Exception")
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Reading Input:** The input is read line by line, and each line is processed to strip leading and trailing whitespace.
+2. **Tracking Try Blocks:** Each try operation is pushed onto a stack to manage nested structures.
+3. **Processing Catch Blocks:** For each catch operation, the corresponding try block is popped from the stack, and the details (try line, catch line, exception type, message) are recorded.
+4. **Identifying Throw Operation:** The line number and exception type of the throw operation are noted.
+5. **Finding Valid Catch Blocks:** Valid catch blocks are those where the try is before the throw, the catch is after the throw, and the exception type matches. The earliest valid catch block in code order is selected to determine the output message.
+
+This approach efficiently processes the program structure and ensures the correct exception handling mechanism is simulated according to the problem's specifications.
+</bot>

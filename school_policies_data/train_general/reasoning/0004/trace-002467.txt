@@ -1,0 +1,988 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.You are given a tree T consisting of n vertices. A number is written on each vertex; the number written on vertex i is ai. Let's denote the function I(x, y) as the difference between maximum and minimum value of ai on a simple path connecting vertices x and y.
+
+Your task is to calculate <image>.
+
+Input
+
+The first line contains one integer number n (1 ≤ n ≤ 106) — the number of vertices in the tree.
+
+The second line contains n integer numbers a1, a2, ..., an (1 ≤ ai ≤ 106) — the numbers written on the vertices.
+
+Then n - 1 lines follow. Each line contains two integers x and y denoting an edge connecting vertex x and vertex y (1 ≤ x, y ≤ n, x ≠ y). It is guaranteed that these edges denote a tree.
+
+Output
+
+Print one number equal to <image>.
+
+Example
+
+Input
+
+4
+2 2 3 1
+1 2
+1 3
+1 4
+
+
+Output
+
+6
+</user>
+<bot>
+<think>
+Okay, let's see. I need to calculate the sum of I(x, y) for all pairs of vertices x and y in a tree, where I(x, y) is the difference between the maximum and minimum a_i on the path from x to y. Hmm. The example given has output 6. Let's think about how that comes about.
+
+In the example input, the tree is a star with center at 1 connected to 2,3,4. The a values are 2,2,3,1. So for all pairs, we need to compute the max minus min along their path and sum all those.
+
+The total number of pairs is 4*3/2 =6. Let's list all pairs:
+
+1-2: path is 1-2. Max is 2, min 2. Diff 0.
+1-3: path 1-3. Max 3, min 2. Diff 1.
+1-4: path 1-4. Max 2, min 1. Diff 1.
+2-3: path 2-1-3. Max 3, min 2. Diff 1.
+2-4: path 2-1-4. Max 2, min 1. Diff 1.
+3-4: path 3-1-4. Max 3, min 1. Diff 2.
+Summing all diffs: 0+1+1+1+1+2=6. Which matches the example.
+
+So the problem is to compute the sum over all pairs (x,y) of (max on path x-y minus min on path x-y).
+
+Now, the challenge is to compute this efficiently for n up to 1e6. A naive approach of checking all O(n^2) pairs is impossible. So we need a smarter approach.
+
+Let me think. The sum can be split into two parts: the sum of the maximums over all paths, minus the sum of the minimums over all paths. So Sum(max) - Sum(min).
+
+So if I can find the total sum of all max for all pairs, and the total sum of all min for all pairs, then subtract them to get the answer.
+
+Now, how to compute Sum(max) and Sum(min) efficiently.
+
+Hmm. For each element a_i, we can compute how many times it is the maximum in some path. Then the contribution of a_i to Sum(max) is a_i multiplied by the number of such paths. Similarly for the minimum.
+
+So the problem reduces to, for each a_i, count the number of pairs (x,y) such that the path x-y contains a_i, and a_i is the maximum in that path. Then sum all a_i multiplied by their counts, and same for the min.
+
+So the key is to compute for each a_i the number of pairs (x,y) where a_i is the maximum on their path. Let's call this count c_max[i]. Similarly c_min[i]. Then the answer is sum(a_i * c_max[i]) - sum(a_i * c_min[i]).
+
+So the problem now is to compute c_max and c_min for all nodes.
+
+How to compute c_max[i]?
+
+An efficient way for such a problem is often based on considering the elements in a certain order and using some kind of inclusion-exclusion with neighboring components.
+
+For example, when calculating the number of paths where a_i is the maximum, we can think of the following approach: process the nodes in increasing order of a_i. When considering a_i, all other nodes that are part of the current component (which are those with a_j < a_i) can form paths where a_i is the maximum. But I'm not sure.
+
+Alternatively, for each a_i, find the regions where a_i is the maximum. For each node i, we can find the number of pairs (x,y) where the path between x and y includes i, and a_i is the maximum along that path.
+
+Wait, but how?
+
+Another approach is similar to the problem where we calculate for each element the number of subarrays where it is the maximum. That problem can be solved using a monotonic stack. But trees are more complex than arrays.
+
+For trees, perhaps we can model it as follows: For each node i, find all pairs of nodes (u, v) such that i is the maximum on the path u-v. The number of such pairs is equal to the number of pairs of nodes where i is on their path, and all nodes on that path (except i) have a value <= a_i. Wait, no. Because i must be the maximum. So any path that includes i and for which all nodes on the path have a <= a_i, but since the path includes i, the maximum is at least a_i. But if i is the maximum, then all other nodes on the path must be <= a_i.
+
+So, for each node i, the problem is to find the number of pairs (u, v) where u and v are in the subtree (or maybe in some component) that allows the path u-v to pass through i, and all nodes on the path u-v are <= a_i. But how to compute this.
+
+Alternatively, for each node i, we can find the connected regions around i where all nodes in the region have a <= a_i. Then, the number of pairs (u, v) where u and v are in different subtrees of i (but connected through i), and all nodes on their path are <= a_i, then i is the maximum on their path.
+
+This seems similar to the approach used in the problem of counting the number of pairs with maximum in a certain position.
+
+Wait, here's an approach inspired by Krusky's algorithm or the like:
+
+For maximums:
+
+- Sort all nodes in increasing order of a_i.
+
+- For each node i, when processing it, connect all its adjacent nodes that have a_j <= a_i. The number of new pairs added when processing i is the number of pairs of nodes in the union of the connected components that are connected through i. Then, these pairs will have their maximum as a_i.
+
+Wait, this might work. Let's think.
+
+The idea is similar to the problem where you calculate the sum of maximums over all subarrays. For that, you can use a monotonic stack to find, for each element, the number of subarrays where it's the maximum.
+
+For trees, perhaps a similar approach can be used. Here's the plan:
+
+1. Sort all nodes in increasing order of a_i.
+
+2. Initialize each node as its own component.
+
+3. For each node i in the sorted order:
+
+   a. The component where i is the maximum is formed by merging adjacent components where the nodes in those components have a_j <= a_i.
+
+   b. The number of pairs contributed by i is the number of pairs of nodes that are connected through i. For example, if i has k components connected to it (from adjacent nodes that have already been processed), the number of pairs is the sum over all pairs of sizes of these components plus the product of the sizes of each pair of components.
+
+Wait, this is similar to the way when you merge components and calculate the number of new pairs.
+
+For example, when you have components of size s1, s2, ..., sk connected to i. Then the number of new pairs is s1 * s2 + s1 * s3 + ... + s_{k-1} * sk + (sum s) * 1 (the node i itself) + sum s (pairs between i and each component). Wait, maybe not. Let me think.
+
+If the components are connected through i, then any two nodes in different components will form a path that includes i, and since i is the maximum in their path (since all the components were processed after i, which has a higher a_i). Wait, no. Because the nodes in the components are processed earlier, their a_j are <= a_i. So when i is processed, any path that goes through i and includes nodes from any of these components will have their maximum as a_i.
+
+So when we process i, the number of pairs (u, v) that have their maximum as a_i is the number of pairs of nodes that are in the merged component (after connecting i's components) such that their path goes through i. Which is equivalent to the number of pairs of nodes where one is in one of the components connected to i and the other is in another component, or one is in a component and the other is i.
+
+So the formula would be:
+
+sum_{j < k} s_j * s_k + sum_j s_j (sum of all components connected through i) multiplied by 1 (the i itself). Wait, perhaps the formula is (total_nodes) * (total_nodes + 1) / 2, but that's not right.
+
+Alternatively, the total number of pairs in the merged component is (s1 + s2 + ... + sk + 1) choose 2. But the existing pairs are the sum of (s_i choose 2) for each component. The new pairs added are the sum of s_i * s_j for i < j, plus each s_i * 1 (i.e., pairs between the component and node i).
+
+So when processing i, the number of new pairs is:
+
+sum_{j < k} s_j * s_k + sum_j s_j * 1.
+
+But sum_{j < k} s_j s_k = (sum s_j)^2 - sum (s_j^2) ) / 2.
+
+Alternatively, when you merge components, the total number of new pairs is (sum s_j + 1) * (sum s_j) / 2 - sum (s_j * (s_j - 1)/2) - existing pairs in components.
+
+Wait, maybe an easier way: the merged component has size S = 1 + sum(s_j). The number of pairs in the merged component is S*(S-1)/2. The existing pairs in the components are sum( s_j*(s_j-1)/2 ) (each component's pairs). The difference between the merged component's pairs and the sum of the components' pairs is the new pairs added. But these new pairs are exactly those that have their path passing through i. Because any pair (u, v) in the merged component where u and v were not in the same component before must pass through i. Because the components were connected through i. So those pairs' paths include i, and since i is the maximum in their path (because all other nodes in the components have a_j <= a_i), the maximum for these pairs is a_i.
+
+So the number of new pairs added when processing i is:
+
+new_pairs = (S*(S-1)/2) - sum (s_j*(s_j-1)/2 )
+
+But S is 1 + sum(s_j). Let's compute:
+
+S*(S-1)/2 = (1 + sum s_j) * (sum s_j) / 2 
+
+sum (s_j*(s_j-1)/2) is the sum of existing pairs in each component.
+
+The difference is:
+
+[ (sum s_j + 1)(sum s_j) / 2 ] - [ sum (s_j^2 - s_j)/2 ]
+
+= [ (sum s_j)^2 + sum s_j - sum s_j^2 + sum s_j ) / 2 ] / 2? Wait, maybe better to expand:
+
+= (sum s_j +1) * sum s_j / 2 - sum s_j(s_j -1)/2
+
+= [ sum s_j (sum s_j +1) - sum s_j (s_j -1) ] / 2
+
+Factor out sum s_j:
+
+= sum s_j [ (sum s_j +1) - (s_j -1) ] / 2 
+
+Wait, perhaps that's not correct. Let's compute numerator:
+
+sum s_j (sum s_j +1) = (sum s_j)^2 + sum s_j 
+
+sum s_j (s_j -1) = sum (s_j^2 - s_j )
+
+So the numerator is (sum s_j)^2 + sum s_j - sum s_j^2 + sum s_j 
+
+= (sum s_j)^2 - sum s_j^2 + 2 sum s_j 
+
+So the entire expression becomes [ (sum s_j)^2 - sum s_j^2 + 2 sum s_j ] / 2 
+
+Hmm. Not sure. Alternatively, perhaps there's a smarter way. The number of new pairs is the number of pairs that cross between different components connected through i, plus the pairs that include i itself.
+
+Each existing component contributes s_j nodes. For each pair of nodes (u, v) where u is in component A and v is in component B (different), their path must go through i. So the number of such pairs is sum_{j < k} s_j * s_k.
+
+Additionally, each node in any component can pair with i, which gives sum s_j * 1 pairs.
+
+Also, i pairs with itself, but since the pairs are unordered and x < y (assuming x and y are distinct), but the problem says all ordered pairs (x, y) where x and y are distinct. Wait, the problem's output is for all pairs (x, y) where x and y are vertices. So in the problem statement, for x and y, x can be equal to y? No, because the problem says "sum over all pairs x, y (1 ≤ x, y ≤ n)". Wait, the sample input for 4 nodes has 6 pairs, which is 4 choose 2. Wait, sample input's output counts all unordered pairs. Wait, let me check the example.
+
+In the example, the input is 4 nodes, and the output is 6. The sample explanation lists 6 pairs: (1-2), (1-3), (1-4), (2-3), (2-4), (3-4). So the pairs are unordered (x < y perhaps). So the problem requires sum over all unordered pairs (x, y) where x != y. So the total number of pairs is n*(n-1)/2.
+
+So in the problem statement, the sum is over all unordered pairs x, y with x != y. So when processing node i, the new pairs added are those unordered pairs (u, v) where u and v are in different components connected through i, or u is in a component and v is i, or v is in a component and u is i.
+
+Wait, no. If the components are connected through i, then any pair (u, v) where u is in component A and v is in component B, then the path u-v must go through i. Similarly, pairs where u is in component A and v is i, the path is u to i. So all these pairs have i on their path.
+
+So when i is processed, the new pairs that have i as the maximum are:
+
+number of pairs in the merged component (A1, A2, ..., Ak, i) that are not present in any individual component.
+
+So the formula for new_pairs is (S*(S-1)/2) - sum (s_j*(s_j-1)/2 ), where S = sum(s_j) + 1.
+
+So the total contribution for a_i is new_pairs.
+
+So for the maximum sum, we process nodes in increasing order, and for each node i, compute the number of new pairs that have their maximum as a_i. Similarly, for the minimum sum, we process nodes in decreasing order, and compute the number of new pairs that have their minimum as a_i.
+
+So the steps are:
+
+For sum_max:
+
+Sort all nodes in increasing order of a_i.
+
+Initialize each node as not processed. For each node in sorted order, collect all adjacent nodes that have been processed (i.e., their a_j <= a_i). For each such adjacent node, find the size of its component. Then, the new component will consist of i and all the components of those adjacent nodes.
+
+The new pairs contributed by this node i is (S*(S-1)/2) - sum (s_j*(s_j-1)/2 ), where S is sum of sizes of adjacent components plus 1 (for i).
+
+Then, add to sum_max the a_i multiplied by this new_pairs value.
+
+For sum_min:
+
+Sort all nodes in decreasing order of a_i.
+
+Process similarly, but this time, the new pairs are those where a_i is the minimum in their path.
+
+So the same approach applies: when processing i, any adjacent nodes that have been processed (a_j >= a_i) will form components where the pairs formed between their nodes have a minimum a_i.
+
+Wait, but in the sum_min case, when we process nodes in decreasing order, each time a node is processed, its adjacent components have a_j >= a_i (since we process in decreasing order). So when merging these components, any pair of nodes in these components will have their path's minimum as a_i.
+
+Wait, perhaps. Let me think.
+
+In sum_min, for a pair (u, v), the minimum is a_i if a_i is the smallest on their path. So when processing nodes in decreasing order, each time we merge components, the pairs added in the merge are those that have their path's minimum as a_i.
+
+So yes, the approach is similar. The difference is that for sum_min, we process nodes in decreasing order, and when merging, the a_i is the smallest in the merged component.
+
+So the steps are the same, but the order is reversed.
+
+Now, the key is to implement this efficiently.
+
+Each node needs to be processed in order, and for each node, find the adjacent nodes that have already been processed. For each such node, we need to get the size of their component. Then, the sum of the sizes is computed, and the new_pairs is calculated.
+
+To track the components, we can use a Union-Find (Disjoint Set Union) data structure. However, the Union-Find needs to track the size of each component, and also, we need to process the nodes in a certain order.
+
+But here's the catch: when processing a node i, we need to find all its adjacent nodes that have been processed already (i.e., their a_j is <= a_i for sum_max, or >= a_i for sum_min). Then, for each of these adjacent nodes, we need to get the size of their component, and then merge i into that component.
+
+Wait, but merging all adjacent components into i's component. So for each node i in sorted order, we can:
+
+- For sum_max:
+
+   a. For each neighbor j of i, if j has been processed (i.e., a_j <= a_i), then find the root of j's component.
+
+   b. Collect all unique roots of these components.
+
+   c. The sum of the sizes of these components is S. The new_pairs is (S + 1 choose 2) - sum (s choose 2) for each component's size s.
+
+   d. Then, merge all these components with i into a single component.
+
+So during processing, for each node i, we need to:
+
+- Iterate through all its neighbors.
+
+- Check if the neighbor has been processed (i.e., has a a_j <= a_i for sum_max).
+
+But wait, since we process nodes in increasing order for sum_max, all a_j of processed nodes are <= a_i. Because when we process i, all nodes with a_j < a_i have been processed already. Those with a_j == a_i are processed in the same step (but since the nodes are sorted, a_i is the same as others in the same group). Wait, but when sorted in increasing order, if there are multiple nodes with the same a_i, they will be processed after all nodes with a_j < a_i. But when processing a node i with a_i equal to others, the nodes processed before i are those with a_j <= a_i (since the sort is in increasing order, and i is processed after all a_j < a_i, but when a_j == a_i, they are processed in the same group).
+
+Wait, but the order in which nodes with the same a_i are processed can affect the merging. For sum_max, if two nodes have the same a_i, their order of processing is arbitrary. Because when processing the first node, the second is not yet processed. So their edges won't be considered until both are processed.
+
+But perhaps the key is that when two nodes have the same a_i, the merged components would have their pairs counted when both are processed. Wait, this needs to be handled correctly.
+
+Alternatively, when processing nodes in increasing order of a_i for sum_max, any node j that has a_j <= a_i (including j = i) may have been processed. But in the case where a_j == a_i and j is processed before i, when j is processed, it may connect to nodes with a <= a_j (which includes i if i hasn't been processed yet). But i hasn't been processed yet, so j's component doesn't include i. So when i is processed, j has already been processed (if a_j == a_i and j is processed before i). So when i is processed, it will look for adjacent nodes that have been processed (a_j <= a_i), which includes j. So j's component will be merged with i's component.
+
+So in this case, when two nodes have the same a_i, their processing order may affect the merging. But since their a_i is the same, when merged, the pairs formed between their components will have a maximum of a_i. So the logic holds.
+
+Therefore, the approach should work.
+
+Now, for implementing this:
+
+We can pre-sort the nodes for sum_max in increasing order, and for sum_min in decreasing order.
+
+For each sum (sum_max and sum_min), we need to process the nodes in the respective order, and for each node i:
+
+1. Initialize a variable to track the total size of the merged components. Let's call this total = 0.
+
+2. Also, track the number of pairs contributed by this node, which is new_pairs = (total + 1) * total / 2 - sum (s * (s-1)/2 for s in component_sizes).
+
+3. For each neighbor of i:
+
+   a. If the neighbor has been processed (i.e., already in the DSU structure, which is possible if the neighbor's a_j is <= a_i for sum_max, or >= a_i for sum_min), then find the root of the neighbor's component.
+
+   b. If the root hasn't been processed yet in this step (since multiple edges may point to the same component), add its size to the total, and add the component to a list of processed roots.
+
+4. After collecting all the adjacent components, compute new_pairs.
+
+5. Merge all these components into i's component. Since DSU can be used, but for efficiency, we need to find the root of each adjacent component and then union them with i.
+
+Wait, but for the DSU, when processing i, it's not part of any component yet. So when we process i, we can create a new component for i. Then, for each neighbor j that has been processed (i.e., exists in the DSU), we find the root, and if not already merged, we perform a union with i's component.
+
+But for each such neighbor's component, we need to track the size.
+
+So the steps would be:
+
+For sum_max:
+
+- Sort nodes in increasing order of a_i.
+
+- Initialize DSU, and a processed array (to mark if a node has been processed).
+
+- sum_max = 0.
+
+- For each i in sorted order:
+
+   a. Mark i as processed.
+
+   b. Collect all adjacent nodes j of i.
+
+   c. For each j in adjacent nodes:
+
+      i. If j is processed (i.e., processed[j] is True), then find the root of j.
+
+   d. Keep track of unique roots (to avoid merging the same component multiple times).
+
+   e. Collect the sizes of these roots.
+
+   f. Compute S = sum(sizes) + 1 (the +1 is for i itself).
+
+   g. Compute the sum_old_pairs = sum( s * (s-1) // 2 for s in sizes )
+
+   h. new_pairs = (S * (S - 1) // 2) - sum_old_pairs.
+
+   i. sum_max += a_i * new_pairs.
+
+   j. For each root in roots, perform a union between i and root.
+
+So, but wait, in step j, when merging the roots with i, since i is a new node (initially in its own component of size 1), we need to union all the adjacent roots into i's component.
+
+But how? Because each time we union a root with i, the DSU will merge their components. So perhaps, for each root in the list of roots, we union i with the root. But since after the first union, i's root changes. So perhaps it's better to first collect all the unique roots, then for each root, union it with i.
+
+But the DSU's union function can be called with any two nodes. So perhaps, for each root in the collected list, we can union i and root.
+
+Alternatively, after processing all adjacent roots, the new component is formed by i and all the adjacent components. So the way to do it is to create i's component (size 1), then for each adjacent root, merge it into i's component.
+
+So in code:
+
+for each root in roots:
+
+   if find(i) != find(root):
+
+      union(i, root)
+
+But since i is just added to the DSU, initially, i is its own parent. So merging all the roots into i's component.
+
+But in DSU, the union by size or rank can affect how the merging is done. For efficiency, we need to merge smaller components into larger ones.
+
+But regardless, the key is that after merging all the adjacent roots into i's component, the size of i's component will be 1 + sum of the sizes of the adjacent roots.
+
+But for the DSU, the find and union functions will handle that.
+
+So this approach should correctly compute the new_pairs.
+
+Now, implementing this for n up to 1e6. The DSU needs to be efficient, with path compression and union by size.
+
+The problem is that for each node, we process it once, and for each of its edges, we check if the neighbor has been processed. Since the tree has n-1 edges, each edge is processed twice (once for each node in the edge). So the total time for sum_max and sum_min would be O(n α(n)) each, which is acceptable for n=1e6.
+
+So the plan is:
+
+- Read the tree and build adjacency lists.
+
+- Sort the nodes for sum_max in increasing order, and for sum_min in decreasing order.
+
+- Compute sum_max and sum_min using the DSU approach.
+
+- The answer is sum_max - sum_min.
+
+Now, code-wise, for Python:
+
+But n is up to 1e6. Python can handle that, but we need to be careful with the adjacency list. For each node, the adjacency list is stored as a list of its neighbors.
+
+But for n=1e6, building an adjacency list of lists may be feasible.
+
+The steps are:
+
+Read n.
+
+Read a as a list.
+
+Read n-1 edges. Each edge is between x and y. But since the nodes are 1-based, we need to adjust them to 0-based or not. But in the code, we can process them as 1-based. So for each edge, add y-1 to the adjacency list of x-1, and vice versa.
+
+Sort the nodes for sum_max in increasing order of a[i]. For sum_min, in decreasing order.
+
+Implement two separate DSU runs: one for sum_max (processing nodes in increasing order), and another for sum_min (processing in decreasing order).
+
+But for sum_min, the process is the same, but sorted in decreasing order, and the DSU is used to track components where nodes have a_j >= a_i.
+
+Now, code outline:
+
+class DSU:
+
+    def __init__(self, n):
+
+        self.parent = list(range(n))
+
+        self.size = [1] * n
+
+    def find(self, x):
+
+        if self.parent[x] != x:
+
+            self.parent[x] = self.find(self.parent[x])
+
+        return self.parent[x]
+
+    def union(self, x, y):
+
+        x_root = self.find(x)
+
+        y_root = self.find(y)
+
+        if x_root == y_root:
+
+            return
+
+        if self.size[x_root] < self.size[y_root]:
+
+            x_root, y_root = y_root, x_root
+
+        self.parent[y_root] = x_root
+
+        self.size[x_root] += self.size[y_root]
+
+def compute_sum(a, order):
+
+    n = len(a)
+
+    dsu = DSU(n)
+
+    processed = [False] * n
+
+    total = 0
+
+    for i in order:
+
+        processed[i] = True
+
+        roots = set()
+
+        for neighbor in adj[i]:
+
+            if processed[neighbor]:
+
+                root = dsu.find(neighbor)
+
+                roots.add(root)
+
+        # Now, collect sizes of each root
+
+        component_sizes = [dsu.size[root] for root in roots]
+
+        sum_sizes = sum(component_sizes)
+
+        s = sum_sizes + 1
+
+        sum_old_pairs = sum( (size * (size -1) ) // 2 for size in component_sizes )
+
+        new_pairs = (s * (s-1) // 2 ) - sum_old_pairs
+
+        total += a[i] * new_pairs
+
+        # Merge all roots with i
+
+        for root in roots:
+
+            dsu.union(i, root)
+
+    return total
+
+adj = [[] for _ in range(n)]
+
+# build adjacency list
+
+Then, for sum_max:
+
+sorted_nodes = sorted(range(n), key=lambda x: a[x])
+
+sum_max = compute_sum(a, sorted_nodes)
+
+For sum_min:
+
+sorted_nodes_desc = sorted(range(n), key=lambda x: -a[x])
+
+sum_min = compute_sum(a, sorted_nodes_desc)
+
+result = sum_max - sum_min
+
+print(result)
+
+But wait, the compute_sum function needs to take the order as the processing order, and for sum_min, the nodes are processed in decreasing order. But the compute_sum function is the same for both cases. Because in the sum_min case, when processing a node i (sorted in descending order), the processed neighbors are those that have a_j >= a_i (since they are processed first). So during the processing of i, any neighbor j that has been processed (so a_j >= a_i) is considered, and their components are merged into i's component.
+
+Yes. Because in the sum_min case, the order is sorted in descending order. So when processing i, all nodes j with a_j >= a_i have already been processed. So their components are merged into i's component.
+
+Thus, the same compute_sum function can be used for both sum_max and sum_min, as long as the order is correct.
+
+But wait, no. Because in sum_max, the processed neighbors are those with a_j <= a_i. But since the nodes are processed in increasing order, when processing i, all a_j <= a_i have been processed. Similarly, in sum_min, the nodes are processed in decreasing order, so when processing i, all a_j >= a_i have been processed.
+
+But in the code, during compute_sum, the 'processed' array is marked as True when the node is processed. So for sum_max, the sorted order is increasing a_i. So nodes are processed in order from smallest to largest. Thus, when processing i, any neighbor j that has been processed must have a_j <= a_i. For sum_min, nodes are processed from largest to smallest, so when processing i, any neighbor j that has been processed has a_j >= a_i.
+
+Thus, the compute_sum function works for both cases.
+
+Now, let's test this code with the sample input.
+
+Sample input:
+
+4
+
+2 2 3 1
+
+Edges:
+
+1 2
+
+1 3
+
+1 4
+
+So the nodes are 0-based indices 0,1,2,3.
+
+a = [2, 2, 3, 1]
+
+Adjacency list:
+
+0: [1, 2, 3]
+
+1: [0]
+
+2: [0]
+
+3: [0]
+
+For sum_max:
+
+sorted order is sorted by a[i], which is indices 3 (a=1), 0 (2), 1 (2), 2 (3).
+
+Processing order: 3, 0, 1, 2.
+
+Process 3 (a=1):
+
+neighbors are 0. But 0 is not processed yet (since 0 is processed after 3). So no processed neighbors.
+
+sum_sizes = 0.
+
+s = 0 + 1 =1.
+
+sum_old_pairs =0.
+
+new_pairs = (1*0/2) -0 =0.
+
+sum_max += 1 *0 =0.
+
+Merge nothing.
+
+Process 0 (a=2):
+
+neighbors are 1, 2, 3. Check which are processed.
+
+3 is processed (processed[3] is True). So for neighbor 3, find root: 3's root is 3 (since after processing 3, it's a component of size 1. When processing 0, which is after 3.
+
+So roots = {3's root (3)}.
+
+component_sizes = [1]
+
+sum_sizes =1.
+
+s =1 +1 =2.
+
+sum_old_pairs = 1*0/2 =0.
+
+new_pairs = (2*1//2) -0 =1.
+
+sum_max += 2 *1 =2.
+
+Now, merge 0 and 3.
+
+The DSU after merging: size of 0's component is 2 (0 and 3).
+
+Process 1 (a=2):
+
+neighbors are 0. 0 is processed (processed[0] is True). find(0) is 0's root (since 0 was merged with 3). So root is 0.
+
+component_sizes = [2].
+
+sum_sizes=2.
+
+s=2+1=3.
+
+sum_old_pairs =2*1//2 =1.
+
+new_pairs = (3*2//2) -1 =3 -1=2.
+
+sum_max += 2*2=4. Now sum_max is 2+4=6.
+
+Merge 1 and 0. Now the component is 0,3,1. size is 3.
+
+Process 2 (a=3):
+
+neighbors are 0. 0 is processed. find(0) is 0 (since 0's root is 0, merged with 1 and 3). component_sizes = [3].
+
+sum_sizes=3.
+
+s=3+1=4.
+
+sum_old_pairs =3*2//2 =3.
+
+new_pairs =4*3//2 -3 =6-3=3.
+
+sum_max +=3*3=9. Now sum_max=6+9=15.
+
+Merge 2 and 0. Now component includes 0,1,3,2. size 4.
+
+sum_max is 15.
+
+sum_min:
+
+sorted order is sorted in descending order of a[i]. So sorted order is 2 (3), 0 (2), 1 (2), 3 (1).
+
+Processing order: 2, 0, 1, 3.
+
+Process 2 (a=3):
+
+neighbors is 0. 0 not processed. So no processed neighbors.
+
+sum_sizes=0.
+
+s=0+1=1.
+
+new_pairs=0.
+
+sum_min +=3*0=0.
+
+Merge nothing.
+
+Process 0 (a=2):
+
+neighbors are 1,2,3.
+
+Check which are processed:
+
+2 is processed (yes). 1 and 3 are not.
+
+So neighbor 2 is processed.
+
+find(2) is 2. component_sizes = [1].
+
+sum_sizes=1.
+
+s=1+1=2.
+
+sum_old_pairs =1*0//2=0.
+
+new_pairs=2*1//2 -0 =1.
+
+sum_min +=2*1=2.
+
+Merge 0 and 2. component size 2.
+
+Process 1 (a=2):
+
+neighbors is 0. 0 is processed (yes). find(0) is 0 (after merging with 2, the root is 0? Or 2? Depends on how DSU is implemented. Let's see: when 0 and 2 were merged. Suppose 2's root was 2, and 0's root was 0. Then when merged, the parent of 2's root (2) is set to 0's root (0) (assuming union by size). The size of 0's component was 1 (since before processing 0, it's not processed. Wait, no. Wait, during sum_min processing, the order is 2,0,1,3.
+
+When processing 2:
+
+processed[2] is True. neighbors 0 is not processed. So no merging.
+
+Then processing 0:
+
+processed[0] becomes True.
+
+Neighbors are 1, 2, 3.
+
+Check which are processed:
+
+2 is processed.
+
+So for neighbor 2: find(2) is 2 (since it was not merged with anything else yet. Wait, during processing 2 (a=3), when processed, no neighbors were processed. So DSU for 2 is parent 2, size 1.
+
+When processing 0, for neighbor 2, which is processed (processed[2] is True).
+
+So find(2) returns 2. component_sizes = [1]. sum_sizes=1.
+
+s=1+1=2. new_pairs= (2*1//2) -0=1-0=1. sum_min +=2*1=2.
+
+Then merge 0 and 2. So 0's root is 0, and 2's root is 2. Since 0's component has size 1, and 2's has size 1. So during union, the larger one is either. Since sizes are same, let's say 0 becomes parent of 2.
+
+Now, component size of 0 is 2.
+
+Processing 1 (a=2):
+
+neighbor is 0, which is processed (yes).
+
+find(0) is 0. component_sizes = [2].
+
+sum_sizes=2.
+
+s=2+1=3.
+
+sum_old_pairs=2*1//2=1.
+
+new_pairs=3*2//2 -1=3-1=2.
+
+sum_min +=2*2=4+2=6.
+
+Merge 1 into 0's component. Now component size is 3.
+
+Processing 3 (a=1):
+
+neighbor is 0, which is processed (yes). find(0) is 0. component_sizes = [3].
+
+sum_sizes=3.
+
+s=3+1=4.
+
+sum_old_pairs=3*2//2=3.
+
+new_pairs=4*3//2 -3=6-3=3.
+
+sum_min +=1*3=3. Now sum_min is 6+3=9.
+
+So sum_max was 15, sum_min is 9. 15-9=6. Which matches the example.
+
+So the code works for the sample.
+
+Now, code in Python.
+
+But for n=1e6, the DSU's find and union operations need to be efficient. Also, the adjacency list should be built correctly.
+
+But in Python, for 1e6 nodes, creating adjacency lists as list of lists is possible, but each node's neighbors are stored. Since the tree is given as n-1 edges, each node's list will have varying lengths (e.g., leaves have 1 neighbor, internal nodes have more).
+
+But in Python, even with 1e6 elements, it's manageable.
+
+But there's a problem: for each node in the loop, when processing the neighbors, the code checks if the neighbor has been processed. But for each neighbor, this is O(1) since it's a boolean array.
+
+Thus, the code should work.
+
+Now, code.
+
+Read n.
+
+Read a as list.
+
+Read n-1 edges. Each edge is x, y (1-based). Subtract 1 to make them 0-based.
+
+Build adjacency list.
+
+Then, compute sum_max and sum_min.
+
+The code:
+
+class DSU:
+
+    def __init__(self, n):
+
+        self.parent = list(range(n))
+
+        self.size = [1]*n
+
+    def find(self, x):
+
+        while self.parent[x] != x:
+
+            self.parent[x] = self.parent[self.parent[x]]
+
+            x = self.parent[x]
+
+        return x
+
+    def union(self, x, y):
+
+        x_root = self.find(x)
+
+        y_root = self.find(y)
+
+        if x_root == y_root:
+
+            return
+
+        if self.size[x_root] < self.size[y_root]:
+
+            x_root, y_root = y_root, x_root
+
+        self.parent[y_root] = x_root
+
+        self.size[x_root] += self.size[y_root]
+
+def compute_sum(a, adj, order):
+
+    n = len(a)
+
+    dsu = DSU(n)
+
+    processed = [False]*n
+
+    total = 0
+
+    for i in order:
+
+        processed[i] = True
+
+        roots = set()
+
+        for neighbor in adj[i]:
+
+            if processed[neighbor]:
+
+                root = dsu.find(neighbor)
+
+                roots.add(root)
+
+        component_sizes = [dsu.size[r] for r in roots]
+
+        sum_sizes = sum(component_sizes)
+
+        s = sum_sizes + 1
+
+        sum_old = sum( (s*(s-1)//2 for s in component_sizes) )
+
+        sum_old = sum( (size * (size -1) // 2 ) for size in component_sizes )
+
+        new_pairs = (s * (s-1) //2 ) - sum_old
+
+        total += a[i] * new_pairs
+
+        for r in roots:
+
+            dsu.union(i, r)
+
+    return total
+
+def main():
+
+    import sys
+
+    input = sys.stdin.read().split()
+
+    ptr = 0
+
+    n = int(input[ptr])
+
+    ptr +=1
+
+    a = list(map(int, input[ptr:ptr+n]))
+
+    ptr +=n
+
+    adj = [[] for _ in range(n)]
+
+    for _ in range(n-1):
+
+        x = int(input[ptr])-1
+
+        y = int(input[ptr+1])-1
+
+        adj[x].append(y)
+
+        adj[y].append(x)
+
+        ptr +=2
+
+    # Compute sum_max
+
+    order_max = sorted( range(n), key=lambda x: a[x] )
+
+    sum_max = compute_sum(a, adj, order_max)
+
+    # Compute sum_min
+
+    order_min = sorted( range(n), key=lambda x: -a[x] )
+
+    sum_min = compute_sum(a, adj, order_min)
+
+    print( sum_max - sum_min )
+
+if __name__ == '__main__':
+
+    main()
+
+Wait, but in the compute_sum function, for the DSU, when we call dsu.union(i, r), i is a node in the current order. But when merging, the roots of the components are being merged into i's component. Because when processing i, it's not part of any component except possibly the new ones.
+
+But the DSU starts with each node as its own parent. So when i is processed, it's initially its own component. Then, for each root in roots (from the adjacent processed components), we union i with each root. So the first union between i and a root would merge the two components. Subsequent unions with other roots would merge each into i's component.
+
+But since the DSU's union is by size, the largest component will be the parent. So when merging multiple roots with i's component (which starts at size 1), each time a root is merged, the component's size increases, and the next roots are merged into the larger component.
+
+This should work correctly.
+
+The code should handle all cases correctly.
+
+Now, testing the sample input, which works. Other test cases would need to be checked, but given the logic is correct, this should handle it.
+
+But in Python, for n=1e6, the code may take some time, but the DSU with path compression and union by size is O(α(n)), which is manageable.
+
+Potential optimizations:
+
+- Pre-sort the orders once.
+
+- Use adjacency lists with precomputed neighbors.
+
+But the code as written should work.
+
+Thus, the final answer is the code provided.
+</think>
+To solve this problem, we need to compute the sum of the differences between the maximum and minimum values on all simple paths in a tree. The tree is given with vertices each having a value, and we need to consider all pairs of vertices (x, y) and sum the differences between the maximum and minimum values on the path connecting x and y.
+
+### Approach
+1. **Problem Analysis**: The problem can be decomposed into two parts: calculating the sum of the maximum values on all paths and the sum of the minimum values on all paths. The final result is the difference between these two sums.
+
+2. **Key Insight**: For each vertex, determine how many times it is the maximum or minimum value on any path. This can be efficiently computed using a Disjoint Set Union (DSU) data structure with Union-Find operations.
+
+3. **Algorithm**:
+   - **Sum of Maximum Values (sum_max)**: Process nodes in increasing order of their values. For each node, merge adjacent components where all nodes have values less than or equal to the current node's value. Track the number of new paths where the current node is the maximum.
+   - **Sum of Minimum Values (sum_min)**: Process nodes in decreasing order of their values. Similarly, merge components and track paths where the current node is the minimum.
+
+4. **Complexity**: Using DSU with path compression and union by size ensures that each operation is nearly constant time, leading to an efficient solution suitable for large input sizes (up to \(10^6\) nodes).
+
+### Solution Code
+```python
+class DSU:
+    def __init__(self, n):
+        self.parent = list(range(n))
+        self.size = [1] * n
+
+    def find(self, x):
+        while self.parent[x] != x:
+            self.parent[x] = self.parent[self.parent[x]]  # Path compression
+            x = self.parent[x]
+        return x
+
+    def union(self, x, y):
+        x_root = self.find(x)
+        y_root = self.find(y)
+        if x_root == y_root:
+            return
+        if self.size[x_root] < self.size[y_root]:
+            x_root, y_root = y_root, x_root
+        self.parent[y_root] = x_root
+        self.size[x_root] += self.size[y_root]
+
+def compute_sum(a, adj, order):
+    n = len(a)
+    dsu = DSU(n)
+    processed = [False] * n
+    total = 0
+    for i in order:
+        processed[i] = True
+        roots = set()
+        for neighbor in adj[i]:
+            if processed[neighbor]:
+                root = dsu.find(neighbor)
+                roots.add(root)
+        component_sizes = [dsu.size[r] for r in roots]
+        sum_sizes = sum(component_sizes)
+        s = sum_sizes + 1
+        sum_old = sum((size * (size - 1) // 2) for size in component_sizes)
+        new_pairs = (s * (s - 1) // 2) - sum_old
+        total += a[i] * new_pairs
+        for r in roots:
+            dsu.union(i, r)
+    return total
+
+def main():
+    import sys
+    input = sys.stdin.read().split()
+    ptr = 0
+    n = int(input[ptr])
+    ptr += 1
+    a = list(map(int, input[ptr:ptr + n]))
+    ptr += n
+    adj = [[] for _ in range(n)]
+    for _ in range(n - 1):
+        x = int(input[ptr]) - 1
+        y = int(input[ptr + 1]) - 1
+        adj[x].append(y)
+        adj[y].append(x)
+        ptr += 2
+    # Compute sum_max
+    order_max = sorted(range(n), key=lambda x: a[x])
+    sum_max = compute_sum(a, adj, order_max)
+    # Compute sum_min
+    order_min = sorted(range(n), key=lambda x: -a[x])
+    sum_min = compute_sum(a, adj, order_min)
+    print(sum_max - sum_min)
+
+if __name__ == '__main__':
+    main()
+```
+
+### Explanation
+1. **DSU Initialization**: Each node starts as its own component.
+2. **Processing Order**: Nodes are processed in sorted order (ascending for sum_max, descending for sum_min).
+3. **Component Merging**: For each node, adjacent components are merged if they meet the criteria (values <= current node for sum_max, values >= current node for sum_min).
+4. **Path Counting**: The number of new paths where the current node is the max/min is calculated using the sizes of merged components.
+5. **Result Calculation**: The difference between the sum of maximums and the sum of minimums gives the final result.
+
+This approach efficiently handles the large input size constraints using DSU with path compression and union by size, ensuring optimal performance.
+</bot>

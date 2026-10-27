@@ -1,0 +1,788 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.You are given a cost matrix of dimensions m X n. The problem of finding the minimal path from top-left corner to some cell in the matrix is well studied. Here, we are gonna add a little twist.
+
+To refresh your memory, the total cost of a path is sum total of cost of all cells visited in the path. 
+
+Only 2 moves are allowed: either to go down by a row, or move right by a column. You cannot leave the matrix at any time.
+
+Also, some of the cells are marked as obstacles and cannot be stepped upon.
+
+Several queries of the form: tx ty k are to be answered. The output for this query should be kth minimum cost of a path from top-left corner to cell indexed at ty column in tx row.
+
+Input:
+
+The first line contains the number of test cases T, 
+
+The first line of each test case contains two space-separated integers m and n.
+
+The next m lines each contain n integers, denoting the matrix.
+
+The next line contains an integer q, denoting the number of queries to come.
+
+The next q lines each contain 3 space separated integers, tx ty and k
+
+Output:
+
+For each query output the kth shortest path
+
+Constraints:
+1 ≤ T ≤ 5
+1 ≤ m,n ≤ 100
+0 ≤ tx < m
+0 ≤ ty <n
+1 ≤ k ≤ 101
+1 ≤ q ≤ 1000
+Notes:
+The obstacles in matrix are marked by "##" (quotes only for clarity)
+The values in every cell that is not an obstacle, varies from -9 to 99 only.
+tx and ty are both 0-indexed.
+If k exceeds the total paths to cell (tx, ty) output "Not so many paths"
+If (tx, ty) is an obstacle, output "Obstacle".
+There will never be an obstacle on the top-left corner or bottom-right corner.
+
+SAMPLE INPUT
+2
+2 2
+1 2
+3 4
+2
+1 1 1
+1 1 2
+2 2
+1 2
+## 4
+3
+1 1 1
+1 1 2
+1 0 1
+
+SAMPLE OUTPUT
+7
+8
+7
+Not so many paths
+Obstacle
+</user>
+<bot>
+<think>
+Okay, let's tackle this problem. Hmm, the task is to find the k-th minimum path cost from the top-left corner (0,0) to a given cell (tx, ty) in a grid. But there are obstacles, and some cells can't be stepped on. Also, the allowed moves are right and down. Oh right, and the matrix cells can have negative values too. 
+
+First, I need to process multiple test cases. For each test case, there's a grid with possible obstacles. Then, several queries asking for the k-th smallest path sum to a particular cell. If there aren't enough paths, we output "Not so many paths". If the cell is an obstacle, output "Obstacle".
+
+Let me think about how to approach this. The straightforward way would be to generate all possible paths to (tx, ty), collect their sums, sort them, and then pick the k-th element. But the problem is that for grids of size up to 100x100, the number of paths can be extremely large. For example, in a 100x100 grid without obstacles, the number of paths is combinatorial (like (m+n-2 choose m-1)), which is way too big to compute directly. So generating all possible paths is not feasible for larger grids. 
+
+But the constraints mention that k can be up to 101, and the number of queries is up to 1000. So maybe there's a dynamic programming approach that tracks the top k smallest sums for each cell. That way, for each cell, we keep a list of the smallest k path sums. Then, when we process a query (tx, ty, k), we check if the cell has at least k paths. If yes, return the k-th smallest. If not, output the appropriate message.
+
+Yes, that makes sense. So the plan is:
+
+1. For each cell (i,j), maintain a list of the top k smallest path sums. The maximum k we need to handle is 101, as per the problem statement.
+
+2. For cells that are obstacles, we ignore them and don't process any paths through them.
+
+3. The dynamic programming approach would start from (0,0). For each cell, the possible paths come from either the cell above (i-1,j) or the cell to the left (i,j-1). For each of those, we can merge their path sums, add the current cell's value, and keep the top k smallest sums.
+
+But how to handle obstacles? If the current cell (i,j) is an obstacle, then we can't step on it. So we should mark it as such, and in the DP table, we can have no entries for it. So when building up the DP, any cell that's an obstacle is skipped.
+
+So the steps would be:
+
+- Read the grid, note which cells are obstacles.
+- Initialize a DP table where each cell has a list of path sums. The starting cell (0,0) will have a single path sum (its own value if it's not an obstacle; but the problem says the starting cell is never an obstacle).
+- For each cell (i,j) in row-major order (or some order where we process cells after their top and left neighbors), if the cell is an obstacle, skip. Otherwise:
+   - Collect all possible path sums from the top and left cells.
+   - Combine them, add the current cell's value, and keep the top k_smallest (up to 101) sums.
+   - Store these in the DP[i][j] list, sorted in ascending order.
+
+Wait, but what's the order to process the cells? Since we can only move right or down, we can process the grid in a way that ensures that when we compute DP[i][j], we have already computed DP[i-1][j] and DP[i][j-1]. So the standard approach of processing rows from top to bottom, and within each row, left to right. That way, when we get to cell (i,j), the cells above and to the left have already been processed.
+
+Yes. So for each cell (i,j):
+
+If it's an obstacle, DP[i][j] remains empty.
+
+Else:
+
+We collect all the possible paths from the top (i-1,j) and the left (i,j-1). For each of those, we take their list of path sums, add the current cell's value, and then merge all those sums. Then, we keep the k smallest sums (sorted, and only up to 101 elements). But since k can be up to 101, for each cell, we need to keep up to 101 elements in the list. 
+
+But for cells where the sum of possible paths from top and left is more than 101, we need to keep only the first 101. Because for any query with k up to 101, those are the ones that matter.
+
+So the approach is:
+
+For each cell (i,j):
+
+sum_list = []
+
+If i-1 >=0 and (i-1,j) is not an obstacle:
+
+sum_list += [sum_val + grid[i][j] for sum_val in DP[i-1][j]]
+
+If j-1 >=0 and (i,j-1) is not an obstacle:
+
+sum_list += [sum_val + grid[i][j] for sum_val in DP[i][j-1]]
+
+Then, sort sum_list, and take the first min(k_max, len(sum_list)) elements. Where k_max is 101.
+
+But merging the two lists (from top and left) and then sorting may be computationally feasible because each list is up to 101 elements, so merging two lists each of 101 elements would be 202 elements, then sorted and take the first 101.
+
+So for each cell, the number of elements stored is up to 101.
+
+This should be manageable even for 100x100 grids, since each cell's processing is O(k) where k is 101. The total time would be O(m*n*k), which for m=100, n=100, k=100, would be 1e6 operations, which is acceptable.
+
+Now, handling obstacles: If a cell is an obstacle, we skip it. So any paths leading to it are invalid. Also, when a cell's top or left neighbor is an obstacle, we don't consider those paths.
+
+But for the starting cell (0,0), since it's not an obstacle, DP[0][0] is initialized to [grid[0][0]] (assuming it's not an obstacle, which the problem states).
+
+Now, for each cell (i,j), the steps are:
+
+1. Check if (i,j) is an obstacle. If yes, DP[i][j] remains empty. For any query on this cell, output "Obstacle".
+
+2. Else:
+
+   a. Collect all possible paths from top and left.
+
+   b. For each possible sum in those paths, add the current cell's value.
+
+   c. Merge all these sums into a list, sort them, keep the first 101 elements.
+
+   d. Assign this sorted list (truncated to 101 elements) to DP[i][j].
+
+So for the DP tables, each cell will have a list of up to 101 elements, sorted in ascending order. 
+
+Then, for each query (tx, ty, k):
+
+- Check if the cell (tx, ty) is an obstacle. If yes, output "Obstacle".
+
+- Else, check the number of paths available (length of DP[tx][ty]). If the length is less than k, output "Not so many paths".
+
+- Else, output the (k-1)th element of the list (since it's 0-based index).
+
+Now, how to handle cells that are not reachable? For example, if the cell (tx, ty) is not an obstacle but there's no path to it (due to obstacles blocking all paths). In that case, DP[tx][ty] would be empty, so when the query comes, since k >=1, the length is zero, which is less than k, so output "Not so many paths".
+
+So, that's the plan.
+
+Now, let's think about the sample input.
+
+Sample Input:
+
+2
+
+Test case 1:
+
+2 2
+
+1 2
+
+3 4
+
+Queries: 2
+
+1 1 1
+
+1 1 2
+
+So the grid is:
+
+Row 0: 1, 2
+
+Row 1: 3,4
+
+The possible paths to (1,1):
+
+From (0,0) → right → down, sum is 1 +2 +4=7.
+
+Or down → right: 1 +3 +4=8.
+
+So the two paths. So for k=1, output 7. For k=2, output 8.
+
+In the DP approach, DP[1][1] would have [7,8], and for k=2, since k=2 is equal to the length, return 8.
+
+Sample Output first two lines are 7 and 8.
+
+Second test case:
+
+2 2
+
+1 2
+
+## 4
+
+So the grid is:
+
+Row 0: 1,2
+
+Row 1: obstacle (##) at (1,0), 4 at (1,1).
+
+Queries:
+
+1 1 1 → possible paths.
+
+But (1,1) can be reached via:
+
+From (0,1) (since (1,0) is an obstacle). The path is right → down.
+
+But (0,1) can be reached via right from (0,0). So (0,0) → right → right (no, wait, (0,1) is the cell. Then down to (1,1). So sum is 1 +2 +4=7.
+
+But another possible path: can we go down from (0,0) first? (0,0) can't go down to (1,0) because that's an obstacle. So the only path is right → down.
+
+So DP[1][1] has one path sum 7. So query (1,1,1) returns 7. But the second query (1,1,2) has k=2, but only one path. So output "Not so many paths".
+
+Third query is (1,0,1). But (1,0) is an obstacle, so output "Obstacle".
+
+Which matches the sample output.
+
+So the approach seems correct.
+
+Now, implementing this in Python.
+
+First, parsing the input. For each test case, read m and n. Then read m lines, each with n elements. The elements can be either "##" (obstacle) or integers.
+
+So for each cell, store either the integer value (if it's a number) or mark it as an obstacle.
+
+Then, build the DP table. Each cell (i,j) will have a list of path sums, sorted.
+
+The steps for each cell:
+
+For i from 0 to m-1:
+
+   for j from 0 to n-1:
+
+      if cell (i,j) is obstacle → DP[i][j] = empty list.
+
+      else:
+
+         collect all possible sums from top and left.
+
+         for each of those sums, add the cell's value.
+
+         merge all these sums, sort them, keep up to 101.
+
+So, code steps.
+
+First, read T test cases.
+
+For each test case:
+
+Read m and n.
+
+Read m lines, each line has n elements. So split each line into elements. For each element, check if it's "##". If so, mark as obstacle, else convert to integer.
+
+Then, create a grid where each cell is either a number (int) or None (or a flag indicating obstacle).
+
+Then, process the DP.
+
+Initialize a 2D list DP of size m x n. Each element is a list.
+
+Set DP[0][0] = [grid[0][0]] if it's not an obstacle. But according to the problem statement, the starting cell (0,0) is never an obstacle.
+
+Then, for each cell (i,j) in row-major order (i from 0 to m-1, j from 0 to n-1):
+
+But wait, for each row, process each cell from left to right.
+
+Wait, but in row-major order, you process each row from top to bottom, and within a row, left to right. So that's correct.
+
+But for cell (i,j), the top is (i-1,j) and left is (i,j-1). So when processing (i,j), (i-1,j) is from the previous row (processed in previous iteration of i), and (i,j-1) is from the same row, processed in previous j.
+
+So for each i in 0 to m-1:
+
+   for each j in 0 to n-1:
+
+      if (i,j) is (0,0):
+
+          continue (already initialized)
+
+      else:
+
+          check if cell is obstacle. If yes, skip.
+
+          else:
+
+              collect the possible paths from top and left.
+
+              sum_list = []
+
+              if i >0 and grid[i-1][j] is not obstacle:
+
+                  sum_list += [x + current_value for x in DP[i-1][j]]
+
+              if j>0 and grid[i][j-1] is not obstacle:
+
+                  sum_list += [x + current_value for x in DP[i][j-1]]
+
+              Now, merge these two lists, sort, and keep the first min(k_max, len) elements.
+
+              Here, k_max is 101, since the maximum k in queries is 101.
+
+              So sum_list is the merged list. Then, sort in ascending order, and take the first 101 elements.
+
+              Assign to DP[i][j] as the sorted list, truncated.
+
+So the code would look something like:
+
+for i in range(m):
+
+    for j in range(n):
+
+        if i ==0 and j ==0:
+
+            continue  # already initialized
+
+        if grid[i][j] is an obstacle:
+
+            DP[i][j] = []
+
+            continue
+
+        current_value = grid[i][j]
+
+        sum_list = []
+
+        # Check top cell (i-1, j)
+
+        if i >0 and (grid[i-1][j] is not obstacle):
+
+            sum_list += [val + current_value for val in DP[i-1][j]]
+
+        # Check left cell (i, j-1)
+
+        if j>0 and (grid[i][j-1] is not obstacle):
+
+            sum_list += [val + current_value for val in DP[i][j-1]]
+
+        # Now merge and sort
+
+        sum_list.sort()
+
+        # Truncate to first 101 elements
+
+        DP[i][j] = sum_list[:101]
+
+Wait, but what if the cell is (0, j) where j>0. Then, the top cell is (i-1, j) which would be ( -1, j ), which is invalid. So the code handles that via the i>0 check.
+
+Similarly for cells in the first row (i=0, j>0), only the left cell (j-1) is considered.
+
+Now, for the queries:
+
+Read q queries. For each tx, ty, k.
+
+But note that the input is 0-based. So tx is the row index (0 to m-1), ty is column index (0 to n-1).
+
+So for a query, check:
+
+if grid[tx][ty] is obstacle → output "Obstacle".
+
+else:
+
+   list_len = len(DP[tx][ty])
+
+   if list_len <k → output "Not so many paths"
+
+   else → output DP[tx][ty][k-1]
+
+So the code can process queries quickly once the DP is built.
+
+Now, let's test the code against the sample input.
+
+Sample Input:
+
+First test case:
+
+m=2, n=2.
+
+Grid:
+
+Row 0: 1,2
+
+Row 1:3,4.
+
+Processing DP[0][0] = [1]
+
+Then DP[0][1]:
+
+current_value = 2.
+
+Left cell is (0,0), not obstacle.
+
+sum_list = [1+2=3]. sorted → [3]. Truncate to 101 elements. So DP[0][1] = [3]
+
+DP[1][0]:
+
+current_value =3.
+
+Top cell (0,0) → sum_list = [1+3=4]. So DP[1][0] = [4]
+
+Now DP[1][1]:
+
+current_value=4.
+
+Top cell (0,1) has sum 3. So 3+4=7.
+
+Left cell (1,0) has sum 4. 4+4=8.
+
+sum_list = [7,8]. sorted → [7,8]. So DP[1][1] = [7,8].
+
+Queries for (1,1):
+
+k=1 → 7, k=2 →8.
+
+Which matches the sample.
+
+Second test case:
+
+Grid:
+
+Row 0: 1,2.
+
+Row 1: "##",4.
+
+So grid[1][0] is obstacle.
+
+Processing DP[0][0] = [1].
+
+DP[0][1] is sum of 1+2=3 → [3].
+
+DP[1][0] is obstacle → empty list.
+
+DP[1][1]:
+
+current_value=4.
+
+Top cell is (0,1), sum 3 →3+4=7.
+
+Left cell is (1,0), which is obstacle. So sum_list is [7]. DP[1][1] = [7].
+
+Queries:
+
+1 1 1 →7.
+
+1 1 2 → len 1 <2 → "Not so many paths".
+
+Another query (1,0,1) → obstacle.
+
+So sample outputs are as expected.
+
+Now, code implementation.
+
+But in Python, how to represent the grid. Let's see.
+
+Parsing the grid:
+
+Each line for the grid is split into elements. For each element, if it's "##", mark as obstacle (perhaps store as a special value, like None). Else, convert to integer.
+
+So:
+
+grid = []
+
+for _ in range(m):
+
+    row = input().split()
+
+    processed_row = []
+
+    for elem in row:
+
+        if elem == '##':
+
+            processed_row.append(None)  # represents obstacle
+
+        else:
+
+            processed_row.append(int(elem))
+
+    grid.append(processed_row)
+
+Then, for each cell (i,j):
+
+if grid[i][j] is None → obstacle.
+
+Else, current_value is grid[i][j].
+
+Then, the DP is a 2D list of lists.
+
+Now, initializing DP[0][0] as [grid[0][0]], since it's not an obstacle.
+
+Then, for each cell in row-major order, process as per the logic.
+
+Now, code for the DP:
+
+m = ... 
+
+n = ... 
+
+dp = [[[] for _ in range(n)] for _ in range(m)]
+
+# initialize starting cell
+
+if grid[0][0] is not None:
+
+    dp[0][0] = [grid[0][0]]
+
+else:
+
+    # but problem says starting cell is not obstacle.
+
+    pass  # according to problem statement, this can't happen.
+
+Then, for each i from 0 to m-1:
+
+   for each j from 0 to n-1:
+
+      if (i,j) == (0,0):
+
+          continue
+
+      if grid[i][j] is None:
+
+          continue
+
+      current_val = grid[i][j]
+
+      sum_list = []
+
+      # check top cell (i-1, j)
+
+      if i >0 and grid[i-1][j] is not None:
+
+          sum_list.extend([x + current_val for x in dp[i-1][j]])
+
+      # check left cell (i, j-1)
+
+      if j>0 and grid[i][j-1] is not None:
+
+          sum_list.extend([x + current_val for x in dp[i][j-1]])
+
+      # sort sum_list and keep first 101 elements.
+
+      sum_list.sort()
+
+      dp[i][j] = sum_list[:101]
+
+But wait, in Python, when you sort an empty list, it's okay. So even if sum_list is empty (no paths), then dp[i][j] remains empty.
+
+So this code should work.
+
+Then, processing queries:
+
+for each query:
+
+tx, ty, k → indexes.
+
+if grid[tx][ty] is None → output "Obstacle".
+
+else:
+
+    paths = dp[tx][ty]
+
+    if len(paths) <k:
+
+        print("Not so many paths")
+
+    else:
+
+        print(paths[k-1])
+
+So the code should work.
+
+Now, handling the input. Since there are T test cases, each with their own grid and queries.
+
+So the code structure would be:
+
+Read T.
+
+for each T:
+
+    read m and n.
+
+    read m lines of grid.
+
+    process grid into a 2D list of integers or None.
+
+    build the dp table.
+
+    read q.
+
+    read q queries.
+
+    process each query as per above.
+
+So putting it all together in Python.
+
+But need to be careful with 0-based vs 1-based.
+
+In the input, tx and ty are 0-based, as per the problem statement.
+
+Now, code:
+
+Here's the code:
+
+def main():
+    import sys
+    input = sys.stdin.read().splitlines()
+    idx = 0
+    T = int(input[idx])
+    idx +=1
+    for _ in range(T):
+        m, n = map(int, input[idx].split())
+        idx +=1
+        grid = []
+        for i in range(m):
+            row = input[idx].split()
+            idx +=1
+            processed_row = []
+            for elem in row:
+                if elem == '##':
+                    processed_row.append(None)
+                else:
+                    processed_row.append(int(elem))
+            grid.append(processed_row)
+        # Initialize DP
+        dp = [[[] for _ in range(n)] for _ in range(m)]
+        if grid[0][0] is not None:
+            dp[0][0] = [grid[0][0]]
+        # Fill DP
+        for i in range(m):
+            for j in range(n):
+                if i ==0 and j ==0:
+                    continue
+                if grid[i][j] is None:
+                    continue
+                current_val = grid[i][j]
+                sum_list = []
+                # Check top
+                if i >0 and grid[i-1][j] is not None:
+                    sum_list.extend([x + current_val for x in dp[i-1][j]])
+                # Check left
+                if j >0 and grid[i][j-1] is not None:
+                    sum_list.extend([x + current_val for x in dp[i][j-1]])
+                # Sort and truncate
+                sum_list.sort()
+                dp[i][j] = sum_list[:101]
+        # Process queries
+        q = int(input[idx])
+        idx +=1
+        for __ in range(q):
+            tx, ty, k = map(int, input[idx].split())
+            idx +=1
+            if grid[tx][ty] is None:
+                print("Obstacle")
+                continue
+            paths = dp[tx][ty]
+            if len(paths) <k:
+                print("Not so many paths")
+            else:
+                print(paths[k-1])
+
+if __name__ == "__main__":
+    main()
+
+Wait, but in the code above, the loop for i and j is processing all cells in row-major order. But in Python, the outer loop is for i in range(m), and inner loop j in range(n). So for each row, process columns from 0 to n-1.
+
+Yes, that's correct.
+
+Testing the sample input:
+
+Sample Input 1:
+
+2
+
+First test case:
+
+m=2, n=2.
+
+Rows:
+
+1 2 → becomes [1, 2]
+
+3 4 → [3,4]
+
+Then queries.
+
+Second test case:
+
+2 2
+
+1 2
+
+## 4 → the second row is ["##",4], processed as [None,4]
+
+Then queries.
+
+The code should output as expected.
+
+Thus, this code should handle all cases correctly.
+</think>
+To solve this problem, we need to determine the k-th minimum path cost from the top-left corner (0,0) to a specified cell (tx, ty) in a grid where some cells are obstacles. The allowed moves are right and down, and the path cost is the sum of all visited cells. 
+
+### Approach
+1. **Dynamic Programming (DP) Setup**: Use a DP table where each cell (i, j) maintains a list of the smallest path sums up to the 101st smallest value. This is because the maximum k value for any query is 101.
+2. **Grid Processing**: For each cell, if it's an obstacle, mark it and skip any path calculations through it. Otherwise, calculate the path sums from the top cell (i-1, j) and the left cell (i, j-1), combine these sums, add the current cell's value, and keep the smallest 101 sums.
+3. **Query Handling**: For each query, check if the target cell is an obstacle or if there are enough paths. Return the k-th smallest path sum or the appropriate message if the conditions are not met.
+
+### Solution Code
+```python
+def main():
+    import sys
+    input = sys.stdin.read().splitlines()
+    idx = 0
+    T = int(input[idx])
+    idx += 1
+    for _ in range(T):
+        m, n = map(int, input[idx].split())
+        idx += 1
+        grid = []
+        for _ in range(m):
+            row = input[idx].split()
+            idx += 1
+            processed_row = []
+            for elem in row:
+                if elem == '##':
+                    processed_row.append(None)
+                else:
+                    processed_row.append(int(elem))
+            grid.append(processed_row)
+        # Initialize DP table
+        dp = [[[] for _ in range(n)] for _ in range(m)]
+        if grid[0][0] is not None:
+            dp[0][0] = [grid[0][0]]
+        # Fill the DP table
+        for i in range(m):
+            for j in range(n):
+                if i == 0 and j == 0:
+                    continue
+                if grid[i][j] is None:
+                    continue
+                current_val = grid[i][j]
+                sum_list = []
+                # Check top cell (i-1, j)
+                if i > 0 and grid[i-1][j] is not None:
+                    sum_list.extend([x + current_val for x in dp[i-1][j]])
+                # Check left cell (i, j-1)
+                if j > 0 and grid[i][j-1] is not None:
+                    sum_list.extend([x + current_val for x in dp[i][j-1]])
+                # Sort and truncate to keep up to 101 elements
+                sum_list.sort()
+                dp[i][j] = sum_list[:101]
+        # Process queries
+        q = int(input[idx])
+        idx += 1
+        for __ in range(q):
+            tx, ty, k = map(int, input[idx].split())
+            idx += 1
+            if grid[tx][ty] is None:
+                print("Obstacle")
+                continue
+            paths = dp[tx][ty]
+            if len(paths) < k:
+                print("Not so many paths")
+            else:
+                print(paths[k-1])
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Grid Parsing**: The grid is read and parsed, converting obstacles into `None` and other values into integers.
+2. **DP Initialization**: The DP table is initialized with empty lists. The starting cell (0,0) is initialized with its own value.
+3. **DP Table Population**: For each cell, path sums from the top and left cells are combined, sorted, and truncated to keep up to 101 values. This ensures efficient handling of up to the 101st smallest path sum.
+4. **Query Processing**: Each query checks if the target cell is an obstacle or if there are enough paths, returning the appropriate result based on the precomputed DP table.
+
+This approach efficiently computes the required path sums using dynamic programming, ensuring that even for large grids, the solution remains feasible within the given constraints.
+</bot>

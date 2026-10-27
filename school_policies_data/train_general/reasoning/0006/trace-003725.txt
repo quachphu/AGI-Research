@@ -1,0 +1,1029 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.For a set $S$ of integers, perform a sequence of the following operations. Note that multiple elements can have equivalent values in $S$.
+
+* insert($x$): Insert $x$ to $S$ and report the number of elements in $S$ after the operation.
+* find($x$): Report the number of $x$ in $S$.
+* delete($x$): Delete all $x$ from $S$.
+* dump($L$, $R$): Print elements $x$ in $S$ such that $L \leq x \leq R$.
+
+Constraints
+
+* $1 \leq q \leq 200,000$
+* $0 \leq x \leq 1,000,000,000$
+* The total number of elements printed by dump operations does not exceed $1,000,000$
+* The sum of numbers printed by find operations does not exceed $2,000,000$
+
+Input
+
+The input is given in the following format.
+
+
+$q$
+$query_1$
+$query_2$
+:
+$query_q$
+
+
+Each query $query_i$ is given by
+
+
+0 $x$
+
+
+or
+
+
+1 $x$
+
+
+or
+
+
+2 $x$
+
+
+or
+
+
+3 $L$ $R$
+
+
+where the first digits 0, 1, 2 and 3 represent insert, find, delete and dump operations respectively.
+
+Output
+
+For each insert operation, print the number of elements in $S$.
+For each find operation, print the number of specified elements in $S$.
+For each dump operation, print the corresponding elements in ascending order. Print an element in a line.
+
+Example
+
+Input
+
+10
+0 1
+0 1
+0 2
+0 3
+2 2
+1 1
+1 2
+1 3
+0 4
+3 1 4
+
+
+Output
+
+1
+2
+3
+4
+2
+0
+1
+4
+1
+1
+3
+4
+</user>
+<bot>
+<think>
+Okay, I need to solve this problem where I have to handle a set of integers with several operations. Let's read the problem statement carefully.
+
+So, the problem requires me to implement four operations on a multiset S. The operations are insert, find, delete all instances of a value, and dump a range. The input is a series of queries, each indicating which operation to perform. The output depends on the operation.
+
+First, I need to think about how to represent the multiset efficiently. The constraints are tight: up to 200,000 queries. So, using a data structure with fast operations is crucial. Let's see:
+
+For insert, find, delete, and dump operations:
+
+- Insert(x): Add x to S and report the new size. The size is straightforward if we track counts.
+- Find(x): Report the count of x in S. So, we need a way to quickly look up how many times x is present.
+- Delete(x): Remove all instances of x. So, need to remove x from the structure entirely.
+- Dump(L, R): Output all elements x in S such that L ≤ x ≤ R, sorted in ascending order.
+
+The key here is to handle these operations efficiently. Let's consider possible data structures.
+
+Option 1: Use a dictionary (hash map) to track counts of each element. For example, a key-value pair where the key is x and the value is the count. This allows O(1) inserts (if we increment the count), O(1) find, and O(1) delete (since we can just remove the key). However, the dump operation is problematic because we need to find all keys in a range [L, R], sorted. With a hash map, we can't efficiently get the sorted list of keys in a range. So, for the dump operation, this approach would require iterating through all keys, checking if they are in the range, collecting them, sorting, and then outputting. That's O(n) for each dump, which could be slow if there are many elements and many dump operations. But given that the total elements printed by dump is up to 1e6, maybe it's manageable. But if the total number of elements in the structure is large (like 1e9 possible x's, but in reality, the number is the number of unique x's inserted and not deleted), then for a dump operation with L=0 and R=1e9, it would have to iterate all keys. If there are many such dumps, this would be O(q * u), where u is the number of unique elements. With u up to 2e5 (since each insert is a query, but some are deletes), this could be 2e5 * 2e5 = 4e10 operations, which is way too slow.
+
+So, the hash map approach may not be efficient enough for the dump operation. So, we need a better way to handle range queries.
+
+Option 2: Use a sorted data structure to keep track of the elements. For example, a balanced binary search tree (BST) or something like a TreeSet. However, since we have multiple elements with the same value (since it's a multiset), but we only need to track the counts, perhaps a BST that stores unique keys but tracks their counts. Then, for the dump operation, we can iterate through the keys in the BST in-order, which are sorted, and collect those in the range [L, R].
+
+But implementing a BST is not trivial, and in Python, we don't have a built-in TreeSet. However, the 'bisect' module can be used to manage a list that's kept sorted. So, perhaps we can maintain a sorted list of the unique keys, along with a dictionary to track their counts. Let's think:
+
+- We can have a list 'keys' that is kept sorted. Each time a new x is inserted, if it's not in the dictionary, we add it to the keys list in the correct position using bisect.insort. The dictionary 'counts' will have x: count.
+
+For insert(x):
+
+If x is not in counts, we add it to the keys list (bisect.insort) and set counts[x] = 1. The size is the sum of counts.values() +1? Wait, no. Wait, the initial size is sum of counts.values(). Inserting x would add 1, so the new size is sum +1. But summing counts each time is O(u), which is too slow for 2e5 operations.
+
+Wait, but for insert, the output is the new size. So, for each insert, we need to track the total number of elements. So, we can have a variable 'total' that tracks the total count. Inserting x increases total by 1 (since even if x was already present, inserting adds one more). So, for insert(x), the output is total after increment.
+
+Wait, yes. Because insert(x) adds x once. So, for example, after inserting x twice, the count for x is 2, and the total is 2. So, for each insert, the total is increased by 1. So, maintaining a 'total' variable that starts at 0, and for each insert, we increment it by 1, and output the new total.
+
+Similarly, delete(x) removes all instances of x. So, if x was present with count c, then total decreases by c. So, for delete(x), we need to subtract counts.get(x, 0) from total, then set counts[x] to 0 (but actually remove x from counts and keys).
+
+So, the data structures could be:
+
+- A sorted list 'keys' (maintained using bisect) containing the unique elements present in S (i.e., elements with count > 0).
+- A dictionary 'counts' mapping each x to its count.
+- A variable 'total' tracking the total number of elements in S.
+
+Now, for each operation:
+
+Insert(x):
+
+- Check if x is in counts. If not, add x to keys using bisect.insort (to maintain order).
+- Increment counts[x] by 1.
+- Increment 'total' by 1.
+- Output the new 'total' (which is total).
+
+Find(x):
+
+- Output counts.get(x, 0).
+
+Delete(x):
+
+- If x is present in counts, c = counts[x]. Subtract c from 'total'. Then remove x from counts and keys. Else, do nothing. Then output nothing for delete (since delete operation doesn't require output except for the other operations).
+
+Wait, the problem statement says that delete is an operation, but according to the input example, delete operation (like query 2 2 in the example) doesn't have output. The outputs are only for insert (output size after), find (count), and dump (elements). So delete has no output.
+
+So, for insert, find, and dump, we output the required values. Delete just removes the elements.
+
+So, for delete(x):
+
+- Get the current count of x (if any). Subtract that from 'total'.
+- Remove x from counts and also from the keys list. How to remove from the keys list? Since keys is a sorted list, we can use bisect to find the index of x, then delete it. But wait, if there are multiple elements with the same x (but in our structure, x is only in keys once, since counts track the multiplicity). So, keys contains each x once. So, to delete x from keys, once we know x is present (i.e., counts[x] > 0), we can find its position via bisect_left, check if that index in keys is x, and then del keys[index].
+
+Yes. So, for delete(x):
+
+- If x is in counts:
+    c = counts[x]
+    del counts[x]
+    index = bisect.bisect_left(keys, x)
+    if index < len(keys) and keys[index] == x:
+        del keys[index]
+    total -= c
+
+Now, for the dump(L, R) operation:
+
+We need to find all x in keys where L ≤ x ≤ R. Since keys is sorted, we can use bisect to find the left and right indices. For example:
+
+left_idx = bisect.bisect_left(keys, L)
+right_idx = bisect.bisect_right(keys, R)
+
+The elements in keys from left_idx to right_idx-1 (inclusive) are those in [L, R]. For each x in that slice, we output the x as many times as counts[x] indicates, sorted. Wait, no: the problem says to print elements x in S in ascending order. Each x is printed once per occurrence. Wait no: the dump operation's output is to print all x in S (each occurrence, so if x is present 3 times, it's printed 3 times) that are between L and R. Wait no, no. Wait the problem says:
+
+"dump(L, R): Print elements x in S such that L ≤ x ≤ R."
+
+But S is a multiset, so if x is present k times, then x should be printed k times. For example, if S contains two 1s, then dump(1,1) would print 1 and 1.
+
+But the example input shows:
+
+After insertions, the S is {1,1,3} (after the delete 2). Then when they do a find on 1, output is 2. Then after inserting 4, then dump(1,4) outputs 1,1,3,4. The sample output for the dump is:
+
+1
+1
+3
+4
+
+Wait, in the example, after inserting 4, the S has elements: after the deletes, let's look:
+
+The sample input is 10 queries:
+
+0 1 → insert 1 → total 1. Output 1.
+
+0 1 → insert again → total 2. Output 2.
+
+0 2 → insert 2 → total 3. Output 3.
+
+0 3 → insert 3 → total 4. Output 4.
+
+Then 2 2 → delete all 2. So S now has 1,1,3. total is 4 - 1 (since x=2's count was 1, so subtract 1 → total 3? Wait no. Wait in the sample input, the delete operation is query 2 2. So after inserting 1,1,2,3, the counts for 2 is 1. So when delete is called, the counts for 2 is subtracted from total (which was 4), so total becomes 3. Then the next find for 1 is 2 (correct). Then insert 4 → total is 4 again. Then the dump 1-4 includes 1,1,3,4. So each element is printed as many times as their count. So in the dump, the elements are 1 (count 2), 3 (count 1), 4 (count 1). So the dump outputs all elements in the range, in sorted order, with multiplicity.
+
+So for the dump, for each x in the keys between L and R, sorted, we need to output x as many times as counts[x]. So for each x in the keys in [L, R], sorted, we print x multiplied by counts[x] times.
+
+So, to process a dump:
+
+- Find all x in keys between L and R (inclusive). Iterate through those x's in sorted order (which they are in the keys list).
+- For each x, print x repeated counts[x] times, each on a separate line.
+
+Wait, no. For example, if x is present twice, then we need to print two lines, each with x. So for x=1 with count 2, the dump would output two lines of '1'.
+
+So, for the dump, the steps are:
+
+1. Use bisect to find the start and end indices in keys for the range [L, R].
+
+2. Iterate through the keys from start to end.
+
+3. For each key in this range, get the count and print the key that many times, each in a separate line.
+
+But how to efficiently get the start and end indices?
+
+Yes, using bisect_left and bisect_right.
+
+So, for example, keys is a sorted list. To find the leftmost index where key >= L, that's bisect_left(keys, L). The rightmost index where key <= R is found by bisect_right(keys, R) -1. Wait, no. bisect_right(keys, R) gives the insertion point after the last element <= R. So the slice from left to right_idx (exclusive) gives all elements >= L and <= R.
+
+So for L and R:
+
+left_idx = bisect.bisect_left(keys, L)
+right_idx = bisect.bisect_right(keys, R)
+
+elements_in_range = keys[left_idx : right_idx]
+
+Then, for each x in elements_in_range, print x count[x] times.
+
+But how to do that efficiently? For each x in elements_in_range, we loop for counts[x] times and print x each time.
+
+But if counts[x] is large (like up to 1e5), this loop would take O(k) time, where k is the count, which could be time-consuming. But according to the constraints, the total number of elements printed by dump operations is <= 1e6. So even if a dump operation requires printing 1e6 elements, it's acceptable.
+
+So the approach for the dump is manageable.
+
+Now, the steps for each operation:
+
+For insert:
+
+1. Check if x is in counts. If not, insert into keys using bisect.insort.
+
+2. Increment counts[x] by 1.
+
+3. Increment total by 1.
+
+4. Output total.
+
+For find:
+
+1. Output counts.get(x, 0).
+
+For delete:
+
+1. If x in counts:
+
+   a. Subtract counts[x] from total.
+
+   b. Remove x from counts.
+
+   c. Find the index in keys via bisect.bisect_left and delete it.
+
+For dump:
+
+1. Find the range of keys in [L, R] using bisect.
+
+2. For each x in that range, output x counts[x] times, each on a new line.
+
+Now, the next thing is to implement this in Python efficiently.
+
+But in Python, the bisect module's functions can handle the sorted list. However, inserting into a list with bisect.insort is O(n) for each insertion, which is acceptable if the number of unique elements is small. However, in the worst case, if all insertions are unique elements (e.g., inserting 2e5 unique elements), then each insertion is O(n), leading to O(n^2) time. For 2e5 elements, that's 2e5 * 2e5 = 4e10 operations, which is way too slow.
+
+So, this approach may not be efficient enough for the problem's constraints. So, this suggests that using a list and bisect.insort is not suitable for handling a large number of unique elements.
+
+Hmm, this is a problem. So the current approach may not work for the time constraints. Need to find a better data structure.
+
+Alternative approach: Use a more efficient structure for maintaining a sorted list. But Python's standard data structures don't include a balanced BST. However, perhaps using a list and keeping it sorted, but inserting and deleting via bisect functions is manageable. Let's calculate the possible time.
+
+Suppose we have q = 2e5 queries, each inserting a unique element. Then, each insertion is O(n) time. For n elements, the insertion time is O(n), so for 2e5 elements, the total time is sum_{i=1 to 2e5} i = (2e5)(2e5 +1)/2 ≈ 2e10 operations, which is way beyond the time limit (Python can handle about 1e8 operations per second). So this approach would be too slow.
+
+Therefore, we need a better way to handle the sorted list of unique elements. Let's think of other data structures.
+
+Another idea: Use a binary indexed tree (Fenwick Tree) or a segment tree. But how?
+
+Alternatively, use a sorted list structure that allows O(log n) inserts, deletes, and range queries. There is a third-party library in Python called 'SortedList' from the 'bisect' module, but I think that's part of the 'sortedcontainers' module. However, in programming contests, we can't use third-party libraries. So, assuming that we can't use that, we need to find an alternative.
+
+Alternative approach:
+
+Since the elements are integers, perhaps use a balanced BST structure. But implementing that is time-consuming.
+
+Alternative idea: Realize that the dump operation requires all elements in a certain range, including duplicates. But since we have counts, the actual elements to output for a dump are all x in [L, R], each printed counts[x] times.
+
+So, for the keys, we can use a structure that allows efficient range queries. The problem is that the keys must be maintained in a sorted manner.
+
+So, perhaps a treap or a balanced BST implementation in Python. But implementing that is difficult.
+
+Alternative approach: Use a binary search on a list for insert, delete, and range queries, but optimize the list operations.
+
+But even so, inserting into a list is O(n) per insertion.
+
+Wait, but maybe for Python, with a list implemented as a dynamic array, inserting elements near the end is O(1) amortized. But inserting into the middle requires shifting elements, which is O(n) time.
+
+So, for example, inserting 2e5 elements in sorted order (each insertion at the end) would be O(1) per insertion. But inserting in random order would require O(n) per insertion.
+
+But in the worst case, the insertions are in a random order, leading to O(n) per insertion.
+
+So this approach is not feasible for Python for large n.
+
+Alternative idea: Since the elements are integers, perhaps use a frequency dictionary and a list of sorted unique keys that is maintained in a sorted way. But again, the issue is inserting into the sorted list.
+
+Wait, but perhaps we can use the fact that when we insert a new x, it's only added to the keys list if it's not already present (since counts is tracked). So, for insert(x), we first check if x is in counts. If yes, we just increment counts[x] and total. If not, then we need to insert x into the keys list in the correct position. So the number of insertions into the keys list is equal to the number of unique elements inserted (minus those that are deleted and then reinserted). So, if there are many unique elements, this becomes a problem.
+
+So, perhaps we can find a way to handle this.
+
+Another idea: Since the dump operation needs to process elements in a sorted range, perhaps the keys can be stored as a list that is always kept sorted. So, during insertion of a new x (not present before), we find the position to insert using binary search (bisect.insort). But for 2e5 unique elements, this would take O(n) time per insertion, leading to O(n^2) total time. Which is not feasible.
+
+So, this suggests that the problem requires a more efficient approach.
+
+Alternative idea: Use a binary indexed tree or a segment tree based on the possible values of x.
+
+But x can be up to 1e9, which makes this impossible unless we compress the coordinates.
+
+So, coordinate compression. Let's see: All x values in the queries can be stored in a list, sorted, and then mapped to their compressed indices. But since x can be up to 1e9, and there are q=2e5 queries, the number of unique x's is up to 2e5. So, coordinate compression is feasible.
+
+So, the steps would be:
+
+1. Collect all x, L, R from the queries. Then sort and assign a compressed index to each unique value.
+
+But the problem is that the dump operations have L and R which could be any values, not necessarily present in the insertions. So, for example, a dump can have L=5 and R=10, even if no x in S is in that range. So, coordinate compression may need to include all possible L and R values that appear in dump operations, but that complicates things.
+
+Alternatively, during coordinate compression, collect all the x values from insert and delete operations, as well as L and R from dump operations. Then create a sorted list of all possible values, and assign each a compressed index. Then, we can build a segment tree or binary indexed tree based on these compressed indices. But this requires that during a dump, the L and R are part of the compressed coordinates, or can be mapped appropriately.
+
+Alternatively, we can collect all x, L, R from all queries, sort them, and assign compressed indices. Then, during processing, for any new x in insert or delete, we can check if it's in the compressed list; if not, we can add it (but this complicates things as the problem allows x to be any integer).
+
+But given that the number of unique x's in the queries (including L and R) is up to 2e5 (since each query can have up to two values, and q is 2e5), this may be manageable.
+
+But even then, for example, a dump query with L=0 and R=1e9 would require checking all possible x's in S, which is again the same problem.
+
+So, perhaps coordinate compression is not the right approach here.
+
+Alternative idea: Since in Python, using a dictionary for counts is O(1) per access, but the dump operation is O(k), where k is the number of elements in the range. The problem allows up to 1e6 elements printed in total across all dumps. So, perhaps for the dump, even if the keys list is not sorted, but we can collect all the x's in S, filter those in the range, sort them, and then print each x according to their count.
+
+Wait, but the S can have a lot of unique elements. For example, if S has 1e5 unique elements, each dump query with L=0 and R=1e9 would require checking all 1e5 elements, which is O(1e5) per dump. If there are 1e4 such dumps, that's 1e9 operations, which is way too slow.
+
+But according to the problem's constraints, the sum of elements printed by dump is 1e6. So even if S has 1e6 elements in a certain range, but the sum of all elements printed across all dumps is 1e6, then perhaps even if the processing is O(u) per dump (u is the number of unique elements in S), but u is up to 2e5, and 2e5 * 1e3 dumps would be 2e8 operations, which might be manageable.
+
+But no, 2e5 * 1e3 is 2e8, which is 200 million operations. Python can handle that in around 20 seconds, which is tight but maybe possible. But if the number of dumps is higher, this becomes problematic.
+
+So, the initial approach may not be efficient enough.
+
+Alternative Idea: Realize that in order to process the dump operation, we need to iterate through all the elements in the range [L, R], sorted. To do this efficiently, we need the keys to be stored in a sorted data structure. The only way to do this in Python without third-party libraries is to use a list kept sorted with bisect, but the insertion and deletion operations are O(n) time. But if the number of unique elements is manageable, perhaps this is feasible.
+
+But given that the constraints allow up to 2e5 unique elements, and each insertion is O(n), this would be 2e5^2 operations, which is 4e10, way too slow.
+
+So, this approach is not feasible.
+
+Alternative Idea: Using a binary indexed tree (Fenwick Tree) or a segment tree for the counts.
+
+But x can be up to 1e9. So, this is impossible without coordinate compression.
+
+So, coordinate compression is the way to go. Let's think again.
+
+We can collect all x's that appear in any insert, delete, find, or dump operations, and all L and R in dump operations. Then, we sort them and assign a compressed index. For example, suppose we have all the x, L, R values from the input. Then, we can create a sorted list of all unique values. Then, for any x in the input, we can find its compressed index via binary search.
+
+But what about x's that are not present in any query but are in the range L-R of a dump operation? For example, if a dump has L=5 and R=10, but there are elements in S with x=7 which wasn't part of any insert query. Wait, no. Because x in S can only be inserted via insert queries. So, any x in S is present in one of the insert queries. So, the dump's L and R can be any values, but the x's in S are from insert queries.
+
+So, for coordinate compression, we can collect all x's from insert and delete queries, and all L and R from dump queries. Then, these are the possible values that need to be considered. Any x in S must be from an insert query. So, when processing a dump, the L and R can be mapped to the compressed coordinates, and we can query the segment tree for the sum in that range.
+
+Wait, but how would this help in listing the elements in the range? Because the elements in the range are the x's inserted, which are part of the compressed coordinates.
+
+Alternatively, the segment tree can be used to track the presence and counts of elements in each compressed interval.
+
+But I'm not sure. Let's think again.
+
+Let's say after coordinate compression, we have a sorted list of all possible values that we need to consider. Then, each x in the insert, delete, find, or dump's L and R is mapped to a compressed index.
+
+Then, for each insert(x), we can increment the count of x's compressed index. For delete(x), we set the count to zero. For find(x), we look up the count in the compressed index of x.
+
+For dump(L, R), we need to find all compressed indices between L's compressed index and R's compressed index, sorted in the original order, and for each such index, output the original value repeated by its count.
+
+But this approach doesn't track the actual values of x. So, for example, if after coordinate compression, x=5 is mapped to index 3, but how do we know which original x's are present in the range [L, R]?
+
+Alternatively, during coordinate compression, we collect all possible x's, L's, and R's from the input, sort them, and assign each a unique index. Then, during a dump(L, R), we can find the range of compressed indices that fall into [L, R], and for each such index, retrieve the original x value and its count.
+
+But this approach requires that all x's present in S are in the compressed list, which is true since they are part of the insert queries.
+
+So, steps for coordinate compression:
+
+1. Collect all x's from insert, delete, find queries, and L and R from dump queries into a list.
+
+2. Sort this list and create a mapping from value to compressed index.
+
+But there's a problem: dump queries may have L and R that are not present in any insert queries. For example, a dump could be L=10 and R=20, but there are no x's in S between 10 and 20. In that case, the compressed indices for L and R would not necessarily include all possible x's in that range. So, how to handle that.
+
+But during coordinate compression, if L and R are not present in the list, they can be added to the list so that their positions can be determined. Wait, but in that case, the compressed list must include all L and R values from the dump queries. Because when we process the dump, we need to find all x in S that are >= L and <= R. These x's are part of the insert queries. So, during coordinate compression, the L and R from dump queries are added to the list of values to be compressed. But when we sort the list, we can merge all x's from insert, delete, find, and L/R from dumps, and create a compressed list that includes all possible values that need to be considered.
+
+However, this may not be sufficient. For example, if a dump's L is 5, and the insert x=7, then during the dump, x=7 is in the range [5, 10]. But if 5 and 10 are not part of any other query, they may not be included in the compressed list. So, the compressed list must include all L and R from dump queries, even if they are not present in any other query.
+
+So, the steps for coordinate compression:
+
+Collect all x's from insert, delete, find queries (types 0, 1, 2, 3). For queries of type 3 (dump), collect L and R.
+
+So, the list for compression is:
+
+all x from 0,1,2-type queries (insert, find, delete), and L and R from 3-type queries (dump).
+
+Then, we sort and deduplicate this list to create a list of unique values. Then, each value can be mapped to its index in the sorted list. But during a dump, the L and R may be in the sorted list. For example, when processing a dump(L, R), we can find the compressed indices of L and R, then find all x's in the compressed indices that are between L and R. Wait, no. Because the compressed list is sorted, but the original x's in S may be present in between.
+
+Alternatively, the compressed list may have gaps. For example, the sorted list could be [1,3,5], but there could be x=2 inserted. But in reality, x=2 would have to be part of the insert queries, so it would be added to the compression list.
+
+Wait, no. For example, if a query is of type 0 (insert) with x=2, then x=2 is added to the list. So, during coordinate compression, x=2 will be included. So, the compressed list will have all possible x's that are present in S, plus all L and R from dump queries.
+
+So, during the dump query, the L and R are mapped to their compressed indices, and then we can use binary search to find the range of x's in the compressed list that are between L and R. However, the x's in S are all part of the compressed list.
+
+But this is not the case. For example, if a dump's L is 5, and no insert query has x=5, but there is an x=6 inserted. Then, during the dump, 6 is in the range [5, 7], but 5 and 7 may not be in the compressed list. So, the compressed list must include L and R from dump queries to handle such cases.
+
+Ah, right. So, during coordinate compression, we must collect all x's from insert, delete, find queries, and all L and R from dump queries. Then, we sort and deduplicate them to get the sorted list. Then, when we process a dump(L, R), we can find the indices in the compressed list where L and R are mapped. However, there's a problem: the actual x's in S may be between L and R but not present in the compressed list. But how can that happen? Because x's in S are from insert queries, which are included in the compressed list. So, any x in S is present in the compressed list. So, during a dump, any x in S between L and R will be present in the compressed list, but L and R may not. However, the compressed list will have the L and R from the dump queries.
+
+Wait, let's see. Suppose we have a dump query with L=5 and R=10. These values are added to the compression list. The compressed list will have all x's from insert, delete, find, plus L and R from dump queries. So, when processing the dump, the L and R are in the compressed list, but the x's in S could be between them. For example, the compressed list may have 3,5,7,10. Then, if an x=6 is inserted, but it's not part of any other query. Wait, but x=6 is part of an insert query, so it will be added to the compression list.
+
+So, in the initial collection of all values, x=6 is collected (since it's in an insert query), then the compressed list includes it. So, in the compressed list, all x's from insert queries are present. Thus, any x in S is present in the compressed list. So, during a dump(L, R), the x's in S that are in [L, R] are present in the compressed list. So, their compressed indices are known.
+
+Thus, the coordinate compression would work.
+
+So, the steps for coordinate compression:
+
+Collect all x's from:
+
+- Insert queries (type 0)
+- Find queries (type 1)
+- Delete queries (type 2)
+- L and R from dump queries (type 3)
+
+Then, sort and deduplicate this list. Assign each value a compressed index, and for each value, store the original value. So, during processing, we can map any x, L, R to the compressed index.
+
+Now, the problem is that during a dump operation, the x's in the range [L, R] are those with x >= L and x <= R. To find all x's in S that are in this range, we can find the compressed indices of L and R, and then iterate through the compressed list between these indices, check if x is present in S (counts[x] > 0), and then output x multiplied by counts[x].
+
+But how to find all x in the compressed list that are between L and R, and are present in S.
+
+So, after coordinate compression, we have a sorted list 'sorted_values' of all possible values. For each value in sorted_values, we can track whether it's present in S (counts > 0). For the dump operation:
+
+1. Find the lower bound and upper bound of L and R in the compressed list. For example, find the indices in sorted_values where the values are >= L and <= R.
+
+2. Iterate through those indices, check if the value is present in S (counts[value] > 0). If yes, output the value counts[value] times.
+
+But this approach requires storing the sorted_values list and a way to efficiently find the lower and upper bounds of L and R in this list.
+
+But during the processing of each dump query, we can perform binary search on the sorted_values list to find the range. Then, iterate through the elements in that range and check if they are present in S. For those present, output x counts[x] times.
+
+But this may still be O(k) per dump, where k is the number of elements in the compressed list within the range. However, if the compressed list is large (up to 4e5 elements for 2e5 queries), then for each dump, this could be up to 4e5 operations. If there are 1e3 dump queries, this is 4e8 operations, which is too much.
+
+But the problem constraints allow a total of 1e6 elements printed by dump operations. So, even if each element in the range has a count of 1, the maximum number of elements processed in the compressed list for all dumps is 1e6. But in reality, each element in the compressed list in the range may have a count of zero (if it's not present in S) or some count. So, the actual time depends on the number of elements in the compressed list in the range [L, R], which could be up to O(4e5) per dump. If there are 1e3 dumps, that's 4e8 operations. Which is way too slow.
+
+So, this approach may not work.
+
+Alternative Idea: Use a segment tree to track the presence of elements in S and their counts, and to perform range queries efficiently.
+
+The segment tree can be built over the compressed coordinates. For each node in the segment tree, it can track the count of elements in that range. But to output the elements in sorted order, we need to know which specific elements are present in the range. A segment tree can help in efficiently finding which ranges are present, but it's not straightforward to list all elements in a range in sorted order.
+
+Alternatively, the segment tree can track for each node a sorted list of elements present in that range. But this would consume too much memory and time.
+
+Alternative Idea: Using a binary indexed tree (Fenwick Tree) for the counts, and another data structure for the sorted elements.
+
+But I'm not sure.
+
+Another Idea: Since the problem requires all elements in the range to be output in sorted order, perhaps we can use a Treap (tree + heap) structure, which allows O(log n) insertions, deletions, and range queries. But implementing a treap in Python is challenging.
+
+Alternatively, use a skip list, which is a data structure that allows O(log n) average time for insertions, deletions, and range queries. But again, implementing this in Python is time-consuming and may not be feasible within the time constraints.
+
+Alternative Idea: Re-express the problem in terms of a frequency dictionary and a sorted list of unique elements. To handle the sorted list efficiently, use a list and bisect for insertions and deletions, but accept that in the worst case, it's O(n) per operation. But with the problem constraints, perhaps this is manageable.
+
+Let's calculate the time for the worst case. For 2e5 insertions, each requiring O(n) time for inserting into a sorted list, but the worst case is when each insertion is in the middle. For 2e5 elements, this would take O(n^2) time, which is 4e10 operations. That's way too slow.
+
+Thus, this approach is not feasible.
+
+Alternative Idea: Realize that the problem requires to output all elements in the range [L, R] in sorted order. If we can't maintain a sorted list of unique elements efficiently, perhaps we can output them by traversing the keys in the dictionary and sorting them each time. But that would take O(u log u) time per dump, where u is the number of unique elements. Again, for u=2e5, this is 2e5 * log 2e5 ≈ 2e5 * 20 ≈ 4e6 operations per dump. For 1e3 dumps, that's 4e9 operations, which is way too slow.
+
+So, this is not feasible.
+
+Alternative Idea: Use a combination of a frequency dictionary and a sorted list that is built once and maintained in sorted order. For example, when a new element is inserted, if it's not in the dictionary, add it to a list and then sort the list. But sorting after each insertion is O(u log u), which is expensive.
+
+But in Python, appending to a list and then sorting once after all insertions is O(u log u) for u elements. But this is only possible if all insertions are processed first, which is not the case here.
+
+So, this approach is not feasible.
+
+Alternative Idea: Find a way to handle the dump operations with the initial approach (using a sorted list and bisect) and accept that it's O(n) per insertion. But in practice, perhaps the test cases are not worst-case.
+
+But this is risky. For example, if a problem's test case has many unique insertions, this would time out.
+
+Thus, I need to find a better way.
+
+Wait, perhaps the problem can be handled with the initial approach, but in Python, the bisect.insort is implemented in a way that is optimized. For example, in CPython, bisect.insort uses a binary search and then the list.insert method, which is O(n) time. So, no.
+
+Alternative Idea: Use a list but keep track of the elements in a way that allows for faster insertion. But I'm not sure.
+
+At this point, I'm stuck. Let's think about alternative data structures again.
+
+Another Idea: Use a list to keep track of the unique elements in sorted order. When inserting a new element, use bisect.insort. For delete, use bisect to find the index and remove it. For dump, use bisect to find the range. The problem is the time for insertion and deletion.
+
+But given that Python's list is implemented as a dynamic array, the actual time for inserting in the middle is O(n) due to the need to shift elements. For 2e5 unique insertions, this would be O(2e5^2) time, which is 4e10 operations. Python can't handle that.
+
+But perhaps the problem's test cases are designed such that the number of unique elements is not very large, making this approach feasible. However, that's an assumption we can't rely on.
+
+Alternative Idea: Use a heap to keep track of the elements. But a heap allows efficient insertion and extraction of the minimum element but doesn't support efficient deletion of arbitrary elements. So, this is not helpful.
+
+Another Idea: Use a binary search tree implemented in Python with a node-based structure. But implementing a self-balancing BST (like an AVL or Red-Black tree) is time-consuming and error-prone. However, for the purpose of solving this problem, it might be necessary.
+
+But implementing a self-balancing BST in Python for this problem would take a lot of time, and given the time constraints of a programming competition, this may not be feasible. However, since this is a thought process, let's explore how that could be done.
+
+An AVL tree could maintain the unique elements in sorted order. Each node contains a key (the x value) and the count of occurrences. For insertions, we check if the key exists. If it does, we increment the count. If not, we insert the key into the AVL tree. For deletions, we remove the key from the tree. For range queries (dump), we can perform an in-order traversal between L and R, collecting the keys and their counts.
+
+This approach would have O(log u) time for insertions, deletions, and find operations (u is the number of unique elements). For dump operations, it would take O(k) time, where k is the number of elements in the range, which is acceptable since the total elements printed are up to 1e6.
+
+Implementing an AVL tree in Python is possible, but the code would be lengthy and error-prone. However, given the problem's constraints, it's the only way to achieve the required time complexity.
+
+So, the steps would be:
+
+1. Implement an AVL tree that supports:
+
+   a. Insert a key.
+
+   b. Delete a key.
+
+   c. Find the count of a key.
+
+   d. Traverse the keys in a given range [L, R] in sorted order.
+
+2. Use this AVL tree to manage the unique keys and their counts.
+
+3. Maintain a 'total' variable to track the total number of elements in the multiset.
+
+4. For each query:
+
+   a. Insert(x): If the key exists, increment count and total. Else, insert the key into the AVL tree. Output total.
+
+   b. Find(x): Search the AVL tree for x and return its count.
+
+   c. Delete(x): Remove x from the AVL tree and subtract its count from total.
+
+   d. Dump(L, R): Traverse the AVL tree for keys in [L, R], collect them in sorted order, and print each key count times.
+
+This approach would handle all operations efficiently. But implementing the AVL tree is time-consuming.
+
+Alternatively, use a Python library that implements a sorted container. But again, assuming that's not allowed.
+
+Given the time constraints, perhaps the best approach is to proceed with the initial approach (using a sorted list and bisect) and hope that the problem's test cases do not have a lot of unique elements.
+
+But the example given in the problem has multiple elements with the same value, which suggests that the test cases may have a lot of duplicates, thus reducing the number of unique elements, making the initial approach feasible.
+
+Alternatively, perhaps the problem's intended solution is to use a frequency dictionary and a sorted list of unique elements, and for the dump operation, to binary search the list for the range and then output the elements.
+
+In Python, even if the sorted list has 2e5 elements, each insertion is O(2e5) time. For 2e5 insertions, this would be 4e10 operations, which is way too slow.
+
+But perhaps the problem's test cases are designed in a way that the number of unique elements is small, making this approach feasible.
+
+Alternatively, the problem may require using a different language (like C++ with its ordered_set), but the problem requires a Python solution.
+
+Hmm.
+
+Wait, another Idea: Use a list to store the unique keys, but keep it unsorted. For dump operations, each time, we collect all keys in the list, filter those in the range, sort them, and then print. This approach would have O(u) time per dump, and O(u log u) time for sorting. But if the number of dumps is small, this could be manageable.
+
+But in the worst case, for each dump, this is O(u) time. For example, with u=2e5 and 1e3 dumps, this is 2e5 * 1e3 = 2e8 operations, which is acceptable.
+
+But for insertions, this approach is O(1) time (if the list is not kept sorted). For example, inserting a new x into the list is O(1) (appending), and the counts are tracked in a dictionary.
+
+But for the dump operation, we need to collect all x's in the list, filter those in [L, R], sort them, and then output. For each x in the list, we check if x is in the range. Then, sort the filtered list.
+
+This approach has:
+
+- Insert: O(1) time (append to list, but need to check if x is new).
+
+Wait, no. For insert(x):
+
+- Check if x is in counts. If not, append to the list (but the list is not sorted). Also, add to counts.
+
+So, the list is a list of unique elements, but not sorted.
+
+For find(x): O(1) time.
+
+For delete(x): O(1) time (remove from counts, but the list still contains x. So, during dumps, we need to check if x is still present in counts. So, the list may contain elements that are no longer in S.
+
+Ah, this is a problem. So, the list will contain all x's that have been inserted, even if they are deleted. So, during dumps, when we iterate through the list, we have to check if x is still present in counts (i.e., counts[x] > 0). This could lead to O(u) time per dump, where u is the total number of unique elements ever inserted, even if they are later deleted.
+
+This would be bad if u is large.
+
+So, this approach would have:
+
+- Insert: O(1) time (appending to list if x is new).
+
+- Find: O(1) time.
+
+- Delete: O(1) time (just removing from counts).
+
+- Dump: O(u) time (iterate through all unique x's ever inserted, check if counts[x] > 0 and in [L, R], collect them, sort, and print with their counts).
+
+But if u is 2e5, and there are 1e3 dumps, this would be 2e5 * 1e3 = 2e8 operations, which is manageable.
+
+But the sorting step for each dump would be O(k log k), where k is the number of elements in the range. However, the total elements printed across all dumps is 1e6, so the total time for sorting is O(1e6 log 1e6) ≈ 1e6 * 20 = 2e7 operations, which is acceptable.
+
+This approach may be feasible.
+
+So, the data structures would be:
+
+- A dictionary 'counts' to track the current count of each x.
+
+- A list 'keys' to store all unique x's ever inserted (including those later deleted).
+
+- A variable 'total' to track the total number of elements in S.
+
+For insert(x):
+
+- If x not in counts, append x to 'keys'.
+
+- Increment counts[x] by 1.
+
+- Increment total by 1.
+
+For find(x):
+
+- Output counts.get(x, 0).
+
+For delete(x):
+
+- If x in counts:
+
+   c = counts[x]
+
+   del counts[x]
+
+   total -= c
+
+For dump(L, R):
+
+- Iterate through all x in 'keys' (which may include x's not in counts).
+
+- For each x, if x is in counts and L <= x <= R, add x to a list.
+
+- Sort this list.
+
+- For each x in the sorted list, output x multiplied by counts[x] times.
+
+But this approach has a problem: during the dump, iterating through 'keys' is O(u), where u is the number of unique x's ever inserted, which could be 2e5. For each x, check if it's in counts (O(1) time). But even with u=2e5 and 1e3 dumps, this is 2e8 operations. Which is manageable in Python, but may be tight.
+
+But the problem is that 'keys' contains x's that are no longer in S (since they were deleted). So, during each dump, we have to iterate through all x's ever inserted, even if they are not present in S anymore. This could be a lot of elements, but according to the problem's constraints, the sum of elements printed is 1e6, which implies that the number of x's in S during dump operations is not very high.
+
+But if the number of unique x's ever inserted is large (like 2e5), then each dump will iterate through all of them, which is 2e5 per dump. For 1e3 dumps, this is 2e8 operations, which may be acceptable.
+
+So, this approach may be feasible.
+
+But how to handle duplicates in 'keys'? Since 'keys' is a list of all unique x's ever inserted, each x is present exactly once. So, during the dump, for each x in 'keys', we check if it's present in 'counts' (i.e., counts[x] > 0), and if it's in the range [L, R]. If so, we collect it. Then, we sort the collected list and output the x's multiplied by their counts.
+
+This approach would work.
+
+But the 'keys' list can be large, but in Python, iteration is relatively fast. Let's consider the example:
+
+In the sample input, after insertions and delete, the 'keys' list contains 1, 2, 3, 4. But after deleting 2, the 'counts' no longer has 2. So, during the dump, when iterating through keys, x=2 is checked, found not in counts, and skipped.
+
+So, the steps for the sample input:
+
+dump(1,4):
+
+Iterate x in keys [1, 2, 3, 4].
+
+Check x=1: in counts (yes), 1<=x<=4 → yes. Add to list.
+
+x=2: not in counts → skip.
+
+x=3: in counts → add.
+
+x=4: in counts → add.
+
+Sort the collected list [1,3,4]. For each x in sorted list:
+
+x=1 → count is 2 → print 1 twice.
+
+x=3 → count is 1 → print once.
+
+x=4 → count is 1 → print once.
+
+Which matches the sample output.
+
+Thus, this approach works.
+
+So, the data structures are:
+
+- counts: a dictionary.
+
+- keys: a list of all unique x's ever inserted.
+
+- total: integer.
+
+For each dump:
+
+1. Collect all x in keys where x is in counts and L <= x <= R.
+
+2. Sort the collected x's.
+
+3. For each x in the sorted list, output x counts[x] times.
+
+This approach is O(u) per dump, which is manageable if u is up to 2e5 and the number of dumps is not too large.
+
+But for the worst case where each insert is unique, and each dump iterates through all 2e5 elements, with 2e5 dumps, this would be 4e10 operations. But given the problem's constraints, this is unlikely. The sum of elements printed by dumps is 1e6, which suggests that the number of dumps and the number of elements per dump are limited.
+
+Therefore, this approach is feasible and worth implementing.
+
+Now, the code:
+
+Implement the data structures:
+
+counts = {}
+keys = []
+total = 0
+
+For each query:
+
+Insert(x):
+
+if x not in counts:
+    keys.append(x)
+counts[x] = counts.get(x, 0) + 1
+total += 1
+print(total)
+
+Find(x):
+
+print(counts.get(x, 0))
+
+Delete(x):
+
+if x in counts:
+    total -= counts[x]
+    del counts[x]
+
+Dump(L, R):
+
+filtered = []
+for x in keys:
+    if x in counts and L <= x <= R:
+        filtered.append(x)
+
+filtered.sort()
+
+result = []
+for x in filtered:
+    result.extend([str(x)] * counts[x])
+
+print('\n'.join(result))
+
+But in Python, appending to a list and then sorting is manageable. However, this approach may be slow for large filtered lists. But since the total elements printed is up to 1e6, the code should work.
+
+But there's a problem: the 'keys' list may contain duplicate entries. But since we check 'x not in counts' before appending to 'keys' in insert, 'keys' should contain each x exactly once. Because when x is inserted for the first time, we append to keys. For subsequent inserts, x is already in counts, so we don't append to keys. So, 'keys' contains all unique x's ever inserted, each exactly once. So, during dump iteration, each x is checked once.
+
+Thus, the code is correct.
+
+But there's a possible optimization: store 'keys' as a set to avoid duplicates, but then during the dump, we have to iterate through the set, which is not sorted. So, we would have to collect all elements from the set and sort them during the dump. This would change the steps for the dump:
+
+filtered = [x for x in counts.keys() if L <= x <= R]
+
+filtered.sort()
+
+But since counts contains only the present x's, this would work. Then, 'keys' is not needed anymore.
+
+Wait, this is a crucial insight. The 'keys' list is unnecessary. Because during a dump, the x's in S are exactly the keys in 'counts'. So, for the dump, we can iterate through counts.keys(), filter those in [L, R], sort them, and output.
+
+Thus, the 'keys' list can be completely omitted. This simplifies the code and reduces the memory usage.
+
+So, revised data structures:
+
+counts = {}  # key: x, value: count
+total = 0
+
+For insert(x):
+
+if x not in counts:
+    counts[x] = 1
+else:
+    counts[x] += 1
+total += 1
+print(total)
+
+Wait, no. For insert(x), we have to add x to the counts. So:
+
+counts[x] = counts.get(x, 0) + 1
+total += 1
+print(total)
+
+For delete(x):
+
+if x in counts:
+    total -= counts[x]
+    del counts[x]
+
+For dump(L, R):
+
+filtered = [x for x in counts.keys() if L <= x <= R]
+filtered.sort()
+output = []
+for x in filtered:
+    output.extend([str(x)] * counts[x])
+print('\n'.join(output))
+
+This approach is better, as it doesn't require maintaining a separate 'keys' list.
+
+This way, during a dump, we iterate through the keys in counts (which are the current x's in S), filter those in [L, R], sort, and output.
+
+This reduces the time for each dump to O(k + m log m), where k is the number of keys in counts (current unique elements in S), and m is the number of keys in the range [L, R].
+
+But for counts, the keys() method in Python returns a view object. Iterating through it is O(k) time, where k is the current number of unique elements in S. If the number of unique elements is up to 2e5, then each dump could take O(2e5) time per iteration. If there are 1e3 dumps, this is 2e8 operations, which is manageable.
+
+But this is a big improvement over the previous approach, as we no longer iterate through x's that were deleted.
+
+Thus, the code can be rewritten without the 'keys' list.
+
+This approach is much more efficient.
+
+So, the steps are:
+
+- For insert(x): increment counts[x], increment total.
+
+- For find(x): output counts.get(x, 0).
+
+- For delete(x): if x exists, subtract its count from total and remove from counts.
+
+- For dump(L, R): collect all x in counts where L <= x <= R, sort them, then output each x counts[x] times.
+
+Yes, this is a better approach.
+
+Now, let's test this with the sample input.
+
+Sample input:
+
+10
+0 1 → insert(1) → counts={1:1}, total=1 → output 1.
+
+0 1 → counts[1] becomes 2, total=2 → output 2.
+
+0 2 → counts[2:1], total=3 → output 3.
+
+0 3 → counts[3:1], total=4 → output 4.
+
+2 2 → delete 2. counts has 1:2, 3:1. total=4-1=3.
+
+1 1 → find(1) → output 2.
+
+1 2 → output 0.
+
+1 3 → output 1.
+
+0 4 → insert(4 → counts[4:1], total=4 → output 4.
+
+3 1 4 → dump 1-4.
+
+counts has keys 1,3,4.
+
+filtered = [x for x in counts.keys() if 1<=x<=4 → 1,3,4 → sorted [1,3,4].
+
+output each x times count:
+
+1 → 2 times.
+
+3 → 1 time.
+
+4 → 1 time.
+
+Thus, the output for the dump is:
+
+1
+
+1
+
+3
+
+4.
+
+Which matches the sample.
+
+Thus, this approach works.
+
+Now, the code:
+
+Read q.
+
+Initialize counts as a defaultdict(int) or a normal dictionary.
+
+But using a normal dictionary is better.
+
+But for efficiency, perhaps use a defaultdict(int) from the start.
+
+But the code can be written as:
+
+import sys
+from sys import stdin
+
+def main():
+    import sys
+    counts = dict()
+    total = 0
+    q = int(sys.stdin.readline())
+    for _ in range(q):
+        query = sys.stdin.readline().split()
+        if query[0] == '0':
+            x = int(query[1])
+            counts[x] = counts.get(x, 0) + 1
+            total += 1
+            print(total)
+        elif query[0] == '1':
+            x = int(query[1])
+            print(counts.get(x, 0))
+        elif query[0] == '2':
+            x = int(query[1])
+            if x in counts:
+                total -= counts[x]
+                del counts[x]
+        elif query[0] == '3':
+            L = int(query[1])
+            R = int(query[2])
+            # Collect all x in counts where L <= x <= R
+            filtered = []
+            for x in counts:
+                if L <= x <= R:
+                    filtered.append(x)
+            # Sort the filtered list
+            filtered.sort()
+            # Generate the output
+            output = []
+            for x in filtered:
+                output.extend([str(x)] * counts[x])
+            # Print each element in a line
+            print('\n'.join(output))
+    return
+
+main()
+
+But wait, in Python, dictionaries are not ordered, so when we do 'for x in counts:', the order of iteration is arbitrary. But in the code above, after collecting the filtered list, we sort it, so the order of iteration in the for loop doesn't matter.
+
+Yes. So, the code is correct.
+
+But when the dump operation is called, the code iterates through all keys in counts, checks if they are in the range, collects them, sorts them, and then outputs in sorted order.
+
+This should work.
+
+Now, testing with the sample input.
+
+But what about the time complexity for the dump operation? Let's see.
+
+For each dump:
+
+- Iterate through all keys in counts (k is the current number of unique elements in S).
+
+- For each key, check if it's in the range. O(k) time.
+
+- Sort the filtered list: O(m log m) time, where m is the number of elements in the filtered list.
+
+- Generate the output: O(s) time, where s is the total number of elements to output (sum of counts[x] for x in filtered).
+
+The sum of s across all dumps is up to 1e6.
+
+The time for the iteration and sorting is O(k + m log m) per dump. If k is up to 2e5, and there are 1e3 dumps, this is 2e5 * 1e3 = 2e8 iterations, plus the sorting steps. For m up to 1e4 per dump, sorting is 1e4 log 1e4 = ~14e4 operations per dump, which for 1e3 dumps is 1.4e7 operations.
+
+The total time should be manageable.
+
+Thus, this code should work within the problem's constraints.
+</think>
+To solve this problem, we need to efficiently handle a multiset of integers with four types of operations: insert, find, delete, and dump. The solution must process these operations efficiently given the constraints, particularly handling up to 200,000 operations and ensuring that the dump operation outputs elements in sorted order.
+
+### Approach
+1. **Data Structures**: Use a dictionary to keep track of the count of each element in the multiset. This allows O(1) time complexity for insert, find, and delete operations.
+2. **Handling Dump Operation**: For the dump operation, collect all elements within the specified range, sort them, and then output each element according to its count. This ensures the elements are printed in ascending order and meets the problem constraints efficiently.
+
+### Solution Code
+```python
+import sys
+
+def main():
+    counts = {}
+    total = 0
+    q = int(sys.stdin.readline())
+    for _ in range(q):
+        parts = sys.stdin.readline().split()
+        if not parts:
+            continue  # handle any potential empty lines
+        op = parts[0]
+        if op == '0':
+            x = int(parts[1])
+            counts[x] = counts.get(x, 0) + 1
+            total += 1
+            print(total)
+        elif op == '1':
+            x = int(parts[1])
+            print(counts.get(x, 0))
+        elif op == '2':
+            x = int(parts[1])
+            if x in counts:
+                total -= counts[x]
+                del counts[x]
+        elif op == '3':
+            L = int(parts[1])
+            R = int(parts[2])
+            filtered = []
+            for key in counts:
+                if L <= key <= R:
+                    filtered.append(key)
+            filtered.sort()
+            output = []
+            for key in filtered:
+                output.extend([str(key)] * counts[key])
+            if output:
+                print('\n'.join(output))
+    return
+
+main()
+```
+
+### Explanation
+1. **Insert Operation**: When inserting an element, increment its count in the dictionary and the total number of elements. This is done in O(1) time.
+2. **Find Operation**: Retrieve the count of the specified element from the dictionary in O(1) time.
+3. **Delete Operation**: Remove all occurrences of the specified element by deleting its entry from the dictionary and adjusting the total count.
+4. **Dump Operation**: Collect all elements within the specified range, sort them, and generate the output by repeating each element according to its count. This ensures the elements are printed in ascending order and efficiently handles the range query using sorting.
+
+This approach ensures that each operation is handled efficiently, particularly leveraging the dictionary for O(1) access and updates, and sorting only when necessary for the dump operation. This balances time complexity with the constraints provided, ensuring optimal performance.
+</bot>

@@ -1,0 +1,397 @@
+<user>
+Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.You are given a weighted undirected graph. The vertices are enumerated from 1 to n. Your task is to find the shortest path between the vertex 1 and the vertex n.
+
+Input
+
+The first line contains two integers n and m (2 ≤ n ≤ 105, 0 ≤ m ≤ 105), where n is the number of vertices and m is the number of edges. Following m lines contain one edge each in form ai, bi and wi (1 ≤ ai, bi ≤ n, 1 ≤ wi ≤ 106), where ai, bi are edge endpoints and wi is the length of the edge.
+
+It is possible that the graph has loops and multiple edges between pair of vertices.
+
+Output
+
+Write the only integer -1 in case of no path. Write the shortest path in opposite case. If there are many solutions, print any of them.
+
+Examples
+
+Input
+
+5 6
+1 2 2
+2 5 5
+2 3 4
+1 4 1
+4 3 3
+3 5 1
+
+
+Output
+
+1 4 3 5 
+
+Input
+
+5 6
+1 2 2
+2 5 5
+2 3 4
+1 4 1
+4 3 3
+3 5 1
+
+
+Output
+
+1 4 3 5
+</user>
+<bot>
+<think>
+Okay, I need to solve this problem where I have to find the shortest path from node 1 to node n in an undirected weighted graph. Let's think about how to approach this.
+
+First, the problem states that the graph can have loops and multiple edges. So, I should probably process all edges and keep track of the minimum weight between any two nodes, but maybe not. Wait, in Dijkstra's algorithm, even if there are multiple edges between two nodes, the algorithm will automatically choose the one with the least weight when relaxing. Or maybe not. Wait, no. Because in the adjacency list, if I add all edges, then when processing each edge from a node, the algorithm will check each and see if the path through that edge is shorter. So maybe including all edges is okay. Because even if there's a longer edge, when we process the node, the first (shorter) edge would have already set a lower distance, so the longer edges would be ignored in relaxation. Hmm. So perhaps I can just process all edges as they are.
+
+So the standard approach here is to use Dijkstra's algorithm. But since the nodes can be up to 1e5, which is 10^5, and edges up to 1e5 as well, we need an efficient implementation. The standard Dijkstra's with a priority queue implemented using a heap should be acceptable, since each edge is processed once and each node is popped from the heap once. But with a priority queue that allows for decrease-key operations, which in Python's heapq module isn't directly supported, but we can handle it by adding multiple entries to the heap and just checking if the distance is already improved when popping.
+
+Wait, but in Python, using a heap-based approach with a priority queue, even if we add multiple entries, when we pop a node, we check if the current distance is better than the stored distance. If it's not, we skip processing that node. This is because once a node is processed (i.e., the shortest path to it is found), any subsequent entries in the heap for that node can be ignored.
+
+So for the Dijkstra's algorithm, the steps are:
+
+1. Initialize a distance array where distance[i] is infinity for all nodes except the start node (distance[1] = 0).
+2. Use a priority queue (heap) to keep track of nodes to visit, ordered by their current distance. Start with node 1 and distance 0.
+3. For each node popped from the heap:
+   a. If it's the target node (n), we can stop early if possible.
+   b. Check all adjacent nodes. For each neighbor, calculate the tentative distance through the current node.
+   c. If the tentative distance is less than the current known distance for the neighbor, update the distance and add the neighbor to the heap.
+4. Once all nodes are processed, check the distance of node n. If it's still infinity, output -1. Otherwise, reconstruct the path.
+
+But reconstructing the path is another challenge. For that, we need to keep track of the previous node for each node in the shortest path. So whenever we update the distance of a node (say, neighbor) from the current node, we set the previous of neighbor to the current node. However, since there can be multiple paths leading to the same node with the same distance, but we need to reconstruct any one of the shortest paths. So the approach would be to keep a prev array where prev[v] is the node that comes before v in the shortest path from 1 to v.
+
+Wait, but in Dijkstra's algorithm, once we process a node (i.e., extract it from the priority queue), we've found the shortest distance to it. So when we process a node, all the edges from it will contribute to the possible shortest paths of their neighbors. So for the prev array, whenever we find a shorter path to a neighbor, we update the prev entry for that neighbor to the current node. This way, by the time all processing is done, the prev array will give the shortest path tree.
+
+So the steps to reconstruct the path would be:
+
+Start from node n, then follow the prev pointers back to node 1. Then reverse the order to get the path from 1 to n.
+
+But wait, since the graph is undirected, each edge is bidirectional. So when building the adjacency list, each edge ai to bi with weight wi should be added as both directions.
+
+So the adjacency list would be a list of lists. For each edge a, b, w, we add (b, w) to the adjacency list of a, and (a, w) to the adjacency list of b.
+
+Now, considering the constraints of up to 1e5 nodes and edges, we need to manage this efficiently. In Python, using a list of adjacency lists is feasible. Each node's adjacency list is a list of tuples (neighbor, weight).
+
+But with 1e5 nodes, the adjacency list would need to be initialized as a list of lists. For nodes from 1 to n, so the adjacency list can be size n+1 (since nodes are 1-based). So in Python:
+
+adj = [[] for _ in range(n+1)]
+
+Then for each edge, we add both directions.
+
+Once the adjacency list is built, proceed with Dijkstra's.
+
+Now, about the distance array. Since n can be up to 1e5, using a list of size n+1 and initializing all to infinity (like 1e18) except distance[1] = 0 is feasible.
+
+Then, the priority queue. Start with (0, 1). The priority queue is a heap, with elements (distance, node). We use heapq in Python. But since Python's heapq is a min-heap, the smallest distance is popped first.
+
+Now, during processing, when we pop a node u, if the current distance in the distance array for u is less than the stored distance in the heap, we skip processing it. Because that means a shorter path to u has already been found, and this entry in the heap is outdated.
+
+Otherwise, for each neighbor v, we compute the new distance as distance[u] + w. If this is less than the current distance[v], then we update distance[v], set prev[v] = u, and add (new_distance, v) to the heap.
+
+Once all processing is done, if distance[n] is still infinity, output -1. Otherwise, reconstruct the path.
+
+Reconstructing the path: start from node n, and follow prev[n], then prev[prev[n]], etc., until we reach node 1. Then reverse the list to get the path from 1 to n.
+
+But what if the path is very long? Like up to 1e5 nodes? Then reconstructing the path could be done in O(n) time, which is acceptable.
+
+So in code:
+
+prev = [None] * (n+1)
+distance = [inf] * (n+1)
+distance[1] = 0
+
+heap = []
+heapq.heappush(heap, (0, 1))
+
+while heap is not empty:
+    current_dist, u = heapq.heappop(heap)
+    if u == n:  # early exit? Well, if the node is popped, then its distance is finalized.
+        break
+    if current_dist > distance[u]:
+        continue
+    for v, w in adj[u]:
+        if distance[v] > distance[u] + w:
+            distance[v] = distance[u] + w
+            prev[v] = u
+            heapq.heappush(heap, (distance[v], v))
+
+After this, check if distance[n] is inf. If yes, output -1. Else, reconstruct the path.
+
+Now, the problem is to handle the case where there are multiple shortest paths. The problem says to print any of them. So the first path found via the prev array is acceptable.
+
+But what about when the path is not possible? For example, when nodes 1 and n are in separate components. Then the distance[n] remains inf, so output -1.
+
+But in the example given, the output is a space-separated sequence of nodes. For the first example input, the path is 1 4 3 5. Let's see: the path is 1-4 (1), 4-3 (3), 3-5 (1). Total distance 5, which is indeed the shortest possible.
+
+Now, in code, reconstructing the path:
+
+path = []
+current = n
+while current is not None:
+    path.append(current)
+    current = prev[current]
+Then reverse the path to get from 1 to n.
+
+But if the path starts from n and goes back to 1, then reversing gives 1 ... n.
+
+So in code:
+
+if distance[n] == inf:
+    print(-1)
+else:
+    path = []
+    current = n
+    while current is not None:
+        path.append(current)
+        current = prev[current]
+    path.reverse()
+    print(' '.join(map(str, path)))
+
+But wait, in the example, the output is 1 4 3 5, which is the reversed path. So yes, the code is correct.
+
+Now, about the possible edge cases.
+
+Test case 1: n=2, m=0. Then output is -1.
+
+Test case 2: n=2, m=1. Edge between 1 and 2. Then output 1 2.
+
+Test case 3: multiple edges between 1 and 2. The code should select the minimal path.
+
+Another edge case: when the path has a loop, but the code's prev array would ignore the loop since once a node is processed, any other paths through it would have longer distances.
+
+Now, considering the constraints. Let's think about the time complexity.
+
+Each edge is processed once, but each edge can be added to the heap twice (since for an undirected graph, each edge is stored in both nodes' adjacency lists). So for m edges, the number of heap operations is O(m) * 2, but each heap insertion is O(log E), where E is the number of edges. But in the worst case, each edge can be processed multiple times. For Dijkstra's algorithm with a priority queue implemented as a binary heap, the time complexity is O((V + E) log V), which for V=1e5 and E=1e5 is O(2e5 log 1e5) which is manageable in Python? Maybe, but sometimes in Python, for large inputs, this can be tight.
+
+But given the problem constraints (n and m up to 1e5), the code must be efficient. So using the standard Dijkstra's with a priority queue is feasible here. However, in Python, for 1e5 elements in a heap, with each operation being O(log n), it's possible, but sometimes might be on the edge of time limits. However, for programming competition standards, this approach is standard.
+
+Another thing to note is that the adjacency list should be built with 1-based indices, which we've considered.
+
+Now, let's think about the example input:
+
+First example:
+
+5 6
+
+Edges:
+
+1 2 2
+
+2 5 5
+
+2 3 4
+
+1 4 1
+
+4 3 3
+
+3 5 1
+
+Adjacency list for 1 includes (2,2), (4,1).
+
+Adjacency list for 2 includes (1,2), (5,5), (3,4).
+
+And so on.
+
+Dijkstra's process:
+
+Start with (0,1). Pop 1. Check neighbors 2 and 4.
+
+For 2: tentative distance is 0+2=2. If distance[2] was infinity, set to 2, push (2,2).
+
+For 4: tentative 0+1=1. Push (1,4).
+
+Then, the heap now has (1,4) and (2,2). Next, pop (1,4). Check its neighbors: 1 and 3.
+
+For 3: tentative 1+3=4. Since initial distance is infinity, update to 4, push (4,3). Also, neighbor 1's distance is already 0, so no change.
+
+Then, pop (2,2) from heap. The current distance for 2 is 2. Process neighbors. For example, 5's tentative distance is 2+5=7. For 3: 2+4=6. But distance[3] is currently 4, so no update.
+
+Next, the heap will have (4,3). Pop 3. Its neighbors are 2 (distance 4+4=8, but current for 2 is 2, no change), 4 (distance 4+3=7, which is higher than 1, no change), and 5 (distance 4+1=5). Current distance[5] is infinity, so set to 5. Push (5,5). Also, the previous of 5 is 3.
+
+Then, the heap now has (5,5). Pop it. Check if it's the target node (5). Then, break. The distance to 5 is 5. Then reconstruct the path: 5's prev is 3, 3's prev is 4, 4's prev is 1. So path is [5,3,4,1]. Reverse to get [1,4,3,5], which matches the example.
+
+So the code works here.
+
+Another example where the same input is given again. So code works.
+
+Now, implementing this in Python.
+
+But wait, the problem requires that the function takes stdin as input. So the code must read from standard input.
+
+In Python, handling large inputs can be slow with input(), but using sys.stdin is better. So in code:
+
+import sys, heapq
+
+n, m = map(int, sys.stdin.readline().split())
+
+adj = [[] for _ in range(n+1)]
+for _ in range(m):
+    a, b, w = map(int, sys.stdin.readline().split())
+    adj[a].append( (b, w) )
+    adj[b].append( (a, w) )
+
+inf = float('inf')
+distance = [inf] * (n+1)
+distance[1] = 0
+prev = [None]*(n+1)
+
+heap = []
+heapq.heappush(heap, (0,1))
+
+while heap:
+    current_dist, u = heapq.heappop(heap)
+    if u == n:
+        break
+    if current_dist > distance[u]:
+        continue
+    for v, w in adj[u]:
+        if distance[v] > distance[u] + w:
+            distance[v] = distance[u] + w
+            prev[v] = u
+            heapq.heappush(heap, (distance[v], v))
+
+if distance[n] == inf:
+    print(-1)
+else:
+    path = []
+    current = n
+    while current is not None:
+        path.append(current)
+        current = prev[current]
+    path.reverse()
+    print(' '.join(map(str, path)))
+
+But wait, the code has a possible problem. For example, if there are multiple entries in the heap for the same node with different distances, but the first time we process the node (with the smallest distance), and subsequent entries are ignored. That's correct.
+
+But for Python, using the standard heapq module is okay. However, for n up to 1e5, the code may need to handle large heaps. But in practice, it's manageable.
+
+Testing the first example:
+
+Input:
+
+5 6
+
+1 2 2
+
+2 5 5
+
+2 3 4
+
+1 4 1
+
+4 3 3
+
+3 5 1
+
+The code should output 1 4 3 5.
+
+Yes.
+
+Another test case where there is no path. For example, n=3, m=0. Output is -1.
+
+Another test case where the path is direct. Like n=2, m=1: 1 2 1. The path is 1 2.
+
+But what about when there's a shorter path via another node. For example:
+
+n=3, m=3:
+
+1 2 5
+
+2 3 5
+
+1 3 10
+
+The shortest path is 1-3 with distance 10? Wait no. Wait 1-2-3 is 5+5=10, same as direct path. So either path is acceptable. The code would pick one of them.
+
+But in Dijkstra's algorithm, the direct edge may be processed after, but since the initial distance is 10 for 3. Then when processing 1's edges, adding 2 and 3. Then when processing 2, adding 3 with 5+5=10. So the code may choose either path.
+
+But the problem says to output any of the shortest paths. So both are acceptable.
+
+So the code works.
+
+Now, potential issues:
+
+- Handling 1-based vs 0-based nodes. The code uses 1-based correctly.
+
+- The adjacency list is built correctly for undirected edges.
+
+- The prev array is correctly updated.
+
+- Path reconstruction in reverse.
+
+Yes.
+
+Another possible issue: when n is 1. But according to the problem statement, n is at least 2. So the input will have n ≥ 2.
+
+So the code is correct.
+</think>
+To solve this problem, we need to find the shortest path in a weighted undirected graph from vertex 1 to vertex n using Dijkstra's algorithm. If there is no path, we should return -1. Otherwise, we should return the shortest path.
+
+### Approach
+1. **Graph Representation**: Use an adjacency list to represent the graph. Each node will have a list of tuples representing its neighbors and the corresponding edge weights.
+2. **Dijkstra's Algorithm**: Implement Dijkstra's algorithm using a priority queue (min-heap) to efficiently find the shortest path. This algorithm works by continuously expanding the shortest known path from the start node until the destination node is reached.
+3. **Path Reconstruction**: Maintain a previous node array to keep track of the path. Once the shortest path is found, backtrack from the destination node to the start node using this array to reconstruct the path.
+
+### Solution Code
+```python
+import sys
+import heapq
+
+def main():
+    n, m = map(int, sys.stdin.readline().split())
+    adj = [[] for _ in range(n + 1)]
+    for _ in range(m):
+        a, b, w = map(int, sys.stdin.readline().split())
+        adj[a].append((b, w))
+        adj[b].append((a, w))
+    
+    inf = float('inf')
+    distance = [inf] * (n + 1)
+    distance[1] = 0
+    prev = [None] * (n + 1)
+    
+    heap = []
+    heapq.heappush(heap, (0, 1))
+    
+    while heap:
+        current_dist, u = heapq.heappop(heap)
+        if u == n:
+            break
+        if current_dist > distance[u]:
+            continue
+        for v, w in adj[u]:
+            if distance[v] > current_dist + w:
+                distance[v] = current_dist + w
+                prev[v] = u
+                heapq.heappush(heap, (distance[v], v))
+    
+    if distance[n] == inf:
+        print(-1)
+    else:
+        path = []
+        current = n
+        while current is not None:
+            path.append(current)
+            current = prev[current]
+        path.reverse()
+        print(' '.join(map(str, path)))
+
+if __name__ == "__main__":
+    main()
+```
+
+### Explanation
+1. **Graph Representation**: The graph is represented using an adjacency list where each node points to a list of tuples. Each tuple contains a neighboring node and the weight of the edge connecting them.
+2. **Dijkstra's Algorithm**: 
+   - Initialize the distance to all nodes as infinity except the starting node (node 1), which is set to 0.
+   - Use a priority queue to process nodes in order of increasing distance from the start. For each node, update the distances to its neighbors if a shorter path is found.
+3. **Path Reconstruction**: After determining the shortest path distances, backtrack from the destination node (node n) to the start node using the previous node array. This path is then reversed to provide the correct order from start to destination.
+
+This approach ensures that we efficiently find the shortest path using Dijkstra's algorithm with a time complexity of O((V + E) log V), where V is the number of vertices and E is the number of edges. The space complexity is O(V + E) for storing the graph and auxiliary data structures.
+</bot>
