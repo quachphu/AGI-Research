@@ -65,7 +65,7 @@ mini-AGI reads several subjects and gives each subject an equal share of charact
 | `code` | 108 MB |
 | `wikipedia` | 55 MB |
 
-`stories` and `arithmetic` exist in the author's corpus as very small local files. They were included in the first 65 minutes and then removed, because those two lanes started repeating (section 7). They are still inside the held-out mix, so the held-out number always includes them even when training does not.
+`stories` and `arithmetic` exist in the author's corpus as very small local files. They were included in the first 65 minutes and then removed, because those two lanes started repeating (section 10). They are still inside the held-out mix, so the held-out number always includes them even when training does not.
 
 The held-out mix is `school_policies_data/heldout_mix/`. It is the author's `data/val` subjects (arithmetic, chat, chess, code, reasoning, stories, wikipedia) plus `csulb_qa` and `csulb_qa_open`. `train.py` scores every subject in that folder. The headline held-out loss is the average across those subjects, each counted once, so a drop in CSULB loss is diluted by stories, arithmetic, and Wikipedia.
 
@@ -522,7 +522,7 @@ The 60-question numbers above are the earlier pilot. They used a 360-character c
 
 ## 19. Why a second evaluation was run
 
-The 60-question scores answer a different question from the one the later protocol tests. Open-book F1 there mixes retrieval with reading, because the passage was the top BM25 hit. The generation cap was 360 characters. In that pilot every hour-8 answer stopped at exactly 360 characters, while the reference answers have a median of 486 characters and a maximum of 764, and 56 of the 60 end with a `Source:` line. Only 25 of 61 closed-book answers contained a URL, so the URL rates were partly lowered by the cap.
+The 60-question scores answer a different question from the one the later protocol tests. Open-book F1 there mixes retrieval with reading, because the passage was the top BM25 hit. The generation cap was 360 characters. Of the 60 scored hour-8 closed-book answers, 31 are exactly 360 characters and 6 are 359. The other 23 stopped earlier, so the cap did not cut every reply. Eleven of those 60 contain the full URL, which is the 18.3% in the table above. The file has 61 rows because it also stores the cheating question, and that row is left out of the average. The 60 reference answers have a median length of 485 characters and a maximum of 764, and 56 of them end with a `Source:` line.
 
 The claim under test on 29 October 2026 is narrower. Continued reading put CSULB policy text into the weights, and the author's frozen next-byte benchmarks show what else those weights kept or lost. Closed-book is the headline: the model sees the question and nothing else. Where a passage is given, it is the stored `passage` field the question was built from, passed through `open_book_prompt` in `tools/csulb/qa_format.py`. `eval.py`'s `open_prompt` is not used, because that function calls BM25.
 
@@ -534,7 +534,7 @@ The written protocol is `research/eval_protocol.md`, committed as `8085b11` befo
 
 A question is clean when its exact wording does not appear in `school_policies_data/train/csulb_qa`, using the same scan as `questions_in_train` in `tools/csulb/watch_8h.py`. That leaves 2,514 of 3,603. The other 1,089 collide with a training wording.
 
-`tools/csulb/draw_eval_sample.py` draws the sample. Seed `20261029`. Fifty of each kind, at most two from one document. Kinds, in draw order: topic, overview, where, date, number, definition, approval, supersedes. The files are `research/eval/questions_400.jsonl` and `research/eval/questions_prompt_dev.jsonl`. The draw notes are `research/eval/sample_draw.json`.
+`tools/csulb/draw_eval_sample.py` draws the sample. Seed `20261029`. Fifty of each kind. Within one kind, at most two questions come from one document. The count starts over at the next kind, so a document can appear more than twice in the full 400. Fifty documents do. The most is six, from Misconduct in Research & Creative Activity. Kinds, in draw order: topic, overview, where, date, number, definition, approval, supersedes. The files are `research/eval/questions_400.jsonl` and `research/eval/questions_prompt_dev.jsonl`. The draw notes are `research/eval/sample_draw.json`.
 
 | | |
 |---|---|
@@ -618,9 +618,9 @@ Hour 8 is worse than the author's weights on both published sets, by about 0.38 
 
 `tools/csulb/generate_answers.py`. Checkpoints are the author's weights and hour 8 only. Hours 2, 4, and 6 were not generated. There is no hour-6 versus hour-8 comparison on these questions.
 
-Decoding is `serve.stream`, temperature 0, the same call `eval.ask` makes, including that function's repetition guard. Learning is off. The limit is 800 characters. The saved answer is cut at `</bot>`, at the incomplete marker `</bo` that `serve.stream` leaves when it stops, or at a new `<user>` or `<bot>` turn, whichever comes first. `end_marker` means the stream finished before 800 characters. `limit` means it used all 800.
+Decoding is `serve.stream`, temperature 0, the same call `eval.ask` makes, including that function's repetition guard. Learning is off. The limit is 800 yields from `serve.stream`. A yield is usually one character. The saved answer is cut at `</bot>`, at the incomplete marker `</bo` that `serve.stream` leaves when it stops, or at a new `<user>` or `<bot>` turn, whichever comes first. `end_marker` means the stream finished before 800 yields. `limit` means it used all 800.
 
-1,600 answers were written, 400 questions by 2 modes by 2 checkpoints, to `research/eval/local/answers.jsonl`. None is empty. None still contains a chat marker. Every limit stop is exactly 800 characters.
+1,600 answers were written, 400 questions by 2 modes by 2 checkpoints, to `research/eval/local/answers.jsonl`. None is empty. None still contains a chat marker. A limit stop is 800 yields from `serve.stream`. A yield is usually one character, and the saved text is stripped. Of the 360 limit stops, 291 saved answers are 800 characters. The other 69 are between 799 and 807.
 
 | | Closed, end | Closed, limit | Gold, end | Gold, limit |
 |---|---:|---:|---:|---:|
@@ -631,7 +631,7 @@ Decoding is `serve.stream`, temperature 0, the same call `eval.ask` makes, inclu
 
 Model id `claude-opus-5-5`. A one-question probe returned that id, stop reason `end_turn`. Effort is `low`, sent as `output_config.effort`. No temperature, `top_p`, or `top_k` is sent. One question per request. No history. Claude never receives a local answer or a reference answer. The output limit is 16,000 tokens, which covers the thinking trace and the answer.
 
-The 20 development questions were asked one at a time, both conditions, 40 replies. All 40 stopped on `end_turn`. Closed-book length ran from 479 to 1,000 characters (median 699), and from 3 to 8 sentences. Gold-passage length ran from 385 to 923 characters (median 663), and from 3 to 12 sentences. That was the one allowed format change. Both prompts now say to stop after 5 sentences and not to use a heading or a bullet list. The frozen text is `research/eval/claude/prompt.json`, commit `57c3bc7`. Those 20 are not scored.
+The 20 development questions were asked one at a time, both conditions, 40 replies. All 40 stopped on `end_turn`. Closed-book length ran from 479 to 1,000 characters (median 668.5), and from 3 to 8 sentences. Gold-passage length ran from 385 to 923 characters (median 622), and from 3 to 12 sentences. That was the one allowed format change. Both prompts now say to stop after 5 sentences and not to use a heading or a bullet list. The frozen text is `research/eval/claude/prompt.json`, commit `57c3bc7`. Those 20 are not scored.
 
 The 400 questions then went through the Batch API, both conditions, 800 requests. A second batch repeated the first 50 questions in file order, both conditions, 100 requests, for the run-to-run ceiling. Results do not return in order. Each result was matched by question id. All 900 replies are model `claude-opus-5-5`, stop reason `end_turn`, and valid. Refusals: 0. Length-limit stops: 0.
 
@@ -673,7 +673,7 @@ Both embeddings rank hour 8, then Claude, then the author. Agreement between hou
 |---|---:|---:|---:|
 | Qwen cosine | 0.634 | 0.918 | 0.792 |
 | mpnet cosine | 0.577 | 0.909 | 0.760 |
-| Word F1 | 0.201 | 0.868 | 0.445 |
+| Word F1 | 0.201 | 0.867 | 0.445 |
 | Policy number | 25 / 279 | 236 / 279 | 278 / 279 |
 | Date | 4 / 50 | 44 / 50 | 50 / 50 |
 | Full URL | 0 / 400 | 353 / 400 | 79 / 400 |
@@ -708,9 +708,9 @@ mpnet agrees that hour 8 is below the author on definition (0.368 to 0.293) and 
 
 Of the 36 hour-8 closed-book answers in the Qwen top quarter whose policy number or date is missing, 19 omit a fact the reference itself contains. The other 17 are flagged because the document has a number and the reference sentence does not use it. The hour-8 gold panel has 142 rows, because the 100th cosine is already 1.0 and ties stay in. All 21 flagged rows in that panel are the second kind. Claude's closed-book panel flags 81 of 100, and 66 of those omit a fact the reference contains. Claude's gold panel flags none of its top 100.
 
-The closed-book demo is question `f01658`, tied at cosine 1.0 on both embeddings. The question is: where is the official Department of Cinematic Arts posted? Hour 8 repeats the reference exactly, including the Academic Senate URL, and stops at 166 characters. The stored policy record has that title and that URL. Policy Statement 23-21, dated 27 October 2023, is in the passage and is not in this reference sentence. The author's weights produce a repetitive sentence and no URL. Claude, with no passage, says the question might be about the University of New Mexico or the University of Southern California. The question text does not name CSULB.
+Thirty-nine hour-8 closed-book answers have cosine 1.0 on both embeddings. The first of those in question-file order is `f02638`, an exact copy of its reference. The example below is `f01658`, which is also an exact copy. The question is: where is the official Department of Cinematic Arts posted? The saved hour-8 answer is 165 characters, the same text as the reference, including the Academic Senate URL. The stream yielded 166 characters and the saved text is stripped. The stored policy record has that title and that URL. Policy Statement 23-21, dated 27 October 2023, is in the passage and is not in this reference sentence. The author's weights produce a repetitive sentence and no URL. Claude, with no passage, says the question might be about the University of New Mexico or the University of Southern California. The question text does not name CSULB.
 
-The median hour-8 closed-book cosine is 0.735, question `f00208`. The reference says the complainant should contact the Human Resources Manager. Hour 8 says the Executive Director. The cosine is high and the office is wrong.
+Sorted by closed-book Qwen cosine, the two middle values of the 400 are 0.734. They are `f00208` (0.734086) and `f01589` (0.734422). The example is `f00208`. The reference says the complainant should contact the Human Resources Manager. Hour 8 says the Executive Director. The cosine is high and the office is wrong.
 
 The same tables, the chart, and this demo are in `research/eval/results.md`. The per-question cosines are in `research/eval/scores.json`.
 

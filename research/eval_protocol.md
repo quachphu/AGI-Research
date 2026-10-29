@@ -27,7 +27,7 @@ Step 931,303 and the 70.7-minute checkpoint were overwritten and are not measure
 
 ## Questions
 
-`tools/csulb/draw_eval_sample.py` draws the files below. Seed `20261029`. A question is clean when its wording does not appear in `school_policies_data/train/csulb_qa`, using the same scan as `questions_in_train` in `tools/csulb/watch_8h.py`. That leaves 2,514 of 3,603. The draw takes 50 of each kind, at most two from one document. Kinds, in draw order: topic, overview, where, date, number, definition, approval, supersedes.
+`tools/csulb/draw_eval_sample.py` draws the files below. Seed `20261029`. A question is clean when its wording does not appear in `school_policies_data/train/csulb_qa`, using the same scan as `questions_in_train` in `tools/csulb/watch_8h.py`. That leaves 2,514 of 3,603. The draw takes 50 of each kind. Within one kind the script keeps at most two questions from one document, and that count starts over at the next kind. In the saved 400, fifty documents appear more than twice and one document appears six times. The sample was not redrawn. Kinds, in draw order: topic, overview, where, date, number, definition, approval, supersedes.
 
 - Confirmatory set: `research/eval/questions_400.jsonl` (400 questions).
 - Prompt development: `research/eval/questions_prompt_dev.jsonl` (20 clean questions drawn from what remained after the 400). These 20 are not in the confirmatory scores. One format adjustment is allowed on them. After that adjustment the prompt is frozen and committed.
@@ -66,9 +66,9 @@ The Claude model id is `claude-opus-5-5`. Effort is `low`. Requests go through t
 
 ## Generation
 
-Greedy decoding through `serve.stream`, which is temperature 0 and the same call `eval.ask` makes, including that function’s repetition guard. Learning is off. The limit is 800 characters for every local answer in this evaluation.
+Greedy decoding through `serve.stream`, which is temperature 0 and the same call `eval.ask` makes, including that function’s repetition guard. Learning is off. The limit is 800 yields from `serve.stream` for every local answer in this evaluation. A yield is usually one character.
 
-`serve.stream` stops when the reply completes `</bot>`, and it does not yield the last character of that marker. The saved answer is the yielded text, cut at the first of `</bot>`, `</bo`, `<user>`, or `<bot>`. The record says `end_marker` when the stream stopped before 800 characters, and `limit` when it reached 800. A new turn inside the yielded text is cut the same way and counts as `end_marker`.
+`serve.stream` stops when the reply completes `</bot>`, and it does not yield the last character of that marker. The saved answer is the yielded text, cut at the first of `</bot>`, `</bo`, `<user>`, or `<bot>`. The record says `end_marker` when the stream stopped before 800 yields, and `limit` when it reached 800 yields. Of the 360 limit stops, 291 saved answers are 800 characters and the other 69 are between 799 and 807. A new turn inside the yielded text is cut the same way and counts as `end_marker`.
 
 ## What is scored
 
@@ -110,7 +110,7 @@ Frozen benchmarks and local answers both use the GPU, so local answers start aft
 
 ## What this evaluation does not include
 
-No NLI model. No hand grading. No unanswerable questions. No learning-while-reading measurement. No MMLU-style exam. No BM25. The earlier 60-question open-book scores used BM25 and are an earlier pilot. The earlier closed-book word F1 on those 60 used a 360-character limit. In that pilot every hour-8 answer stopped at exactly 360 characters, so its URL scores were partly lowered by the limit. Those numbers are reported separately and are not recomputed here.
+No NLI model. No hand grading. No unanswerable questions. No learning-while-reading measurement. No MMLU-style exam. No BM25. The earlier 60-question open-book scores used BM25 and are an earlier pilot. The earlier closed-book word F1 on those 60 used a 360-character limit. Of the 60 scored hour-8 closed-book answers, 31 are exactly 360 characters and 6 are 359. The other 23 stopped earlier. Eleven of the 60 contain the full URL. Those numbers are reported separately and are not recomputed here.
 
 ## Limits stated in advance
 

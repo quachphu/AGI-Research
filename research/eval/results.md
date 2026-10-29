@@ -44,7 +44,7 @@ The passage is the stored `passage` on the question, rendered once into `gold_us
 |---|---:|---:|---:|
 | Qwen cosine | 0.634 | 0.918 | 0.792 |
 | mpnet cosine | 0.577 | 0.909 | 0.760 |
-| Word F1 | 0.201 | 0.868 | 0.445 |
+| Word F1 | 0.201 | 0.867 | 0.445 |
 | Policy number | 25 / 279 | 236 / 279 | 278 / 279 |
 | Date, date questions | 4 / 50 | 44 / 50 | 50 / 50 |
 | Full URL | 0 / 400 | 353 / 400 | 79 / 400 |
@@ -85,18 +85,18 @@ Of the 36 hour-8 closed-book answers in the Qwen panel whose policy number or da
 
 ## How the replies ended
 
-The limit was 800 characters. `end_marker` means `serve.stream` finished the reply before that. `limit` means it used all 800.
+The generator stops after 800 yields from `serve.stream`. A yield is usually one character. `end_marker` means the stream finished the reply before 800 yields. `limit` means it used all 800.
 
 | | Closed, end | Closed, limit | Gold, end | Gold, limit |
 |---|---:|---:|---:|---:|
 | Author | 204 | 196 | 266 | 134 |
 | Hour 8 | 382 | 18 | 388 | 12 |
 
-Every limit stop is exactly 800 characters. No saved answer still contains a chat marker.
+Of the 360 limit stops, 291 saved answers are 800 characters. The other 69 are between 799 and 807, because a yield can contain more than one character and the saved text is stripped. No saved answer still contains a chat marker.
 
 ## Demo
 
-Closed-book. Several hour-8 answers tie at cosine 1.0 on both embeddings. The first of those, in question-file order within the tie, is `f01658`.
+Closed-book. Thirty-nine hour-8 answers have cosine 1.0 on both embeddings. The first of those in question-file order is `f02638`, an exact copy of its reference. The example below is `f01658`, which is also an exact copy.
 
 Question: Where is the official Department of Cinematic Arts posted?
 
@@ -104,13 +104,13 @@ Official reference: The official text of the Department of Cinematic Arts is pub
 
 The stored policy record for that document has the same title and the same URL, and the passage says it was published by the CSULB Academic Senate. Policy Statement 23-21, dated October 27, 2023, is in the passage. This question’s reference sentence does not include the number or the date, and neither does the hour-8 answer.
 
-Hour 8 repeats the reference exactly, word F1 1.0, and stops at 166 characters on the end marker.
+Hour 8 repeats the reference exactly, word F1 1.0. The saved answer is 165 characters. The stream yielded 166 and the saved text is stripped. It stops on the end marker.
 
 The author’s weights answer: “1. Introduction: The Department of Cinematic Arts posted includes the formation of arts, cinematic posted arts, and cinematic posted arts.” It goes on in that pattern and does not give the URL.
 
 Claude, with no passage, does not treat the question as CSULB. It says the question is ambiguous, mentions the University of New Mexico and the University of Southern California, and asks which institution is meant. It gives no CSULB URL.
 
-Median hour-8 closed-book cosine is 0.735, question `f00208`, on the early-resolution section of the discrimination policy. The reference says the complainant should contact the Human Resources Manager. Hour 8 says the complainant should consult the Executive Director, and it cites an Associated Students URL. The cosine is high and the office is wrong. That is the backup example.
+Sorted by closed-book Qwen cosine, the two middle values of the 400 are 0.734. They are `f00208` (0.734086) and `f01589` (0.734422). The example is `f00208`, on the early-resolution section of the discrimination policy. The reference says the complainant should contact the Human Resources Manager. Hour 8 says the complainant should consult the Executive Director, and it cites an Associated Students URL. The cosine is high and the office is wrong. That is the backup example.
 
 ## Forgetting
 
@@ -175,7 +175,7 @@ Hour 8 is worse than the author’s weights on both published sets, by about 0.3
 
 ## Earlier pilot
 
-The original 60 questions, with a 360-character limit, stay a separate pilot. Eleven of them also sit in this 400. The sample was not redrawn. `runs/csulb_eval.md` reports closed-book word F1 of 13.4% on the author’s weights and 31.6% after the earlier continuation. `runs/csulb_8h_review.md` reports 41.9% closed-book word F1 at hour 8 on all 60. In that pilot every hour-8 answer stopped at 360 characters, so the URL rates there were partly lowered by the limit. The open-book numbers in those files used BM25. They are an earlier pilot. This run’s gold passage is the stored passage, and the closed-book numbers above use the 800-character limit.
+The original 60 questions, with a 360-character limit, stay a separate pilot. Eleven of them also sit in this 400. The sample was not redrawn. `runs/csulb_eval.md` reports closed-book word F1 of 13.4% on the author’s weights and 31.6% after the earlier continuation. `runs/csulb_8h_review.md` reports 41.9% closed-book word F1 at hour 8 on all 60. Of the 60 scored hour-8 closed-book answers, 31 are exactly 360 characters and 6 are 359. The other 23 stopped earlier. Eleven of the 60 contain the full URL. The open-book numbers in those files used BM25. They are an earlier pilot. This run’s gold passage is the stored passage, and the closed-book numbers above use the 800-character limit.
 
 ## Methods
 
