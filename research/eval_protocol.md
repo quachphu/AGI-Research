@@ -117,3 +117,27 @@ No NLI model. No hand grading. No unanswerable questions. No learning-while-read
 The reference answer was a training target on the other wordings of the same fact. Only the question wording is new. A high cosine means a new wording produced the trained answer. It does not mean the answer text was never trained.
 
 Training started from the author’s checkpoint, not from empty weights. The 65-minute run reset the plasticity scale and read stories and arithmetic, which the eight-hour run did not. Claude’s answers vary from run to run, and Claude may have seen public CSULB pages. The model was not trained to say that it does not know. Cosine similarity is weak when two sentences differ by a number, a date, or a negation, which is why exact match and the error panel are reported beside it.
+
+## Amendment, 29 October 2026
+
+Recorded before the version-2 Claude run and before the replacement demo was chosen. The original prompt, the original answers, and `research/eval/scores.json` stay as they are.
+
+### Closed-book Claude, version 2
+
+The frozen closed-book prompt never says the questions are about CSULB. Counted on `research/eval/questions_400.jsonl`, 203 question texts do not contain `CSULB`. Two of those 203 still name a place: the address “W Broadway, Long Beach, CA 90802”, and the system-wide title “California State University Time, Place and Manner Policy”. The other 201 contain none of `CSULB`, `Long Beach`, or `California State University`. Claude had to guess the institution. The local model was trained only on CSULB policies.
+
+Version 2 is the frozen closed-book prompt plus one sentence at the start. Nothing else in that prompt changes.
+
+```text
+These questions are about policies of California State University, Long Beach (CSULB). Answer this question from your own knowledge in 2 to 5 sentences, then stop. Do not use a heading or a bullet list. Mention a policy number or a source only if you know it.
+
+Question: {question}
+```
+
+`research/eval/claude/prompt.json` and `research/eval/claude/answers.jsonl` are version 1 and are not overwritten. Version 2 is written to new files. The gold-passage prompt is not changed and is not re-run. The passage already names the policy and its CSULB source.
+
+The re-run is the 400 closed-book questions, plus the first 50 rows of `questions_400.jsonl` in file order, closed-book only, for the ceiling. Settings are the ones already fixed: model `claude-opus-5-5`, effort `low`, no temperature, one question per request, the Batch API, results matched by question id. A refusal or a stop on the length limit is invalid. Those answers are excluded from the paired scores and the count is reported.
+
+### Demo question
+
+Chosen after this amendment, and only by this rule. Keep a question whose text contains `CSULB`. Keep kinds `topic`, `overview`, and `definition`. Rank the remaining questions by hour 8’s closed-book Qwen cosine, highest first. Break ties by mpnet cosine, then by order in `questions_400.jsonl`. Check the hour-8 answer against the official policy text. If that answer is not correct, take the next question under the same rule and record why. `f01658` does not contain `CSULB`, so this rule does not select it.
