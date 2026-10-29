@@ -6,6 +6,14 @@ The author’s `weights/manifest.json` was last written at 2026-10-12 15:55:31 -
 
 Claude is `claude-opus-5-5`, effort `low`, with no temperature sent. The first run, version 1, is 900 replies: 400 questions in both conditions plus a 50-question re-run. All stopped on `end_turn`. None were refusals and none hit the length limit. Version 2 re-asked the 400 closed-book questions and the 50-question closed-book ceiling after one sentence was added to that prompt. Those 450 replies also stopped on `end_turn`. Refusals: 0. Length-limit stops: 0. Every question stays in the paired comparisons. Version 1 is still `research/eval/claude/answers.jsonl` and `research/eval/scores.json`. Version 2 is `answers_v2.jsonl` and `scores_v2.json`. The API key is only in the untracked `.env`.
 
+## Summary
+
+Closed-book, hour 8 is ahead of Claude version 2, and Claude version 2 is ahead of the author’s weights. The main negative result is elsewhere. Hour 8 is worse than the author’s weights on enwik9 (1.356 to 1.736 bits/byte), PG19 (2.058 to 2.214 bits/byte), stories (0.476 to 0.905 nats), and arithmetic (0.657 to 0.970 nats). Chat and chess improved. Code, reasoning, and the project’s own Wikipedia held-out stayed within 0.03 nats.
+
+Most of that damage shows up early. enwik9 is worst at hour 2 (1.779). Stories is already 0.992 at the 65-minute checkpoint. That points to the pilot’s learning-rate reset and to reading the tiny stories and arithmetic files over and over. Arithmetic is not finished there: it is 0.793 at 65 minutes and 0.970 at hour 8.
+
+The project’s Wikipedia held-out barely moves, from 1.077 to 1.067. enwik9, a different Wikipedia slice, gets much worse. This record states that split and does not explain it.
+
 ## Closed-book
 
 The model saw the question only. Cosine is to the official reference, after stripping the trained lead-in and cutting each text to that question’s cleaned reference. Qwen is `Qwen/Qwen3-Embedding-0.6B`. mpnet is `sentence-transformers/all-mpnet-base-v2`. Both texts were encoded with no instruction. Word F1 is the project’s function in `tools/csulb/eval.py`, on the raw answer before that stripping.
@@ -177,7 +185,7 @@ PG19, frozen, 100 books, 41,289,001 bytes scored, window 4,096:
 | 65 minutes | 2.2864 | 1.5848 |
 | Hour 8 | 2.2141, repeat 2.2141 | 1.5347 |
 
-Hour 8 is worse than the author’s weights on both published sets, by about 0.38 bits/byte on enwik9 and 0.11 nats/byte on PG19. Both gaps are larger than 0.03 nats.
+Hour 8 is worse than the author’s weights on enwik9 (1.356 to 1.736 bits/byte) and on PG19 (2.058 to 2.214 bits/byte). Both gaps are larger than 0.03 nats. Stories goes from 0.476 to 0.905 and arithmetic from 0.657 to 0.970. Chat and chess improve. Code, reasoning, and the project’s own Wikipedia held-out stay within 0.03 nats. enwik9 is worst at hour 2 (1.779), and stories is already 0.992 at the 65-minute checkpoint. The project’s Wikipedia held-out goes from 1.077 to 1.067 while enwik9 gets much worse. That split is left as it stands.
 
 ## Earlier pilot
 
@@ -192,6 +200,8 @@ Local answers use `serve.build_prompt` and `serve.stream` with learning off, the
 Claude was asked one question at a time, with no history and no temperature. The 20 development questions ran past five sentences, so the frozen prompt adds “then stop” and forbids a heading or a list. Those 20 are not scored. The 400, in both conditions, and the repeat of the first 50 went through the Batch API. Results were matched by question id. Version 2 repeated the 400 closed-book questions and the 50-question closed-book ceiling with one added sentence, and left the gold-passage answers as version 1.
 
 ## Limits
+
+The main negative result is the loss on the frozen benchmarks. Hour 8 is worse than the author’s weights on enwik9 (1.356 to 1.736 bits/byte), PG19 (2.058 to 2.214 bits/byte), stories (0.476 to 0.905 nats), and arithmetic (0.657 to 0.970 nats). Chat and chess improved. Code, reasoning, and the project’s Wikipedia held-out stayed within 0.03 nats. enwik9 is at its worst at hour 2 (1.779), and stories is already 0.992 after the 65-minute pilot. That points to the learning-rate reset and the repeated reading of the tiny stories and arithmetic files. The Wikipedia held-out barely changes, from 1.077 to 1.067, while enwik9 gets much worse. Nothing here explains that split.
 
 The reference answer was a training target on the other wordings of the same fact. Only the question wording is new. A high cosine means a new wording produced the trained answer.
 

@@ -549,6 +549,8 @@ Of the 400, 279 have a policy number (all of those start with `PS `) and 121 do 
 
 ## 21. Frozen next-byte benchmarks
 
+The main negative result is in these measurements. Hour 8 is worse than the author's weights on enwik9 (1.356 to 1.736 bits/byte), PG19 (2.058 to 2.214 bits/byte), stories (0.476 to 0.905 nats), and arithmetic (0.657 to 0.970 nats). Chat and chess improved. Code, reasoning, and the project's own Wikipedia held-out stayed within 0.03 nats. Most of the damage shows up early. enwik9 is worst at hour 2 (1.779). Stories is already 0.992 at the 65-minute checkpoint. That points to the pilot's learning-rate reset and to reading the tiny stories and arithmetic files over and over. Arithmetic keeps rising after that checkpoint, from 0.793 at 65 minutes to 0.970 at hour 8. The project's Wikipedia held-out barely moves, from 1.077 to 1.067. enwik9, a different Wikipedia slice, gets much worse. This record states that split and does not explain it.
+
 These are the author's measurements, re-run on this code. Numbers already in the training logs are the historical record. They are not this table. Held-out reading changed after those runs, and the first call on `weights/` can otherwise reuse the author's logged line at step 914,508. Every invocation passed `--force`, including the first measurement of `weights/`. A reused log line would have failed the protocol. All 29 records say `fresh: true`. The wrapper is `tools/csulb/bench_frozen.py`, driven by `tools/csulb/run_frozen_suite.py`. Each record was copied into `research/eval/benchmarks/` before the next run overwrote the shared file under `runs/`.
 
 Before the runs, each of the six folders was checked by manifest step and `core.npz` sha256 against `RESEARCH.md`. All six matched. `weights/manifest.json` was last written at 2026-10-12 15:55:31 -0700. No `train.py` and no `chat.py` was running. The GPU was an RTX 4090 with 24,564 MiB. The manifest timestamp was the same after the suite.
@@ -612,7 +614,7 @@ PG19, frozen, all 100 books, window 4,096. Hours 2, 4, and 6 were not run. Bits 
 | 65 minutes | 2.2864 | 1.5848 |
 | Hour 8 | 2.2141, repeat 2.2141 | 1.5347 |
 
-Hour 8 is worse than the author's weights on both published sets, by about 0.38 bits per byte on enwik9 and 0.108 nats per byte on PG19. Both gaps are larger than 0.03 nats. These fresh numbers are not comparable to the README figures for a later author checkpoint.
+Hour 8 is worse than the author's weights on enwik9 (1.356 to 1.736 bits/byte) and on PG19 (2.058 to 2.214 bits/byte). Both gaps are larger than 0.03 nats. Stories goes from 0.476 to 0.905 and arithmetic from 0.657 to 0.970. Chat and chess improve. Code, reasoning, and the project's own Wikipedia held-out stay within 0.03 nats. enwik9 is worst at hour 2 (1.779), and stories is already 0.992 at the 65-minute checkpoint. The Wikipedia held-out goes from 1.077 to 1.067 while enwik9 gets much worse. That split is left as it stands. These fresh numbers are not comparable to the README figures for a later author checkpoint.
 
 ## 22. Local answers on the 400
 
