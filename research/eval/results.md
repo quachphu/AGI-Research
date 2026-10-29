@@ -100,21 +100,21 @@ Of the 360 limit stops, 291 saved answers are 800 characters. The other 69 are b
 
 ## Demo
 
-Closed-book. Thirty-nine hour-8 answers have cosine 1.0 on both embeddings. The first of those in question-file order is `f02638`, an exact copy of its reference. The example below is `f01658`, which is also an exact copy.
+Closed-book. The example is `f02638`, chosen by the rule in the 29 October 2026 amendment: the question contains `CSULB`, the kind is overview, and it has the highest hour-8 Qwen cosine among topic, overview, and definition questions that name CSULB. mpnet cosine is also 1.0, so the tie break was not needed. It was the first question under that rule. The hour-8 answer was checked against `school_policies_data/text/19_06_range_elevation_for_lecturer_faculty.txt` and kept.
 
-Question: Where is the official Department of Cinematic Arts posted?
+Question: Explain the CSULB 19-06 Range Elevation for Lecturer Faculty in short.
 
-Official reference: The official text of the Department of Cinematic Arts is published by the CSULB Academic Senate at https://www.csulb.edu/academic-senate/department-of-cinematic-arts
+Official reference: According to CSULB Policy Statement 19-06 (19-06 Range Elevation for Lecturer Faculty): Policy Statement Policy Number: 19-06 Date: 5/16/2019 (This revised policy supersedes PS 00-11, 02-03, and 08-15.) This policy statement was recommended by the Academic Senate on March 21, 2019 and approved by the president on April 18, 2019. Source: https://www.csulb.edu/academic-senate/19-06-range-elevation-for-lecturer-faculty
 
-The stored policy record for that document has the same title and the same URL, and the passage says it was published by the CSULB Academic Senate. Policy Statement 23-21, dated October 27, 2023, is in the passage. This question’s reference sentence does not include the number or the date, and neither does the hour-8 answer.
+The stored policy text states each of those claims: policy number 19-06, date 5/16/2019, the three superseded statements, the Academic Senate recommendation on March 21, 2019, presidential approval on April 18, 2019, and that URL. Hour 8 repeats the reference exactly, word F1 1.0, and stops on the end marker at 419 characters. The answer is correct.
 
-Hour 8 repeats the reference exactly, word F1 1.0. The saved answer is 165 characters. The stream yielded 166 and the saved text is stripped. It stops on the end marker.
+The author’s weights repeat the question as a numbered list and do not give the policy number, the dates, or the URL. The reply hits the 800-yield limit.
 
-The author’s weights answer: “1. Introduction: The Department of Cinematic Arts posted includes the formation of arts, cinematic posted arts, and cinematic posted arts.” It goes on in that pattern and does not give the URL.
+Claude version 2, with no passage, describes range elevation as a lecturer’s move to a higher salary range under the collective bargaining agreement, including an application and review. Its Qwen cosine to the reference is 0.526. The reference sentence is the adoption paragraph, not the salary-range procedure.
 
-Claude, with no passage, does not treat the question as CSULB. It says the question is ambiguous, mentions the University of New Mexico and the University of Southern California, and asks which institution is meant. It gives no CSULB URL.
+`f01658`, “Where is the official Department of Cinematic Arts posted?”, is no longer the example. The question does not name CSULB, and it is a template-style where-question. Version 1 of Claude treated it as possibly the University of New Mexico or the University of Southern California.
 
-Sorted by closed-book Qwen cosine, the two middle values of the 400 are 0.734. They are `f00208` (0.734086) and `f01589` (0.734422). The example is `f00208`, on the early-resolution section of the discrimination policy. The reference says the complainant should contact the Human Resources Manager. Hour 8 says the complainant should consult the Executive Director, and it cites an Associated Students URL. The cosine is high and the office is wrong. That is the backup example.
+Sorted by closed-book Qwen cosine, the two middle values of the 400 are 0.734. They are `f00208` (0.734086) and `f01589` (0.734422). The backup example is `f00208`, on the early-resolution section of the discrimination policy. The reference says the complainant should contact the Human Resources Manager. Hour 8 says the complainant should consult the Executive Director, and it cites an Associated Students URL. The cosine is high and the office is wrong.
 
 ## Forgetting
 
@@ -197,4 +197,4 @@ Training started from the author’s checkpoint. Step 931,303 and the 70.7-minut
 
 The model was not trained to say that it does not know. Cosine stays high when a number, a date, or a negation is wrong, which is why the median example and the error panel sit beside the cosine. Definition questions are the kind where hour 8’s closed-book cosine is below both the author and Claude.
 
-Claude’s answers vary from run to run. On the version-2 50-question re-run the closed-book ceiling is 0.916, so two Claude answers of the same question are closer to each other than hour 8 is to the reference. The version-1 ceiling was 0.896. Claude may also have seen public CSULB pages. On the demo question it did not identify the campus. The question itself does not say CSULB.
+Claude’s answers vary from run to run. On the version-2 50-question re-run the closed-book ceiling is 0.916, so two Claude answers of the same question are closer to each other than hour 8 is to the reference. The version-1 ceiling was 0.896. Claude may also have seen public CSULB pages. The replaced demo, `f01658`, does not name CSULB. The current demo, `f02638`, does.
