@@ -45,7 +45,7 @@ Local gold passage. The user turn is the stored `gold_user` string. It is not re
 Claude, no passage:
 
 ```text
-Answer this question from your own knowledge in 2 to 5 sentences. Mention a policy number or a source only if you know it.
+Answer this question from your own knowledge in 2 to 5 sentences, then stop. Do not use a heading or a bullet list. Mention a policy number or a source only if you know it.
 
 Question: {question}
 ```
@@ -53,12 +53,14 @@ Question: {question}
 Claude, gold passage:
 
 ```text
-Answer this question only from the passage below, in 2 to 5 sentences. Mention a policy number or a source only if the passage states it.
+Answer this question only from the passage below, in 2 to 5 sentences, then stop. Do not use a heading or a bullet list. Mention a policy number or a source only if the passage states it.
 
 {gold_user}
 ```
 
 `{gold_user}` is the same string the local model reads. Claude never receives a local answer or a reference answer. One question per request. No conversation history.
+
+The 20 prompt-development answers were longer than 5 sentences: closed-book ran to 8 sentences and the gold passage to 12. That was the one allowed format change. The sentences above are the frozen prompt. Those 20 questions are not in the confirmatory scores.
 
 The Claude model id is `claude-opus-5-5`. Effort is `low`. Requests go through the Batch API. No temperature setting is sent. The output limit is high enough for the thinking trace and the answer. If that model id is rejected, this protocol is amended before any score is computed. Another model is not substituted silently.
 
