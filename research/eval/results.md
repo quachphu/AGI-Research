@@ -177,6 +177,8 @@ enwik9, frozen, 2,000 pieces of 2,048 bytes, bits per byte:
 | Hour 6 | 1.6984 |
 | Hour 8 | 1.7359, repeat 1.7358 |
 
+The same 2,000 pieces were scored once more, with the loss of each piece saved, for the author’s weights and for hour 8. The means are 1.356 and 1.736 bits/byte, the same measurement as the table. A piece is a table if it contains wiki table markup, a template if it contains at least two `{{` and is not a table, markup if it contains a wiki link, a heading, or a page tag, and prose otherwise. Templates (282 pieces) rose by 0.555 bits/byte and tables (191) by 0.550. Ordinary wiki markup is 1,501 of the 2,000 pieces and rose by 0.331, which is about two thirds of the total increase. Plain prose is 26 pieces and rose by 0.114. The per-piece file is `research/eval/diagnostics/enwik9_pieces.jsonl`. The frozen benchmark records were not changed.
+
 PG19, frozen, 100 books, 41,289,001 bytes scored, window 4,096:
 
 | Checkpoint | Bits/byte | Nats/byte |
