@@ -38,7 +38,7 @@ On the 400 paired questions, the bootstrap 95% intervals are:
 
 Both embeddings rank hour 8, then Claude, then the author. With version 1 the hour-8 gap on Qwen was 0.092 (0.065 to 0.119). Naming the campus narrows that gap. It does not reverse it.
 
-Agreement with Claude version 2, the cosine between the two answers on the same question, is 0.577 (Qwen) and 0.487 (mpnet) for hour 8. Hour 8 is closer to the official reference (0.693) than to Claude. The ceiling, cosine between Claude’s two version-2 closed-book runs on the first 50 questions, is 0.916 (Qwen) and 0.895 (mpnet). The version-1 ceiling was 0.896 and 0.887.
+Agreement with Claude version 2, the cosine between the two answers on the same question, is 0.577 (Qwen) and 0.487 (mpnet) for hour 8. Hour 8 is closer to the official policy wording (0.693) than to Claude. Hour 8 was trained on these reference answers, on other wordings of the same facts. Claude paraphrases. The ceiling, cosine between Claude’s two version-2 closed-book runs on the first 50 questions, is 0.916 (Qwen) and 0.895 (mpnet). The version-1 ceiling was 0.896 and 0.887.
 
 ## Gold passage
 
@@ -52,6 +52,8 @@ The passage is the stored `passage` on the question, rendered once into `gold_us
 | Policy number | 25 / 279 | 236 / 279 | 278 / 279 |
 | Date, date questions | 4 / 50 | 44 / 50 | 50 / 50 |
 | Full URL | 0 / 400 | 353 / 400 | 79 / 400 |
+
+Claude’s gold-passage URL count is 79 of 400. Its prompt said to mention a source only if the passage states it, and to answer in 2 to 5 sentences. Hour 8 was trained to end every answer with `Source:` and the URL.
 
 On the same 400 questions:
 
@@ -79,7 +81,7 @@ Fifty questions of each kind. Closed-book Qwen cosine:
 | Approval | 0.660 | 0.887 | 0.633 | 0.636 | 0.784 |
 | Supersedes | 0.630 | 0.813 | 0.532 | 0.532 | 0.663 |
 
-Claude in this table is version 2. mpnet agrees on the direction from the author to hour 8 for every kind, including definition, where closed-book cosine falls (mpnet 0.368 to 0.293) while word F1 still rises (0.086 to 0.265). On definition, both embeddings place Claude above hour 8 (mpnet 0.521 against 0.293). The overall order remains hour 8, then Claude, then the author.
+Claude in this table is version 2. Claude’s cosine is higher than hour 8’s on topic (0.583 against 0.458), overview (0.661 against 0.587), and definition (0.529 against 0.388). On definition, hour 8 is below the author’s weights as well. mpnet agrees on that direction for every kind, including definition, where closed-book cosine falls (mpnet 0.368 to 0.293) while word F1 still rises (0.086 to 0.265). On definition, both embeddings place Claude above hour 8 (mpnet 0.521 against 0.293). The overall order remains hour 8, then Claude, then the author.
 
 ## Error panel
 
