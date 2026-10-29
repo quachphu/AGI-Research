@@ -633,7 +633,9 @@ Model id `claude-opus-5-5`. A one-question probe returned that id, stop reason `
 
 The 20 development questions were asked one at a time, both conditions, 40 replies. All 40 stopped on `end_turn`. Closed-book length ran from 479 to 1,000 characters (median 668.5), and from 3 to 8 sentences. Gold-passage length ran from 385 to 923 characters (median 622), and from 3 to 12 sentences. That was the one allowed format change. Both prompts now say to stop after 5 sentences and not to use a heading or a bullet list. The frozen text is `research/eval/claude/prompt.json`, commit `57c3bc7`. Those 20 are not scored.
 
-The 400 questions then went through the Batch API, both conditions, 800 requests. A second batch repeated the first 50 questions in file order, both conditions, 100 requests, for the run-to-run ceiling. Results do not return in order. Each result was matched by question id. All 900 replies are model `claude-opus-5-5`, stop reason `end_turn`, and valid. Refusals: 0. Length-limit stops: 0.
+The 400 questions then went through the Batch API, both conditions, 800 requests. A second batch repeated the first 50 questions in file order, both conditions, 100 requests, for the run-to-run ceiling. Results do not return in order. Each result was matched by question id. All 900 replies are model `claude-opus-5-5`, stop reason `end_turn`, and valid. Refusals: 0. Length-limit stops: 0. Those files are version 1 and were not overwritten.
+
+Version 2, recorded in the 29 October 2026 amendment, adds one sentence to the start of the closed-book prompt: the questions are about policies of California State University, Long Beach. Nothing else in that prompt changes. The gold-passage prompt was not re-run. The re-run is 400 closed-book questions plus the first 50, closed-book only. All 450 replies are model `claude-opus-5-5`, stop reason `end_turn`, and valid. Refusals: 0. Length-limit stops: 0. The new files are `research/eval/claude/prompt_v2.json` and `answers_v2.jsonl`.
 
 ## 24. Scores on the 400
 
@@ -647,27 +649,33 @@ Chance is the cosine to a different question's reference, 10 shuffles, seed `202
 
 ### Closed-book
 
-| | Author | Hour 8 | Claude |
-|---|---:|---:|---:|
-| Qwen cosine | 0.543 | 0.693 | 0.601 |
-| mpnet cosine | 0.461 | 0.645 | 0.559 |
-| Word F1 | 0.117 | 0.562 | 0.174 |
-| Policy number | 22 / 279 | 112 / 279 | 32 / 279 |
-| Date | 2 / 50 | 12 / 50 | 4 / 50 |
-| Full URL | 0 / 400 | 174 / 400 | 0 / 400 |
+Claude in this table is version 2. The last column is version 1, the same closed-book prompt without the campus sentence.
 
-Chance, Qwen then mpnet: author 0.305 and 0.206, hour 8 0.374 and 0.259, Claude 0.366 and 0.259.
+| | Author | Hour 8 | Claude | Without CSULB context |
+|---|---:|---:|---:|---:|
+| Qwen cosine | 0.543 | 0.693 | 0.642 | 0.601 |
+| mpnet cosine | 0.461 | 0.645 | 0.585 | 0.559 |
+| Word F1 | 0.117 | 0.562 | 0.194 | 0.174 |
+| Policy number | 22 / 279 | 112 / 279 | 32 / 279 | 32 / 279 |
+| Date | 2 / 50 | 12 / 50 | 4 / 50 | 4 / 50 |
+| Full URL | 0 / 400 | 174 / 400 | 0 / 400 | 0 / 400 |
+
+Naming the campus raises Claude's closed-book cosine by 0.041 on Qwen and 0.026 on mpnet, and word F1 by 0.020. The policy-number, date, and URL counts do not move.
+
+Chance, Qwen then mpnet: author 0.305 and 0.206, hour 8 0.374 and 0.259, Claude version 2 0.401 and 0.282, version 1 0.366 and 0.259.
 
 | Contrast | Embedding | Mean gap | 95% interval |
 |---|---|---:|---:|
 | Hour 8 minus author | Qwen | 0.150 | 0.126 to 0.174 |
 | Hour 8 minus author | mpnet | 0.184 | 0.157 to 0.212 |
-| Hour 8 minus Claude | Qwen | 0.092 | 0.065 to 0.119 |
-| Hour 8 minus Claude | mpnet | 0.086 | 0.053 to 0.119 |
+| Hour 8 minus Claude, version 2 | Qwen | 0.051 | 0.025 to 0.076 |
+| Hour 8 minus Claude, version 2 | mpnet | 0.060 | 0.029 to 0.092 |
 
-Both embeddings rank hour 8, then Claude, then the author. Agreement between hour 8 and Claude is 0.538 (Qwen) and 0.458 (mpnet). Hour 8 is closer to the official reference than to Claude. The closed-book ceiling on the 50 is 0.896 (Qwen) and 0.887 (mpnet).
+Both embeddings rank hour 8, then Claude, then the author. With version 1 the hour-8 gap on Qwen was 0.092 (0.065 to 0.119). Agreement between hour 8 and Claude version 2 is 0.577 (Qwen) and 0.487 (mpnet). Hour 8 is closer to the official reference than to Claude. The version-2 closed-book ceiling on the 50 is 0.916 (Qwen) and 0.895 (mpnet). The version-1 ceiling was 0.896 and 0.887.
 
 ### Gold passage
+
+Claude in this table is version 1. The gold-passage prompt was not re-run.
 
 | | Author | Hour 8 | Claude |
 |---|---:|---:|---:|
@@ -691,22 +699,24 @@ Both embeddings rank hour 8, then Claude, then the author. The gold ceiling is 0
 
 Fifty questions of each kind.
 
-| Kind | Author | Hour 8 | Claude | Hour 8 word F1 |
-|---|---:|---:|---:|---:|
-| Topic | 0.407 | 0.458 | 0.563 | 0.345 |
-| Overview | 0.480 | 0.587 | 0.615 | 0.387 |
-| Where | 0.560 | 0.856 | 0.672 | 0.711 |
-| Date | 0.483 | 0.629 | 0.534 | 0.527 |
-| Number | 0.676 | 0.926 | 0.710 | 0.813 |
-| Definition | 0.448 | 0.388 | 0.548 | 0.265 |
-| Approval | 0.660 | 0.887 | 0.636 | 0.784 |
-| Supersedes | 0.630 | 0.813 | 0.532 | 0.663 |
+Claude in this table is version 2.
 
-mpnet agrees that hour 8 is below the author on definition (0.368 to 0.293) and above the author on the other seven kinds. On definition, both embeddings also place Claude above hour 8 (mpnet 0.567 against 0.293). The overall order is still hour 8, then Claude, then the author.
+| Kind | Author | Hour 8 | Claude | Without CSULB context | Hour 8 word F1 |
+|---|---:|---:|---:|---:|---:|
+| Topic | 0.407 | 0.458 | 0.583 | 0.563 | 0.345 |
+| Overview | 0.480 | 0.587 | 0.661 | 0.615 | 0.387 |
+| Where | 0.560 | 0.856 | 0.792 | 0.672 | 0.711 |
+| Date | 0.483 | 0.629 | 0.632 | 0.534 | 0.527 |
+| Number | 0.676 | 0.926 | 0.774 | 0.710 | 0.813 |
+| Definition | 0.448 | 0.388 | 0.529 | 0.548 | 0.265 |
+| Approval | 0.660 | 0.887 | 0.633 | 0.636 | 0.784 |
+| Supersedes | 0.630 | 0.813 | 0.532 | 0.532 | 0.663 |
+
+mpnet agrees that hour 8 is below the author on definition (0.368 to 0.293) and above the author on the other seven kinds. On definition, both embeddings also place Claude above hour 8 (mpnet 0.521 against 0.293). The overall order is still hour 8, then Claude, then the author.
 
 ### Error panel and the demo
 
-Of the 36 hour-8 closed-book answers in the Qwen top quarter whose policy number or date is missing, 19 omit a fact the reference itself contains. The other 17 are flagged because the document has a number and the reference sentence does not use it. The hour-8 gold panel has 142 rows, because the 100th cosine is already 1.0 and ties stay in. All 21 flagged rows in that panel are the second kind. Claude's closed-book panel flags 81 of 100, and 66 of those omit a fact the reference contains. Claude's gold panel flags none of its top 100.
+Of the 36 hour-8 closed-book answers in the Qwen top quarter whose policy number or date is missing, 19 omit a fact the reference itself contains. The other 17 are flagged because the document has a number and the reference sentence does not use it. The hour-8 gold panel has 142 rows, because the 100th cosine is already 1.0 and ties stay in. All 21 flagged rows in that panel are the second kind. Claude version 2's closed-book panel flags 78 of 100, and 66 of those omit a fact the reference contains. The other 12 are flagged because the reference sentence does not use a number the document has. Version 1 flagged 81 of 100. Claude's gold panel, version 1, flags none of its top 100.
 
 Thirty-nine hour-8 closed-book answers have cosine 1.0 on both embeddings. The first of those in question-file order is `f02638`, an exact copy of its reference. The example below is `f01658`, which is also an exact copy. The question is: where is the official Department of Cinematic Arts posted? The saved hour-8 answer is 165 characters, the same text as the reference, including the Academic Senate URL. The stream yielded 166 characters and the saved text is stripped. The stored policy record has that title and that URL. Policy Statement 23-21, dated 27 October 2023, is in the passage and is not in this reference sentence. The author's weights produce a repetitive sentence and no URL. Claude, with no passage, says the question might be about the University of New Mexico or the University of Southern California. The question text does not name CSULB.
 

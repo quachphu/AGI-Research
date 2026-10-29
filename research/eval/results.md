@@ -4,24 +4,28 @@ Measurements use commit `2eea41fcd83b3489df27f55de61bd1ecec8b33cb`. The protocol
 
 The author’s `weights/manifest.json` was last written at 2026-10-12 15:55:31 -0700 and was unchanged after the measurements. The six `core.npz` hashes match `RESEARCH.md`.
 
-Claude is `claude-opus-5-5`, effort `low`, with no temperature sent. All 900 replies, 400 questions in both conditions plus a 50-question re-run, stopped on `end_turn`. None were refusals and none hit the length limit, so every question is valid for the paired comparisons. The API key is only in the untracked `.env`.
+Claude is `claude-opus-5-5`, effort `low`, with no temperature sent. The first run, version 1, is 900 replies: 400 questions in both conditions plus a 50-question re-run. All stopped on `end_turn`. None were refusals and none hit the length limit. Version 2 re-asked the 400 closed-book questions and the 50-question closed-book ceiling after one sentence was added to that prompt. Those 450 replies also stopped on `end_turn`. Refusals: 0. Length-limit stops: 0. Every question stays in the paired comparisons. Version 1 is still `research/eval/claude/answers.jsonl` and `research/eval/scores.json`. Version 2 is `answers_v2.jsonl` and `scores_v2.json`. The API key is only in the untracked `.env`.
 
 ## Closed-book
 
 The model saw the question only. Cosine is to the official reference, after stripping the trained lead-in and cutting each text to that question’s cleaned reference. Qwen is `Qwen/Qwen3-Embedding-0.6B`. mpnet is `sentence-transformers/all-mpnet-base-v2`. Both texts were encoded with no instruction. Word F1 is the project’s function in `tools/csulb/eval.py`, on the raw answer before that stripping.
 
-| | Author | Hour 8 | Claude |
-|---|---:|---:|---:|
-| Qwen cosine | 0.543 | 0.693 | 0.601 |
-| mpnet cosine | 0.461 | 0.645 | 0.559 |
-| Word F1 | 0.117 | 0.562 | 0.174 |
-| Policy number | 22 / 279 | 112 / 279 | 32 / 279 |
-| Date, date questions | 2 / 50 | 12 / 50 | 4 / 50 |
-| Full URL | 0 / 400 | 174 / 400 | 0 / 400 |
+Claude in this table is version 2. The closed-book prompt starts with one added sentence: the questions are about policies of California State University, Long Beach. The column “Without CSULB context” is version 1, the same prompt with that sentence absent. The gold-passage prompt was not changed.
+
+| | Author | Hour 8 | Claude | Without CSULB context |
+|---|---:|---:|---:|---:|
+| Qwen cosine | 0.543 | 0.693 | 0.642 | 0.601 |
+| mpnet cosine | 0.461 | 0.645 | 0.585 | 0.559 |
+| Word F1 | 0.117 | 0.562 | 0.194 | 0.174 |
+| Policy number | 22 / 279 | 112 / 279 | 32 / 279 | 32 / 279 |
+| Date, date questions | 2 / 50 | 12 / 50 | 4 / 50 | 4 / 50 |
+| Full URL | 0 / 400 | 174 / 400 | 0 / 400 | 0 / 400 |
+
+Naming the campus raises Claude’s closed-book cosine by 0.041 on Qwen and 0.026 on mpnet, and word F1 by 0.020. The policy-number, date, and URL counts do not move.
 
 A question with no policy number is left out of the number rate. Date is scored only when the kind is `date`. Every question has a URL.
 
-Chance, the cosine to a different question’s reference over 10 shuffles, is 0.305 (Qwen) and 0.206 (mpnet) for the author, 0.374 and 0.259 for hour 8, and 0.366 and 0.259 for Claude. Each system’s cosine to the right reference sits above its own floor.
+Chance, the cosine to a different question’s reference over 10 shuffles, is 0.305 (Qwen) and 0.206 (mpnet) for the author, 0.374 and 0.259 for hour 8, 0.401 and 0.282 for Claude version 2, and 0.366 and 0.259 for version 1. Each system’s cosine to the right reference sits above its own floor.
 
 On the 400 paired questions, the bootstrap 95% intervals are:
 
@@ -29,16 +33,16 @@ On the 400 paired questions, the bootstrap 95% intervals are:
 |---|---|---:|---:|
 | Hour 8 minus author | Qwen | 0.150 | 0.126 to 0.174 |
 | Hour 8 minus author | mpnet | 0.184 | 0.157 to 0.212 |
-| Hour 8 minus Claude | Qwen | 0.092 | 0.065 to 0.119 |
-| Hour 8 minus Claude | mpnet | 0.086 | 0.053 to 0.119 |
+| Hour 8 minus Claude, version 2 | Qwen | 0.051 | 0.025 to 0.076 |
+| Hour 8 minus Claude, version 2 | mpnet | 0.060 | 0.029 to 0.092 |
 
-Both embeddings rank hour 8, then Claude, then the author.
+Both embeddings rank hour 8, then Claude, then the author. With version 1 the hour-8 gap on Qwen was 0.092 (0.065 to 0.119). Naming the campus narrows that gap. It does not reverse it.
 
-Agreement with Claude, the cosine between the two answers on the same question, is 0.538 (Qwen) and 0.458 (mpnet) for hour 8. Hour 8 is closer to the official reference (0.693) than to Claude. The ceiling, cosine between Claude’s two closed-book runs on the first 50 questions, is 0.896 (Qwen) and 0.887 (mpnet).
+Agreement with Claude version 2, the cosine between the two answers on the same question, is 0.577 (Qwen) and 0.487 (mpnet) for hour 8. Hour 8 is closer to the official reference (0.693) than to Claude. The ceiling, cosine between Claude’s two version-2 closed-book runs on the first 50 questions, is 0.916 (Qwen) and 0.895 (mpnet). The version-1 ceiling was 0.896 and 0.887.
 
 ## Gold passage
 
-The passage is the stored `passage` on the question, rendered once into `gold_user` when the sample was drawn. No search was used.
+The passage is the stored `passage` on the question, rendered once into `gold_user` when the sample was drawn. No search was used. Claude here is version 1. The gold-passage prompt already names the policy and its CSULB source, and it was not re-run.
 
 | | Author | Hour 8 | Claude |
 |---|---:|---:|---:|
@@ -64,24 +68,24 @@ Both embeddings rank hour 8, then Claude, then the author. The gold-passage ceil
 
 Fifty questions of each kind. Closed-book Qwen cosine:
 
-| Kind | Author | Hour 8 | Claude | Hour 8 word F1 |
-|---|---:|---:|---:|---:|
-| Topic | 0.407 | 0.458 | 0.563 | 0.345 |
-| Overview | 0.480 | 0.587 | 0.615 | 0.387 |
-| Where | 0.560 | 0.856 | 0.672 | 0.711 |
-| Date | 0.483 | 0.629 | 0.534 | 0.527 |
-| Number | 0.676 | 0.926 | 0.710 | 0.813 |
-| Definition | 0.448 | 0.388 | 0.548 | 0.265 |
-| Approval | 0.660 | 0.887 | 0.636 | 0.784 |
-| Supersedes | 0.630 | 0.813 | 0.532 | 0.663 |
+| Kind | Author | Hour 8 | Claude | Without CSULB context | Hour 8 word F1 |
+|---|---:|---:|---:|---:|---:|
+| Topic | 0.407 | 0.458 | 0.583 | 0.563 | 0.345 |
+| Overview | 0.480 | 0.587 | 0.661 | 0.615 | 0.387 |
+| Where | 0.560 | 0.856 | 0.792 | 0.672 | 0.711 |
+| Date | 0.483 | 0.629 | 0.632 | 0.534 | 0.527 |
+| Number | 0.676 | 0.926 | 0.774 | 0.710 | 0.813 |
+| Definition | 0.448 | 0.388 | 0.529 | 0.548 | 0.265 |
+| Approval | 0.660 | 0.887 | 0.633 | 0.636 | 0.784 |
+| Supersedes | 0.630 | 0.813 | 0.532 | 0.532 | 0.663 |
 
-mpnet agrees on the direction from the author to hour 8 for every kind, including definition, where closed-book cosine falls (mpnet 0.368 to 0.293) while word F1 still rises (0.086 to 0.265). On definition, both embeddings place Claude above hour 8 (mpnet 0.567 against 0.293). The overall order remains hour 8, then Claude, then the author.
+Claude in this table is version 2. mpnet agrees on the direction from the author to hour 8 for every kind, including definition, where closed-book cosine falls (mpnet 0.368 to 0.293) while word F1 still rises (0.086 to 0.265). On definition, both embeddings place Claude above hour 8 (mpnet 0.521 against 0.293). The overall order remains hour 8, then Claude, then the author.
 
 ## Error panel
 
 High cosine means the top quarter of cosine-to-reference for that system and that embedding. A tie at the cutoff stays in. For hour 8 closed-book the cutoff is a real quarter: 100 of 400. For hour 8 with the gold passage, Qwen’s 100th value is already 1.0, so every perfect match stays in and the panel has 142 rows. mpnet’s gold panel has 205 for the same reason.
 
-Of the 36 hour-8 closed-book answers in the Qwen panel whose policy number or date is missing, 19 omit a number or date that the official reference itself contains. The other 17 are flagged because the stored document has a number and the reference sentence does not use it. All 21 rows in the hour-8 gold Qwen panel are that second kind. Claude’s closed-book Qwen panel flags 81 of 100, and 66 of those omit a fact the reference contains. Claude’s gold-passage panel flags none of its top 100.
+Of the 36 hour-8 closed-book answers in the Qwen panel whose policy number or date is missing, 19 omit a number or date that the official reference itself contains. The other 17 are flagged because the stored document has a number and the reference sentence does not use it. All 21 rows in the hour-8 gold Qwen panel are that second kind. Claude version 2’s closed-book Qwen panel flags 78 of 100, and 66 of those omit a fact the reference contains. The other 12 are flagged because the reference sentence does not use a number the document has. Version 1 flagged 81 of 100, 66 of them for a fact the reference contains. Claude’s gold-passage panel, which is version 1, flags none of its top 100.
 
 ## How the replies ended
 
@@ -183,7 +187,7 @@ Only output paths and `--force` were added to `tools/measure_heldout.py`, `tools
 
 Local answers use `serve.build_prompt` and `serve.stream` with learning off, the same call `eval.ask` makes, at temperature 0, with that function’s repetition guard. The gold-passage user text is the stored `gold_user` string.
 
-Claude was asked one question at a time, with no history and no temperature. The 20 development questions ran past five sentences, so the frozen prompt adds “then stop” and forbids a heading or a list. Those 20 are not scored. The 400, in both conditions, and the repeat of the first 50 went through the Batch API. Results were matched by question id.
+Claude was asked one question at a time, with no history and no temperature. The 20 development questions ran past five sentences, so the frozen prompt adds “then stop” and forbids a heading or a list. Those 20 are not scored. The 400, in both conditions, and the repeat of the first 50 went through the Batch API. Results were matched by question id. Version 2 repeated the 400 closed-book questions and the 50-question closed-book ceiling with one added sentence, and left the gold-passage answers as version 1.
 
 ## Limits
 
@@ -193,4 +197,4 @@ Training started from the author’s checkpoint. Step 931,303 and the 70.7-minut
 
 The model was not trained to say that it does not know. Cosine stays high when a number, a date, or a negation is wrong, which is why the median example and the error panel sit beside the cosine. Definition questions are the kind where hour 8’s closed-book cosine is below both the author and Claude.
 
-Claude’s answers vary from run to run. On the 50-question re-run the closed-book ceiling is 0.896, so two Claude answers of the same question are closer to each other than hour 8 is to the reference. Claude may also have seen public CSULB pages. On the demo question it did not identify the campus. The question itself does not say CSULB.
+Claude’s answers vary from run to run. On the version-2 50-question re-run the closed-book ceiling is 0.916, so two Claude answers of the same question are closer to each other than hour 8 is to the reference. The version-1 ceiling was 0.896. Claude may also have seen public CSULB pages. On the demo question it did not identify the campus. The question itself does not say CSULB.
