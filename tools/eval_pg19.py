@@ -108,6 +108,9 @@ def main():
     ap.add_argument("--force", action="store_true",
                     help="measure even if these weights were measured "
                          "already")
+    ap.add_argument("--out", default=None,
+                    help="also write the measurement here; "
+                         "runs/scaling/pg19.json is still written")
     a = ap.parse_args()
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     full = a.fraction >= 1.0 and not a.books_limit and not a.window
@@ -200,6 +203,13 @@ def main():
     with open(hist, "a") as f:
         f.write(json.dumps(rec) + "\n")
     json.dump(rec, open(out, "w"), indent=1)
+    if a.out:
+        extra = (a.out if os.path.isabs(a.out)
+                 else os.path.join(root, a.out))
+        os.makedirs(os.path.dirname(extra) or ".", exist_ok=True)
+        with open(extra + ".tmp", "w") as f:
+            json.dump(rec, f, indent=1)
+        os.replace(extra + ".tmp", extra)
     print(f"\n  PG19 {os.path.basename(a.books)}: {nats:.4f} nats/byte = "
           f"**{nats/math.log(2):.4f} BPB**")
     print(f"  over {n:,} bytes of {len(files)} books, context {window:,}, "

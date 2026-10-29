@@ -24,6 +24,12 @@ start while a run is training (--check) and stops if this fails.
     python3 tools/measure_heldout.py
     python3 tools/measure_heldout.py --all
     python3 tools/measure_heldout.py --check     # is a run training?
+
+--held-out names a folder other than data.held_out. --out names the file.
+--force measures again even when a measurement of these weights exists.
+With none of those three, this tool does what it did before they existed.
+A held-out folder other than data.held_out is not the run's own evaluation,
+so the sample log is not reused for it.
 """
 import argparse
 import json
@@ -81,13 +87,15 @@ def same_weights(d, man):
             and abs((d.get("chars") or 0) - (man.get("read_chars") or 0)) < 1e5)
 
 
-def already(man, want_all=False, out=OUT, log=LOG):
+def already(man, want_all=False, out=OUT, log=LOG, log_reuse=True):
     """A measurement of the weights `man` describes that exists already, or
     None: this tool's own, or the evaluation the run ended on - the last
     entry of its sample log, taken after checks were spread over the whole
     set, without the evidence line a check carries, on these same weights.
     Only this tool's own reading of every block will do for --all, and none
-    taken before held-out counted whole blocks only (`whole` unset)."""
+    taken before held-out counted whole blocks only (`whole` unset).
+    `log_reuse` false skips the sample log, which describes data.held_out
+    and not some other folder."""
     try:
         with open(out) as f:
             d = json.load(f)
@@ -96,7 +104,7 @@ def already(man, want_all=False, out=OUT, log=LOG):
             return d
     except (OSError, ValueError):
         pass
-    if want_all:
+    if want_all or not log_reuse:
         return None
     try:
         with open(log, errors="ignore") as f:
@@ -132,11 +140,12 @@ def already(man, want_all=False, out=OUT, log=LOG):
     return d
 
 
-def write(d):
-    os.makedirs(os.path.dirname(OUT), exist_ok=True)
-    with open(OUT + ".tmp", "w") as f:
+def write(d, path=None):
+    path = path or OUT
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path + ".tmp", "w") as f:
         json.dump(d, f, indent=1)
-    os.replace(OUT + ".tmp", OUT)
+    os.replace(path + ".tmp", path)
 
 
 def main():
@@ -149,6 +158,15 @@ def main():
     ap.add_argument("--check", action="store_true",
                     help="only say whether a training run is going: exit 3 "
                          "if one is, 0 if not")
+    ap.add_argument("--held-out", default=None,
+                    help="held-out folder; default is data.held_out in "
+                         "config.yaml")
+    ap.add_argument("--out", default=None,
+                    help="where to write the measurement; default "
+                         "runs/heldout_measured.json")
+    ap.add_argument("--force", action="store_true",
+                    help="measure even if these weights were measured "
+                         "already")
     a = ap.parse_args()
 
     pid = training_run(a.weights)
@@ -165,15 +183,27 @@ def main():
 
     with open(os.path.join(a.weights, "manifest.json")) as f:
         man = json.load(f)
-    have = already(man, a.all)
-    if have is not None:
-        if have.get("source"):
-            write(have)
-        print(f"  held-out {have['val']:.4f} +/-{have['se']:.4f} at step "
-              f"{have['step']:,} is already measured on these weights"
-              + (f" - {have['source']}" if have.get("source") else "")
-              + "; not measuring again")
-        return
+    out_path = (a.out if not a.out or os.path.isabs(a.out)
+                else os.path.join(ROOT, a.out)) or OUT
+    log_reuse = True
+    held = None
+    if a.held_out:
+        from minagi.config import get as _get, load as _load
+        default_held = os.path.join(
+            ROOT, str(_get(_load(), "data.held_out", "data/val")))
+        held = (a.held_out if os.path.isabs(a.held_out)
+                else os.path.join(ROOT, a.held_out))
+        log_reuse = os.path.realpath(held) == os.path.realpath(default_held)
+    if not a.force:
+        have = already(man, a.all, out=out_path, log_reuse=log_reuse)
+        if have is not None:
+            if have.get("source"):
+                write(have, out_path)
+            print(f"  held-out {have['val']:.4f} +/-{have['se']:.4f} at step "
+                  f"{have['step']:,} is already measured on these weights"
+                  + (f" - {have['source']}" if have.get("source") else "")
+                  + "; not measuring again")
+            return
 
     import numpy as np
     import torch
@@ -185,7 +215,8 @@ def main():
     if a.device is None and not torch.cuda.is_available():
         sys.exit("  no GPU - held-out on the CPU would take hours")
     c = load()
-    held = os.path.join(ROOT, str(get(c, "data.held_out", "data/val")))
+    if held is None:
+        held = os.path.join(ROOT, str(get(c, "data.held_out", "data/val")))
     chunk = int(get(c, "training.chunk", 2048))
     chars = int(get(c, "data.eval_chars", 240 * 512))
     set_compute_dtype(str(get(c, "training.precision", "bf16")))
@@ -206,10 +237,10 @@ def main():
            "all": bool(a.all), "whole": True,
            "date": time.strftime("%Y-%m-%d %H:%M"),
            "seconds": round(time.time() - t0)}
-    write(out)
+    write(out, out_path)
     print(f"  held-out {val:.4f} +/-{se:.4f} at step {out['step']:,}, "
           f"{'every block' if a.all else f'{min(n.values())}-{max(n.values())} blocks'} "
-          f"of each subject, in {out['seconds']} s -> {os.path.relpath(OUT, ROOT)}")
+          f"of each subject, in {out['seconds']} s -> {os.path.relpath(out_path, ROOT)}")
 
 
 if __name__ == "__main__":

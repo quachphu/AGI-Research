@@ -23,6 +23,10 @@ publish.sh stops if it fails.
 
 Weights other than weights/ go into the history only: the README's table is
 about the model as it stands.
+
+--force measures again even when a measurement of these weights exists.
+--out also writes that measurement to a file of your choosing. With neither
+flag, this tool does what it did before they existed.
 """
 import argparse
 import json
@@ -97,6 +101,12 @@ def main():
     ap.add_argument("--pieces", type=int, default=2000)
     ap.add_argument("--device", default=None,
                     help="cuda unless said otherwise; the CPU is for tests")
+    ap.add_argument("--out", default=None,
+                    help="also write the measurement here; the history and "
+                         "the weights/ file are unchanged")
+    ap.add_argument("--force", action="store_true",
+                    help="measure even if these weights were measured "
+                         "already")
     a = ap.parse_args()
 
     pid = MH.training_run(a.weights)
@@ -107,11 +117,12 @@ def main():
         sys.exit(f"  {a.weights} has a save in progress - not measuring")
     with open(os.path.join(a.weights, "manifest.json")) as f:
         man = json.load(f)
-    have = already(man, a.pieces)
-    if have is not None:
-        print(f"  enwik9 {have['bpb']:.4f} bits/byte at step {have['step']:,} "
-              f"is already measured on these weights; not measuring again")
-        return
+    if not a.force:
+        have = already(man, a.pieces)
+        if have is not None:
+            print(f"  enwik9 {have['bpb']:.4f} bits/byte at step {have['step']:,} "
+                  f"is already measured on these weights; not measuring again")
+            return
 
     import torch
     import train as T
@@ -152,6 +163,12 @@ def main():
     live = (os.path.realpath(a.weights)
             == os.path.realpath(os.path.join(ROOT, "weights")))
     record(out, live)
+    if a.out:
+        extra = (a.out if os.path.isabs(a.out) else os.path.join(ROOT, a.out))
+        os.makedirs(os.path.dirname(extra) or ".", exist_ok=True)
+        with open(extra + ".tmp", "w") as f:
+            json.dump(out, f, indent=1)
+        os.replace(extra + ".tmp", extra)
     print(f"  enwik9 {out['bpb']:.4f} +/-{out['se']:.4f} bits/byte at step "
           f"{out['step']:,}, {a.pieces:,} pieces of {PIECE:,} bytes, in "
           f"{out['seconds']} s -> "
