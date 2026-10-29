@@ -85,11 +85,11 @@ Fifty questions of each kind. Closed-book Qwen cosine:
 | Where | 0.560 | 0.856 | 0.792 | 0.672 | 0.711 |
 | Date | 0.483 | 0.629 | 0.632 | 0.534 | 0.527 |
 | Number | 0.676 | 0.926 | 0.774 | 0.710 | 0.813 |
-| Definition | 0.448 | 0.388 | 0.529 | 0.548 | 0.265 |
-| Approval | 0.660 | 0.887 | 0.633 | 0.636 | 0.784 |
+| Definition | 0.448 | 0.387 | 0.529 | 0.548 | 0.265 |
+| Approval | 0.660 | 0.886 | 0.633 | 0.636 | 0.784 |
 | Supersedes | 0.630 | 0.813 | 0.532 | 0.532 | 0.663 |
 
-Claude in this table is version 2. Claude’s cosine is higher than hour 8’s on topic (0.583 against 0.458), overview (0.661 against 0.587), and definition (0.529 against 0.388). On definition, hour 8 is below the author’s weights as well. mpnet agrees on that direction for every kind, including definition, where closed-book cosine falls (mpnet 0.368 to 0.293) while word F1 still rises (0.086 to 0.265). On definition, both embeddings place Claude above hour 8 (mpnet 0.521 against 0.293). The overall order remains hour 8, then Claude, then the author.
+Claude in this table is version 2. Claude’s cosine is higher than hour 8’s on topic (0.583 against 0.458), overview (0.661 against 0.587), and definition (0.529 against 0.387). On definition, hour 8 is below the author’s weights as well. mpnet agrees on that direction for every kind, including definition, where closed-book cosine falls (mpnet 0.368 to 0.293) while word F1 still rises (0.086 to 0.265). On definition, both embeddings place Claude above hour 8 (mpnet 0.521 against 0.293). The overall order remains hour 8, then Claude, then the author.
 
 ## Error panel
 
@@ -164,7 +164,7 @@ On the CSULB mix, the two added subjects:
 | csulb_qa | 0.802 | 0.389 | 0.143 | 0.099 | 0.082 | 0.081 |
 | csulb_qa_open | 0.795 | 0.434 | 0.246 | 0.184 | 0.160 | 0.139 |
 
-The mix mean goes from 0.7177 (repeat 0.7176) on the author’s weights to 0.5710 (repeat 0.5710) at hour 8. That drop is the CSULB subjects. The other seven move as in the table above.
+The mix mean goes from 0.7177 (repeat 0.7176) on the author’s weights to 0.5710 (repeat 0.5710) at hour 8. That drop is the CSULB subjects. The other seven stay within 0.001 nats of the table above.
 
 enwik9, frozen, 2,000 pieces of 2,048 bytes, bits per byte:
 

@@ -420,8 +420,8 @@ The change −0.0312 is against the resume start of 0.6055, not against the auth
 | | |
 |---|---|
 | Step | 995,953 |
-| This session | 112.9M characters, 411 minutes |
-| Plan clock | 481.7 minutes (70.7 + 411) |
+| This session | 112.83M characters, 410.1 minutes |
+| Plan clock | 480.8 minutes (70.7 + 410.1) |
 | Life characters | 2,039.0M |
 | Train loss | 0.4273 |
 | Held-out | 0.5743 ± 0.0219 |
@@ -584,9 +584,9 @@ Per subject on `data/val`:
 | Stories | 0.476 | 0.992 | 0.894 | 0.827 | 0.823 | 0.905 |
 | Wikipedia | 1.077 | 1.158 | 1.108 | 1.075 | 1.073 | 1.067 |
 
-Arithmetic rose by 0.313 nats and stories by 0.429. Both gaps are larger than 0.03. Chat fell by 0.145 and chess by 0.547. Code, reasoning, and the project's own Wikipedia held-out moved by less than 0.03.
+Arithmetic rose by 0.314 nats and stories by 0.430. Both gaps are larger than 0.03. Chat fell by 0.145 and chess by 0.547. Code, reasoning, and the project's own Wikipedia held-out moved by less than 0.03.
 
-On the CSULB mix the other seven subjects move as in that table. The two added subjects:
+On the CSULB mix the other seven subjects stay within 0.001 nats of that table. The two added subjects:
 
 | Subject | Author | 65 min | Hour 2 | Hour 4 | Hour 6 | Hour 8 |
 |---|---:|---:|---:|---:|---:|---:|
@@ -712,11 +712,11 @@ Claude in this table is version 2.
 | Where | 0.560 | 0.856 | 0.792 | 0.672 | 0.711 |
 | Date | 0.483 | 0.629 | 0.632 | 0.534 | 0.527 |
 | Number | 0.676 | 0.926 | 0.774 | 0.710 | 0.813 |
-| Definition | 0.448 | 0.388 | 0.529 | 0.548 | 0.265 |
-| Approval | 0.660 | 0.887 | 0.633 | 0.636 | 0.784 |
+| Definition | 0.448 | 0.387 | 0.529 | 0.548 | 0.265 |
+| Approval | 0.660 | 0.886 | 0.633 | 0.636 | 0.784 |
 | Supersedes | 0.630 | 0.813 | 0.532 | 0.532 | 0.663 |
 
-Claude's cosine is higher than hour 8's on topic (0.583 against 0.458), overview (0.661 against 0.587), and definition (0.529 against 0.388). On definition, hour 8 is below the author's weights as well. mpnet agrees that hour 8 is below the author on definition (0.368 to 0.293) and above the author on the other seven kinds. On definition, both embeddings also place Claude above hour 8 (mpnet 0.521 against 0.293). The overall order is still hour 8, then Claude, then the author.
+Claude's cosine is higher than hour 8's on topic (0.583 against 0.458), overview (0.661 against 0.587), and definition (0.529 against 0.387). On definition, hour 8 is below the author's weights as well. mpnet agrees that hour 8 is below the author on definition (0.368 to 0.293) and above the author on the other seven kinds. On definition, both embeddings also place Claude above hour 8 (mpnet 0.521 against 0.293). The overall order is still hour 8, then Claude, then the author.
 
 ### Error panel and the demo
 

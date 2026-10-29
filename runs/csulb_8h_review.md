@@ -148,10 +148,11 @@ repeats 31% of 8-grams, greedy with no guard
 - Recorded: 2026-10-22 14:46:55
 - Trainer still running: no, the trainer has exited
 - Step: 995953
-- Characters read this session: 112.9M
+- Characters read this session: 112.83M
 - Characters read over the model's life: 2039.0M
-- Minutes into this session: 411.0
-- Minutes of the 8-hour plan: 481.7
+- Minutes into this session: 410.1
+- Minutes of the 8-hour plan: 480.8
+- The sample status line below prints 411 minutes. The closing log line is 410.1 minutes and 112.83M characters. The plan total uses that closing line.
 - Train loss: 0.4273
 - Held-out loss: 0.5743 +/-0.0219
 - Learning-rate scale: 0.9895755939831209
