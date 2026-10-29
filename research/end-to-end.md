@@ -2,7 +2,7 @@
 
 This is the record of one experiment. It starts from the published mini-AGI checkpoint, builds a corpus of public CSULB policies, trains that same checkpoint on the corpus, and scores the answers. The model was not created from random weights. The author's checkpoint had already read 1.87 billion characters. Everything below is continued training on top of that checkpoint, plus the data and the scoring built for this project.
 
-Only this model was trained and only this model wrote the answers. No other language model drafted the questions, the answers, or the scores.
+Only this model was trained. The questions and the reference answers were built by the project's own scripts from the scraped policies. No other language model wrote the training text. On 29 October 2026 a separate evaluation, recorded from section 19 on, also asked Claude Opus 5.5 the same questions and scored it the same way. Claude did not write or grade the training data. The API key for that call is not in the repository.
 
 The code of the model is [volotat/mini-AGI](https://github.com/volotat/mini-AGI) by Alexey Borsky, MIT license, file `LICENSE`. The training described here ran on that code as it stood before the author's 20–24 October 2026 commits. After the 8-hour run finished, this copy was fast-forwarded to the author's commit `8f74c58` ("benchmarking scripts", 24 October 2026). The CSULB files were kept. A re-run on today's code needs `--lane-schedule equal` if it is meant to match this experiment, because the author's later default shares reading time by expected held-out drop instead of giving every subject an equal turn.
 
@@ -517,3 +517,203 @@ Files that hold the raw record:
 | `runs/csulb_8h_review.md` | The hour 2, 4, 6, and 8 record and the score table |
 | `runs/csulb_samples.txt` | Samples every 15 minutes |
 | `runs/csulb_eval_h2.json` … `h8.json` | Every scored answer at those checkpoints |
+
+The 60-question numbers above are the earlier pilot. They used a 360-character cap, and the open-book condition used BM25. They are not the 29 October evaluation. That evaluation is section 19.
+
+## 19. Why a second evaluation was run
+
+The 60-question scores answer a different question from the one the later protocol tests. Open-book F1 there mixes retrieval with reading, because the passage was the top BM25 hit. The generation cap was 360 characters. In that pilot every hour-8 answer stopped at exactly 360 characters, while the reference answers have a median of 486 characters and a maximum of 764, and 56 of the 60 end with a `Source:` line. Only 25 of 61 closed-book answers contained a URL, so the URL rates were partly lowered by the cap.
+
+The claim under test on 29 October 2026 is narrower. Continued reading put CSULB policy text into the weights, and the author's frozen next-byte benchmarks show what else those weights kept or lost. Closed-book is the headline: the model sees the question and nothing else. Where a passage is given, it is the stored `passage` field the question was built from, passed through `open_book_prompt` in `tools/csulb/qa_format.py`. `eval.py`'s `open_prompt` is not used, because that function calls BM25.
+
+The reference answer was a training target on the other wordings of the same fact. Only the question wording is new. A high cosine means a new wording produced the trained answer. It does not mean the answer text was never trained.
+
+The written protocol is `research/eval_protocol.md`, committed as `8085b11` before any measurement in this evaluation. The code it was written against is `d6aa869`. The measurement tools then gained `--held-out`, `--out`, and `--force` in `2eea41f`. With those flags omitted, each tool follows the path it had at `d6aa869`. The measurement arithmetic was not changed. `config.yaml` was not edited. `data.held_out` stays `data/val`. `tools/refresh_readme.py` and `measure_benchmarks.sh` were not run.
+
+## 20. The 400 questions
+
+A question is clean when its exact wording does not appear in `school_policies_data/train/csulb_qa`, using the same scan as `questions_in_train` in `tools/csulb/watch_8h.py`. That leaves 2,514 of 3,603. The other 1,089 collide with a training wording.
+
+`tools/csulb/draw_eval_sample.py` draws the sample. Seed `20261029`. Fifty of each kind, at most two from one document. Kinds, in draw order: topic, overview, where, date, number, definition, approval, supersedes. The files are `research/eval/questions_400.jsonl` and `research/eval/questions_prompt_dev.jsonl`. The draw notes are `research/eval/sample_draw.json`.
+
+| | |
+|---|---|
+| Confirmatory questions | 400 |
+| Prompt-development questions, drawn from what remained | 20 |
+| Overlap between the 400 and the original 60 | 11 |
+| Prompt-development questions that also sit in the original 60 | 1 |
+
+The overlap is recorded. The sample was not redrawn to remove it. The 20 development questions are not in the confirmatory scores. Each row stores the official reference, the policy number, the document date, the URL, and `gold_user`, which is `open_book_prompt` applied once at draw time. Generation uses that stored string, so a later edit to `qa_format.py` does not change the passage bytes.
+
+Of the 400, 279 have a policy number (all of those start with `PS `) and 121 do not. All 50 date questions have a document date. All 400 have a URL.
+
+## 21. Frozen next-byte benchmarks
+
+These are the author's measurements, re-run on this code. Numbers already in the training logs are the historical record. They are not this table. Held-out reading changed after those runs, and the first call on `weights/` can otherwise reuse the author's logged line at step 914,508. Every invocation passed `--force`, including the first measurement of `weights/`. A reused log line would have failed the protocol. All 29 records say `fresh: true`. The wrapper is `tools/csulb/bench_frozen.py`, driven by `tools/csulb/run_frozen_suite.py`. Each record was copied into `research/eval/benchmarks/` before the next run overwrote the shared file under `runs/`.
+
+Before the runs, each of the six folders was checked by manifest step and `core.npz` sha256 against `RESEARCH.md`. All six matched. `weights/manifest.json` was last written at 2026-10-12 15:55:31 -0700. No `train.py` and no `chat.py` was running. The GPU was an RTX 4090 with 24,564 MiB. The manifest timestamp was the same after the suite.
+
+The enwik9 slice is the last 50,000,000 bytes of enwik9, sha256 `fa616cef732f5622ff8bd6706fec08638491beb6b7934786bcf95bf69c8a86cc`. PG19 is the test split, 100 books, 41,289,101 bytes on disk and 41,289,001 bytes scored, window 4,096.
+
+The author's weights and hour 8 were measured twice. The largest repeat gap was under 0.0001 nats. The author's own noise line is about 0.03 nats. The repeats are inside that line.
+
+Held-out loss is nats per character. `data/val` is the author's seven subjects. The CSULB mix adds `csulb_qa` and `csulb_qa_open`, so its average is a different quantity. Hours 2 through 8 are one series. The 65-minute checkpoint is a different run (ten subjects, learning rate `1e-4`, plasticity reset) and is labeled separately. The chart is `research/eval/benchmarks/heldout_val.svg`.
+
+`data/val`, mean of the seven subjects. The second number is the repeat.
+
+| Checkpoint | Step | Loss |
+|---|---:|---:|
+| Author | 914,508 | 0.6945, repeat 0.6945 |
+| 65 minutes | 923,915 | 0.7465 |
+| Hour 2 | 950,140 | 0.7033 |
+| Hour 4 | 965,184 | 0.6796 |
+| Hour 6 | 982,163 | 0.6843 |
+| Hour 8 | 995,953 | 0.7028, repeat 0.7028 |
+
+Per subject on `data/val`:
+
+| Subject | Author | 65 min | Hour 2 | Hour 4 | Hour 6 | Hour 8 |
+|---|---:|---:|---:|---:|---:|---:|
+| Arithmetic | 0.657 | 0.793 | 0.812 | 0.839 | 0.915 | 0.970 |
+| Chat | 0.525 | 0.504 | 0.452 | 0.411 | 0.386 | 0.380 |
+| Chess | 0.960 | 0.446 | 0.414 | 0.415 | 0.413 | 0.413 |
+| Code | 0.596 | 0.672 | 0.630 | 0.604 | 0.602 | 0.601 |
+| Reasoning | 0.571 | 0.660 | 0.612 | 0.588 | 0.578 | 0.583 |
+| Stories | 0.476 | 0.992 | 0.894 | 0.827 | 0.823 | 0.905 |
+| Wikipedia | 1.077 | 1.158 | 1.108 | 1.075 | 1.073 | 1.067 |
+
+Arithmetic rose by 0.313 nats and stories by 0.429. Both gaps are larger than 0.03. Chat fell by 0.145 and chess by 0.547. Code, reasoning, and the project's own Wikipedia held-out moved by less than 0.03.
+
+On the CSULB mix the other seven subjects move as in that table. The two added subjects:
+
+| Subject | Author | 65 min | Hour 2 | Hour 4 | Hour 6 | Hour 8 |
+|---|---:|---:|---:|---:|---:|---:|
+| csulb_qa | 0.802 | 0.389 | 0.143 | 0.099 | 0.082 | 0.081 |
+| csulb_qa_open | 0.795 | 0.434 | 0.246 | 0.184 | 0.160 | 0.139 |
+
+The mix mean goes from 0.7177 (repeat 0.7176) to 0.5710 (repeat 0.5710). That drop is those two subjects.
+
+enwik9, frozen, 2,000 pieces of 2,048 bytes, bits per byte:
+
+| Checkpoint | Bits/byte |
+|---|---:|
+| Author | 1.3556, repeat 1.3556 |
+| 65 minutes | 1.6284 |
+| Hour 2 | 1.7790 |
+| Hour 4 | 1.6980 |
+| Hour 6 | 1.6984 |
+| Hour 8 | 1.7359, repeat 1.7358 |
+
+PG19, frozen, all 100 books, window 4,096. Hours 2, 4, and 6 were not run. Bits per byte, and nats per byte:
+
+| Checkpoint | Bits/byte | Nats/byte |
+|---|---:|---:|
+| Author | 2.0578, repeat 2.0577 | 1.4263 |
+| 65 minutes | 2.2864 | 1.5848 |
+| Hour 8 | 2.2141, repeat 2.2141 | 1.5347 |
+
+Hour 8 is worse than the author's weights on both published sets, by about 0.38 bits per byte on enwik9 and 0.108 nats per byte on PG19. Both gaps are larger than 0.03 nats. These fresh numbers are not comparable to the README figures for a later author checkpoint.
+
+## 22. Local answers on the 400
+
+`tools/csulb/generate_answers.py`. Checkpoints are the author's weights and hour 8 only. Hours 2, 4, and 6 were not generated. There is no hour-6 versus hour-8 comparison on these questions.
+
+Decoding is `serve.stream`, temperature 0, the same call `eval.ask` makes, including that function's repetition guard. Learning is off. The limit is 800 characters. The saved answer is cut at `</bot>`, at the incomplete marker `</bo` that `serve.stream` leaves when it stops, or at a new `<user>` or `<bot>` turn, whichever comes first. `end_marker` means the stream finished before 800 characters. `limit` means it used all 800.
+
+1,600 answers were written, 400 questions by 2 modes by 2 checkpoints, to `research/eval/local/answers.jsonl`. None is empty. None still contains a chat marker. Every limit stop is exactly 800 characters.
+
+| | Closed, end | Closed, limit | Gold, end | Gold, limit |
+|---|---:|---:|---:|---:|
+| Author | 204 | 196 | 266 | 134 |
+| Hour 8 | 382 | 18 | 388 | 12 |
+
+## 23. Claude
+
+Model id `claude-opus-5-5`. A one-question probe returned that id, stop reason `end_turn`. Effort is `low`, sent as `output_config.effort`. No temperature, `top_p`, or `top_k` is sent. One question per request. No history. Claude never receives a local answer or a reference answer. The output limit is 16,000 tokens, which covers the thinking trace and the answer.
+
+The 20 development questions were asked one at a time, both conditions, 40 replies. All 40 stopped on `end_turn`. Closed-book length ran from 479 to 1,000 characters (median 699), and from 3 to 8 sentences. Gold-passage length ran from 385 to 923 characters (median 663), and from 3 to 12 sentences. That was the one allowed format change. Both prompts now say to stop after 5 sentences and not to use a heading or a bullet list. The frozen text is `research/eval/claude/prompt.json`, commit `57c3bc7`. Those 20 are not scored.
+
+The 400 questions then went through the Batch API, both conditions, 800 requests. A second batch repeated the first 50 questions in file order, both conditions, 100 requests, for the run-to-run ceiling. Results do not return in order. Each result was matched by question id. All 900 replies are model `claude-opus-5-5`, stop reason `end_turn`, and valid. Refusals: 0. Length-limit stops: 0.
+
+## 24. Scores on the 400
+
+`tools/csulb/score_similarity.py`. Primary metric: cosine of the answer to the official reference.
+
+Primary embedding: `Qwen/Qwen3-Embedding-0.6B`. Secondary: `sentence-transformers/all-mpnet-base-v2`. Both texts are encoded with no instruction. Qwen's default prompt name is unset, so the query instruction is not applied to either side. Vectors are L2-normalized. Cosine is their dot product. A ranking is reported only when the two embeddings agree, and they do, on both conditions.
+
+Before the embedding, a leading `According to …` (through the first colon), any `Source:` line, and chat tags are removed. The local answer, the Claude answer, and the reference are then cut to the length of that question's cleaned reference. Exact match and word F1 use the raw answer after the end-of-reply cut and before that stripping. Word F1 is the project's function in `tools/csulb/eval.py`. The policy number is the stored number without the `PS ` prefix. Date is scored only for `kind == date`. A missing number, date, or URL is not a miss.
+
+Chance is the cosine to a different question's reference, 10 shuffles, seed `20261029`, with no answer left on its own reference. The ceiling is the cosine between Claude's two runs on the 50. High cosine, for the error panel, is the top quarter of cosine-to-reference for that system and that embedding. A tie at the cutoff stays in. Bootstrap intervals are 10,000 resamples on the paired questions. Every system has a valid answer on all 400, so the paired comparisons use all 400.
+
+### Closed-book
+
+| | Author | Hour 8 | Claude |
+|---|---:|---:|---:|
+| Qwen cosine | 0.543 | 0.693 | 0.601 |
+| mpnet cosine | 0.461 | 0.645 | 0.559 |
+| Word F1 | 0.117 | 0.562 | 0.174 |
+| Policy number | 22 / 279 | 112 / 279 | 32 / 279 |
+| Date | 2 / 50 | 12 / 50 | 4 / 50 |
+| Full URL | 0 / 400 | 174 / 400 | 0 / 400 |
+
+Chance, Qwen then mpnet: author 0.305 and 0.206, hour 8 0.374 and 0.259, Claude 0.366 and 0.259.
+
+| Contrast | Embedding | Mean gap | 95% interval |
+|---|---|---:|---:|
+| Hour 8 minus author | Qwen | 0.150 | 0.126 to 0.174 |
+| Hour 8 minus author | mpnet | 0.184 | 0.157 to 0.212 |
+| Hour 8 minus Claude | Qwen | 0.092 | 0.065 to 0.119 |
+| Hour 8 minus Claude | mpnet | 0.086 | 0.053 to 0.119 |
+
+Both embeddings rank hour 8, then Claude, then the author. Agreement between hour 8 and Claude is 0.538 (Qwen) and 0.458 (mpnet). Hour 8 is closer to the official reference than to Claude. The closed-book ceiling on the 50 is 0.896 (Qwen) and 0.887 (mpnet).
+
+### Gold passage
+
+| | Author | Hour 8 | Claude |
+|---|---:|---:|---:|
+| Qwen cosine | 0.634 | 0.918 | 0.792 |
+| mpnet cosine | 0.577 | 0.909 | 0.760 |
+| Word F1 | 0.201 | 0.868 | 0.445 |
+| Policy number | 25 / 279 | 236 / 279 | 278 / 279 |
+| Date | 4 / 50 | 44 / 50 | 50 / 50 |
+| Full URL | 0 / 400 | 353 / 400 | 79 / 400 |
+
+| Contrast | Embedding | Mean gap | 95% interval |
+|---|---|---:|---:|
+| Hour 8 minus author | Qwen | 0.284 | 0.266 to 0.303 |
+| Hour 8 minus author | mpnet | 0.332 | 0.310 to 0.353 |
+| Hour 8 minus Claude | Qwen | 0.127 | 0.110 to 0.143 |
+| Hour 8 minus Claude | mpnet | 0.149 | 0.128 to 0.170 |
+
+Both embeddings rank hour 8, then Claude, then the author. The gold ceiling is 0.954 (Qwen) and 0.938 (mpnet). Agreement between hour 8 and Claude is 0.765 (Qwen) and 0.726 (mpnet).
+
+### By kind, closed-book Qwen cosine
+
+Fifty questions of each kind.
+
+| Kind | Author | Hour 8 | Claude | Hour 8 word F1 |
+|---|---:|---:|---:|---:|
+| Topic | 0.407 | 0.458 | 0.563 | 0.345 |
+| Overview | 0.480 | 0.587 | 0.615 | 0.387 |
+| Where | 0.560 | 0.856 | 0.672 | 0.711 |
+| Date | 0.483 | 0.629 | 0.534 | 0.527 |
+| Number | 0.676 | 0.926 | 0.710 | 0.813 |
+| Definition | 0.448 | 0.388 | 0.548 | 0.265 |
+| Approval | 0.660 | 0.887 | 0.636 | 0.784 |
+| Supersedes | 0.630 | 0.813 | 0.532 | 0.663 |
+
+mpnet agrees that hour 8 is below the author on definition (0.368 to 0.293) and above the author on the other seven kinds. On definition, both embeddings also place Claude above hour 8 (mpnet 0.567 against 0.293). The overall order is still hour 8, then Claude, then the author.
+
+### Error panel and the demo
+
+Of the 36 hour-8 closed-book answers in the Qwen top quarter whose policy number or date is missing, 19 omit a fact the reference itself contains. The other 17 are flagged because the document has a number and the reference sentence does not use it. The hour-8 gold panel has 142 rows, because the 100th cosine is already 1.0 and ties stay in. All 21 flagged rows in that panel are the second kind. Claude's closed-book panel flags 81 of 100, and 66 of those omit a fact the reference contains. Claude's gold panel flags none of its top 100.
+
+The closed-book demo is question `f01658`, tied at cosine 1.0 on both embeddings. The question is: where is the official Department of Cinematic Arts posted? Hour 8 repeats the reference exactly, including the Academic Senate URL, and stops at 166 characters. The stored policy record has that title and that URL. Policy Statement 23-21, dated 27 October 2023, is in the passage and is not in this reference sentence. The author's weights produce a repetitive sentence and no URL. Claude, with no passage, says the question might be about the University of New Mexico or the University of Southern California. The question text does not name CSULB.
+
+The median hour-8 closed-book cosine is 0.735, question `f00208`. The reference says the complainant should contact the Human Resources Manager. Hour 8 says the Executive Director. The cosine is high and the office is wrong.
+
+The same tables, the chart, and this demo are in `research/eval/results.md`. The per-question cosines are in `research/eval/scores.json`.
+
+## 25. What is and is not in git
+
+The weight folders stay on the training machine. Each `optim.npz` is about 436 MB, GitHub rejects a file over 100 MB, and the six folders together are about 61 GB. `data/` (the general corpus, the enwik9 slice, and PG19) is gitignored and rebuilt by `python3 -m corpora`. `.env` holds the Claude key and is gitignored. The evaluation text, the 400 questions, the benchmark JSON, the local answers, the Claude answers, and the score file are in the repository. They do not contain the key.
